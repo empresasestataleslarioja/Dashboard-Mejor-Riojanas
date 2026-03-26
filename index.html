@@ -6807,95 +6807,108 @@ function handleImportFromBuffer(buffer, fname) {
 
 // ── Parser nativo para archivos SIDIF de transferencias ─────────
 // Detecta archivos tipo "Pagos_SAPEM_XXX.xls/xlsx" con columnas SIDIF
+// Lee TODAS las pestañas que tengan el formato correcto
 function tryParseSIDIF(wb, fname) {
-  // Buscar la hoja correcta (primera hoja con columna "Importe MPago" o "Denominación Beneficiario")
-  let ws = null;
+
+  // ── Función auxiliar: parsear una hoja individual ──────────────
+  function parsearHoja(data, headerRow, sheetName) {
+    const headers = (data[headerRow] || []).map(v => String(v||'').trim().toLowerCase());
+
+    const idx = (terms) => {
+      for (const t of terms) {
+        const i = headers.findIndex(h => h.includes(t));
+        if (i >= 0) return i;
+      }
+      return -1;
+    };
+
+    const iSAF  = idx(['etd','saf']);
+    const iOrg  = idx(['denominación saf','organismo','saf']);
+    const iBen  = idx(['denominación beneficiario','beneficiario']);
+    const iFF   = idx(['f.f.','ff ']);
+    const iCGto = idx(['cgto']);
+    const iObs  = idx(['observ']);
+    const iSuel = idx(['incluye sueldos','sueldo']);
+    const iMes  = idx(['mes pago','mes']);
+    const iAño  = idx(['año pago','año','ejer op']);
+    const iImp  = idx(['importe mpago','importe bruto moneda origen','importe']);
+
+    if (iBen < 0 || iImp < 0) return [];
+
+    const rows = [];
+    for (let ri = headerRow + 1; ri < data.length; ri++) {
+      const row = data[ri] || [];
+      const ben = String(row[iBen]||'').trim();
+      const imp = parseFloat(String(row[iImp]||'0').replace(/[^0-9.-]/g,''));
+      if (!ben || isNaN(imp) || imp <= 0) continue;
+
+      const observ = String(row[iObs]||'').trim();
+      const cgto   = String(iCGto>=0 ? (row[iCGto]||'') : '').trim().toUpperCase();
+      const saf    = String(iSAF>=0 ? (row[iSAF]||'') : '').trim();
+      const org    = String(iOrg>=0 ? (row[iOrg]||'') : '').trim();
+      const ff     = String(iFF>=0  ? (row[iFF]||'')  : '').trim();
+      const suel   = String(iSuel>=0? (row[iSuel]||''):'').trim();
+
+      let mes = iMes>=0 ? parseInt(row[iMes]||0) : 0;
+      let año = iAño>=0 ? parseInt(row[iAño]||0) : 0;
+
+      if (mes > 12) mes = 0;
+      if (año < 2000 || año > 2100) año = 0;
+
+      if (!año) {
+        const mAño = observ.match(/20(\d{2})/);
+        if (mAño) año = parseInt('20'+mAño[1]);
+      }
+
+      const categoria = clasificarTransferencia(cgto, observ, suel);
+
+      rows.push({ saf, organismo:org, beneficiario:ben, ff, cgto, observacion:observ,
+                  incluye_sueldos:suel, mes:mes||null, año:año||null, importe:imp,
+                  categoria, _hoja: sheetName });
+    }
+    return rows;
+  }
+
+  // ── Procesar TODAS las hojas con formato SIDIF ─────────────────
+  const todasLasRows = [];
+  const hojasImportadas = [];
+
   for (const sn of wb.SheetNames) {
     const raw = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:null});
-    if (!raw || !raw.length) continue;
-    // Buscar la fila de encabezados (puede no ser la primera)
+    if (!raw || raw.length < 2) continue;
+
+    // Buscar fila de encabezados (puede no ser la primera)
     for (let ri = 0; ri < Math.min(5, raw.length); ri++) {
       const row = (raw[ri] || []).map(v => String(v||'').trim().toLowerCase());
       const hasBen = row.some(c => c.includes('beneficiario') || c.includes('denominaci'));
       const hasImp = row.some(c => c.includes('importe') || c.includes('mpago'));
       if (hasBen && hasImp) {
-        ws = { data: raw, headerRow: ri, sheetName: sn };
+        const rowsDeHoja = parsearHoja(raw, ri, sn);
+        if (rowsDeHoja.length > 0) {
+          todasLasRows.push(...rowsDeHoja);
+          hojasImportadas.push(`${sn} (${rowsDeHoja.length} registros)`);
+        }
         break;
       }
     }
-    if (ws) break;
-  }
-  if (!ws) return false;
-
-  const { data, headerRow, sheetName } = ws;
-  const headers = (data[headerRow] || []).map(v => String(v||'').trim().toLowerCase());
-
-  // Mapear columnas
-  const idx = (terms) => {
-    for (const t of terms) {
-      const i = headers.findIndex(h => h.includes(t));
-      if (i >= 0) return i;
-    }
-    return -1;
-  };
-
-  const iSAF  = idx(['etd','saf']);
-  const iOrg  = idx(['denominación saf','organismo','saf']);
-  const iBen  = idx(['denominación beneficiario','beneficiario']);
-  const iFF   = idx(['f.f.','ff ']);
-  const iCGto = idx(['cgto']);
-  const iObs  = idx(['observ']);
-  const iSuel = idx(['incluye sueldos','sueldo']);
-  const iMes  = idx(['mes pago','mes']);
-  const iAño  = idx(['año pago','año','ejer op']);
-  const iImp  = idx(['importe mpago','importe bruto moneda origen','importe']);
-
-  if (iBen < 0 || iImp < 0) return false;
-
-  const rows = [];
-  for (let ri = headerRow + 1; ri < data.length; ri++) {
-    const row = data[ri] || [];
-    const ben = String(row[iBen]||'').trim();
-    const imp = parseFloat(String(row[iImp]||'0').replace(/[^0-9.-]/g,''));
-    if (!ben || isNaN(imp) || imp <= 0) continue;
-
-    const observ = String(row[iObs]||'').trim();
-    const cgto   = String(row[iCGto]>=0 ? (row[iCGto]||'') : '').trim().toUpperCase();
-    const saf    = String(iSAF>=0 ? (row[iSAF]||'') : '').trim();
-    const org    = String(iOrg>=0 ? (row[iOrg]||'') : '').trim();
-    const ff     = String(iFF>=0  ? (row[iFF]||'')  : '').trim();
-    const suel   = String(iSuel>=0? (row[iSuel]||''):'').trim();
-
-    // Mes y año: pueden ser números directos o extraerse del período
-    let mes = iMes>=0 ? parseInt(row[iMes]||0) : 0;
-    let año = iAño>=0 ? parseInt(row[iAño]||0) : 0;
-
-    // Si son fechas seriales Excel (>1000) los ignoramos y buscamos en observacion
-    if (mes > 12) mes = 0;
-    if (año < 2000 || año > 2100) año = 0;
-
-    // Extraer año de la observación si no se obtuvo
-    if (!año) {
-      const mAño = observ.match(/20(\d{2})/);
-      if (mAño) año = parseInt('20'+mAño[1]);
-    }
-
-    const categoria = clasificarTransferencia(cgto, observ, suel);
-
-    rows.push({ saf, organismo:org, beneficiario:ben, ff, cgto, observacion:observ,
-                incluye_sueldos:suel, mes:mes||null, año:año||null, importe:imp, categoria });
   }
 
-  if (!rows.length) return false;
+  if (!todasLasRows.length) return false;
 
-  // Agregar (no reemplazar) — se acumulan distintos períodos
-  const newTotal = rows.reduce((s,r)=>s+r.importe,0);
-  DATA.transferencias.push(...rows);
-
-  // Agregar años al selector de filtro
+  // Agregar al dataset (acumula distintos períodos)
+  DATA.transferencias.push(...todasLasRows);
   populateTransSelects();
 
-  return { sheetName, imported: rows.length, total: newTotal, rows };  // devolver rows para historial
+  const newTotal = todasLasRows.reduce((s,r)=>s+r.importe, 0);
+  const sheetDesc = hojasImportadas.join(', ');
+
+  return {
+    sheetName: sheetDesc,
+    imported:  todasLasRows.length,
+    total:     newTotal,
+    rows:      todasLasRows,
+    hojas:     hojasImportadas,
+  };
 }
 
 // ── Modelo Excel para transferencias ────────────────────────────
