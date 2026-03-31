@@ -2194,90 +2194,136 @@ table.diff-tbl .d-emp { color:var(--dim); }
       <!-- Contenido principal -->
       <div id="bal-content" style="display:none">
 
-        <!-- ── Header: selector + metadatos + vinculación ── -->
         <!-- ══ NAVEGADOR DE BALANCES ════════════════════════════ -->
         <div class="rowfull card" style="padding:0;margin-bottom:12px;overflow:hidden">
 
-          <!-- Fila 1: Paso 1 — elegir empresa -->
-          <div style="padding:10px 16px;border-bottom:1px solid var(--bd);background:var(--s3)">
-            <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">
-              1 · Seleccionar empresa
+          <!-- Fila 1: Empresa + Período -->
+          <div style="padding:14px 16px;border-bottom:1px solid var(--bd);background:var(--s3)">
+            <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+
+              <!-- Selector Empresa -->
+              <div style="display:flex;flex-direction:column;gap:5px;flex:2;min-width:220px">
+                <label style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;
+                  color:var(--dim)">1 · Empresa</label>
+                <div style="position:relative">
+                  <select id="bal-sel-empresa" onchange="elegirEmpresaSel(this.value)"
+                    style="width:100%;padding:9px 32px 9px 12px;background:var(--s1);
+                    border:2px solid var(--bd2);color:var(--text);font-family:var(--mono);
+                    font-size:12px;border-radius:5px;cursor:pointer;outline:none;
+                    appearance:none;-webkit-appearance:none;transition:border-color .12s"
+                    onfocus="this.style.borderColor='var(--y21)'"
+                    onblur="this.style.borderColor='var(--bd2)'">
+                    <option value="">— Seleccioná una empresa —</option>
+                  </select>
+                  <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                    pointer-events:none;color:var(--y21);font-size:12px">▾</span>
+                </div>
+                <div id="bal-empresa-info" style="font-size:9px;color:var(--dim);
+                  font-family:var(--mono);min-height:13px"></div>
+              </div>
+
+              <!-- Selector Período -->
+              <div style="display:flex;flex-direction:column;gap:5px;flex:1;min-width:180px">
+                <label style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;
+                  color:var(--dim)">2 · Período</label>
+                <div style="position:relative">
+                  <select id="bal-sel-periodo" onchange="elegirPeriodoSel(this.value)"
+                    style="width:100%;padding:9px 32px 9px 12px;background:var(--s1);
+                    border:2px solid var(--bd2);color:var(--text);font-family:var(--mono);
+                    font-size:12px;border-radius:5px;cursor:pointer;outline:none;
+                    appearance:none;-webkit-appearance:none;transition:border-color .12s"
+                    onfocus="this.style.borderColor='var(--y21)'"
+                    onblur="this.style.borderColor='var(--bd2)'"
+                    disabled>
+                    <option value="">— Elegí una empresa primero —</option>
+                  </select>
+                  <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                    pointer-events:none;color:var(--y21);font-size:12px">▾</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;min-height:13px">
+                  <span id="bal-cierre-det" style="font-size:8.5px;color:var(--dim);padding:2px 7px;
+                    border:1px solid var(--bd);border-radius:2px;white-space:nowrap"></span>
+                  <span id="bal-fuente" style="font-size:8.5px;color:#47ffb4;padding:2px 7px;
+                    border:1px solid #47ffb440;border-radius:2px;white-space:nowrap"></span>
+                </div>
+              </div>
+
+              <!-- Acciones -->
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding-bottom:18px">
+                <button onclick="editarPeriodoBalance()"
+                  style="background:none;border:1px solid var(--bd);color:var(--dim);font-size:9px;
+                  padding:7px 10px;border-radius:4px;cursor:pointer;white-space:nowrap">
+                  ✎ Editar período
+                </button>
+                <label style="display:flex;align-items:center;gap:5px;padding:7px 12px;
+                  background:rgba(232,255,71,.06);border:1px solid #e8ff4740;border-radius:4px;
+                  cursor:pointer;font-size:9.5px;color:var(--y21);font-family:var(--mono);white-space:nowrap">
+                  📄 + PDF
+                  <input type="file" id="file-bal2" accept=".pdf" style="display:none"
+                    onchange="loadBalancePDF(this.files[0])">
+                </label>
+                <button onclick="eliminarBalanceActivo()"
+                  style="padding:7px 10px;background:rgba(255,71,102,.06);border:1px solid #ff476640;
+                  color:#ff4766;font-size:9.5px;border-radius:4px;cursor:pointer;font-family:var(--mono)">
+                  🗑
+                </button>
+              </div>
             </div>
-            <div id="bal-empresa-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
           </div>
 
-          <!-- Fila 2: Paso 2 — elegir período (aparece al elegir empresa) -->
-          <div id="bal-periodos-row" style="padding:10px 16px;border-bottom:1px solid var(--bd)">
-            <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:8px">
-              2 · Seleccionar período
-            </div>
-            <div id="bal-periodo-btns" style="display:flex;gap:6px;flex-wrap:wrap">
-              <span style="font-size:10px;color:var(--dim)">— Elegí una empresa primero —</span>
-            </div>
-          </div>
-
-          <!-- Fila 3: Balance activo + acciones -->
-          <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-
-            <!-- Info del balance activo -->
+          <!-- Fila 2: Info activo + vinculación + limpiar -->
+          <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+            border-bottom:1px solid var(--bd)">
             <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
               <div style="font-size:20px">📄</div>
               <div style="min-width:0">
                 <div id="bal-empresa-det" style="font-size:13px;font-weight:600;color:var(--text);
                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">—</div>
-                <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+                <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
                   <span id="bal-periodo-det" style="font-size:11px;color:var(--y21);font-family:var(--mono)">—</span>
-                  <span id="bal-cierre-det" style="font-size:9px;color:var(--dim);padding:1px 5px;
-                    border:1px solid var(--bd);border-radius:2px">—</span>
-                  <span id="bal-fuente" style="font-size:9px;color:#47ffb4;padding:1px 5px;
-                    border:1px solid #47ffb440;border-radius:2px">—</span>
-                  <button onclick="editarPeriodoBalance()" title="Editar período"
-                    style="background:none;border:1px solid var(--bd);color:var(--dim);font-size:9px;
-                    padding:1px 6px;border-radius:2px;cursor:pointer">✎ período</button>
+                  <span id="bal-status" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
                 </div>
               </div>
             </div>
-
-            <!-- Vinculación al portafolio -->
             <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
-              <div style="font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">Vincular al portafolio</div>
+              <div style="font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Vincular a empresa del portafolio</div>
               <div style="display:flex;align-items:center;gap:5px">
                 <select id="bal-vincular-sel"
                   style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
-                  font-family:var(--mono);font-size:9.5px;padding:4px 8px;border-radius:3px;cursor:pointer;min-width:160px">
+                  font-family:var(--mono);font-size:9.5px;padding:4px 8px;border-radius:3px;
+                  cursor:pointer;min-width:160px">
                   <option value="">— Sin vincular —</option>
                 </select>
                 <button onclick="vincularBalance()" style="padding:4px 10px;background:rgba(71,232,255,.08);
-                  border:1px solid #47e8ff44;color:#47e8ff;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
-                  Vincular
-                </button>
+                  border:1px solid #47e8ff44;color:#47e8ff;font-size:9.5px;border-radius:3px;
+                  cursor:pointer;font-family:var(--mono)">Vincular</button>
                 <span id="bal-vincular-estado" style="font-size:9px;color:#47ffb4;font-family:var(--mono)"></span>
               </div>
             </div>
+            <button onclick="clearAllBalances()"
+              style="padding:5px 10px;background:none;border:1px solid #ff476625;
+              color:#ff476680;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+              Limpiar todo
+            </button>
+            <select id="bal-sel" onchange="showBalanceResult()" style="display:none"></select>
+            <span id="bal-empresa-lbl" style="display:none"></span>
+          </div>
 
-            <!-- Acciones -->
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              <label style="display:flex;align-items:center;gap:5px;padding:5px 11px;
-                background:rgba(232,255,71,.06);border:1px solid #e8ff4740;border-radius:3px;
-                cursor:pointer;font-size:9.5px;color:var(--y21);font-family:var(--mono)">
-                + Cargar PDF
-                <input type="file" id="file-bal2" accept=".pdf" style="display:none" onchange="loadBalancePDF(this.files[0])">
-              </label>
-              <button onclick="eliminarBalanceActivo()"
-                style="padding:5px 11px;background:rgba(255,71,102,.06);border:1px solid #ff476640;
-                color:#ff4766;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
-                🗑 Eliminar
-              </button>
-              <button onclick="clearAllBalances()"
-                style="padding:5px 11px;background:rgba(255,71,102,.03);border:1px solid #ff476625;
-                color:#ff476680;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
-                Limpiar todo
+          <!-- Fila 3: Comparación entre períodos de la misma empresa -->
+          <div id="bal-comp-selector-row" style="display:none;padding:10px 16px;
+            background:rgba(71,232,255,.03)">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="font-size:8px;letter-spacing:.14em;text-transform:uppercase;
+                color:#47e8ff;flex-shrink:0;white-space:nowrap">⟺ Comparar períodos</div>
+              <div id="bal-comp-checks" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;
+                align-items:center"></div>
+              <button onclick="buildComparacionBalances()" style="padding:5px 12px;
+                background:rgba(71,232,255,.1);border:1px solid #47e8ff55;color:#47e8ff;
+                font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+                white-space:nowrap;flex-shrink:0">
+                Ver comparación →
               </button>
             </div>
-
-            <!-- Selector hidden (usado por JS internamente) -->
-            <select id="bal-sel" onchange="showBalanceResult()" style="display:none"></select>
-            <span id="bal-status" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
           </div>
         </div>
 
@@ -2294,8 +2340,15 @@ table.diff-tbl .d-emp { color:var(--dim); }
         <!-- KPI banda -->
         <div id="bal-kpi-band" class="kpi-band" style="margin-bottom:12px"></div>
 
-        <!-- Estados contables resumen (Patrimonial + Resultados) -->
+        <!-- Radar + estados contables -->
         <div class="row2" style="margin-bottom:12px">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Perfil financiero</span>
+              <span class="card-hd-unit" id="bal-radar-lbl">score 4 ejes</span>
+            </div>
+            <canvas id="ch-bal-radar" style="max-height:220px"></canvas>
+          </div>
           <div class="card">
             <div class="card-hd">
               <span class="card-hd-title">Estado de situación patrimonial</span>
@@ -2303,13 +2356,15 @@ table.diff-tbl .d-emp { color:var(--dim); }
             </div>
             <div id="bal-estado-patrimonial"></div>
           </div>
-          <div class="card">
-            <div class="card-hd">
-              <span class="card-hd-title">Estado de resultados</span>
-              <span class="card-hd-unit" id="bal-er-lbl"></span>
-            </div>
-            <div id="bal-estado-resultados"></div>
+        </div>
+
+        <!-- Estado de resultados solo -->
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Estado de resultados</span>
+            <span class="card-hd-unit" id="bal-er-lbl"></span>
           </div>
+          <div id="bal-estado-resultados"></div>
         </div>
 
         <!-- Indicadores 2×2 -->
@@ -8270,26 +8325,141 @@ async function loadBalancePDF(file) {
 // ── Guardar y mostrar resultado ────────────────────────────
 function guardarBalance(filename, texto, metodo) {
   const result = analizarBalanceLocal(filename, texto);
-  _balances[filename] = {
-    filename,
-    empresa:      result.empresa,
-    periodo:      result.periodo,
-    esCierreNoCal: result.esCierreNoCal || false,
-    cierreMes:    result.cierreMes || 12,
-    tipo:         result.tipo_estado,
-    moneda:       result.moneda,
-    indicadores:  result.indicadores,
-    diagnostico:  result.diagnostico,
-    alertas:      result.alertas,
-    textoRaw:     texto,
-    timestamp:    Date.now(),
-    metodo:       metodo || 'Texto nativo',
-    vinculada:    null,
-  };
-  setBalProgress(false);
-  renderBalanceUI();
-  _balActivo = filename;
-  showBalanceResult();
+
+  // ── Modal: elegir empresa del portafolio ───────────────────
+  // Las empresas disponibles son las del portafolio (DATA.fact/sit)
+  const empresasPortafolio = [...new Set([
+    ...Object.keys(DATA.fact || {}),
+    ...Object.keys(DATA.sit  || {}),
+  ])].sort();
+
+  // Empresa sugerida: la que detectó el parser del PDF
+  const empresaSugerida = result.empresa || '';
+
+  // Mostrar modal de selección
+  _mostrarModalEmpresaBalance(empresaPortafolio => {
+    const empresaFinal = empresaPortafolio || empresaSugerida || filename.replace(/\.pdf$/i,'');
+
+    _balances[filename] = {
+      filename,
+      empresa:      empresaFinal,
+      periodo:      result.periodo,
+      esCierreNoCal: result.esCierreNoCal || false,
+      cierreMes:    result.cierreMes || 12,
+      tipo:         result.tipo_estado,
+      moneda:       result.moneda,
+      indicadores:  result.indicadores,
+      diagnostico:  result.diagnostico,
+      alertas:      result.alertas,
+      textoRaw:     texto,
+      timestamp:    Date.now(),
+      metodo:       metodo || 'Texto nativo',
+      vinculada:    empresaPortafolio || null,
+    };
+    setBalProgress(false);
+    renderBalanceUI();
+    _balActivo = filename;
+    // Seleccionar la empresa recién cargada
+    _balEmpresaActiva = empresaFinal;
+    const selEmp = document.getElementById('bal-sel-empresa');
+    if (selEmp) selEmp.value = empresaFinal;
+    actualizarPeriodos();
+    showBalanceResult();
+  }, empresasSugeridas(empresaSugerida, empresasPortafolio), empresaSugerida);
+}
+
+// Encontrar empresas del portafolio más similares a la detectada
+function empresasSugeridas(detectada, portafolio) {
+  if (!detectada || !portafolio.length) return portafolio;
+  const det = detectada.toUpperCase();
+  // Ordenar por similitud: primero las que contienen palabras del nombre detectado
+  const palabras = det.split(/\s+/).filter(p => p.length > 3);
+  return [...portafolio].sort((a, b) => {
+    const scoreA = palabras.filter(p => a.toUpperCase().includes(p)).length;
+    const scoreB = palabras.filter(p => b.toUpperCase().includes(p)).length;
+    return scoreB - scoreA;
+  });
+}
+
+// Modal para elegir empresa
+function _mostrarModalEmpresaBalance(callback, empresas, sugerida) {
+  // Crear overlay modal
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99998;display:flex;align-items:center;justify-content:center';
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:var(--s1);border:1px solid var(--bd2);border-radius:6px;padding:24px;width:400px;max-width:95vw;box-shadow:0 16px 48px rgba(0,0,0,.5)';
+
+  const tienePdf = sugerida && sugerida !== '?';
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">
+      📊 Vincular balance a empresa
+    </div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:14px;line-height:1.6">
+      ${tienePdf ? `El PDF sugiere: <strong style="color:var(--y21)">${sugerida}</strong><br>` : ''}
+      Elegí la empresa del portafolio a la que pertenece este balance.
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+        display:block;margin-bottom:5px">Empresa del portafolio</label>
+      <select id="modal-bal-empresa"
+        style="width:100%;padding:9px 12px;background:var(--s2);border:2px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:11px;border-radius:4px;cursor:pointer;outline:none"
+        onfocus="this.style.borderColor='var(--y21)'" onblur="this.style.borderColor='var(--bd2)'">
+        ${empresas.length
+          ? empresas.map(e => `<option value="${e}" ${e===sugerida||e.toUpperCase().includes((sugerida||'').toUpperCase().slice(0,5))?'selected':''}>${e}</option>`).join('')
+          : '<option value="">— Sin empresas en el portafolio aún —</option>'}
+      </select>
+    </div>
+    ${!empresas.length ? `
+    <div style="margin-bottom:12px">
+      <label style="font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+        display:block;margin-bottom:5px">O ingresá el nombre manualmente</label>
+      <input id="modal-bal-empresa-manual" type="text" placeholder="${sugerida || 'Nombre de la empresa'}"
+        value="${sugerida || ''}"
+        style="width:100%;padding:9px 12px;background:var(--s2);border:2px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:11px;border-radius:4px;outline:none;box-sizing:border-box">
+    </div>` : ''}
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="modal-bal-cancelar"
+        style="padding:8px 16px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--dim);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono)">
+        Cancelar
+      </button>
+      <button id="modal-bal-confirmar"
+        style="padding:8px 20px;background:rgba(232,255,71,.12);border:1px solid var(--y21);
+        color:var(--y21);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600">
+        Confirmar →
+      </button>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  // Focus en el selector
+  setTimeout(() => {
+    const sel = panel.querySelector('#modal-bal-empresa');
+    if (sel) sel.focus();
+  }, 50);
+
+  function confirmar() {
+    const sel    = panel.querySelector('#modal-bal-empresa');
+    const manual = panel.querySelector('#modal-bal-empresa-manual');
+    const val    = (sel?.value || manual?.value || '').trim();
+    overlay.remove();
+    callback(val);
+  }
+
+  panel.querySelector('#modal-bal-confirmar').addEventListener('click', confirmar);
+  panel.querySelector('#modal-bal-cancelar').addEventListener('click', () => {
+    overlay.remove();
+    // Continuar sin vincular
+    callback('');
+  });
+  // Enter para confirmar
+  panel.querySelector('#modal-bal-empresa')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmar();
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -8391,50 +8561,59 @@ function analizarBalanceLocal(filename, texto) {
       .filter(n => n !== null && !isNaN(n));
   };
 
-  // ── 7. Buscar etiqueta → número (misma línea + 3 siguientes) ──
+  // ── 7. Buscar etiqueta → número ──────────────────────────────
   // PDF.js suele separar etiqueta y valor en ítems distintos
+  // Buscamos en las siguientes N líneas (extendido de 3 a 8)
   const lineas = texto.split('\n');
 
-  const buscar = patrones => {
+  const buscar = (patrones, maxLineas) => {
+    const lim = maxLineas || 8;
     for (const pat of patrones) {
       const re = new RegExp(pat, 'i');
       for (let i = 0; i < lineas.length; i++) {
         if (!re.test(lineas[i])) continue;
-        // Bloque: línea con la etiqueta + 3 líneas siguientes
-        const bloque   = lineas.slice(i, i + 4).join(' ');
+        // Bloque extendido: etiqueta + siguientes líneas
+        const bloque   = lineas.slice(i, i + lim).join(' ');
         const sinEtiq  = bloque.replace(re, '\t');
         const parteNum = sinEtiq.slice(sinEtiq.indexOf('\t') + 1);
         const nums     = extractNums(parteNum);
         for (const n of nums) {
-          if (Math.abs(n) >= 100) return n;    // número contable significativo
+          if (Math.abs(n) >= 100) return n;
         }
-        if (nums.length) return nums[0];        // si solo hay números chicos, tomar igual
+        if (nums.length) return nums[0];
       }
     }
     return null;
   };
 
   // ── 8. Extraer rubros del balance ─────────────────────────
-  // Los valores del certificado CPCE tienen precedencia sobre los del balance
   const activoC  = buscar([
     '[Tt]otal\\s+[Aa]ctivo\\s+[Cc]orriente',
     '[Tt]otal\\s+del\\s+[Aa]ctivo\\s+[Cc]orriente',
     '[Aa]ctivos?\\s+[Cc]orrientes?\\s+[Tt]otales?',
     'TOTAL\\s+ACTIVO\\s+CORRIENTE',
+    'SUBTOTAL\\s+ACTIVO\\s+CORRIENTE',
+    'Total\\s+Activo\\s+Corriente',
+    // Patrón: "ACTIVO CORRIENTE" seguido de número en las próximas líneas
+    // cuando la palabra "TOTAL" no aparece explícitamente
   ]);
   const pasivoC  = buscar([
     '[Tt]otal\\s+[Pp]asivo\\s+[Cc]orriente',
     '[Tt]otal\\s+del\\s+[Pp]asivo\\s+[Cc]orriente',
     '[Pp]asivos?\\s+[Cc]orrientes?\\s+[Tt]otales?',
     'TOTAL\\s+PASIVO\\s+CORRIENTE',
+    'SUBTOTAL\\s+PASIVO\\s+CORRIENTE',
   ]);
   const activoNC = buscar([
     '[Tt]otal\\s+[Aa]ctivo\\s+[Nn]o\\s+[Cc]orriente',
     '[Aa]ctivos?\\s+[Nn]o\\s+[Cc]orrientes?\\s+[Tt]otales?',
+    'TOTAL\\s+ACTIVO\\s+NO\\s+CORRIENTE',
+    'SUBTOTAL\\s+ACTIVO\\s+NO\\s+CORRIENTE',
   ]);
   const pasivoNC = buscar([
     '[Tt]otal\\s+[Pp]asivo\\s+[Nn]o\\s+[Cc]orriente',
     '[Pp]asivos?\\s+[Nn]o\\s+[Cc]orrientes?\\s+[Tt]otales?',
+    'TOTAL\\s+PASIVO\\s+NO\\s+CORRIENTE',
   ]);
   const activoT  = activoCPCE ?? buscar([
     '[Tt]otal\\s+(?:del\\s+)?[Aa]ctivo(?!\\s+[Cc]orr)(?!\\s+[Nn]o)',
@@ -8613,22 +8792,52 @@ function cierreLabel(mes) {
 }
 
 // ── Comparación entre dos o más balances cargados ──────────
+function elegirPeriodoSel(key) {
+  if (!key) return;
+  _balActivo = key;
+  const selHidden = document.getElementById('bal-sel');
+  if (selHidden) selHidden.value = key;
+  // Marcar el checkbox correspondiente
+  document.querySelectorAll('#bal-comp-checks input[type=checkbox]').forEach(cb => {
+    cb.checked = cb.value === key;
+  });
+  showBalanceResult();
+}
+
 function buildComparacionBalances() {
   const wrap = document.getElementById('bal-comparacion-wrap');
   const cont = document.getElementById('bal-comp-contenido');
   const lbl  = document.getElementById('bal-comp-lbl');
   if (!wrap || !cont) return;
 
-  const keys = Object.keys(_balances);
-  if (keys.length < 2) { wrap.style.display = 'none'; return; }
+  // Obtener períodos seleccionados via checkboxes
+  const checkboxes = [...document.querySelectorAll('#bal-comp-checks input[type=checkbox]:checked')];
+  let keys = checkboxes.map(cb => cb.value).filter(k => _balances[k]);
+
+  // Si no hay checkboxes (empresa con 1 período) o ninguno marcado → usar todos de la empresa
+  if (!keys.length) {
+    const empresaActiva = _balEmpresaActiva || (_balActivo ? _balances[_balActivo]?.empresa : null);
+    keys = empresaActiva
+      ? Object.keys(_balances).filter(k => _balances[k].empresa === empresaActiva)
+      : Object.keys(_balances);
+  }
+
+  if (keys.length < 2) {
+    wrap.style.display = 'none';
+    // Mensaje de aviso
+    if (cont) cont.innerHTML = '<div style="padding:12px;font-size:10px;color:var(--dim)">Seleccioná al menos 2 períodos para comparar.</div>';
+    wrap.style.display = '';
+    return;
+  }
   wrap.style.display = '';
 
   // Ordenar por período
   const ordenados = keys
     .map(k => _balances[k])
-    .sort((a,b) => String(a.periodo).localeCompare(String(b.periodo)));
+    .sort((a, b) => String(a.periodo).localeCompare(String(b.periodo)));
 
-  if (lbl) lbl.textContent = ordenados.map(b => b.periodo).join(' · ');
+  if (lbl) lbl.textContent = (empresaActiva ? empresaActiva + ' · ' : '') +
+    ordenados.map(b => b.periodo).join(' vs ');
 
   const ratioRows = [
     { lbl:'Liquidez corriente',  get: b => b.indicadores?.liquidez?.liquidez_corriente,    fmt:'ratio', ok: v => v >= 1 },
@@ -8648,7 +8857,7 @@ function buildComparacionBalances() {
 
   const fmtV = (v, fmt) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
-    if (fmt==='ratio') return v.toFixed(2);
+    if (fmt==='ratio') return v.toFixed(2) + 'x';
     if (fmt==='pct')   return (v*100).toFixed(1)+'%';
     if (fmt==='monto') {
       const s=v<0?'-':'', a=Math.abs(v);
@@ -8660,32 +8869,33 @@ function buildComparacionBalances() {
     return String(v);
   };
 
-  // Cabecera con períodos — resaltar si son no-calendario
-  const thStyle = 'padding:6px 12px;text-align:right;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap';
+  const thStyle = 'padding:6px 12px;text-align:right;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd);white-space:nowrap';
   const thPeriodo = ordenados.map(b => {
-    const nc = b.esCierreNoCal || (b.periodo && !/^\d{4}$/.test(b.periodo));
-    const color = nc ? '#ff8c47' : 'var(--dim)';
-    const tip   = nc ? 'Cierre no calendario' : '';
-    return `<th style="${thStyle};color:${color}" title="${tip}">${b.periodo}${nc?' ✦':''}</th>`;
+    const nc    = b.esCierreNoCal || (b.periodo && !/^\d{4}$/.test(b.periodo));
+    const color = nc ? '#ff8c47' : 'var(--y21)';
+    const activo= b === _balances[_balActivo];
+    return `<th style="${thStyle};color:${color};${activo?'font-weight:700;border-bottom:2px solid var(--y21)':''}"
+      title="${nc?'Cierre no calendario':''}">
+      ${b.periodo}${nc?' ✦':''}${activo?' ●':''}
+    </th>`;
   }).join('');
 
-  // Columna de variación entre primer y último período
   const showVar = ordenados.length >= 2;
 
   const filas = ratioRows.map(row => {
     const vals = ordenados.map(b => row.get(b));
-    if (vals.every(v => v == null)) return ''; // skip filas vacías
+    if (vals.every(v => v == null)) return '';
 
-    const celdas = vals.map((v,i) => {
-      const color = v==null ? 'var(--dim)' : row.fmt==='monto' && v<0 ? 'var(--neg)' : row.ok(v) ? 'var(--pos)' : 'var(--neg)';
-      // Flecha de tendencia respecto al anterior
+    const celdas = vals.map((v, i) => {
+      const color = v==null ? 'var(--dim)' : row.fmt==='monto' && v<0 ? '#ff4766' : row.ok(v) ? '#47ffb4' : '#ff4766';
       let flecha = '';
       if (i > 0 && vals[i-1] != null && v != null) {
-        const up = row.fmt==='pct'||row.fmt==='ratio' ? v > vals[i-1] : v > vals[i-1];
+        const up     = v > vals[i-1];
         const goodUp = row.lbl.includes('Endeud') || row.lbl.includes('Deuda') ? !up : up;
-        flecha = `<span style="font-size:9px;color:${goodUp?'var(--pos)':'var(--neg)'};margin-left:4px">${up?'↑':'↓'}</span>`;
+        const fColor = goodUp ? '#47ffb4' : '#ff4766';
+        flecha = `<span style="font-size:10px;color:${fColor};margin-left:4px">${up?'↑':'↓'}</span>`;
       }
-      return `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:10.5px;
+      return `<td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:10.5px;
         border-bottom:1px solid var(--bd2);color:${color}">${fmtV(v,row.fmt)}${flecha}</td>`;
     }).join('');
 
@@ -8694,159 +8904,161 @@ function buildComparacionBalances() {
     if (showVar) {
       const v0 = vals[0], vN = vals[vals.length-1];
       if (v0 != null && vN != null && v0 !== 0 && row.fmt !== 'monto') {
-        const pct = (vN - v0) / Math.abs(v0) * 100;
-        const buena = row.lbl.includes('Endeud')||row.lbl.includes('Deuda') ? pct<0 : pct>0;
-        varCell = `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:10px;
-          border-bottom:1px solid var(--bd2);color:${buena?'var(--pos)':'var(--neg)'};font-style:italic">
-          ${pct>0?'+':''}${pct.toFixed(1)}%</td>`;
+        const pct  = (vN - v0) / Math.abs(v0) * 100;
+        const buena= row.lbl.includes('Endeud')||row.lbl.includes('Deuda') ? pct<0 : pct>0;
+        const arrow= pct > 0 ? '▲' : '▼';
+        varCell = `<td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:10px;
+          border-bottom:1px solid var(--bd2);color:${buena?'#47ffb4':'#ff4766'}">
+          ${arrow} ${pct>0?'+':''}${pct.toFixed(1)}%</td>`;
       } else {
-        varCell = `<td style="padding:5px 12px;border-bottom:1px solid var(--bd2);color:var(--dim)">—</td>`;
+        varCell = `<td style="padding:6px 12px;border-bottom:1px solid var(--bd2);color:var(--dim)">—</td>`;
       }
     }
 
-    return `<tr><td style="padding:5px 10px;font-size:10px;color:var(--dim);border-bottom:1px solid var(--bd2);
-      white-space:nowrap">${row.lbl}</td>${celdas}${varCell}</tr>`;
+    return `<tr onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''">
+      <td style="padding:6px 10px;font-size:10px;color:var(--dim);border-bottom:1px solid var(--bd2);
+        white-space:nowrap">${row.lbl}</td>${celdas}${varCell}</tr>`;
   }).filter(Boolean).join('');
 
   const varHeader = showVar
-    ? `<th style="${thStyle};color:#47e8ff;font-style:italic">Var. total</th>`
+    ? `<th style="${thStyle};color:#47e8ff">Var. total</th>`
     : '';
 
   cont.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     <thead><tr>
       <th style="padding:6px 10px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;
-        color:var(--dim);border-bottom:1px solid var(--bd)">Indicador</th>
+        color:var(--dim);border-bottom:2px solid var(--bd)">Indicador</th>
       ${thPeriodo}${varHeader}
     </tr></thead>
     <tbody>${filas}</tbody>
   </table></div>
   <div style="margin-top:8px;font-size:9px;color:var(--dim)">
-    ✦ Período con cierre no calendario &nbsp;·&nbsp;
-    ↑↓ variación respecto al período anterior &nbsp;·&nbsp;
-    Verde = favorable · Rojo = desfavorable
+    ✦ Cierre no calendario &nbsp;·&nbsp; ● Período activo &nbsp;·&nbsp;
+    ▲▼ variación respecto al período anterior &nbsp;·&nbsp;
+    <span style="color:#47ffb4">Verde = favorable</span> · <span style="color:#ff4766">Rojo = desfavorable</span>
   </div>`;
+
 }
 
 
 // ═══════════════════════════════════════════════════════════
-//  NAVEGACIÓN: botones empresa → botones período → resultado
+//  NAVEGACIÓN: dropdowns empresa → período → resultado
 // ═══════════════════════════════════════════════════════════
-let _balEmpresaActiva = null;  // empresa seleccionada en paso 1
+let _balEmpresaActiva = null;
 
-// Paso 1: renderizar botones de empresa
+// Actualizar dropdown de empresas
 function actualizarFiltros() {
-  const empresas = [...new Set(Object.values(_balances).map(b=>b.empresa))].sort();
-  const wrap     = document.getElementById('bal-empresa-btns');
-  if (!wrap) return;
+  const empresas = [...new Set(Object.values(_balances).map(b => b.empresa))].sort();
+  const selEmp   = document.getElementById('bal-sel-empresa');
+  if (!selEmp) return;
 
-  // Si la empresa activa ya no existe, resetear
-  if (_balEmpresaActiva && !empresas.includes(_balEmpresaActiva)) _balEmpresaActiva = null;
-  // Si no hay ninguna activa, elegir la primera
+  const prev = _balEmpresaActiva || selEmp.value;
+
+  selEmp.innerHTML = '<option value="">— Seleccioná una empresa —</option>' +
+    empresas.map(emp => {
+      const bals  = Object.values(_balances).filter(b => b.empresa === emp);
+      const nPer  = bals.length;
+      const periodos = bals.map(b => b.periodo).sort().join(', ');
+      return `<option value="${emp}">${emp} · ${nPer} período${nPer !== 1 ? 's' : ''} (${periodos})</option>`;
+    }).join('');
+
   if (!_balEmpresaActiva && empresas.length) _balEmpresaActiva = empresas[0];
-
-  wrap.innerHTML = empresas.map(emp => {
-    const activa  = emp === _balEmpresaActiva;
-    const nPer    = Object.values(_balances).filter(b=>b.empresa===emp).length;
-    return `<button onclick="elegirEmpresa('${emp.replace(/'/g,"\'")}', this)"
-      style="padding:6px 14px;border-radius:4px;cursor:pointer;font-size:10.5px;
-      border:1px solid ${activa?'var(--y21)':'var(--bd2)'};
-      background:${activa?'rgba(232,255,71,.12)':'var(--s2)'};
-      color:${activa?'var(--y21)':'var(--text)'};
-      font-weight:${activa?'600':'400'};transition:all .1s">
-      ${emp}
-      <span style="font-size:9px;color:var(--dim);margin-left:4px">${nPer} per.</span>
-    </button>`;
-  }).join('');
+  if (_balEmpresaActiva && empresas.includes(_balEmpresaActiva)) {
+    selEmp.value = _balEmpresaActiva;
+    // Mostrar info debajo del selector
+    const bals   = Object.values(_balances).filter(b => b.empresa === _balEmpresaActiva);
+    const infoEl = document.getElementById('bal-empresa-info');
+    if (infoEl) infoEl.textContent =
+      `${bals.length} balance${bals.length!==1?'s':''} cargados · períodos: ${bals.map(b=>b.periodo).sort().join(' · ')}`;
+  }
 
   actualizarPeriodos();
 }
 
-function elegirEmpresa(emp, btn) {
-  _balEmpresaActiva = emp;
-  // Resaltar botón activo
-  document.querySelectorAll('#bal-empresa-btns button').forEach(b => {
-    const activa = b === btn;
-    b.style.borderColor  = activa ? 'var(--y21)' : 'var(--bd2)';
-    b.style.background   = activa ? 'rgba(232,255,71,.12)' : 'var(--s2)';
-    b.style.color        = activa ? 'var(--y21)' : 'var(--text)';
-    b.style.fontWeight   = activa ? '600' : '400';
-  });
+function elegirEmpresaSel(emp) {
+  _balEmpresaActiva = emp || null;
+  // Actualizar info de empresa
+  const infoEl = document.getElementById('bal-empresa-info');
+  if (infoEl && emp) {
+    const bals = Object.values(_balances).filter(b => b.empresa === emp);
+    infoEl.textContent = `${bals.length} balance${bals.length!==1?'s':''} cargados · períodos: ${bals.map(b=>b.periodo).sort().join(' · ')}`;
+  } else if (infoEl) {
+    infoEl.textContent = '';
+  }
   actualizarPeriodos();
 }
 
-// Paso 2: renderizar botones de período para la empresa elegida
+// Actualizar dropdown de períodos según empresa elegida
 function actualizarPeriodos() {
-  const wrap = document.getElementById('bal-periodo-btns');
-  if (!wrap) return;
+  const selPer = document.getElementById('bal-sel-periodo');
+  if (!selPer) return;
 
   if (!_balEmpresaActiva) {
-    wrap.innerHTML = '<span style="font-size:10px;color:var(--dim)">— Elegí una empresa primero —</span>';
+    selPer.innerHTML = '<option value="">— Elegí una empresa primero —</option>';
+    selPer.disabled  = true;
+    document.getElementById('bal-comp-selector-row').style.display = 'none';
     return;
   }
 
-  // Balances de esta empresa ordenados por período
   const bals = Object.entries(_balances)
-    .filter(([,b]) => b.empresa === _balEmpresaActiva)
-    .sort(([,a],[,b]) => String(a.periodo).localeCompare(String(b.periodo)));
+    .filter(([, b]) => b.empresa === _balEmpresaActiva)
+    .sort(([, a], [, b]) => String(a.periodo).localeCompare(String(b.periodo)));
 
   if (!bals.length) {
-    wrap.innerHTML = '<span style="font-size:10px;color:var(--dim)">Sin balances para esta empresa</span>';
+    selPer.innerHTML = '<option value="">Sin balances para esta empresa</option>';
+    selPer.disabled  = true;
     return;
   }
 
-  // Si el activo no pertenece a esta empresa, elegir el primero
-  const perteneceActivo = _balActivo && _balances[_balActivo]?.empresa === _balEmpresaActiva;
-  if (!perteneceActivo && bals.length) _balActivo = bals[bals.length-1][0];
-
-  wrap.innerHTML = bals.map(([key, b]) => {
-    const activo  = key === _balActivo;
-    const nc      = b.esCierreNoCal;
-    const vinc    = b.vinculada ? ' · ' + b.vinculada : '';
-    const color   = nc ? '#ff8c47' : 'var(--text)';
-    return `<button onclick="elegirBalance('${key.replace(/'/g,"\'")}', this)"
-      style="padding:6px 16px;border-radius:4px;cursor:pointer;font-size:11px;
-      border:2px solid ${activo?'var(--y21)':'var(--bd2)'};
-      background:${activo?'rgba(232,255,71,.10)':'var(--s2)'};
-      color:${activo?'var(--y21)':color};
-      font-family:var(--mono);font-weight:${activo?'600':'400'};
-      position:relative;transition:all .1s">
-      ${b.periodo}${nc?'<span style="font-size:9px;color:#ff8c47"> ✦</span>':''}
-      ${vinc?'<span style="font-size:8px;color:#47e8ff;display:block;margin-top:1px">'+b.vinculada+'</span>':''}
-      <button onclick="event.stopPropagation();eliminarBalance('${key.replace(/'/g,"\'")}');return false"
-        title="Eliminar este balance"
-        style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;
-        background:#ff4766;border:none;color:#fff;font-size:9px;cursor:pointer;
-        display:flex;align-items:center;justify-content:center;line-height:1;padding:0">×</button>
-    </button>`;
+  selPer.disabled  = false;
+  selPer.innerHTML = bals.map(([key, b]) => {
+    const nc  = b.esCierreNoCal;
+    const vin = b.vinculada ? ` · vinculado a ${b.vinculada}` : '';
+    const met = b.metodo ? ` · ${b.metodo}` : '';
+    return `<option value="${key}">${b.periodo}${nc ? ' ✦ (cierre no cal.)' : ''}${vin}${met}</option>`;
   }).join('');
 
-  // Actualizar selector hidden y mostrar resultado
-  const sel = document.getElementById('bal-sel');
-  if (sel) {
-    sel.innerHTML = bals.map(([k,b])=>`<option value="${k}">${b.empresa} — ${b.periodo}</option>`).join('');
-    sel.value = _balActivo || '';
+  const perteneceActivo = _balActivo && _balances[_balActivo]?.empresa === _balEmpresaActiva;
+  if (!perteneceActivo) _balActivo = bals[bals.length - 1][0];
+  selPer.value = _balActivo || '';
+
+  // Actualizar selector hidden
+  const selHidden = document.getElementById('bal-sel');
+  if (selHidden) {
+    selHidden.innerHTML = bals.map(([k, b]) =>
+      `<option value="${k}">${b.empresa} — ${b.periodo}</option>`).join('');
+    selHidden.value = _balActivo || '';
   }
+
+  // Actualizar checkboxes de comparación
+  const compRow    = document.getElementById('bal-comp-selector-row');
+  const compChecks = document.getElementById('bal-comp-checks');
+  if (compChecks) {
+    if (bals.length >= 2) {
+      compRow.style.display = '';
+      // Por defecto seleccionar todos
+      compChecks.innerHTML = bals.map(([key, b]) =>
+        `<label style="display:flex;align-items:center;gap:4px;padding:4px 8px;
+          background:var(--s2);border:1px solid var(--bd2);border-radius:3px;
+          cursor:pointer;font-size:9.5px;font-family:var(--mono);white-space:nowrap;
+          color:${b.esCierreNoCal?'#ff8c47':'var(--text)'}">
+          <input type="checkbox" value="${key}" checked
+            style="accent-color:var(--y21);cursor:pointer">
+          ${b.periodo}${b.esCierreNoCal?' ✦':''}
+        </label>`
+      ).join('');
+    } else {
+      compRow.style.display = 'none';
+    }
+  }
+
   if (_balActivo && _balances[_balActivo]) showBalanceResult();
 }
 
-function elegirBalance(key, btn) {
-  _balActivo = key;
-  // Resaltar botón activo
-  document.querySelectorAll('#bal-periodo-btns > button').forEach(b => {
-    const activo = b === btn;
-    b.style.borderColor = activo ? 'var(--y21)' : 'var(--bd2)';
-    b.style.background  = activo ? 'rgba(232,255,71,.10)' : 'var(--s2)';
-    b.style.fontWeight  = activo ? '600' : '400';
-    const nc = _balances[Object.keys(_balances).find(k=>_balances[k].empresa===_balEmpresaActiva&&b.textContent.includes(_balances[k].periodo))]?.esCierreNoCal;
-    b.style.color = activo ? 'var(--y21)' : (nc ? '#ff8c47' : 'var(--text)');
-  });
-  const sel = document.getElementById('bal-sel');
-  if (sel) sel.value = key;
-  showBalanceResult();
-}
-
-// Compatibilidad con código existente que llama filtrarBalances()
-function filtrarBalances() { actualizarFiltros(); }
+// Compatibilidad con botones viejos (ya no existen en el HTML pero pueden llamarse desde JS)
+function elegirEmpresa(emp) { _balEmpresaActiva = emp; elegirEmpresaSel(emp); }
+function elegirBalance(key) { elegirPeriodoSel(key); }
+function filtrarBalances()   { actualizarFiltros(); }
 
 // Lista de archivos cargados con opción de eliminación individual
 function renderListaArchivos() {
@@ -9135,23 +9347,38 @@ function showBalanceResult() {
   const ren = ind.rentabilidad || {};
   const efi = ind.eficiencia   || {};
 
-  // KPI banda
+  // Diagnóstico y alertas
+  // ── Semáforo de salud financiera ─────────────────────────
+  const scores = {
+    liquidez:    liq.liquidez_corriente != null ? Math.min(100, Math.max(0, liq.liquidez_corriente >= 2 ? 100 : liq.liquidez_corriente >= 1 ? 70 : liq.liquidez_corriente >= 0.5 ? 40 : 15)) : null,
+    solvencia:   sol.razon_endeudamiento != null ? Math.min(100, Math.max(0, sol.razon_endeudamiento <= 0.3 ? 100 : sol.razon_endeudamiento <= 0.5 ? 80 : sol.razon_endeudamiento <= 0.7 ? 55 : sol.razon_endeudamiento <= 1 ? 30 : 10)) : null,
+    rentabilidad:ren.roe != null ? Math.min(100, Math.max(0, ren.roe >= 0.15 ? 100 : ren.roe >= 0.05 ? 75 : ren.roe >= 0 ? 50 : ren.roe >= -0.1 ? 25 : 5)) : null,
+    eficiencia:  efi.rotacion_activos != null ? Math.min(100, Math.max(0, efi.rotacion_activos >= 1 ? 100 : efi.rotacion_activos >= 0.5 ? 75 : efi.rotacion_activos >= 0.2 ? 50 : 25)) : null,
+  };
+  const validScores = Object.values(scores).filter(v => v != null);
+  const scoreGlobal = validScores.length ? Math.round(validScores.reduce((a,b)=>a+b,0)/validScores.length) : null;
+  const scoreColor  = scoreGlobal == null ? '#94a3b8' : scoreGlobal >= 70 ? '#47ffb4' : scoreGlobal >= 45 ? '#e8ff47' : '#ff4766';
+  const scoreLabel  = scoreGlobal == null ? 'Sin datos' : scoreGlobal >= 70 ? 'Saludable' : scoreGlobal >= 45 ? 'Moderado' : 'Crítico';
+
+  // KPI banda con score global
   const kpis = [
+    { lbl:'Salud financiera', val: scoreGlobal!=null ? scoreGlobal+'/100' : '—',
+      sub: scoreLabel, ac: scoreColor },
     { lbl:'Liquidez corriente', val: liq.liquidez_corriente!=null ? liq.liquidez_corriente.toFixed(2) : '—',
       sub: liq.liquidez_corriente!=null ? (liq.liquidez_corriente>=1 ? '✓ Cubre pasivo corriente' : '⚠ Menor a 1') : 'Sin dato',
       ac: liq.liquidez_corriente==null?'#94a3b8':liq.liquidez_corriente>=1?'#47ffb4':'#ff4766' },
     { lbl:'ROE', val: ren.roe!=null ? (ren.roe*100).toFixed(1)+'%' : '—',
-      sub: ren.roe!=null ? (ren.roe>0 ? 'Rentable' : 'Pérdida sobre patrimonio') : 'Sin dato',
+      sub: ren.roe!=null ? (ren.roe>0 ? 'Rentable sobre patrimonio' : '⚠ Pérdida sobre patrimonio') : 'Sin dato',
       ac: ren.roe==null?'#94a3b8':ren.roe>0?'#47ffb4':'#ff4766' },
     { lbl:'Endeudamiento', val: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento*100).toFixed(1)+'%' : '—',
       sub: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento<0.6?'Nivel moderado':'⚠ Alta deuda') : 'Sin dato',
       ac: sol.razon_endeudamiento==null?'#94a3b8':sol.razon_endeudamiento<0.6?'#47e8ff':'#ff4766' },
-    { lbl:'Margen neto', val: ren.margen_neto!=null ? (ren.margen_neto*100).toFixed(1)+'%' : '—',
-      sub: ren.margen_neto!=null ? (ren.margen_neto>=0?'Positivo':'Negativo') : 'Sin dato',
-      ac: ren.margen_neto==null?'#94a3b8':ren.margen_neto>=0?'#47ffb4':'#ff4766' },
     { lbl:'Patrimonio neto', val: sol.patrimonio_neto!=null ? fv(sol.patrimonio_neto,true) : '—',
       sub: sol.patrimonio_neto!=null ? (sol.patrimonio_neto>0?'Positivo':'⚠ Negativo') : 'Sin dato',
       ac: sol.patrimonio_neto==null?'#94a3b8':sol.patrimonio_neto>0?'#47e8ff':'#ff4766' },
+    { lbl:'Margen neto', val: ren.margen_neto!=null ? (ren.margen_neto*100).toFixed(1)+'%' : '—',
+      sub: ren.margen_neto!=null ? (ren.margen_neto>=0?'Positivo':'Negativo') : 'Sin dato',
+      ac: ren.margen_neto==null?'#94a3b8':ren.margen_neto>=0?'#47ffb4':'#ff4766' },
   ];
   document.getElementById('bal-kpi-band').innerHTML = kpis.map(k=>`
     <div class="kpi-band-item">
@@ -9161,79 +9388,150 @@ function showBalanceResult() {
       <div class="kpi-band-sub">${k.sub}</div>
     </div>`).join('');
 
-  // Tablas de indicadores
-  document.getElementById('bal-liquidez').innerHTML = buildIndicTable([
-    ['Liquidez corriente',  liq.liquidez_corriente, 'ratio', liq.liquidez_corriente>=1],
-    ['Liquidez seca',       liq.liquidez_seca,      'ratio', liq.liquidez_seca>=1],
-    ['Capital de trabajo',  liq.capital_trabajo,    'monto', liq.capital_trabajo>0],
-    ['Activo corriente',    liq.activo_corriente,   'monto', true],
-    ['Pasivo corriente',    liq.pasivo_corriente,   'monto', false],
+  // ── Gráfico radar 4 ejes ───────────────────────────────────
+  const radarCanvas = document.getElementById('ch-bal-radar');
+  if (radarCanvas) {
+    const rData = [scores.liquidez??0, scores.solvencia??0, scores.rentabilidad??0, scores.eficiencia??0];
+    mkChart('ch-bal-radar', 'radar', {
+      labels: ['Liquidez','Solvencia','Rentabilidad','Eficiencia'],
+      datasets: [{
+        label: b.empresa + ' · ' + b.periodo,
+        data:  rData,
+        backgroundColor: scoreColor + '28',
+        borderColor:     scoreColor,
+        borderWidth: 2,
+        pointBackgroundColor: scoreColor,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }]
+    }, {
+      scales: { r: {
+        min: 0, max: 100,
+        ticks:       { stepSize:25, color:'var(--dim)', font:{size:8}, backdropColor:'transparent' },
+        grid:        { color:'rgba(255,255,255,.08)' },
+        angleLines:  { color:'rgba(255,255,255,.08)' },
+        pointLabels: { color:'var(--text)', font:{size:10} },
+      }},
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}/100` } }
+      }
+    });
+    const rl = document.getElementById('bal-radar-lbl');
+    if (rl) rl.textContent = scoreGlobal!=null
+      ? `Score global: ${scoreGlobal}/100 — ${scoreLabel}`
+      : 'Datos insuficientes para radar';
+  }
+
+  // ── Tablas de indicadores con barras de progreso visuales ──
+  document.getElementById('bal-liquidez').innerHTML    = buildIndicTableVis([
+    { lbl:'Liquidez corriente',  val:liq.liquidez_corriente,  tipo:'ratio', ok:liq.liquidez_corriente>=1,    score:scores.liquidez,   ref:'≥ 1.0', desc:'Capacidad de pagar deudas de corto plazo' },
+    { lbl:'Liquidez seca',       val:liq.liquidez_seca,       tipo:'ratio', ok:liq.liquidez_seca>=1,         score:null,              ref:'≥ 1.0', desc:'Sin considerar inventarios' },
+    { lbl:'Capital de trabajo',  val:liq.capital_trabajo,     tipo:'monto', ok:liq.capital_trabajo>0,        score:null,              ref:'> 0',   desc:'Activo corriente − Pasivo corriente' },
+    { lbl:'Activo corriente',    val:liq.activo_corriente,    tipo:'monto', ok:true,                         score:null,              ref:'',      desc:'' },
+    { lbl:'Pasivo corriente',    val:liq.pasivo_corriente,    tipo:'monto', ok:null,                         score:null,              ref:'',      desc:'' },
   ], b.moneda);
 
-  document.getElementById('bal-solvencia').innerHTML = buildIndicTable([
-    ['Razón endeudamiento', sol.razon_endeudamiento,'pct',   sol.razon_endeudamiento<0.6],
-    ['Deuda / Patrimonio',  sol.deuda_patrimonio,   'ratio', sol.deuda_patrimonio<1],
-    ['Cobertura intereses', sol.cobertura_intereses,'ratio', sol.cobertura_intereses>1.5],
-    ['Pasivo total',        sol.pasivo_total,       'monto', false],
-    ['Patrimonio neto',     sol.patrimonio_neto,    'monto', sol.patrimonio_neto>0],
-    ['Activo total',        sol.activo_total,       'monto', true],
+  document.getElementById('bal-solvencia').innerHTML  = buildIndicTableVis([
+    { lbl:'Razón endeudamiento', val:sol.razon_endeudamiento, tipo:'pct',   ok:sol.razon_endeudamiento<0.6,  score:scores.solvencia,  ref:'< 60%', desc:'Deuda sobre activo total' },
+    { lbl:'Deuda / Patrimonio',  val:sol.deuda_patrimonio,    tipo:'ratio', ok:sol.deuda_patrimonio<1,        score:null,              ref:'< 1.0', desc:'Apalancamiento financiero' },
+    { lbl:'Cobertura intereses', val:sol.cobertura_intereses, tipo:'ratio', ok:sol.cobertura_intereses>1.5,  score:null,              ref:'> 1.5', desc:'EBIT / Intereses' },
+    { lbl:'Pasivo total',        val:sol.pasivo_total,        tipo:'monto', ok:null,                         score:null,              ref:'',      desc:'' },
+    { lbl:'Patrimonio neto',     val:sol.patrimonio_neto,     tipo:'monto', ok:sol.patrimonio_neto>0,        score:null,              ref:'> 0',   desc:'' },
+    { lbl:'Activo total',        val:sol.activo_total,        tipo:'monto', ok:true,                         score:null,              ref:'',      desc:'' },
   ], b.moneda);
 
-  document.getElementById('bal-rentabilidad').innerHTML = buildIndicTable([
-    ['ROE (Rentab. patrimonio)', ren.roe,              'pct',   ren.roe>0],
-    ['ROA (Rentab. activos)',    ren.roa,              'pct',   ren.roa>0],
-    ['Margen neto',              ren.margen_neto,      'pct',   ren.margen_neto>=0],
-    ['Margen operativo',         ren.margen_operativo, 'pct',   ren.margen_operativo>=0],
-    ['Resultado neto',           ren.resultado_neto,   'monto', ren.resultado_neto>0],
-    ['Ventas / Ingresos',        ren.ventas_ingresos,  'monto', true],
+  document.getElementById('bal-rentabilidad').innerHTML = buildIndicTableVis([
+    { lbl:'ROE',                 val:ren.roe,              tipo:'pct',   ok:ren.roe>0,                score:scores.rentabilidad, ref:'> 0%',  desc:'Retorno sobre patrimonio neto' },
+    { lbl:'ROA',                 val:ren.roa,              tipo:'pct',   ok:ren.roa>0,                score:null,                ref:'> 0%',  desc:'Retorno sobre activos totales' },
+    { lbl:'Margen neto',         val:ren.margen_neto,      tipo:'pct',   ok:ren.margen_neto>=0,       score:null,                ref:'≥ 0%',  desc:'Resultado neto / Ventas' },
+    { lbl:'Margen operativo',    val:ren.margen_operativo, tipo:'pct',   ok:ren.margen_operativo>=0,  score:null,                ref:'≥ 0%',  desc:'Resultado op. / Ventas' },
+    { lbl:'Resultado neto',      val:ren.resultado_neto,   tipo:'monto', ok:ren.resultado_neto>0,     score:null,                ref:'',      desc:'' },
+    { lbl:'Ventas / Ingresos',   val:ren.ventas_ingresos,  tipo:'monto', ok:true,                     score:null,                ref:'',      desc:'' },
   ], b.moneda);
 
-  document.getElementById('bal-eficiencia').innerHTML = buildIndicTable([
-    ['Rotación activos',   efi.rotacion_activos,    'ratio', efi.rotacion_activos>0.5],
-    ['Rotación inventarios',efi.rotacion_inventarios,'ratio', efi.rotacion_inventarios>1],
-    ['Días de cobro',      efi.dias_cobro,          'dias',  efi.dias_cobro<60],
-    ['Cuentas a cobrar',   efi.cuentas_cobrar,      'monto', true],
-    ['Costo de ventas',    efi.costo_ventas,        'monto', false],
+  document.getElementById('bal-eficiencia').innerHTML = buildIndicTableVis([
+    { lbl:'Rotación activos',    val:efi.rotacion_activos,     tipo:'ratio', ok:efi.rotacion_activos>0.5,    score:scores.eficiencia, ref:'> 0.5', desc:'Ventas / Activo total' },
+    { lbl:'Rotación inventarios',val:efi.rotacion_inventarios, tipo:'ratio', ok:efi.rotacion_inventarios>1,  score:null,              ref:'> 1.0', desc:'Costo ventas / Inventarios' },
+    { lbl:'Días de cobro',       val:efi.dias_cobro,           tipo:'dias',  ok:efi.dias_cobro<60,           score:null,              ref:'< 60d', desc:'Plazo promedio de cobranza' },
+    { lbl:'Cuentas a cobrar',    val:efi.cuentas_cobrar,       tipo:'monto', ok:true,                        score:null,              ref:'',      desc:'' },
+    { lbl:'Costo de ventas',     val:efi.costo_ventas,         tipo:'monto', ok:null,                        score:null,              ref:'',      desc:'' },
   ], b.moneda);
 
-  // Diagnóstico y alertas
-  const alertHTML = (b.alertas||[]).length
-    ? '<div style="margin-bottom:10px">' +
-      b.alertas.map(a=>`<div style="display:inline-block;margin:2px 4px 2px 0;padding:3px 10px;background:rgba(255,71,102,.1);border:1px solid #ff476640;border-radius:2px;font-size:9.5px;color:#ff4766">⚠ ${a}</div>`).join('') +
-      '</div>' : '';
-  document.getElementById('bal-diagnostico').innerHTML = alertHTML + '<p style="margin:0">'+b.diagnostico+'</p>';
+  // Diagnóstico y alertas con severidad
+  const alertas = b.alertas || [];
+  const alertHTML = alertas.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">` +
+      alertas.map(a => {
+        const isCrit = a.toLowerCase().includes('negativo') || a.toLowerCase().includes('crítico') || a.toLowerCase().includes('insolvencia');
+        const color  = isCrit ? '#ff4766' : '#ff8c47';
+        const bg     = isCrit ? 'rgba(255,71,102,.1)' : 'rgba(255,140,71,.1)';
+        return `<div style="padding:4px 12px;background:${bg};border:1px solid ${color}40;
+          border-radius:3px;font-size:9.5px;color:${color};display:flex;align-items:center;gap:5px">
+          <span>${isCrit?'🔴':'🟡'}</span> ${a}
+        </div>`;
+      }).join('') + '</div>'
+    : `<div style="padding:6px 12px;background:rgba(71,255,180,.08);border:1px solid #47ffb440;
+        border-radius:3px;font-size:9.5px;color:#47ffb4;margin-bottom:12px;display:inline-flex;
+        align-items:center;gap:6px">🟢 Sin alertas críticas detectadas</div>`;
+
+  document.getElementById('bal-diagnostico').innerHTML = alertHTML +
+    `<div style="font-size:11px;line-height:1.9;color:var(--text)">${b.diagnostico}</div>`;
 
   document.getElementById('bal-raw-txt').textContent = b.textoRaw;
 }
 
-// ── Tabla de indicadores ───────────────────────────────────
-function buildIndicTable(rows, moneda) {
-  const fmt = (v,tipo) => {
-    if (v==null) return '—';
-    if (tipo==='ratio') return v.toFixed(2);
-    if (tipo==='pct')   return (v*100).toFixed(1)+'%';
-    if (tipo==='dias')  return Math.round(v)+' días';
-    if (tipo==='monto') {
-      const s=v<0?'-':'', a=Math.abs(v);
-      if (a>=1e9) return s+'$'+(a/1e9).toFixed(2)+'B';
-      if (a>=1e6) return s+'$'+(a/1e6).toFixed(1)+'M';
-      if (a>=1e3) return s+'$'+(a/1e3).toFixed(0)+'K';
-      return s+'$'+a.toFixed(0);
+// ── Tabla de indicadores con barra visual ─────────────────────────
+function buildIndicTableVis(rows, moneda) {
+  const fmt = (v, tipo) => {
+    if (v == null) return '—';
+    if (tipo === 'ratio') return v.toFixed(2) + 'x';
+    if (tipo === 'pct')   return (v * 100).toFixed(1) + '%';
+    if (tipo === 'dias')  return Math.round(v) + ' días';
+    if (tipo === 'monto') {
+      const s = v < 0 ? '-' : '', a = Math.abs(v);
+      if (a >= 1e9) return s + '$' + (a/1e9).toFixed(2) + 'B';
+      if (a >= 1e6) return s + '$' + (a/1e6).toFixed(1) + 'M';
+      if (a >= 1e3) return s + '$' + (a/1e3).toFixed(0) + 'K';
+      return s + '$' + a.toFixed(0);
     }
     return String(v);
   };
-  return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">${
-    rows.map(([lbl,val,tipo,ok])=>{
-      const dot = val!=null
-        ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${ok?'#47ffb4':'#ff4766'};margin-right:6px;flex-shrink:0;vertical-align:middle"></span>`
-        : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--bd2);margin-right:6px;flex-shrink:0;vertical-align:middle"></span>`;
-      const vColor = val==null?'var(--dim)':tipo==='monto'&&val<0?'var(--neg)':tipo==='monto'?'var(--text)':ok?'var(--pos)':'var(--neg)';
-      return `<tr style="border-bottom:1px solid var(--bd2)">
-        <td style="padding:6px 4px;color:var(--dim)">${dot}${lbl}</td>
-        <td style="padding:6px 4px;text-align:right;font-family:var(--mono);font-weight:500;color:${vColor}">${fmt(val,tipo)}</td>
-      </tr>`;
+
+  return `<div style="display:flex;flex-direction:column;gap:1px">${
+    rows.map(({lbl, val, tipo, ok, score, ref, desc}) => {
+      const hasVal  = val != null;
+      const isPos   = ok === true;
+      const isNeg   = ok === false && hasVal;
+      const isNeut  = ok === null;
+      const vColor  = !hasVal ? 'var(--dim)' : tipo === 'monto' && val < 0 ? '#ff4766' : tipo === 'monto' ? 'var(--text)' : isPos ? '#47ffb4' : isNeg ? '#ff4766' : 'var(--dim)';
+      const dotColor= !hasVal ? 'var(--bd2)' : isNeut ? '#94a3b8' : isPos ? '#47ffb4' : '#ff4766';
+      const barWidth = score != null ? score : null;
+      const barColor = score == null ? '#47e8ff' : score >= 70 ? '#47ffb4' : score >= 45 ? '#e8ff47' : '#ff4766';
+
+      return `<div style="padding:7px 4px;border-bottom:1px solid var(--bd2);display:flex;flex-direction:column;gap:3px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+              background:${dotColor};flex-shrink:0"></span>
+            <span style="font-size:10px;color:var(--dim);white-space:nowrap">${lbl}</span>
+            ${ref ? `<span style="font-size:8px;color:var(--bd2);font-family:var(--mono)">${ref}</span>` : ''}
+          </div>
+          <span style="font-size:11.5px;font-family:var(--mono);font-weight:600;color:${vColor};
+            flex-shrink:0">${fmt(val, tipo)}</span>
+        </div>
+        ${barWidth != null ? `<div style="height:3px;background:var(--s3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${barWidth}%;background:${barColor};border-radius:2px;transition:width .4s"></div>
+        </div>` : ''}
+        ${desc ? `<div style="font-size:8.5px;color:var(--bd2)">${desc}</div>` : ''}
+      </div>`;
     }).join('')
-  }</table>`;
+  }</div>`;
+}
+
+// Alias para compatibilidad
+function buildIndicTable(rows, moneda) {
+  return buildIndicTableVis(rows.map(([lbl,val,tipo,ok]) => ({lbl,val,tipo,ok,score:null,ref:'',desc:''})), moneda);
 }
 
 // ── Progreso ───────────────────────────────────────────────
