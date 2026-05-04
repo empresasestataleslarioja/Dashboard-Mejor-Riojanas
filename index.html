@@ -2751,11 +2751,12 @@ self.onmessage = async (e) => {
           </div>
           <div id="bal-editor-wrap" style="display:none;margin-top:10px">
 
+            <!-- Tipo de empresa — controla qué rubros aparecen en el editor y en el ER -->
             <!-- Estado Patrimonial -->
             <div style="margin-bottom:14px">
               <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
                 color:#47e8ff;margin-bottom:8px;font-weight:600">Estado de Situación Patrimonial</div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"
+              <div style="display:flex;flex-direction:column;gap:6px"
                 id="bal-editor-patrimonial"></div>
             </div>
 
@@ -2763,7 +2764,7 @@ self.onmessage = async (e) => {
             <div style="margin-bottom:14px">
               <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
                 color:#47ffb4;margin-bottom:8px;font-weight:600">Estado de Resultados</div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"
+              <div style="display:flex;flex-direction:column;gap:6px"
                 id="bal-editor-resultados"></div>
             </div>
 
@@ -7714,16 +7715,26 @@ function tryParseSIDIF(wb, fname) {
       return -1;
     };
 
-    const iSAF  = idx(['etd','saf']);
+    const iSAF  = idx(['etd. emisora op','etd. emisora pg','etd','saf']);
     const iOrg  = idx(['denominación saf','organismo','saf']);
     const iBen  = idx(['denominación beneficiario','beneficiario']);
     const iFF   = idx(['f.f.','ff ']);
-    const iCGto = idx(['cgto']);
+    const iCGto = idx(['cgto','nro. sidif','nro sidif','sidif']);
+    // También capturar el número SIDIF para identificar el pago
+    const iSIDIF = idx(['nro. sidif op','nro. sidif','nro sidif']);
     const iObs  = idx(['observ']);
     const iSuel = idx(['incluye sueldos','sueldo']);
     const iMes  = idx(['mes pago','mes']);
     const iAño  = idx(['año pago','año','ejer op']);
-    const iImp  = idx(['importe mpago','importe bruto moneda origen','importe']);
+    // Buscar columna de importe — priorizar MCL (moneda corriente local) sobre MO
+    // "Imp. Pag. MCL" es la columna del importe real en archivos SIDIF modernos
+    const iImpMCL = idx(['imp. pag. mcl','imp pag mcl','importe mcl','mcl']);
+    const iImpMO  = idx(['imp. pag. mo','imp pag mo','importe mo','importe mpago',
+                         'importe bruto moneda origen']);
+    const iImpGen = idx(['importe']);
+    // Prioridad: MCL > MO genérico > cualquier "importe"
+    // MCL es la columna en pesos corrientes — la relevante para el dashboard
+    const iImp = iImpMCL >= 0 ? iImpMCL : (iImpMO >= 0 ? iImpMO : iImpGen);
 
     if (iBen < 0 || iImp < 0) return [];
 
@@ -7740,6 +7751,7 @@ function tryParseSIDIF(wb, fname) {
       const org    = String(iOrg>=0 ? (row[iOrg]||'') : '').trim();
       const ff     = String(iFF>=0  ? (row[iFF]||'')  : '').trim();
       const suel   = String(iSuel>=0? (row[iSuel]||''):'').trim();
+      const nroSIDIF = iSIDIF>=0 ? String(row[iSIDIF]||'').trim() : '';
 
       let mes = iMes>=0 ? parseInt(row[iMes]||0) : 0;
       let año = iAño>=0 ? parseInt(row[iAño]||0) : 0;
@@ -7747,15 +7759,57 @@ function tryParseSIDIF(wb, fname) {
       if (mes > 12) mes = 0;
       if (año < 2000 || año > 2100) año = 0;
 
-      if (!año) {
-        const mAño = observ.match(/20(\d{2})/);
-        if (mAño) año = parseInt('20'+mAño[1]);
+      // Helper: convertir número de serie Excel a {año, mes, dia}
+      // SheetJS devuelve fechas como número de serie (ej: 46139 = 2026-04-27)
+      const excelSerialToDate = (n) => {
+        if (typeof n !== 'number' || n < 1) return null;
+        // Epoch de Excel: 1-ene-1900 = día 1 (con bug de año bisiesto 1900, offset 25569 para Unix)
+        const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+        return { año: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
+      };
+
+      // PRIORIDAD: extraer año y mes de la columna de fecha de registro (F.Registro PG)
+      // Es la fecha real del pago, no la del período referenciado en la observación
+      const iFecha = idx(['f.registro pg','f.registro op','f.registro','fecha registro','fecha pago','fregistro']);
+      const fechaCell = iFecha >= 0 ? row[iFecha] : null;
+      if (fechaCell) {
+        // Caso 1: número de serie de Excel (el más común en XLS/XLSX)
+        if (typeof fechaCell === 'number' && fechaCell > 40000) {
+          const fd = excelSerialToDate(fechaCell);
+          if (fd) { año = fd.año; if (!mes) mes = fd.mes; }
+        }
+        // Caso 2: string "2026-04-27 13:54:22" o "2026-04-27"
+        else if (typeof fechaCell === 'string') {
+          const mFecha = fechaCell.match(/(20\d{2})-(0[1-9]|1[0-2])/);
+          if (mFecha) { año = parseInt(mFecha[1]); if (!mes) mes = parseInt(mFecha[2]); }
+        }
+        // Caso 3: objeto Date nativo
+        else if (fechaCell instanceof Date) {
+          año = fechaCell.getFullYear(); if (!mes) mes = fechaCell.getMonth() + 1;
+        }
       }
+
+      // Fallback: buscar número de serie de fecha en cualquier celda de la fila
+      if (!año || !mes) {
+        for (const cell of row) {
+          if (!cell || cell === fechaCell) continue;
+          if (typeof cell === 'number' && cell > 40000 && cell < 60000) {
+            const fd = excelSerialToDate(cell);
+            if (fd && fd.año >= 2000) { if (!año) año = fd.año; if (!mes) mes = fd.mes; break; }
+          } else if (typeof cell === 'string') {
+            const mFecha = cell.match(/(20\d{2})-(0[1-9]|1[0-2])/);
+            if (mFecha) { if (!año) año = parseInt(mFecha[1]); if (!mes) mes = parseInt(mFecha[2]); break; }
+          }
+        }
+      }
+      // NO usar la observación para el año — contiene años del período referenciado, no del pago
 
       const categoria = clasificarTransferencia(cgto, observ, suel);
 
-      rows.push({ saf, organismo:org, beneficiario:ben, ff, cgto, observacion:observ,
-                  incluye_sueldos:suel, mes:mes||null, año:año||null, importe:imp,
+      rows.push({ saf, organismo:org, beneficiario:ben, ff,
+                  cgto: cgto || nroSIDIF, // usar nro SIDIF si no hay CGto
+                  observacion:observ, incluye_sueldos:suel,
+                  mes:mes||null, año:año||null, importe:imp,
                   categoria, _hoja: sheetName });
     }
     return rows;
@@ -7773,7 +7827,11 @@ function tryParseSIDIF(wb, fname) {
     for (let ri = 0; ri < Math.min(5, raw.length); ri++) {
       const row = (raw[ri] || []).map(v => String(v||'').trim().toLowerCase());
       const hasBen = row.some(c => c.includes('beneficiario') || c.includes('denominaci'));
-      const hasImp = row.some(c => c.includes('importe') || c.includes('mpago'));
+      const hasImp = row.some(c =>
+        c.includes('importe') || c.includes('mpago') ||
+        c.includes('imp. pag') || c.includes('imp pag') ||
+        c.includes('mcl') || c.includes('pago mcl') || c.includes('pago mo')
+      );
       if (hasBen && hasImp) {
         const rowsDeHoja = parsearHoja(raw, ri, sn);
         if (rowsDeHoja.length > 0) {
@@ -8010,6 +8068,11 @@ function handleImportWorkbook(wb, fname) {
       sidifRows: JSON.parse(JSON.stringify(sidifResult.rows)),
       snapAfter: deepCopyData() });
     updateImportUI();
+    saveDataToLocalCache();
+    // Refrescar módulo de transferencias con los nuevos datos
+    populateTransSelects();
+    if (typeof buildTransferencias === 'function') buildTransferencias();
+    rebuildActive();
     return;
   }
 
@@ -9259,6 +9322,204 @@ function loadBalanceArchivo(file) {
 }
 
 // ── Carga desde Excel ────────────────────────────────────────────
+// ── Limpiar label: quitar referencias a notas/anexos entre paréntesis ──────
+function _limpiarLabelExcel(txt) {
+  return (txt || '')
+    .replace(/\s*\([^)]*(?:[Nn]ota|[Aa]nexo|[Aa]nex|[Nn]ote)[^)]*\)/gi, '')
+    .replace(/\s*\([a-zA-Z+\s]{1,10}\)\s*$/g, '')
+    .trim();
+}
+
+// ── Parser estructural de Excel para balances ────────────────────────────────
+// Lee fila a fila respetando fórmulas y estructura del archivo.
+// Produce estructura_er con grupos de suma explícitos.
+function parsearExcelBalance(wb, XLSX) {
+  // Buscar hojas de Estado de Resultados y Situación Patrimonial
+  const findSheet = (...keywords) => wb.SheetNames.find(sn =>
+    keywords.some(kw => sn.toLowerCase().includes(kw.toLowerCase()))
+  );
+  const snER  = findSheet('resultado', 'results', 'ganancias', 'perdidas');
+  const snSP  = findSheet('patrimonial', 'situacion', 'balance', 'activo');
+
+  // Mapa de nombres de campo para rubros comunes del ER
+  // Determina negativo y libre según el nombre del rubro
+  const inferirSigno = (lbl) => {
+    const l = lbl.toLowerCase();
+    const NEGA = ['costo','gasto','egreso','menos:','perdida','pérdida','impuesto'];
+    const LIBRE = ['financier','tenencia','recpam','monetar','rei ','resultado','rtdo','rdo.',
+                   'impuesto','ganancia','utilidad','margen','neto','bruto','subtotal','sub-total',
+                   'sub total','total','ejercicio'];
+    const LIBRE_DEF_NEG = ['impuesto'];
+    const esNeg  = NEGA.some(k => l.includes(k)) && !l.includes('ingreso') && !l.includes('venta');
+    const esLib  = LIBRE.some(k => l.includes(k));
+    const esLDN  = LIBRE_DEF_NEG.some(k => l.includes(k));
+    return { negativo: esNeg && !esLib, libre: esLib, libreDefaultNeg: esLDN };
+  };
+
+  // ── Leer Estado de Resultados ───────────────────────────────────────────
+  const estructura_er = [];
+  if (snER) {
+    const ws = wb.Sheets[snER];
+    // Obtener rango de la hoja
+    const rango  = XLSX.utils.decode_range(ws['!ref'] || 'A1:C50');
+    const maxRow = rango.e.r;
+
+    // Encontrar columna de datos (primera con valores numéricos en filas de datos)
+    let colDatos = 1; // default columna B (index 1)
+    for (let r = 1; r <= Math.min(maxRow, 20); r++) {
+      const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
+      const cellB = ws[XLSX.utils.encode_cell({r, c: 1})];
+      if (cellA?.v && typeof cellB?.v === 'number') { colDatos = 1; break; }
+    }
+
+    // Leer fila a fila
+    for (let r = 0; r <= maxRow; r++) {
+      const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
+      const cellB = ws[XLSX.utils.encode_cell({r, c: colDatos})];
+      const labelRaw = String(cellA?.v || '').trim();
+      if (!labelRaw) continue;
+
+      // Ignorar cabeceras (no tienen número en col B)
+      const valor    = typeof cellB?.v === 'number' ? cellB.v : null;
+      const formula  = cellB?.f || null; // fórmula si existe
+
+      // Filas de texto puro sin número: separadores visuales ("Menos:", "Más:")
+      // Las ignoramos pero las marcamos como separadores
+      if (valor === null && !formula) continue;
+
+      const lbl = _limpiarLabelExcel(labelRaw);
+      if (!lbl) continue;
+
+      const { negativo, libre, libreDefaultNeg } = inferirSigno(lbl);
+      const esCalc = !!formula; // tiene fórmula → calculado
+
+      // Resolver la fórmula a lista de filas dependientes para recalcular en JS
+      let depFilas = null; // array de números de fila que sumamos
+      if (formula) {
+        depFilas = [];
+        // Caso: SUM(B5:B7) → filas 5 a 7
+        const mRange = formula.match(/SUM\(B(\d+):B(\d+)\)/i);
+        if (mRange) {
+          const desde = parseInt(mRange[1]), hasta = parseInt(mRange[2]);
+          for (let fi = desde; fi <= hasta; fi++) depFilas.push(fi);
+        }
+        // Caso: +B8+B12 o B8+B12 → filas individuales
+        const mSuma = formula.matchAll(/\+?B(\d+)/g);
+        for (const m of mSuma) depFilas.push(parseInt(m[1]));
+        depFilas = [...new Set(depFilas)].sort((a,b)=>a-b);
+      }
+
+      estructura_er.push({
+        lbl,
+        labelOriginal: labelRaw,
+        val:           valor,
+        negativo:      negativo && !esCalc,
+        libre:         libre || esCalc,
+        libreDefaultNeg,
+        calc:          esCalc,
+        formula:       formula || null,
+        depFilas,               // filas de las que depende este cálculo
+        fila:          r + 1,  // número de fila Excel (1-based)
+      });
+    }
+  }
+
+  // ── Extraer indicadores patrimoniales ─────────────────────────────────
+  const ind = { liquidez:{}, solvencia:{}, rentabilidad:{}, eficiencia:{} };
+  const buscarFila = (ws, maxRow, ...keywords) => {
+    for (let r = 0; r <= maxRow; r++) {
+      const cellA = ws[XLSX.utils.encode_cell({r, c:0})];
+      const lbl   = String(cellA?.v||'').toLowerCase();
+      if (keywords.some(k => lbl.includes(k))) {
+        const cellB = ws[XLSX.utils.encode_cell({r, c:1})];
+        return typeof cellB?.v === 'number' ? cellB.v : null;
+      }
+    }
+    return null;
+  };
+
+  if (snSP) {
+    const ws = wb.Sheets[snSP];
+    const maxRow = XLSX.utils.decode_range(ws['!ref']||'A1:C50').e.r;
+    const g = (k) => buscarFila(ws, maxRow, ...k);
+    ind.liquidez.activo_corriente  = g(['total activo corriente']);
+    ind.liquidez.pasivo_corriente  = g(['total pasivo corriente']);
+    ind.solvencia.activo_total     = g(['total activo','total del activo']);
+    ind.solvencia.activo_no_corriente = g(['total activo no corriente']);
+    ind.solvencia.pasivo_total     = g(['total pasivo','total del pasivo']);
+    ind.solvencia.pasivo_no_corriente = g(['total pasivo no corriente']);
+    ind.solvencia.patrimonio_neto  = g(['patrimonio neto']);
+  }
+
+  // Mapear rubros del ER a ind.rentabilidad usando labels conocidos
+  const MAP_RUBROS = {
+    'produccion_agro':         ['ingresos por producción','ingresos producción','producción '],
+    'medicion_razonable':      ['medición al valor razonable','valor razonable','medicion al valor'],
+    'costo_produccion':        ['costo de producción','costo producción'],
+    'res_neto_produccion':     ['resultado de producción agropecuaria','resultado producción agropecuaria','resultado agropecuario'],
+    'venta_hacienda':          ['venta de hacienda','venta hacienda'],
+    'venta_frigorifico':       ['venta frigorífico','ventas frigorífico'],
+    'venta_locales':           ['venta productos agropecuarios','ventas locales','ventas productos agropecuarios'],
+    'costo_venta_locales':     ['costo de productos vendidos','costo productos vendidos','costo venta locales'],
+    'res_bruto_locales':       ['resultado bruto venta productos','resultado bruto venta'],
+    'sub_total_agro':          ['resultado bruto de explotación','resultado bruto explotación'],
+    'ventas_ingresos':         ['ventas ','ingresos por ventas'],
+    'costo_ventas':            ['costo de ventas','costo ventas'],
+    'utilidad_bruta':          ['utilidad bruta','resultado bruto','ganancia bruta'],
+    'gastos_administracion':   ['gastos de administración','gastos administración'],
+    'gastos_comercializacion': ['gastos de comercialización','gastos comercialización'],
+    'gastos_operativos':       ['otros gastos de explotación','gastos operativos','gastos de explotación'],
+    'gastos_ejecucion_obras':  ['gastos de ejecución de obras','gastos ejecución obras'],
+    'otros_ingresos':          ['otros ingresos'],
+    'ingresos_obras_subsidios':['ingresos por obras y subsidios','ingresos obras'],
+    'resultado_financiero':    ['resultados financieros','resultados financieros y por tenencia'],
+    'recpam':                  ['recpam','resultado por exposición'],
+    'resultado_tenencia':      ['resultado por tenencia'],
+    'resultado_operativo':     ['sub-total resultado ordinario','subtotal resultado','resultado antes de impuesto'],
+    'otros_egresos':           ['otros egresos'],
+    'impuesto_ganancias':      ['impuesto a las ganancias','impuesto ganancias'],
+    'resultado_neto':          ['resultado del ejercicio','resultado neto','ganancia (pérdida)','pérdida del ejercicio'],
+  };
+
+  estructura_er.forEach(rubro => {
+    if (rubro.val == null) return;
+    const lblL = rubro.lbl.toLowerCase();
+    for (const [key, patterns] of Object.entries(MAP_RUBROS)) {
+      if (patterns.some(p => lblL.includes(p))) {
+        if (ind.rentabilidad[key] == null) {
+          ind.rentabilidad[key] = rubro.val;
+          rubro.key = key; // agregar key al rubro
+        }
+        break;
+      }
+    }
+    if (!rubro.key) rubro.key = 'extra_' + rubro.fila; // campo no mapeado
+  });
+
+  // Calcular ratios
+  const ren = ind.rentabilidad, sol = ind.solvencia, liq = ind.liquidez;
+  const safe = (n,d) => (n!=null&&d!=null&&d!==0) ? n/d : null;
+  if (liq.activo_corriente && liq.pasivo_corriente)
+    liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
+  if (sol.pasivo_total && sol.activo_total)
+    sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
+  if (sol.patrimonio_neto && sol.activo_total) {
+    sol.deuda_patrimonio = safe(sol.pasivo_total, sol.patrimonio_neto);
+    ren.roe = safe(ren.resultado_neto, sol.patrimonio_neto);
+    ren.roa = safe(ren.resultado_neto, sol.activo_total);
+  }
+  if (ren.resultado_neto && ren.ventas_ingresos)
+    ren.margen_neto = safe(ren.resultado_neto, ren.ventas_ingresos);
+  if (ren.resultado_operativo && ren.ventas_ingresos)
+    ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
+  if (liq.activo_corriente && liq.pasivo_corriente)
+    liq.capital_trabajo = liq.activo_corriente - liq.pasivo_corriente;
+  if (sol.activo_total && liq.activo_corriente)
+    sol.activo_no_corriente = sol.activo_no_corriente ?? sol.activo_total - liq.activo_corriente;
+
+  return { estructura_er, indicadores: ind };
+}
+
 async function loadBalanceExcel(file) {
   if (!file) return;
   document.getElementById('bal-empty').style.display   = 'none';
@@ -9266,7 +9527,6 @@ async function loadBalanceExcel(file) {
   setBalProgress(true, 'Leyendo archivo Excel…', 10);
 
   try {
-    // Cargar SheetJS
     const XLSX = await new Promise((res, rej) => {
       if (window.XLSX) return res(window.XLSX);
       const s = document.createElement('script');
@@ -9276,38 +9536,86 @@ async function loadBalanceExcel(file) {
       document.head.appendChild(s);
     });
 
-    setBalProgress(true, 'Procesando hojas…', 30);
-    const buf  = await file.arrayBuffer();
-    const wb   = XLSX.read(buf, { type: 'array' });
+    setBalProgress(true, 'Analizando estructura del Excel…', 40);
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, { type: 'array', cellFormula: true, cellText: false });
 
-    // Convertir todas las hojas a texto plano estructurado
-    let textoTotal = '';
-    wb.SheetNames.forEach(nombre => {
-      const ws   = wb.Sheets[nombre];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      if (!rows.length) return;
-      textoTotal += `\n=== Hoja: ${nombre} ===\n`;
-      rows.forEach(row => {
-        const linea = row.map(c => {
-          if (c === null || c === undefined || c === '') return '';
-          // Formatear números con coma decimal para que el parser los reconozca
-          if (typeof c === 'number') {
-            return Number.isInteger(c) ? String(c) : c.toFixed(2).replace('.', ',');
-          }
-          return String(c).trim();
-        }).filter(c => c !== '').join('  ');
-        if (linea.trim()) textoTotal += linea + '\n';
+    // Parser estructural: lee fórmulas y estructura fila a fila
+    const { estructura_er, indicadores } = parsearExcelBalance(wb, XLSX);
+
+    if (!estructura_er.length && !Object.values(indicadores.solvencia).some(v=>v!=null)) {
+      // Fallback: convertir a texto y usar parser genérico
+      let textoTotal = '';
+      wb.SheetNames.forEach(nombre => {
+        const ws   = wb.Sheets[nombre];
+        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+        textoTotal += `\n=== Hoja: ${nombre} ===\n`;
+        rows.forEach(row => {
+          const linea = row.map(c => {
+            if (c === null || c === undefined || c === '') return '';
+            if (typeof c === 'number') return Number.isInteger(c) ? String(c) : c.toFixed(2).replace('.', ',');
+            return String(c).trim();
+          }).filter(c => c !== '').join('  ');
+          if (linea.trim()) textoTotal += linea + '\n';
+        });
       });
-    });
-
-    if (textoTotal.trim().length < 50) {
-      throw new Error('El archivo Excel está vacío o no tiene datos reconocibles.');
+      setBalProgress(true, 'Analizando indicadores…', 85);
+      await new Promise(r => setTimeout(r, 20));
+      guardarBalance(file.name, textoTotal, 'Excel — SheetJS');
+      setBalProgress(false);
+      return;
     }
 
-    setBalProgress(true, 'Analizando indicadores contables…', 85);
+    setBalProgress(true, 'Guardando balance…', 90);
     await new Promise(r => setTimeout(r, 20));
-    guardarBalance(file.name, textoTotal, 'Excel — SheetJS');
+
+    // Detectar empresa y período del Excel
+    const snAny = wb.SheetNames[0];
+    const wsAny = wb.Sheets[snAny];
+    const getCellText = (r, c) => String(wsAny[XLSX.utils.encode_cell({r, c})]?.v || '').trim();
+    const empresa = getCellText(0, 0) || file.name.replace(/\.xlsx?$/i, '');
+    // Buscar período en primeras filas
+    let periodo = '?';
+    for (let r = 0; r <= 5; r++) {
+      const txt = getCellText(r, 0);
+      const m = txt.match(/([12]\d{3})/);
+      if (m) { periodo = m[1]; break; }
+    }
+
+    // Determinar tipo_empresa desde estructura_er
+    const keys = new Set(estructura_er.map(r => r.key));
+    const tipo_empresa = (keys.has('produccion_agro') || keys.has('venta_hacienda'))
+      ? 'agro'
+      : (keys.has('recpam') || keys.has('gastos_ejecucion_obras'))
+      ? 'servicios_publicos'
+      : 'estandar';
+
+    // Construir y guardar el balance directamente
+    _balances[file.name] = {
+      filename:      file.name,
+      empresa:       empresa.split('\n')[0].trim(),
+      periodo,
+      esCierreNoCal: false,
+      cierreMes:     12,
+      tipo:          'Balance General / Estado de Resultados',
+      tipo_empresa,
+      moneda:        'ARS',
+      indicadores,
+      estructura_er,
+      diagnostico:   [],
+      alertas:       [],
+      textoRaw:      '',
+      timestamp:     Date.now(),
+      metodo:        'Excel estructural',
+      vinculada:     _balEmpresaActiva || '',
+    };
+
+    _balActivo        = file.name;
+    _balEmpresaActiva = _balances[file.name].empresa;
     setBalProgress(false);
+    renderBalanceUI();
+    marcarPendienteGuardar();
+    saveDataToLocalCache();
 
   } catch(err) {
     setBalProgress(false);
@@ -9430,8 +9738,10 @@ function guardarBalance(filename, texto, metodo) {
       esCierreNoCal: result.esCierreNoCal || false,
       cierreMes:     result.cierreMes || 12,
       tipo:          result.tipo_estado,
+      tipo_empresa:  result.tipo_empresa || 'estandar',
       moneda:        result.moneda,
       indicadores:   result.indicadores,
+      estructura_er: result.estructura_er || [],   // rubros detectados en orden
       diagnostico:   result.diagnostico,
       alertas:       result.alertas,
       textoRaw:      texto,
@@ -9748,12 +10058,15 @@ function analizarBalanceLocal(filename, texto) {
         const nums     = extractNums(parteNum);
         for (const n of nums) {
           if (Math.abs(n) >= 100) {
-            _diagLog.push({ pat, linea: lineas[i], valor: n, ok: true });
+            // Calcular posición aproximada en el texto para ordenar _erRubros
+            const posGlobal = textoNorm.indexOf(lineas[i]);
+            _diagLog.push({ pat, linea: lineas[i], valor: n, ok: true, pos: posGlobal });
             return n;
           }
         }
         if (nums.length && permitirNegativos) {
-          _diagLog.push({ pat, linea: lineas[i], valor: nums[0], ok: true });
+          const posGlobal2 = textoNorm.indexOf(lineas[i]);
+          _diagLog.push({ pat, linea: lineas[i], valor: nums[0], ok: true, pos: posGlobal2 });
           return nums[0];
         }
         _diagLog.push({ pat, linea: lineas[i], valor: null, ok: false,
@@ -9817,6 +10130,8 @@ function analizarBalanceLocal(filename, texto) {
     '^Producci[oó]n\\b(?!.*[Cc]osto)(?!.*[Rr]esultado)',
     '[Pp]roducci[oó]n\\s+[Pp]rimaria',
     '[Vv]entas?\\s+de\\s+[Pp]roducci',
+    '[Ii]ngresos?\\s+por\\s+[Pp]roducci[oó]n',   // ALFA: "Ingresos por Producción"
+    '[Ii]ngresos?\\s+[Pp]roducci[oó]n',
   ]);
   const ventaHacienda = buscar([
     '[Vv]enta\\s+de\\s+[Hh]acienda',
@@ -9830,14 +10145,20 @@ function analizarBalanceLocal(filename, texto) {
   const ventaLocales = buscar([
     '[Vv]entas?\\s+[Ll]ocales?\\s+[Cc]omerciales?',
     '[Vv]entas?\\s+[Ll]ocales?',
+    '[Vv]enta\\s+[Pp]roductos?\\s+[Aa]gropecuarios?',   // ALFA
+    '[Vv]entas?\\s+[Pp]roductos?\\s+[Aa]gropecuarios?',
   ]);
   const costoVentaLocales = buscar([
     '[Cc]osto\\s+de\\s+[Vv]enta\\s+[Ll]ocales?\\s+[Cc]omerciales?',
     '[Cc]osto\\s+de\\s+[Vv]enta\\s+[Ll]ocales?',
+    '[Cc]osto\\s+de\\s+[Pp]roductos?\\s+[Vv]endidos?',  // ALFA
+    '[Cc]osto\\s+[Pp]roductos?\\s+[Vv]endidos?',
   ], 10, true);
   const resBrutoLocales = buscar([
     '[Rr]esultado\\s+[Bb]ruto\\s+[Ll]ocales?',
     '[Rr]esultado\\s+[Bb]ruto.*[Ll]ocales?',
+    '[Rr]esultado\\s+[Bb]ruto\\s+[Vv]enta\\s+[Pp]roductos?',  // ALFA
+    '[Rr]esultado\\s+[Bb]ruto.*[Pp]roductos?\\s+[Aa]gropecuarios?',
   ], 10, true);
   const ventaSemillas = buscar([
     '[Vv]enta\\s+al\\s+por\\s+mayor\\s+de\\s+[Ss]emillas?',
@@ -9869,6 +10190,7 @@ function analizarBalanceLocal(filename, texto) {
   const resNProduccion = buscar([
     '[Rr]esultado\\s+[Nn]eto\\s+de\\s+[Pp]roducci',
     '[Rr]esultado\\s+[Pp]roducci[oó]n\\s+[Aa]gropecuaria',
+    '[Rr]esultado\\s+de\\s+[Pp]roducci[oó]n\\s+[Aa]gropecuaria',  // ALFA: "Resultado de Producción Agropecuaria (a)"
     '[Rr]esultado\\s+[Aa]gropecuario',
   ], 10, true);
   const medicionRazonable = buscar([
@@ -9881,6 +10203,9 @@ function analizarBalanceLocal(filename, texto) {
   const subTotal1 = buscar([
     '^Sub[-\\s]?[Tt]otal\\b(?!.*[Rr]esultado)',
     'Sub\\s+Total(?!\\s+[Rr]esultado)',
+    '[Rr]esultado\\s+[Bb]ruto\\s+de\\s+[Ee]xplotaci[oó]n\\s+[Aa]gropecuaria',  // ALFA
+    '[Rr]esultado\\s+de\\s+[Pp]roducci[oó]n\\s+[Aa]gropecuaria.*\\(a\\+b\\)',
+    'Sub[\\-\\s]?[Tt]otal\\s+[Rr]esultado\\s+[Oo]rdinario',
   ], 10, true);
 
   // Ingresos por Obras y Subsidios (ej: Aguas Riojanas — compensa resultado bruto negativo)
@@ -9958,6 +10283,8 @@ function analizarBalanceLocal(filename, texto) {
   const gastosOp = buscar([
     '[Gg]astos?\\s+(?:de\\s+)?[Oo]peraci',
     '[Gg]astos?\\s+[Oo]perativos?',
+    '[Oo]tros?\\s+[Gg]astos?\\s+de\\s+[Ee]xplotaci[oó]n',
+    '[Gg]astos?\\s+de\\s+[Ee]xplotaci[oó]n',
   ], 10, true);
   const resFinanciero = buscar([
     '[Rr]esultados?\\s+[Ff]inancieros?\\s+y\\s+por\\s+[Tt]enencia',
@@ -10029,6 +10356,72 @@ function analizarBalanceLocal(filename, texto) {
   const safe = (n,d) => (n != null && d != null && d !== 0) ? n/d : null;
 
   const liqCorr  = safe(activoC, pasivoC);
+  // ── Estructura real del ER detectado (para el Editor de Datos dinámico) ──────
+  // Construida en el ORDEN en que aparecen en el texto, con label real del archivo.
+  // buscar() ahora registra la posición de cada match para poder ordenar.
+
+  // Mapa de posición: key → { pos, lbl, val, negativo, libre, libreDefaultNeg, calc }
+  const _erMap = {};
+  const _erUsedLogs = new Set(); // prevenir que el mismo logEntry se asigne a dos keys
+  const _erRegistrar = (key, val, negativo, libre, libreDefaultNeg, calc) => {
+    if (val == null || _erMap[key]) return;
+    // Buscar en _diagLog la entrada correspondiente a este valor, no usada aún
+    const logEntry = _diagLog.find(d =>
+      d.ok && !_erUsedLogs.has(d) && Math.abs(d.valor) === Math.abs(val)
+    );
+    if (logEntry) _erUsedLogs.add(logEntry);
+    const lineaTexto = logEntry ? logEntry.linea : '';
+    // Limpiar el label: quitar notas tipo "(Nota 2.1)", "(Anexo IV)", "(a)", "(a+b)" etc.
+    const lbl = lineaTexto
+      ? lineaTexto
+          .replace(/\s*\([^)]*(?:[Nn]ota|[Aa]nexo|[Nn]ote|[Aa]nex)[^)]*\)/gi, '')
+          .replace(/\s*\([a-zA-Z][^)]{0,10}\)\s*$/, '')
+          .trim()
+      : '';
+    const pos = logEntry?.pos ?? 999999;
+    _erMap[key] = {
+      key, lbl: lbl || key, val,
+      negativo: !!negativo, libre: !!libre,
+      libreDefaultNeg: !!libreDefaultNeg, calc: !!calc, pos
+    };
+  };
+
+  // Registrar cada rubro en el orden del texto
+  _erRegistrar('produccion_agro',         produccionAgro,           false, false);
+  _erRegistrar('medicion_razonable',      medicionRazonable,        false, true);
+  _erRegistrar('costo_produccion',        costoProduccion,          true,  false);
+  _erRegistrar('res_neto_produccion',     resNProduccion,           false, true,  false, true);
+  _erRegistrar('venta_hacienda',          ventaHacienda,            false, false);
+  _erRegistrar('costo_venta_hacienda',    costoVentaHacienda,       true,  false);
+  _erRegistrar('venta_frigorifico',       ventaFrigorifico,         false, false);
+  _erRegistrar('costo_venta_frigorifico', costoVentaFrigorifico,    true,  false);
+  _erRegistrar('venta_locales',           ventaLocales,             false, false);
+  _erRegistrar('costo_venta_locales',     costoVentaLocales,        true,  false);
+  _erRegistrar('res_bruto_locales',       resBrutoLocales,          false, true,  false, true);
+  _erRegistrar('venta_semillas',          ventaSemillas,            false, false);
+  _erRegistrar('costo_semillas',          costoSemillas,            true,  false);
+  _erRegistrar('sub_total_agro',          subTotal1,                false, true,  false, true);
+  _erRegistrar('ventas_ingresos',         ventas,                   false, false);
+  // costo_ventas: solo registrar si difiere de costo_produccion (evitar duplicado)
+  if (costo != null && costo !== costoProduccion) _erRegistrar('costo_ventas', costo, true, false);
+  _erRegistrar('utilidad_bruta',          utilBruta,                false, true,  false, true);
+  _erRegistrar('gastos_administracion',   gastosAdmin,              true,  false);
+  _erRegistrar('gastos_comercializacion', gastosCom,                true,  false);
+  _erRegistrar('gastos_operativos',       gastosOp,                 true,  false);
+  _erRegistrar('gastos_ejecucion_obras',  gastosEjecucionObras,     true,  false);
+  _erRegistrar('otros_ingresos',          otrosIngresos,            false, false);
+  _erRegistrar('ingresos_obras_subsidios',ingresosObrasSubsidios,   false, false);
+  _erRegistrar('resultado_financiero',    resFinanciero,            false, true);
+  _erRegistrar('recpam',                  recpam,                   false, true);
+  _erRegistrar('resultado_tenencia',      resTenencia,              false, true);
+  _erRegistrar('resultado_operativo',     resOp,                    false, true,  false, true);
+  _erRegistrar('otros_egresos',           otrosEgresos,             true,  false);
+  _erRegistrar('impuesto_ganancias',      impuesto,                 false, true,  true);
+  _erRegistrar('resultado_neto',          resNeto,                  false, true,  false, true);
+
+  // Ordenar por posición de aparición en el texto
+  const _erRubros = Object.values(_erMap).sort((a, b) => a.pos - b.pos);
+
   const liqSeca  = (activoC != null && inv != null && pasivoC) ? safe(activoC - inv, pasivoC) : liqCorr;
   const capTrab  = (activoC != null && pasivoC != null) ? activoC - pasivoC : null;
   const endeudam = safe(pasivoT, activoT);
@@ -10091,7 +10484,16 @@ function analizarBalanceLocal(filename, texto) {
     tipo_estado: tieneAlgo
       ? (cpceMatch && !activoC ? 'Certificado CPCE (totales resumidos)' : 'Balance General / Estado de Resultados')
       : 'Sin datos numéricos',
+    // Tipo de empresa detectado estructuralmente — usado por ER y Editor de Datos
+    tipo_empresa: (produccionAgro != null || ventaHacienda != null || ventaFrigorifico != null
+                  || ventaLocales != null || ventaSemillas != null)
+      ? 'agro'
+      : (ingresosObrasSubsidios != null || recpam != null || gastosEjecucionObras != null
+         || resTenencia != null)
+      ? 'servicios_publicos'
+      : 'estandar',
     moneda,
+    estructura_er: _erRubros, // rubros detectados en orden, con label y signo
     indicadores: {
       liquidez:     { liquidez_corriente:liqCorr, liquidez_seca:liqSeca, capital_trabajo:capTrab,
                       activo_corriente:activoC, pasivo_corriente:pasivoC },
@@ -10618,8 +11020,15 @@ function buildEstadoResultados(b) {
     (_segsVenta.length ? _segsVenta.reduce((s, v) => s + v, 0) : null);
 
   // ── Detectar tipo de estructura ───────────────────────────
-  const esAgropecuario = ren.produccion_agro != null || ren.venta_hacienda != null
-    || ren.venta_frigorifico != null || ren.res_neto_produccion != null;
+  // Tipo de empresa: usar campo explícito si existe, si no inferir de los rubros
+  const tipoEmp = b.tipo_empresa ||
+    ((ren.produccion_agro != null || ren.venta_hacienda != null || ren.venta_frigorifico != null)
+      ? 'agro'
+      : (ren.ingresos_obras_subsidios != null || ren.recpam != null || ren.gastos_ejecucion_obras != null)
+      ? 'servicios_publicos'
+      : 'estandar');
+  const esAgropecuario   = tipoEmp === 'agro';
+  const esServPublico    = tipoEmp === 'servicios_publicos';
 
   // ── Construir cascada según tipo ──────────────────────────
   const filas = [];
@@ -10958,8 +11367,10 @@ function showBalanceResult() {
 
   // Actualizar lista de archivos para resaltar el activo
   renderListaArchivos();
+  const tipoLabel = { agro:'🌾 Agropecuaria', servicios_publicos:'🏗 Servicios Públicos', estandar:'🏢 Estándar' };
   document.getElementById('bal-status').textContent =
-    'Cargado ' + new Date(b.timestamp).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    'Cargado ' + new Date(b.timestamp).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+    + ' · ' + (tipoLabel[b.tipo_empresa] || tipoLabel.estandar);
 
   const ind = b.indicadores;
   const liq = ind.liquidez     || {};
@@ -11417,7 +11828,7 @@ const BAL_EDITOR_FIELDS = {
     // ── Resultados financieros ────────────────────────────────
     { key:'rentabilidad.resultado_financiero',     lbl:'Resultados financieros',       tipo:'monto' },
     // RECPAM (Resultado por Exposición a Cambios en el Poder Adquisitivo)
-    { key:'rentabilidad.recpam',                   lbl:'RECPAM',                       tipo:'monto', negativo:true },
+    { key:'rentabilidad.recpam',                   lbl:'RECPAM',                       tipo:'monto' },
     // Resultado por Tenencia (puede ser positivo o negativo)
     { key:'rentabilidad.resultado_tenencia',       lbl:'Resultado por tenencia',       tipo:'monto' },
 
@@ -11455,7 +11866,7 @@ const BAL_EDITOR_FIELDS = {
 
     // ── Impuesto a las ganancias ──────────────────────────────
     // Puede ser positivo (crédito fiscal, ej: Aguas Riojanas 2024) o negativo (cargo)
-    { key:'rentabilidad.impuesto_ganancias',       lbl:'Impuesto a las ganancias',     tipo:'monto', negativo:true },
+    { key:'rentabilidad.impuesto_ganancias',       lbl:'Impuesto a las ganancias',     tipo:'monto', libreDefaultNeg:true },
 
     // ── Resultado del ejercicio ───────────────────────────────
     { key:'rentabilidad.resultado_neto',           lbl:'Resultado del ejercicio',      tipo:'monto', calc:true,
@@ -11560,16 +11971,25 @@ function _renderBalEditor() {
   };
 
   // Detectar si es empresa agropecuaria para mostrar campos relevantes
-  const esAgro = ren.produccion_agro != null || ren.venta_hacienda != null
-              || ren.venta_frigorifico != null || ren.res_neto_produccion != null;
+  // Tipo de empresa: fuente de verdad para qué campos mostrar en el editor
+  const tipoEmp      = b.tipo_empresa ||
+    ((ren.produccion_agro != null || ren.venta_hacienda != null || ren.venta_frigorifico != null)
+      ? 'agro'
+      : (ren.ingresos_obras_subsidios != null || ren.recpam != null || ren.gastos_ejecucion_obras != null)
+      ? 'servicios_publicos'
+      : 'estandar');
+  const esAgro       = tipoEmp === 'agro';
+  const esServPubl   = tipoEmp === 'servicios_publicos';
 
   const mkInput = f => {
     if (f.hidden) return '';
+    // Visibilidad condicional según tipo de empresa
+    // Campos agro: solo mostrar si la empresa es agro o ya tiene ese valor
     if (f.grupo === 'agro' && !esAgro && _getIndPath(ind, f.key) == null) return '';
-
-    // Campos de servicios públicos (Aguas Riojanas): solo mostrar si tienen valor
+    // Campos de servicios públicos: solo mostrar si la empresa es SP o ya tiene valor
     const CAMPOS_SP = ['gastos_ejecucion_obras','ingresos_obras_subsidios','recpam','resultado_tenencia'];
-    if (CAMPOS_SP.some(k => f.key.endsWith(k)) && _getIndPath(ind, f.key) == null) return '';
+    const esCampoSP = CAMPOS_SP.some(k => f.key.endsWith(k));
+    if (esCampoSP && !esServPubl && _getIndPath(ind, f.key) == null) return '';
 
     if (f.calc) {
       // Si tiene editKey y no hay segmentos de venta: modo editable directo
@@ -11647,52 +12067,353 @@ function _renderBalEditor() {
     }
 
     const raw    = _getIndPath(ind, f.key);
-    const val    = fmtInput(raw, f.negativo);
     const hasVal = raw != null;
     const border = hasVal ? 'var(--bd2)' : 'rgba(232,255,71,.2)';
+
+    // libreDefaultNeg: toggle de signo, pero arranca en − si el valor viene positivo del archivo
+    if (f.libreDefaultNeg) {
+      const rawLD  = _getIndPath(ind, f.key);
+      const hasLD  = rawLD != null;
+      const borderLD = hasLD ? 'var(--bd2)' : 'rgba(232,255,71,.2)';
+      // Por defecto resta (negativo) a menos que el valor ya esté guardado como positivo
+      const esNegLD = rawLD == null ? true : rawLD < 0;  // default: negativo
+      const absLD  = rawLD != null ? Math.abs(rawLD) : null;
+      const fmtLD  = fmtInput(absLD, false);
+      const tColLD = esNegLD ? '#ff8c47' : '#47ffb4';
+      const tLblLD = esNegLD ? '−' : '+';
+      const tTitLD = esNegLD ? 'Resta (negativo) — click para cambiar' : 'Suma (positivo) — click para cambiar';
+      return `<div style="display:flex;flex-direction:column;gap:3px">
+        <label style="font-size:8.5px;color:${hasLD?'var(--text)':'var(--dim)'};
+          font-family:var(--mono);display:flex;align-items:center;gap:4px">
+          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;
+            background:${hasLD?'#ff8c47':'var(--bd2)'}"></span>
+          ${f.lbl}
+          <span style="font-size:7px;color:var(--dim);opacity:.7">(signo libre, default resta)</span>
+        </label>
+        <div style="display:flex;gap:4px;align-items:stretch">
+          <button type="button"
+            data-sign-toggle="${f.key}"
+            data-is-neg="${esNegLD}"
+            title="${tTitLD}"
+            onclick="_balEditorToggleSign(this)"
+            style="width:28px;flex-shrink:0;
+              background:${esNegLD?'rgba(255,140,71,.15)':'rgba(71,255,180,.1)'};
+              border:1px solid ${esNegLD?'rgba(255,140,71,.4)':'rgba(71,255,180,.3)'};
+              color:${tColLD};font-family:var(--mono);font-size:13px;font-weight:700;
+              border-radius:3px;cursor:pointer;display:flex;align-items:center;
+              justify-content:center;padding:0;line-height:1">${tLblLD}</button>
+          <input type="text" data-field="${f.key}" data-negativo="false"
+            ${f._fila ? `data-er-fila="${f._fila}"` : ''}
+            value="${fmtLD}" placeholder="${hasLD?'':'Sin dato'}"
+            style="padding:6px 10px;background:${hasLD?'var(--s2)':'var(--s3)'};
+            border:1px solid ${borderLD};color:var(--text);font-family:var(--mono);
+            font-size:10px;border-radius:3px;outline:none;flex:1;box-sizing:border-box"
+            onfocus="this.style.borderColor='var(--y21)'"
+            onblur="_balEditorBlurFmt(this,'${borderLD}')"
+            oninput="_balEditorFmtMiles(this);_balEditorRecalcER(this)">
+        </div>
+      </div>`;
+    }
+
+    if (f.negativo) {
+      // Campos que SIEMPRE restan (costos, gastos, egresos):
+      // mostrar valor absoluto — el signo negativo es implícito y fijo
+      const absVal = raw != null ? Math.abs(raw) : null;
+      const valFmt = fmtInput(absVal, false);
+      return `<div style="display:flex;flex-direction:column;gap:3px">
+        <label style="font-size:8.5px;color:${hasVal?'var(--text)':'var(--dim)'};
+          font-family:var(--mono);display:flex;align-items:center;gap:4px">
+          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;
+            background:${hasVal?'#ff8c47':'var(--bd2)'}"></span>
+          ${f.lbl}
+          <span style="font-size:7px;color:#ff8c47;opacity:.7">(resta)</span>
+        </label>
+        <input type="text" data-field="${f.key}" data-negativo="true"
+          ${f._fila ? `data-er-fila="${f._fila}"` : ''}
+          value="${valFmt}" placeholder="${hasVal?'':'Sin dato'}"
+          style="padding:6px 10px;background:${hasVal?'var(--s2)':'var(--s3)'};
+          border:1px solid ${border};color:var(--text);font-family:var(--mono);
+          font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box"
+          onfocus="this.style.borderColor='var(--y21)'"
+          onblur="_balEditorBlurFmt(this,'${border}')"
+          oninput="_balEditorFmtMiles(this);_balEditorRecalcER(this)">
+      </div>`;
+    }
+
+    // Campos con signo variable (resultado_financiero, recpam, tenencia, medicion VR, etc.):
+    // mostrar toggle de signo para que el usuario controle si suma o resta
+    const esNeg      = raw != null && raw < 0;
+    const absVal     = raw != null ? Math.abs(raw) : null;
+    const valFmt     = fmtInput(absVal, false);
+    const toggleCol  = esNeg ? '#ff8c47' : '#47ffb4';
+    const toggleLbl  = esNeg ? '−' : '+';
+    const toggleTit  = esNeg
+      ? 'Resta (negativo) — click para cambiar a suma'
+      : 'Suma (positivo) — click para cambiar a resta';
     return `<div style="display:flex;flex-direction:column;gap:3px">
       <label style="font-size:8.5px;color:${hasVal?'var(--text)':'var(--dim)'};
         font-family:var(--mono);display:flex;align-items:center;gap:4px">
         <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;
           background:${hasVal?'#47ffb4':'var(--bd2)'}"></span>
-        ${f.lbl}${f.negativo?' (−)':''}
+        ${f.lbl}
+        <span style="font-size:7px;color:var(--dim);opacity:.7">(signo libre)</span>
       </label>
-      <input type="text" data-field="${f.key}" data-negativo="${f.negativo||false}"
-        value="${val}" placeholder="${hasVal?'':'Sin dato'}"
-        style="padding:6px 10px;background:${hasVal?'var(--s2)':'var(--s3)'};
-        border:1px solid ${border};color:var(--text);font-family:var(--mono);
-        font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box"
-        onfocus="this.style.borderColor='var(--y21)'"
-        onblur="_balEditorBlurFmt(this,'${border}')"
-        oninput="_balEditorFmtMiles(this)">
+      <div style="display:flex;gap:4px;align-items:stretch">
+        <button type="button"
+          data-sign-toggle="${f.key}"
+          data-is-neg="${esNeg}"
+          title="${toggleTit}"
+          onclick="_balEditorToggleSign(this)"
+          style="width:28px;flex-shrink:0;
+            background:${esNeg?'rgba(255,140,71,.15)':'rgba(71,255,180,.1)'};
+            border:1px solid ${esNeg?'rgba(255,140,71,.4)':'rgba(71,255,180,.3)'};
+            color:${toggleCol};font-family:var(--mono);font-size:13px;font-weight:700;
+            border-radius:3px;cursor:pointer;display:flex;align-items:center;
+            justify-content:center;padding:0;line-height:1"
+          aria-label="Signo">${toggleLbl}</button>
+        <input type="text" data-field="${f.key}" data-negativo="false"
+          ${f._fila ? `data-er-fila="${f._fila}"` : ''}
+          value="${valFmt}" placeholder="${hasVal?'':'Sin dato'}"
+          style="padding:6px 10px;background:${hasVal?'var(--s2)':'var(--s3)'};
+          border:1px solid ${border};color:var(--text);font-family:var(--mono);
+          font-size:10px;border-radius:3px;outline:none;flex:1;box-sizing:border-box"
+          onfocus="this.style.borderColor='var(--y21)'"
+          onblur="_balEditorBlurFmt(this,'${border}')"
+          oninput="_balEditorFmtMiles(this);_balEditorRecalcER(this)">
+      </div>
     </div>`;
   };
 
-  const buildGrid = (fields, containerId) => {
+  // Separador de sección (igual que en el ER)
+  const mkSeccion = (titulo, color='var(--dim)') =>
+    `<div style="width:100%;margin-top:10px;padding:4px 0 2px 0;
+      border-top:1px solid var(--bd);font-size:8px;text-transform:uppercase;
+      letter-spacing:.14em;color:${color};font-family:var(--mono)">${titulo}</div>`;
+
+  // buildGrid para sección patrimonial (sin cambios)
+  const buildGridPat = (fields, containerId) => {
     const el = document.getElementById(containerId);
     if (!el) return;
-
-    // Separar en grupos con encabezado
     let html = '';
-    let grupoActual = null;
     fields.forEach(f => {
       if (f.hidden) return;
-      if (f.grupo === 'agro' && !esAgro && _getIndPath(ind, f.key) == null) return;
-      if (f.grupo !== grupoActual) {
-        if (f.grupo === 'agro') {
-          html += `<div style="grid-column:1/-1;margin-top:10px;padding-top:8px;
-            border-top:1px solid var(--bd);font-size:8px;text-transform:uppercase;
-            letter-spacing:.14em;color:#47ffb4">Rubros agropecuarios / industriales</div>`;
-        }
-        grupoActual = f.grupo || null;
-      }
       html += mkInput(f);
     });
     el.innerHTML = html;
   };
 
-  buildGrid(BAL_EDITOR_FIELDS.patrimonial, 'bal-editor-patrimonial');
-  buildGrid(BAL_EDITOR_FIELDS.resultados,  'bal-editor-resultados');
+  // buildGrid para resultados: usa estructura_er del balance (rubros detectados en orden)
+  // Si no hay estructura_er (balance viejo), usa los campos con valor del ind actual
+  const buildGridResultados = (fields, containerId) => {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    let html = '';
+
+    // Mapa de key → campo definido en BAL_EDITOR_FIELDS (para acceder a calcFn)
+    const campoMap = {};
+    fields.forEach(f => { campoMap[f.key.split('.').pop()] = f; });
+
+    // Mapa para mkInput dinámico desde estructura_er
+    // Construir campo sintético compatible con mkInput
+    const mkInputDinamico = (rubro) => {
+      const shortKey  = rubro.key || ('extra_' + rubro.fila);
+      const fullKey   = shortKey.startsWith('extra_') ? null : 'rentabilidad.' + shortKey;
+      // Valor: desde ind si existe, sino del rubro directamente (parser estructural Excel)
+      const rawVal    = fullKey ? (_getIndPath(ind, fullKey) ?? rubro.val) : rubro.val;
+      const campoBase = campoMap[shortKey];
+
+      // Campo calculado (tiene fórmula en Excel o calcFn en el sistema):
+      // mostrar como readonly con el valor resuelto
+      if (rubro.calc) {
+        // Usar valor del Excel directamente (ya resuelto por la fórmula)
+        const displayVal = rubro.val ?? (campoBase?.calcFn ? campoBase.calcFn(ind) : null);
+        if (displayVal == null) return '';
+        const fmt   = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+        const s     = displayVal < 0 ? '−' : '';
+        const color = displayVal < 0 ? 'var(--neg)' : 'var(--pos)';
+        const hint  = rubro.formula ? `formula: ${rubro.formula}` : 'calculado';
+        return `<div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:8.5px;color:var(--text);font-family:var(--mono);
+            display:flex;align-items:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#47e8ff;
+              opacity:.6;flex-shrink:0;display:inline-block"></span>
+            ${rubro.lbl}
+            <span style="font-size:7px;color:var(--dim)" title="${hint}">calculado</span>
+          </label>
+          <div data-er-calc-fila="${rubro.fila}"
+            style="padding:6px 10px;background:var(--s3);border:1px solid var(--bd);
+            color:${color};font-family:var(--mono);font-size:10px;border-radius:3px;
+            font-weight:600;min-height:30px;display:flex;align-items:center">
+            ${s}$ ${fmt.format(Math.abs(displayVal))}
+          </div>
+        </div>`;
+      }
+
+      // Campo editable
+      const editKey = fullKey || ('rentabilidad.__extra_' + (rubro.fila||0));
+      // Sincronizar valor en ind si viene del rubro
+      if (rawVal != null && fullKey) _setIndPath(ind, fullKey, rawVal);
+      const fSint = {
+        key:             editKey,
+        lbl:             rubro.lbl,
+        tipo:            'monto',
+        negativo:        rubro.negativo,
+        libre:           rubro.libre,
+        libreDefaultNeg: rubro.libreDefaultNeg || false,
+        // Pasar el número de fila para que el recalculador sepa qué dependencias actualizar
+        _fila:           rubro.fila,
+      };
+      return mkInput(fSint);
+    };
+
+    // ── Usar estructura_er del balance si está disponible ──────────
+    const erRubros = b.estructura_er;
+    if (erRubros && erRubros.length > 0) {
+      // Agrupar rubros en secciones automáticas según posición en el ER
+      // Separadores semánticos basados en los keys
+      const TOTALIZADORES = new Set(['resultado_operativo','resultado_neto','utilidad_bruta',
+                                      'res_neto_produccion','sub_total_agro']);
+      const LIBRE_SIGNO   = new Set(['resultado_financiero','recpam','resultado_tenencia',
+                                      'medicion_razonable','otros_ingresos','ingresos_obras_subsidios']);
+
+      erRubros.forEach((rubro, i) => {
+        // Separador visual antes de totalizadores
+        if (TOTALIZADORES.has(rubro.key)) {
+          html += `<div style="width:100%;height:1px;background:var(--bd);margin:4px 0"></div>`;
+        }
+        const inp = mkInputDinamico(rubro);
+        if (inp) html += inp;
+        // Separador visual después de totalizadores
+        if (TOTALIZADORES.has(rubro.key)) {
+          html += `<div style="width:100%;height:1px;background:var(--bd);margin:4px 0"></div>`;
+        }
+      });
+
+      // Agregar campos con valor que no estén en estructura_er (ej: editados manualmente)
+      const keysEnER = new Set(erRubros.map(r => 'rentabilidad.' + r.key));
+      fields.forEach(f => {
+        if (f.hidden || f.calc) return;
+        if (keysEnER.has(f.key)) return;
+        const raw = _getIndPath(ind, f.key);
+        if (raw == null) return;
+        html += mkInput(f);
+      });
+
+    } else {
+      // ── Fallback: mostrar todos los campos con valor en ind ────────
+      fields.forEach(f => {
+        if (f.hidden) return;
+        if (f.grupo === 'agro' && !esAgro && _getIndPath(ind, f.key) == null) return;
+        const CAMPOS_SP = ['gastos_ejecucion_obras','ingresos_obras_subsidios','recpam','resultado_tenencia'];
+        if (CAMPOS_SP.some(k => f.key.endsWith(k)) && _getIndPath(ind, f.key) == null) return;
+        html += mkInput(f);
+      });
+    }
+
+    el.innerHTML = html;
+  };
+
+  buildGridPat(BAL_EDITOR_FIELDS.patrimonial, 'bal-editor-patrimonial');
+  buildGridResultados(BAL_EDITOR_FIELDS.resultados, 'bal-editor-resultados');
+
+  // Actualizar selector de tipo empresa si existe en el DOM
+
+}
+
+// Recalcular campos calculados del ER al editar un campo base
+// Usa estructura_er.depFilas para saber qué rubros dependen de qué filas
+function _balEditorRecalcER(changedInput) {
+  // Obtener el balance activo y su estructura_er
+  const key = document.getElementById('bal-sel')?.value || _balActivo;
+  const b   = _balances[key];
+  if (!b?.estructura_er?.length) return;
+
+  const erRubros = b.estructura_er;
+
+  // Construir mapa fila → valor actual desde los inputs del editor
+  // y desde los rubros ya calculados
+  const filaToVal = {};
+  erRubros.forEach(r => { filaToVal[r.fila] = r.val ?? 0; });
+
+  // Actualizar el valor del campo recién editado
+  const filaEditada = parseInt(changedInput.dataset.erFila);
+  if (filaEditada) {
+    const raw = changedInput.value.trim().replace(/\./g,'').replace(',','.');
+    const n   = parseFloat(raw);
+    if (!isNaN(n)) {
+      // Aplicar signo según toggle o data-negativo
+      const toggleBtn = changedInput.parentElement?.querySelector('[data-sign-toggle]');
+      const negFijo   = changedInput.dataset.negativo === 'true';
+      let val;
+      if (negFijo)       val = -Math.abs(n);
+      else if (toggleBtn) val = toggleBtn.dataset.isNeg === 'true' ? -Math.abs(n) : Math.abs(n);
+      else                val = n;
+      filaToVal[filaEditada] = val;
+      // Actualizar también en el rubro de estructura_er
+      const rubroEdit = erRubros.find(r => r.fila === filaEditada);
+      if (rubroEdit) rubroEdit.val = val;
+    }
+  }
+
+  // Recalcular todos los campos calculados que tengan depFilas,
+  // en orden de fila (así los cálculos encadenados se resuelven correctamente)
+  const calcRubros = erRubros.filter(r => r.calc && r.depFilas?.length > 0)
+                              .sort((a, b) => a.fila - b.fila);
+
+  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+
+  calcRubros.forEach(rubro => {
+    // Sumar las filas dependientes
+    const suma = rubro.depFilas.reduce((s, f) => s + (filaToVal[f] ?? 0), 0);
+    filaToVal[rubro.fila] = suma;
+    rubro.val = suma; // actualizar el valor en estructura_er
+
+    // Actualizar el elemento visual en el editor
+    // Buscar el div readonly de este rubro (no tiene data-field, buscamos por data-er-calc-fila)
+    const divEl = document.querySelector(`[data-er-calc-fila="${rubro.fila}"]`);
+    if (divEl) {
+      const s     = suma < 0 ? '−' : '';
+      const color = suma < 0 ? 'var(--neg)' : 'var(--pos)';
+      divEl.textContent = `${s}$ ${fmt.format(Math.abs(suma))}`;
+      divEl.style.color = color;
+    }
+  });
+}
+
+// Toggle de signo: invierte el signo del campo y actualiza el indicador visual
+function _balEditorToggleSign(btn) {
+  const key     = btn.dataset.signToggle;
+  const wasNeg  = btn.dataset.isNeg === 'true';
+  const isNeg   = !wasNeg; // nuevo estado
+
+  // Actualizar dataset
+  btn.dataset.isNeg = String(isNeg);
+
+  // Actualizar visual del botón
+  btn.textContent = isNeg ? '−' : '+';
+  btn.title = isNeg
+    ? 'Resta (negativo) — click para cambiar a suma'
+    : 'Suma (positivo) — click para cambiar a resta';
+  btn.style.background    = isNeg ? 'rgba(255,140,71,.15)' : 'rgba(71,255,180,.1)';
+  btn.style.border        = `1px solid ${isNeg ? 'rgba(255,140,71,.4)' : 'rgba(71,255,180,.3)'}`;
+  btn.style.color         = isNeg ? '#ff8c47' : '#47ffb4';
+
+  // Actualizar el valor en ind inmediatamente
+  const key2  = key;
+  const input = document.querySelector(`input[data-field="${key2}"]`);
+  if (input) {
+    // Leer valor absoluto del input y aplicar signo
+    const raw = input.value.trim().replace(/\./g,'').replace(',','.');
+    if (raw !== '' && !isNaN(parseFloat(raw))) {
+      const n   = Math.abs(parseFloat(raw));
+      const val = isNeg ? -n : n;
+      // Actualizar ind directamente
+      const b   = _balances[document.getElementById('bal-sel')?.value || _balActivo];
+      if (b?.indicadores) _setIndPath(b.indicadores, key2, val);
+    }
+    // Recalcular campos derivados
+    _balEditorRecalcCalcs(input);
+  }
 }
 
 // Formatear input de importe con separador de miles en tiempo real
@@ -11725,8 +12446,10 @@ function _balEditorFmtMiles(inp) {
     try { inp.setSelectionRange(nuevoCursor, nuevoCursor); } catch(e) {}
   }
 
-  // Recalcular campos derivados
+  // Recalcular campos derivados (sistema estándar)
   _balEditorRecalcCalcs(inp);
+  // Recalcular campos ER basados en fórmulas del Excel
+  if (inp) _balEditorRecalcER(inp);
 }
 
 // Al salir del campo: formato final limpio (redondear a 2 decimales si hay coma)
@@ -11748,15 +12471,22 @@ function _balEditorRecalcCalcs(changedInput) {
 
   document.querySelectorAll('#bal-editor-wrap input[data-field]').forEach(inp => {
     const campo   = inp.dataset.field;
-    const negativo= inp.dataset.negativo === 'true';
-    // Parsear formato AR: quitar puntos de miles, reemplazar coma decimal
-    // El guion al inicio es signo negativo — parseFloat lo reconoce correctamente
+    // Parsear formato AR
     const raw = inp.value.trim().replace(/\./g,'').replace(',','.');
     if (raw === '' || isNaN(parseFloat(raw))) return;
     const n = parseFloat(raw);
-    // negativo:true → siempre negativo (gastos/costos)
-    // negativo:false → respetar signo del usuario (medicion_razonable, otros)
-    const val = negativo ? -Math.abs(n) : n;
+    // Mismo orden de prioridad que balEditorGuardar
+    const negFijo2   = inp.dataset.negativo === 'true';
+    const toggleBtn2 = inp.parentElement?.querySelector('[data-sign-toggle]');
+    let val;
+    if (negFijo2) {
+      val = -Math.abs(n);
+    } else if (toggleBtn2) {
+      const esNeg = toggleBtn2.dataset.isNeg === 'true';
+      val = esNeg ? -Math.abs(n) : Math.abs(n);
+    } else {
+      val = n;
+    }
     _setIndPath(indTemp, campo, val);
   });
 
@@ -11892,9 +12622,8 @@ function _balEditorGuardarInterno() {
 
   // 1. Guardar campos editables (inputs)
   document.querySelectorAll('#bal-editor-wrap input[data-field]').forEach(inp => {
-    const campo   = inp.dataset.field;
-    const negativo= inp.dataset.negativo === 'true';
-    // Formato AR: puntos como miles, coma como decimal, guion como negativo
+    const campo = inp.dataset.field;
+    // Formato AR: puntos como miles, coma como decimal
     const raw = inp.value.trim().replace(/\./g,'').replace(',','.');
     if (raw === '') {
       _setIndPath(ind, campo, null);
@@ -11902,9 +12631,22 @@ function _balEditorGuardarInterno() {
     }
     const n = parseFloat(raw);
     if (isNaN(n)) return;
-    // Si el campo tiene negativo:true → forzar negativo (ej: gastos, costos)
-    // Si no → respetar el signo que ingresó el usuario (ej: medicion_razonable)
-    const val = negativo ? -Math.abs(n) : n;
+
+    // Determinar signo:
+    // 1. data-negativo="true" → siempre negativo (costos, gastos — sin toggle)
+    // 2. toggle botón presente → el toggle controla el signo (signo libre)
+    // 3. ninguno → respetar el signo del número ingresado
+    const negFijo   = inp.dataset.negativo === 'true';
+    const toggleBtn = inp.parentElement?.querySelector('[data-sign-toggle]');
+    let val;
+    if (negFijo) {
+      val = -Math.abs(n);
+    } else if (toggleBtn) {
+      const esNeg = toggleBtn.dataset.isNeg === 'true';
+      val = esNeg ? -Math.abs(n) : Math.abs(n);
+    } else {
+      val = n;
+    }
     _setIndPath(ind, campo, val);
     cambiados++;
   });
@@ -11994,6 +12736,9 @@ function _balEditorGuardarInterno() {
   // Actualizar todos los paneles que consumen datos de _balances
   // (resumen, empresa, portafolio, sostenibilidad, heatmap, ranking)
   rebuildActive();
+
+  // Refrescar el ER con el tipo de empresa actualizado
+
 }
 
 function balEditorRecargar() {
@@ -13470,6 +14215,7 @@ function applyCloudData(cloud) {
         esCierreNoCal: r.es_cierre_no_cal === 'SI',
         vinculada:    r.vinculada || null,
         tipo:         r.tipo || '',
+        tipo_empresa: r.tipo_empresa || 'estandar',
         metodo:       r.metodo || 'Sheets',
         timestamp:    r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : Date.now(),
         alertas:      r.alertas ? r.alertas.split(' | ').filter(Boolean) : [],
@@ -13605,6 +14351,7 @@ function buildCloudPayload() {
       es_cierre_no_cal:      b.esCierreNoCal ? 'SI' : 'NO',
       vinculada:             b.vinculada  || '',
       tipo:                  b.tipo       || '',
+      tipo_empresa:          b.tipo_empresa || 'estandar',
       metodo:                b.metodo     || '',
       fecha_analisis:        b.timestamp  ? new Date(b.timestamp).toISOString().slice(0,10) : '',
       // Liquidez
@@ -13988,9 +14735,10 @@ function reAnalizarBalancesRestaurados() {
     try {
       const fresh = analizarBalanceLocal(b.filename || key, b.textoRaw);
       // Solo actualizar indicadores, alertas y diagnóstico — no tocar empresa/período elegidos por el usuario
-      b.indicadores = fresh.indicadores;
-      b.alertas     = fresh.alertas;
-      b.diagnostico = fresh.diagnostico;
+      b.indicadores    = fresh.indicadores;
+      b.alertas        = fresh.alertas;
+      b.diagnostico    = fresh.diagnostico;
+      b.tipo_empresa   = fresh.tipo_empresa || 'estandar';
       count++;
     } catch(e) {
       console.warn('[LR] Error re-analizando balance', key, e);
