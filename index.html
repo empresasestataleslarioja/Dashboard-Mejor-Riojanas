@@ -2392,9 +2392,111 @@ self.onmessage = async (e) => {
       <select id="sel-trans-saf" style="display:none"></select>
       <select id="sel-trans-ben" style="display:none"></select>
       <select id="sel-trans-cat" style="display:none"></select>
-      <!-- Resumen de filtros activos -->
-      <div id="trans-filtro-resumen" style="font-size:9px;color:var(--dim);font-family:var(--mono);
-        margin-bottom:6px;min-height:14px"></div>
+      <!-- Resumen de filtros activos + corrección masiva -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+        <div id="trans-filtro-resumen" style="font-size:9px;color:var(--dim);font-family:var(--mono);
+          flex:1;min-height:14px"></div>
+        <button onclick="toggleCorreccionMasivaPanel()"
+          id="btn-corr-masiva"
+          style="padding:3px 9px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.25);
+          color:var(--y21);font-family:var(--mono);font-size:8px;border-radius:3px;
+          cursor:pointer;white-space:nowrap">🔧 Asignar mes masivo</button>
+      </div>
+
+      <!-- Panel de corrección masiva de mes -->
+      <div id="panel-corr-masiva" style="display:none;padding:12px 14px;margin-bottom:10px;
+        background:rgba(232,255,71,.04);border:1px solid rgba(232,255,71,.2);border-radius:5px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
+          color:var(--y21);margin-bottom:10px;font-family:var(--mono)">
+          🔧 Corrección masiva de mes
+        </div>
+
+        <!-- Opción A: extraer de observación automáticamente -->
+        <div style="margin-bottom:10px;padding:10px 12px;background:var(--s2);border-radius:4px">
+          <div style="font-size:10px;font-weight:600;color:var(--text);margin-bottom:4px">
+            A) Extraer mes de la columna Observación automáticamente
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:8px">
+            Busca patrones como <em>ENERO/2024</em>, <em>MARZO 2023</em>, <em>03/2022</em> en el texto de observación y asigna el mes correspondiente.
+            Solo afecta registros <strong>sin mes asignado</strong>.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="corr-año-obs" style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+              <option value="">Todos los años</option>
+            </select>
+            <button onclick="corregirMesDesdeObservacion()"
+              style="padding:5px 12px;background:rgba(71,232,255,.1);border:1px solid #47e8ff40;
+              color:#47e8ff;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              ▶ Ejecutar extracción
+            </button>
+            <span id="corr-obs-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
+          </div>
+        </div>
+
+        <!-- Opción B: asignar mes manualmente a un año/archivo -->
+        <div style="padding:10px 12px;background:var(--s2);border-radius:4px">
+          <div style="font-size:10px;font-weight:600;color:var(--text);margin-bottom:4px">
+            B) Asignar mes manualmente a registros de un año/archivo específico
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:8px">
+            Útil cuando todos los registros de un archivo corresponden a un mes conocido.
+            Solo afecta registros <strong>sin mes asignado</strong> que coincidan con el año/archivo seleccionado.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="corr-año-man" style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+              <option value="">Todos los años</option>
+            </select>
+            <select id="corr-archivo-man" style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;max-width:200px">
+              <option value="">Todos los archivos</option>
+            </select>
+            <select id="corr-mes-man" style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+              <option value="">— Mes a asignar —</option>
+              <option value="1">Enero</option><option value="2">Febrero</option>
+              <option value="3">Marzo</option><option value="4">Abril</option>
+              <option value="5">Mayo</option><option value="6">Junio</option>
+              <option value="7">Julio</option><option value="8">Agosto</option>
+              <option value="9">Septiembre</option><option value="10">Octubre</option>
+              <option value="11">Noviembre</option><option value="12">Diciembre</option>
+            </select>
+            <button onclick="asignarMesMasivo()"
+              style="padding:5px 12px;background:rgba(71,255,180,.1);border:1px solid #47ffb440;
+              color:#47ffb4;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              ✓ Asignar
+            </button>
+            <span id="corr-man-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
+          </div>
+        </div>
+
+        <!-- Asignación masiva de AÑO -->
+        <div style="padding:10px 12px;background:var(--s2);border-radius:4px;margin-top:8px">
+          <div style="font-size:10px;font-weight:600;color:var(--text);margin-bottom:4px">
+            C) Asignar año a registros sin año (o corregir año incorrecto)
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:8px">
+            Asignará el año elegido a todos los registros que coincidan con el archivo seleccionado y <strong>no tengan año asignado</strong>.
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="corr-archivo-año" style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;max-width:200px">
+              <option value="">Todos los archivos (sin año)</option>
+            </select>
+            <select id="corr-año-asignar" style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+              <option value="">— Año a asignar —</option>
+            </select>
+            <button onclick="asignarAñoMasivo()"
+              style="padding:5px 12px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
+              color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              ✓ Asignar año
+            </button>
+            <span id="corr-año-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
+          </div>
+        </div>
+      </div>
 
       <!-- sin datos -->
       <div id="trans-empty" style="display:none;padding:48px;text-align:center;color:var(--dim)">
@@ -5960,11 +6062,31 @@ function abrirFiltroTrans(campo, btnEl) {
   const panel = document.createElement('div');
   panel.id = 'trans-filtro-panel';
   panel.dataset.campo = campo;
+
+  // Calcular posición óptima: abajo si hay espacio, arriba si no
+  // El panel ocupa ~180px fijo (header+search+selectAll+botones) + lista variable
+  const PANEL_FIJO = 180;          // altura fija del panel sin la lista
+  const ITEM_H     = 33;           // altura aprox por ítem
+  const listaIdeal = vals.length * ITEM_H;  // altura ideal de la lista
+  const espacioAbajo = window.innerHeight - rect.bottom - 8;
+  const espacioArriba = rect.top - 8;
+  const abreAbajo = espacioAbajo >= 200 || espacioAbajo >= espacioArriba;
+  const espacioDisponible = abreAbajo ? espacioAbajo : espacioArriba;
+  // Altura máxima de la lista = espacio disponible menos la parte fija del panel
+  const listaMaxH = Math.max(120, Math.min(listaIdeal, espacioDisponible - PANEL_FIJO));
+  const panelH    = PANEL_FIJO + listaMaxH;
+  const topPos    = abreAbajo
+    ? rect.bottom + 3
+    : rect.top - panelH - 3;
+
   panel.style.cssText = `position:fixed;z-index:9999;background:var(--s1);
     border:1px solid var(--bd2);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.5);
-    min-width:220px;max-width:320px;
-    top:${Math.min(rect.bottom + 3, window.innerHeight - 360)}px;
-    left:${Math.min(rect.left, window.innerWidth - 330)}px`;
+    min-width:240px;max-width:340px;
+    top:${Math.max(4, Math.min(topPos, window.innerHeight - panelH - 4))}px;
+    left:${Math.min(rect.left, window.innerWidth - 350)}px`;
+
+  // Guardar listaMaxH para usarla en el HTML del panel
+  panel._listaMaxH = listaMaxH;
 
   panel.innerHTML = `
     <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;
@@ -5991,7 +6113,7 @@ function abrirFiltroTrans(campo, btnEl) {
         <span style="font-weight:600">(Seleccionar / Deseleccionar todo)</span>
       </label>
     </div>
-    <div id="ftrans-lista-${campo}" style="max-height:240px;overflow-y:auto;padding:4px 0">
+    <div id="ftrans-lista-${campo}" style="max-height:${Math.round(listaMaxH)}px;overflow-y:auto;padding:4px 0">
       ${vals.map(v => {
         const lbl = _transValLabel(campo, v);
         const color = v === '__sin_dato__' ? '#ff8c47' : 'var(--text)';
@@ -8670,8 +8792,8 @@ function handleImportFromBuffer(buffer, fname) {
 
     const isCSV = fname.toLowerCase().endsWith('.csv');
     const wb = isCSV
-      ? XLSX.read(new TextDecoder('utf-8').decode(uint8), { type: 'string' })
-      : XLSX.read(uint8, { type: 'array' });
+      ? XLSX.read(new TextDecoder('utf-8').decode(uint8), { type: 'string', cellDates:true })
+      : XLSX.read(uint8, { type: 'array', cellDates:true });
     handleImportWorkbook(wb, fname);
   } catch(e) {
     document.getElementById('import-result').innerHTML =
@@ -8687,7 +8809,7 @@ function handleImportFromBuffer(buffer, fname) {
 function tryParseSIDIF(wb, fname) {
 
   // ── Función auxiliar: parsear una hoja individual ──────────────
-  function parsearHoja(data, headerRow, sheetName) {
+  function parsearHoja(data, headerRow, sheetName, wsRaw) { // wsRaw = hoja original de SheetJS
     const headers = (data[headerRow] || []).map(v => String(v||'').trim().toLowerCase());
 
     const idx = (terms) => {
@@ -8723,6 +8845,7 @@ function tryParseSIDIF(wb, fname) {
 
     const rows = [];
     for (let ri = headerRow + 1; ri < data.length; ri++) {
+      const rowIdx = ri; // exponer para acceso a cell.w
       const row = data[ri] || [];
       const ben = String(row[iBen]||'').trim();
       const imp = parseFloat(String(row[iImp]||'0').replace(/[^0-9.-]/g,''));
@@ -8736,56 +8859,79 @@ function tryParseSIDIF(wb, fname) {
       const suel   = String(iSuel>=0? (row[iSuel]||''):'').trim();
       const nroSIDIF = iSIDIF>=0 ? String(row[iSIDIF]||'').trim() : '';
 
-      let mes = iMes>=0 ? parseInt(row[iMes]||0) : 0;
-      let año = iAño>=0 ? parseInt(row[iAño]||0) : 0;
+      // ═══════════════════════════════════════════════════════════════
+      // FUENTE DE VERDAD: F.Registro PG
+      // Mes Y año se leen SIEMPRE de esta columna. Es la fecha real del pago.
+      // ═══════════════════════════════════════════════════════════════
 
-      if (mes > 12) mes = 0;
-      if (año < 2000 || año > 2100) año = 0;
-
-      // Helper: convertir número de serie Excel a {año, mes, dia}
-      // SheetJS devuelve fechas como número de serie (ej: 46139 = 2026-04-27)
+      // ── Helpers de conversión ─────────────────────────────────────
       const excelSerialToDate = (n) => {
-        if (typeof n !== 'number' || n < 1) return null;
-        // Epoch de Excel: 1-ene-1900 = día 1 (con bug de año bisiesto 1900, offset 25569 para Unix)
+        if (typeof n !== 'number' || n < 40000 || n > 60000) return null;
         const d = new Date(Math.round((n - 25569) * 86400 * 1000));
-        return { año: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
+        const yr = d.getUTCFullYear(), mo = d.getUTCMonth() + 1;
+        return (yr >= 2000 && yr <= 2100 && mo >= 1 && mo <= 12)
+          ? { año: yr, mes: mo } : null;
       };
 
-      // PRIORIDAD: extraer año y mes de la columna de fecha de registro (F.Registro PG)
-      // Es la fecha real del pago, no la del período referenciado en la observación
-      const iFecha = idx(['f.registro pg','f.registro op','f.registro','fecha registro','fecha pago','fregistro']);
-      const fechaCell = iFecha >= 0 ? row[iFecha] : null;
-      if (fechaCell) {
-        // Caso 1: número de serie de Excel (el más común en XLS/XLSX)
-        if (typeof fechaCell === 'number' && fechaCell > 40000) {
-          const fd = excelSerialToDate(fechaCell);
-          if (fd) { año = fd.año; if (!mes) mes = fd.mes; }
+      const parseFechaStr = (s) => {
+        if (!s || typeof s !== 'string') return null;
+        s = s.trim();
+        // "27/04/2026" o "27-04-2026" (DD/MM/YYYY)
+        let m = s.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/);
+        if (m) {
+          let yr = parseInt(m[3]); if (yr < 100) yr += 2000;
+          const mo = parseInt(m[2]);
+          if (yr >= 2000 && yr <= 2100 && mo >= 1 && mo <= 12)
+            return { año: yr, mes: mo };
         }
-        // Caso 2: string "2026-04-27 13:54:22" o "2026-04-27"
-        else if (typeof fechaCell === 'string') {
-          const mFecha = fechaCell.match(/(20\d{2})-(0[1-9]|1[0-2])/);
-          if (mFecha) { año = parseInt(mFecha[1]); if (!mes) mes = parseInt(mFecha[2]); }
-        }
-        // Caso 3: objeto Date nativo
-        else if (fechaCell instanceof Date) {
-          año = fechaCell.getFullYear(); if (!mes) mes = fechaCell.getMonth() + 1;
-        }
+        // "2026-04-27" (YYYY-MM-DD)
+        m = s.match(/^(20\d{2})-(0?[1-9]|1[0-2])/);
+        if (m) return { año: parseInt(m[1]), mes: parseInt(m[2]) };
+        return null;
+      };
+
+      let mes = 0, año = 0;
+
+      // ── 1. Leer F.Registro PG desde wsRaw (.w = texto formateado "DD/MM/YYYY") ──
+      // cell.w es lo más confiable: SheetJS lo genera aplicando el formato Excel
+      // aunque .v sea un número de serie crudo
+      const iFecha = idx(['f.registro pg','f.registro op','f.registro',
+                          'fecha registro','fecha pago','fregistro']);
+      if (iFecha >= 0 && wsRaw) {
+        try {
+          const cellKey = XLSX.utils.encode_cell({ r: rowIdx, c: iFecha });
+          const cell    = wsRaw[cellKey];
+          if (cell?.w) {
+            const fd = parseFechaStr(cell.w);
+            if (fd) { año = fd.año; mes = fd.mes; }
+          }
+          // Si .w no dio resultado, intentar .v
+          if ((!año || !mes) && cell?.v != null) {
+            const fd = typeof cell.v === 'number'
+              ? excelSerialToDate(cell.v)
+              : parseFechaStr(String(cell.v));
+            if (fd) { año = fd.año; mes = fd.mes; }
+          }
+        } catch(e) {}
       }
 
-      // Fallback: buscar número de serie de fecha en cualquier celda de la fila
-      if (!año || !mes) {
-        for (const cell of row) {
-          if (!cell || cell === fechaCell) continue;
-          if (typeof cell === 'number' && cell > 40000 && cell < 60000) {
-            const fd = excelSerialToDate(cell);
-            if (fd && fd.año >= 2000) { if (!año) año = fd.año; if (!mes) mes = fd.mes; break; }
-          } else if (typeof cell === 'string') {
-            const mFecha = cell.match(/(20\d{2})-(0[1-9]|1[0-2])/);
-            if (mFecha) { if (!año) año = parseInt(mFecha[1]); if (!mes) mes = parseInt(mFecha[2]); break; }
-          }
+      // ── 2. Si wsRaw no está disponible, leer row[iFecha] directamente ──
+      if ((!año || !mes) && iFecha >= 0) {
+        const v = row[iFecha];
+        let fd = null;
+        if (v instanceof Date) {
+          // Con cellDates:true SheetJS devuelve Date — usar UTC para evitar offset de zona horaria
+          fd = { año: v.getUTCFullYear(), mes: v.getUTCMonth() + 1 };
+        } else if (typeof v === 'number') {
+          fd = excelSerialToDate(v);
+        } else if (typeof v === 'string') {
+          fd = parseFechaStr(v);
         }
+        if (fd && fd.año >= 2000 && fd.año <= 2100) { año = fd.año; mes = fd.mes; }
       }
-      // NO usar la observación para el año — contiene años del período referenciado, no del pago
+
+      // ── 3. Sin F.Registro PG: sin mes ni año (no inventar) ───────
+      // No usar otras columnas — podrían contener el período referenciado, no la fecha real
 
       const categoria = clasificarTransferencia(cgto, observ, suel);
 
@@ -8817,7 +8963,7 @@ function tryParseSIDIF(wb, fname) {
         c.includes('mcl') || c.includes('pago mcl') || c.includes('pago mo')
       );
       if (hasBen && hasImp) {
-        const rowsDeHoja = parsearHoja(raw, ri, sn);
+        const rowsDeHoja = parsearHoja(raw, ri, sn, wb.Sheets[sn]);
         if (rowsDeHoja.length > 0) {
           todasLasRows.push(...rowsDeHoja);
           hojasImportadas.push(`${sn} (${rowsDeHoja.length} registros)`);
@@ -9034,29 +9180,173 @@ function tryParseERNativo(wb, fname) {
 }
 
 // ── handleImportWorkbook: pipeline compartido (File o Buffer) ──
+// ── Clave única de un registro de transferencia ──────────────────
+function _claveTrans(t) {
+  return `${(t.beneficiario||'').toUpperCase().trim()}|${t.año||''}|${t.mes||''}|${Math.round(t.importe||0)}`;
+}
+
+// ── Aplicar importación SIDIF con el modo elegido ─────────────────
+function _aplicarSIDIF(sidifResult, fname, modo) {
+  const fnameNorm = fname.toLowerCase().trim();
+
+  if (modo === 'reemplazar') {
+    // Eliminar todos los registros del archivo anterior (mismo nombre)
+    const cargaAnterior = _importHistory.find(h =>
+      !h.reverted && h.sidifImport &&
+      (h.fname || '').toLowerCase().trim() === fnameNorm
+    );
+    if (cargaAnterior) {
+      // Marcar como revertida la carga anterior
+      cargaAnterior.reverted = true;
+      // Eliminar de DATA.transferencias los registros de esa carga
+      // Identificamos por _archivo o por sidifRows guardados
+      const clavesPrevias = new Set((cargaAnterior.sidifRows || []).map(_claveTrans));
+      DATA.transferencias = DATA.transferencias.filter(t => !clavesPrevias.has(_claveTrans(t)));
+    } else {
+      // Sin carga anterior identificada: eliminar registros duplicados por clave
+      const clavesNuevas = new Set(sidifResult.rows.map(_claveTrans));
+      DATA.transferencias = DATA.transferencias.filter(t => !clavesNuevas.has(_claveTrans(t)));
+    }
+    // Agregar todos los registros del nuevo archivo
+    DATA.transferencias.push(...sidifResult.rows);
+
+  } else if (modo === 'solo_nuevos') {
+    const clavesExistentes = new Set(DATA.transferencias.map(_claveTrans));
+    const nuevos = sidifResult.rows.filter(r => !clavesExistentes.has(_claveTrans(r)));
+    DATA.transferencias.push(...nuevos);
+    sidifResult.imported = nuevos.length; // actualizar contador
+
+  } else {
+    // 'todos': agregar sin filtrar
+    DATA.transferencias.push(...sidifResult.rows);
+  }
+
+  // Registrar en historial
+  const sidifTs = Date.now();
+  _importHistory.push({
+    id: sidifTs, fname, added: sidifResult.imported, updated: 0,
+    ts: sidifTs, reverted: false, diff: [], sidifImport: true, modo,
+    sidifRows: JSON.parse(JSON.stringify(sidifResult.rows)),
+    snapAfter: deepCopyData()
+  });
+
+  // Mostrar resultado
+  document.getElementById('import-result').innerHTML =
+    `<div class="imp-ok">
+      ✓ <strong>${fname}</strong> — ${modo === 'reemplazar' ? 'reemplazado' : modo === 'solo_nuevos' ? 'nuevos agregados' : 'importado'}<br>
+      <strong>${sidifResult.imported}</strong> transferencias · Total: <strong>${fvFull(sidifResult.total)}</strong>
+    </div>`;
+  document.getElementById('import-preview').style.display = 'none';
+
+  updateImportUI();
+  saveDataToLocalCache();
+  populateTransSelects();
+  if (typeof buildTransferencias === 'function') buildTransferencias();
+  rebuildActive();
+  marcarPendienteGuardar();
+}
+
+// ── Confirmación del diálogo de duplicados ────────────────────────
+function confirmarSIDIF(modo, fname, _unused) {
+  const pending = window._pendingSIDIF;
+  if (!pending) return;
+  window._pendingSIDIF = null;
+
+  if (modo === 'cancelar') {
+    document.getElementById('import-result').innerHTML =
+      `<div style="padding:10px 14px;color:var(--dim);font-size:10px">Importación cancelada.</div>`;
+    return;
+  }
+
+  _aplicarSIDIF(pending.sidifResult, pending.fname, modo);
+}
+
 function handleImportWorkbook(wb, fname) {
   // ── Intentar parser nativo SIDIF primero (transferencias) ──
   const sidifResult = tryParseSIDIF(wb, fname);
   if (sidifResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
-    document.getElementById('import-result').innerHTML = `<div class="imp-ok">
-      ✓ Archivo de transferencias SIDIF detectado — <strong>${fname}</strong><br>
-      <strong>${sidifResult.imported}</strong> transferencias importadas · Total: <strong>${fvFull(sidifResult.total)}</strong><br>
-      <span style="font-size:10px;color:var(--dim)">Los pagos se acumulan a períodos anteriores ya cargados.
-      Ver el módulo <strong>💸 Transferencias</strong> para el reporte completo.</span>
-    </div>`;
-    document.getElementById('import-preview').style.display = 'none';
-    const sidifTs = Date.now();
-    _importHistory.push({ id: sidifTs, fname, added: sidifResult.imported, updated: 0,
-      ts: sidifTs, reverted: false, diff:[], sidifImport: true,
-      sidifRows: JSON.parse(JSON.stringify(sidifResult.rows)),
-      snapAfter: deepCopyData() });
-    updateImportUI();
-    saveDataToLocalCache();
-    // Refrescar módulo de transferencias con los nuevos datos
-    populateTransSelects();
-    if (typeof buildTransferencias === 'function') buildTransferencias();
-    rebuildActive();
+
+    // ── Detectar si este archivo ya fue cargado anteriormente ──────
+    const fnameNorm = fname.toLowerCase().trim();
+    const cargaAnterior = _importHistory.find(h =>
+      !h.reverted && h.sidifImport &&
+      (h.fname || '').toLowerCase().trim() === fnameNorm
+    );
+
+    // ── Detectar duplicados por clave de registro ──────────────────
+    // Clave: beneficiario|año|mes|importe (identifica un pago único)
+    const claveReg = t =>
+      `${(t.beneficiario||'').toUpperCase()}|${t.año||''}|${t.mes||''}|${Math.round(t.importe||0)}`;
+
+    const clavesExistentes = new Set(DATA.transferencias.map(claveReg));
+    const rowsNuevos    = sidifResult.rows.filter(r => !clavesExistentes.has(claveReg(r)));
+    const rowsDuplicados = sidifResult.rows.filter(r => clavesExistentes.has(claveReg(r)));
+
+    const hasDuplicados = rowsDuplicados.length > 0 || cargaAnterior;
+
+    // ── Si hay duplicados, pedir confirmación con opciones ─────────
+    if (hasDuplicados) {
+      const msgArchivo = cargaAnterior
+        ? `<div style="padding:8px 12px;background:rgba(255,140,71,.1);border:1px solid #ff8c4740;
+            border-radius:4px;margin-bottom:8px;font-size:10px;line-height:1.6">
+            ⚠ <strong>El archivo "${fname}" ya fue cargado anteriormente</strong>
+            (${new Date(cargaAnterior.ts).toLocaleDateString('es-AR')},
+            ${cargaAnterior.added} registros).
+          </div>`
+        : '';
+      const msgReg = rowsDuplicados.length > 0
+        ? `<div style="padding:8px 12px;background:rgba(255,140,71,.08);border:1px solid #ff8c4730;
+            border-radius:4px;margin-bottom:8px;font-size:10px;line-height:1.6">
+            📋 <strong>${rowsDuplicados.length} registro${rowsDuplicados.length>1?'s':''} ya existen</strong>
+            en el dashboard (mismo beneficiario, importe, mes y año).
+            ${rowsNuevos.length} registros son nuevos.
+          </div>`
+        : '';
+
+      document.getElementById('import-result').innerHTML = `
+        <div style="padding:14px;background:var(--s2);border:1px solid var(--bd2);
+          border-radius:5px;font-family:var(--mono)">
+          <div style="font-size:11px;font-weight:600;color:var(--y21);margin-bottom:10px">
+            ⚠ Posibles duplicados detectados — ${fname}
+          </div>
+          ${msgArchivo}${msgReg}
+          <div style="font-size:10px;color:var(--text);margin-bottom:12px;line-height:1.7">
+            ¿Cómo querés proceder?
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="confirmarSIDIF('reemplazar','${fname.replace(/'/g,"\\'")}',${JSON.stringify(sidifResult).length > 50000 ? '{}' : ''})"
+              style="flex:1;padding:8px 12px;background:rgba(71,232,255,.1);border:1px solid #47e8ff40;
+              color:#47e8ff;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+              text-align:center;line-height:1.5">
+              🔄 <strong>Reemplazar</strong><br>
+              <span style="font-size:8.5px;color:var(--dim)">Eliminar la carga anterior<br>y cargar este archivo completo</span>
+            </button>
+            <button onclick="confirmarSIDIF('solo_nuevos','${fname.replace(/'/g,"\\'")}',{})"
+              style="flex:1;padding:8px 12px;background:rgba(71,255,180,.08);border:1px solid #47ffb430;
+              color:#47ffb4;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+              text-align:center;line-height:1.5">
+              ➕ <strong>Solo nuevos</strong><br>
+              <span style="font-size:8.5px;color:var(--dim)">Agregar solo los ${rowsNuevos.length}<br>registros que no existen</span>
+            </button>
+            <button onclick="confirmarSIDIF('cancelar','${fname.replace(/'/g,"\\'")}',{})"
+              style="flex:1;padding:8px 12px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--dim);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+              text-align:center;line-height:1.5">
+              ✕ <strong>Cancelar</strong><br>
+              <span style="font-size:8.5px;color:var(--dim)">No hacer cambios</span>
+            </button>
+          </div>
+        </div>`;
+      document.getElementById('import-preview').style.display = 'none';
+
+      // Guardar el resultado para usarlo en confirmarSIDIF
+      window._pendingSIDIF = { sidifResult, fname, cargaAnterior, rowsNuevos };
+      return;
+    }
+
+    // ── Sin duplicados: importar directamente ──────────────────────
+    _aplicarSIDIF(sidifResult, fname, 'todos');
     return;
   }
 
@@ -9138,8 +9428,8 @@ function handleImport(file) {
   reader.onload = function(e) {
     try {
       const wb = ext === 'csv'
-        ? XLSX.read(e.target.result, {type:'string'})
-        : XLSX.read(e.target.result, {type:'array'});
+        ? XLSX.read(e.target.result, {type:'string', cellDates:true})
+        : XLSX.read(e.target.result, {type:'array', cellDates:true});
       handleImportWorkbook(wb, file.name);
     } catch(err) { alert('Error leyendo archivo: ' + err.message); }
   };
@@ -9769,8 +10059,8 @@ function importPresupuesto(file) {
   reader.onload = e => {
     try {
       const wb = file.name.endsWith('.csv')
-        ? XLSX.read(e.target.result,{type:'string'})
-        : XLSX.read(e.target.result,{type:'array'});
+        ? XLSX.read(e.target.result,{type:'string',cellDates:true})
+        : XLSX.read(e.target.result,{type:'array',cellDates:true});
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws,{defval:''});
       rows.forEach(r => {
@@ -10523,7 +10813,7 @@ async function loadBalanceExcel(file) {
 
     setBalProgress(true, 'Analizando estructura del Excel…', 40);
     const buf = await file.arrayBuffer();
-    const wb  = XLSX.read(buf, { type: 'array', cellFormula: true, cellText: false });
+    const wb  = XLSX.read(buf, { type: 'array', cellFormula: true, cellText: false, cellDates: true });
 
     // Parser estructural: lee fórmulas y estructura fila a fila
     const { estructura_er, indicadores } = parsearExcelBalance(wb, XLSX);
@@ -14319,6 +14609,191 @@ function editarCeldaTrans(span, idx, campo) {
       if (e.key === 'Enter') ta.blur();
       if (e.key === 'Escape') renderTransTabla(transFiltered());
     });
+  }
+}
+
+// ── Panel de corrección masiva de mes ────────────────────────────
+function toggleCorreccionMasivaPanel() {
+  const panel = document.getElementById('panel-corr-masiva');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : '';
+  if (!open) _poblarCorrMasivaSelects();
+}
+
+function _poblarCorrMasivaSelects() {
+  const años    = [...new Set(DATA.transferencias.map(t=>t.año).filter(Boolean))].sort();
+  const archivos = [...new Set(DATA.transferencias.map(t=>
+    (t._archivo||'').replace(/^.*[\/]/,'').replace(/\.xls[x]?$/i,'')
+  ).filter(Boolean))].sort();
+
+  // Archivos que tienen al menos un registro sin año (para sección C)
+  const archivosSinAño = [...new Set(
+    DATA.transferencias.filter(t=>!t.año).map(t=>
+      (t._archivo||'').replace(/^.*[\/]/,'').replace(/\.xls[x]?$/i,'')
+    ).filter(Boolean)
+  )].sort();
+
+  // Años para selects de obs y man (años con dato)
+  ['corr-año-obs','corr-año-man'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Todos los años</option>' +
+      años.map(y=>`<option value="${y}">${y}</option>`).join('');
+  });
+
+  // Archivos (para opción B — todos los archivos)
+  const selArch = document.getElementById('corr-archivo-man');
+  if (selArch) {
+    selArch.innerHTML = '<option value="">Todos los archivos</option>' +
+      archivos.map(a=>`<option value="${a}">${a}</option>`).join('');
+  }
+
+  // Archivos sin año (para opción C)
+  const selArchAño = document.getElementById('corr-archivo-año');
+  if (selArchAño) {
+    selArchAño.innerHTML = '<option value="">Todos los archivos (sin año)</option>' +
+      archivosSinAño.map(a=>`<option value="${a}">${a}</option>`).join('');
+  }
+
+  // Selector de año a asignar en opción C (todos los años posibles + nuevos)
+  const selAñoAsignar = document.getElementById('corr-año-asignar');
+  if (selAñoAsignar) {
+    const hoy = new Date().getFullYear();
+    const todosAños = [...new Set([...años, ...Array.from({length:8},(_,i)=>hoy-7+i)])].sort();
+    selAñoAsignar.innerHTML = '<option value="">— Año a asignar —</option>' +
+      todosAños.map(y=>`<option value="${y}">${y}</option>`).join('');
+  }
+}
+
+// Opción C: asignar año masivamente a registros sin año
+function asignarAñoMasivo() {
+  const archFiltro  = document.getElementById('corr-archivo-año')?.value;
+  const añoAsignar  = parseInt(document.getElementById('corr-año-asignar')?.value);
+  const res         = document.getElementById('corr-año-resultado');
+
+  if (!añoAsignar || añoAsignar < 2000 || añoAsignar > 2100) {
+    if (res) { res.textContent = '⚠ Seleccioná un año.'; res.style.color = '#ff8c47'; }
+    return;
+  }
+
+  let asignados = 0;
+  DATA.transferencias.forEach(t => {
+    if (t.año) return; // solo sin año
+    if (archFiltro) {
+      const arch = (t._archivo||'').replace(/^.*[\/]/,'').replace(/\.xls[x]?$/i,'');
+      if (arch !== archFiltro) return;
+    }
+    t.año = añoAsignar;
+    asignados++;
+  });
+
+  if (asignados > 0) {
+    saveDataToLocalCache();
+    marcarPendienteGuardar();
+    populateTransSelects();
+    buildTransferencias();
+  }
+  if (res) {
+    res.textContent = asignados > 0
+      ? `✓ ${asignados} registro${asignados>1?'s':''} actualizados con año ${añoAsignar}.`
+      : 'Sin registros sin año que coincidan.';
+    res.style.color = asignados > 0 ? '#47ffb4' : '#ff8c47';
+  }
+}
+
+// Opción A: extraer mes de la observación
+function corregirMesDesdeObservacion() {
+  const añoFiltro = document.getElementById('corr-año-obs')?.value;
+  const res = document.getElementById('corr-obs-resultado');
+
+  // Patrones para detectar mes en la observación
+  const MESES_PAT = [
+    'ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+    'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'
+  ];
+  const MESES_ABREV = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+
+  let asignados = 0, sinPatron = 0;
+
+  DATA.transferencias.forEach(t => {
+    if (t.mes) return; // ya tiene mes
+    if (añoFiltro && String(t.año) !== añoFiltro) return;
+
+    const obs = (t.observacion || '').toUpperCase();
+    let mesDetectado = null;
+
+    // Patrón: "ENERO/2024", "ENERO 2024", "ENERO-2024"
+    for (let i = 0; i < MESES_PAT.length; i++) {
+      if (obs.includes(MESES_PAT[i])) { mesDetectado = i + 1; break; }
+    }
+    // Patrón: "ENE/2024", "ENE 2024"
+    if (!mesDetectado) {
+      for (let i = 0; i < MESES_ABREV.length; i++) {
+        if (obs.includes(MESES_ABREV[i])) { mesDetectado = i + 1; break; }
+      }
+    }
+    // Patrón: "03/2024", "03-2024", "/03/", " 03 "
+    if (!mesDetectado) {
+      const mNum = obs.match(/[^\d]0?(1[012]|[1-9])[/\-](20[12]\d)/);
+      if (mNum) mesDetectado = parseInt(mNum[1]);
+    }
+
+    if (mesDetectado) {
+      t.mes = mesDetectado;
+      asignados++;
+    } else {
+      sinPatron++;
+    }
+  });
+
+  if (asignados > 0) {
+    saveDataToLocalCache();
+    marcarPendienteGuardar();
+    buildTransferencias();
+  }
+  if (res) {
+    res.textContent = asignados > 0
+      ? `✓ ${asignados} registros actualizados. ${sinPatron} sin patrón detectado.`
+      : `Sin cambios — ${sinPatron} registros sin patrón de mes en la observación.`;
+    res.style.color = asignados > 0 ? '#47ffb4' : '#ff8c47';
+  }
+}
+
+// Opción B: asignar mes manualmente en lote
+function asignarMesMasivo() {
+  const añoFiltro   = document.getElementById('corr-año-man')?.value;
+  const archFiltro  = document.getElementById('corr-archivo-man')?.value;
+  const mesAsignar  = parseInt(document.getElementById('corr-mes-man')?.value);
+  const res         = document.getElementById('corr-man-resultado');
+
+  if (!mesAsignar || mesAsignar < 1 || mesAsignar > 12) {
+    if (res) { res.textContent = '⚠ Seleccioná un mes.'; res.style.color = '#ff8c47'; }
+    return;
+  }
+
+  let asignados = 0;
+  DATA.transferencias.forEach(t => {
+    if (t.mes) return; // solo sin mes
+    if (añoFiltro && String(t.año) !== añoFiltro) return;
+    if (archFiltro) {
+      const arch = (t._archivo||'').replace(/^.*[\/]/,'').replace(/\.xls[x]?$/i,'');
+      if (arch !== archFiltro) return;
+    }
+    t.mes = mesAsignar;
+    asignados++;
+  });
+
+  if (asignados > 0) {
+    saveDataToLocalCache();
+    marcarPendienteGuardar();
+    buildTransferencias();
+  }
+  if (res) {
+    res.textContent = asignados > 0
+      ? `✓ ${asignados} registros actualizados.`
+      : 'Sin registros sin mes que coincidan con los filtros.';
+    res.style.color = asignados > 0 ? '#47ffb4' : '#ff8c47';
   }
 }
 
