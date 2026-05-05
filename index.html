@@ -1861,7 +1861,7 @@ self.onmessage = async (e) => {
           </div>
         </div>
         <div style="overflow-x:auto">
-          <table id="port-table" style="width:100%;border-collapse:collapse;font-size:10px;font-family:var(--mono)"></table>
+          <table id="port-table" style="width:100%;min-width:900px;border-collapse:collapse;font-size:10px;font-family:var(--mono)"></table>
         </div>
       </div>
       <div class="row2">
@@ -2124,6 +2124,32 @@ self.onmessage = async (e) => {
           </span>
         </div>
         <div class="rub-grid" id="rub-editor"></div>
+
+        <!-- Agregar nueva empresa -->
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bd);
+          display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div style="font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
+            color:var(--dim);align-self:center;white-space:nowrap">+ Nueva empresa:</div>
+          <input id="rub-nueva-nombre" type="text" placeholder="Nombre de la empresa (mayúsculas)"
+            style="flex:2;min-width:180px;padding:6px 10px;background:var(--s2);
+            border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
+            font-size:10px;border-radius:3px;outline:none;text-transform:uppercase"
+            onfocus="this.style.borderColor='var(--y21)'"
+            onblur="this.style.borderColor='var(--bd2)'"
+            onkeydown="if(event.key==='Enter') agregarEmpresaRubro()">
+          <select id="rub-nueva-rubro"
+            style="flex:1;min-width:130px;padding:6px 10px;background:var(--s2);
+            border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
+            font-size:10px;border-radius:3px;outline:none">
+            <option value="">— Rubro —</option>
+          </select>
+          <button onclick="agregarEmpresaRubro()"
+            style="padding:6px 14px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.4);
+            color:#47ffb4;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;
+            white-space:nowrap">+ Agregar</button>
+          <span id="rub-nueva-msg" style="font-size:9px;font-family:var(--mono);
+            color:var(--dim);align-self:center"></span>
+        </div>
       </div>
 
       <!-- ══ GESTIÓN DE EMPRESAS ══════════════════════════════════ -->
@@ -2278,42 +2304,64 @@ self.onmessage = async (e) => {
     <div class="panel" id="panel-transferencias">
       <div class="kpi-strip" id="kpi-trans"></div>
 
-      <!-- filtros -->
-      <div class="sel-row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px;align-items:center">
-        <span class="sel-label">Año</span>
-        <select class="sel" id="sel-trans-año" onchange="buildTransferencias()">
-          <option value="">Todos</option>
-        </select>
-        <span class="sel-label">Mes</span>
-        <select class="sel" id="sel-trans-mes" onchange="buildTransferencias()">
-          <option value="">Todos</option>
-          <option value="1">Enero</option><option value="2">Febrero</option>
-          <option value="3">Marzo</option><option value="4">Abril</option>
-          <option value="5">Mayo</option><option value="6">Junio</option>
-          <option value="7">Julio</option><option value="8">Agosto</option>
-          <option value="9">Septiembre</option><option value="10">Octubre</option>
-          <option value="11">Noviembre</option><option value="12">Diciembre</option>
-        </select>
-        <span class="sel-label">SAF</span>
-        <select class="sel" id="sel-trans-saf" onchange="buildTransferencias()">
-          <option value="">Todos</option>
-        </select>
-        <span class="sel-label">Beneficiario</span>
-        <select class="sel" id="sel-trans-ben" onchange="buildTransferencias()">
-          <option value="">Todos</option>
-        </select>
-        <span class="sel-label">Categoría</span>
-        <select class="sel" id="sel-trans-cat" onchange="buildTransferencias()">
-          <option value="">Todas</option>
-        </select>
-        <div class="sel-filter" style="flex:1;min-width:160px;position:relative">
+      <!-- filtros multi-selección estilo Excel -->
+      <div class="sel-row" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;align-items:center">
+
+        <!-- Año -->
+        <button id="btn-ftrans-año" onclick="abrirFiltroTrans('año',this)"
+          class="trans-multi-btn"
+          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+          cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px">
+          <span id="lbl-ftrans-año">Año: Todos</span><span style="font-size:8px;color:var(--dim)">▼</span>
+        </button>
+
+        <!-- Mes -->
+        <button id="btn-ftrans-mes" onclick="abrirFiltroTrans('mes',this)"
+          class="trans-multi-btn"
+          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+          cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px">
+          <span id="lbl-ftrans-mes">Mes: Todos</span><span style="font-size:8px;color:var(--dim)">▼</span>
+        </button>
+
+        <!-- SAF -->
+        <button id="btn-ftrans-saf" onclick="abrirFiltroTrans('saf',this)"
+          class="trans-multi-btn"
+          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+          cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px">
+          <span id="lbl-ftrans-saf">SAF: Todos</span><span style="font-size:8px;color:var(--dim)">▼</span>
+        </button>
+
+        <!-- Beneficiario -->
+        <button id="btn-ftrans-ben" onclick="abrirFiltroTrans('ben',this)"
+          class="trans-multi-btn"
+          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+          cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px">
+          <span id="lbl-ftrans-ben">Beneficiario: Todos</span><span style="font-size:8px;color:var(--dim)">▼</span>
+        </button>
+
+        <!-- Categoría -->
+        <button id="btn-ftrans-cat" onclick="abrirFiltroTrans('cat',this)"
+          class="trans-multi-btn"
+          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+          cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px">
+          <span id="lbl-ftrans-cat">Categoría: Todas</span><span style="font-size:8px;color:var(--dim)">▼</span>
+        </button>
+
+        <!-- Búsqueda texto libre -->
+        <div style="flex:1;min-width:160px;position:relative">
           <input id="inp-trans-buscar" type="search" placeholder="🔍 Buscar en observaciones, beneficiario…"
             oninput="buildTransferencias()"
-            style="width:100%;padding:5px 10px 5px 10px;background:var(--s2);border:1px solid var(--bd2);
+            style="width:100%;padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
             outline:none;box-sizing:border-box"
             onfocus="this.style.borderColor='#47e8ff'" onblur="this.style.borderColor='var(--bd2)'">
         </div>
+
         <button onclick="limpiarFiltrosTrans()" title="Limpiar todos los filtros"
           style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
           color:var(--dim);font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);
@@ -2322,6 +2370,13 @@ self.onmessage = async (e) => {
           ✕ Limpiar
         </button>
       </div>
+
+      <!-- Selectores hidden para compatibilidad con código existente -->
+      <select id="sel-trans-año" style="display:none"></select>
+      <select id="sel-trans-mes" style="display:none"></select>
+      <select id="sel-trans-saf" style="display:none"></select>
+      <select id="sel-trans-ben" style="display:none"></select>
+      <select id="sel-trans-cat" style="display:none"></select>
       <!-- Resumen de filtros activos -->
       <div id="trans-filtro-resumen" style="font-size:9px;color:var(--dim);font-family:var(--mono);
         margin-bottom:6px;min-height:14px"></div>
@@ -3578,7 +3633,7 @@ const RUBROS_DEFAULT = {
   'LA RIOJA VITICOLA'  : 'Alimentos',
 };
 // Estado mutable — se carga desde localStorage si existe
-let rubros = {};
+var rubros = {}; // var evita Temporal Dead Zone en referencias tempranas
 function loadRubros() {
   try {
     const saved = localStorage.getItem('lr_rubros_v4');
@@ -3601,6 +3656,23 @@ function resetRubros() {
   rebuildActive();
 }
 function getRubro(emp) { return rubros[emp] || 'Sin rubro'; }
+
+// ── Helper: obtener importe de transferencias para una empresa en un año ──
+// Busca por t.empresa (asignado), t.beneficiario (nombre exacto),
+// o coincidencia parcial normalizada del beneficiario con el nombre de empresa
+function _transEmpresa(e) {
+  // Normalizar: mayúsculas, sin puntuación extra
+  const norm = s => (s||'').toUpperCase().replace(/[.,\-_]/g,' ').replace(/\s+/g,' ').trim();
+  const eN = norm(e);
+  return (DATA.transferencias||[]).filter(t => {
+    if (t.empresa && norm(t.empresa) === eN) return true;
+    if (norm(t.beneficiario) === eN) return true;
+    // Coincidencia parcial: el beneficiario contiene el nombre de la empresa
+    const bN = norm(t.beneficiario);
+    if (bN && eN.length >= 4 && (bN.includes(eN) || eN.includes(bN))) return true;
+    return false;
+  });
+}
 function getRuboLabel(emp) {
   const r = getRubro(emp);
   return `<span class="rb ${RUBRO_CSS[r]}">${r}</span>`;
@@ -3885,8 +3957,8 @@ function gestionNuevaEmpresa() {
   DATA.sit[nombre]  = tieneAlgunDato ? sitData  : {};
 
   // Asignar rubro si se eligió
-  if (rubro && window._rubros) {
-    window._rubros[nombre] = rubro;
+  if (rubro && rubros) {
+    rubros[nombre] = rubro;
   }
 
   // Limpiar formulario
@@ -3973,7 +4045,7 @@ function _renombrarEmpresa(from, to) {
   // presupuesto
   if (DATA.presupuesto?.[from]) { DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
   // rubros
-  if (window._rubros?.[from]) { window._rubros[to] = window._rubros[from]; delete window._rubros[from]; }
+  if (rubros?.[from]) { rubros[to] = rubros[from]; delete rubros[from]; }
   // balances
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
@@ -4016,7 +4088,7 @@ function _fusionarEmpresas(from, to) {
   // notas, presupuesto, rubros, balances
   if (DATA.notas?.[from])       { if (!DATA.notas[to]) DATA.notas[to] = DATA.notas[from]; delete DATA.notas[from]; }
   if (DATA.presupuesto?.[from]) { if (!DATA.presupuesto[to]) DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
-  if (window._rubros?.[from])   { if (!window._rubros[to]) window._rubros[to] = window._rubros[from]; delete window._rubros[from]; }
+  if (rubros?.[from])   { if (!rubros[to]) rubros[to] = rubros[from]; delete rubros[from]; }
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
     if (b.vinculada === from) b.vinculada = to;
@@ -4026,7 +4098,17 @@ function _fusionarEmpresas(from, to) {
 function buildRubros() {
   const years = ys();
   const lastY = years[years.length-1];
-  const allEmps = [...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit),...DATA.personal.map(d=>d.e)])].sort();
+  // Universo completo: rubros es la fuente de verdad del portafolio.
+  // Incluye empresas registradas en rubros aunque aún no tengan datos en otros módulos.
+  const _rub3 = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const allEmps = [...new Set([
+    ...Object.keys(_rub3),
+    ...Object.keys(DATA.fact || {}),
+    ...Object.keys(DATA.sit  || {}),
+    ...(DATA.personal || []).map(d => d.e),
+  ])].sort();
+  // Poblar el select de rubro del formulario de nueva empresa
+  _poblarSelectRubroNueva();
 
   // KPIs por rubro
   const kpiEl = document.getElementById('rub-kpis');
@@ -4110,6 +4192,66 @@ function buildRubros() {
       <select class="rub-sel" onchange="setRubro('${emp}',this.value,this)">${opts}</select>
     </div>`;
   }).join('');
+}
+
+// ── Poblar el select de rubros en el formulario de nueva empresa ──
+function _poblarSelectRubroNueva() {
+  const sel = document.getElementById('rub-nueva-rubro');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Rubro —</option>' +
+    RUBRO_LIST.map(r => `<option value="${r}">${r}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+// ── Agregar nueva empresa al portafolio ──────────────────────────
+// La empresa queda registrada en `rubros` y se propaga a todos los módulos
+// que lean de la lista unificada de empresas.
+function agregarEmpresaRubro() {
+  const nombre = (document.getElementById('rub-nueva-nombre')?.value || '').trim().toUpperCase();
+  const rubro  = document.getElementById('rub-nueva-rubro')?.value || '';
+  const msg    = document.getElementById('rub-nueva-msg');
+
+  if (!nombre) { if (msg) { msg.textContent = '⚠ Ingresá el nombre'; msg.style.color = '#ff8c47'; } return; }
+  if (!rubro)  { if (msg) { msg.textContent = '⚠ Seleccioná un rubro'; msg.style.color = '#ff8c47'; } return; }
+
+  // Verificar si ya existe
+  const _rub4 = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const yaExiste = _rub4[nombre] != null ||
+    Object.keys(DATA.fact || {}).includes(nombre) ||
+    Object.keys(DATA.sit  || {}).includes(nombre);
+
+  if (yaExiste) {
+    if (msg) { msg.textContent = `⚠ "${nombre}" ya existe`; msg.style.color = '#ff8c47'; }
+    return;
+  }
+
+  // Registrar en rubros (fuente de verdad del portafolio)
+  rubros[nombre] = rubro;
+  saveRubros(); // persiste en localStorage y llama rebuildActive()
+
+  // Inicializar entradas vacías en los módulos principales para que aparezca
+  // en todos los selectores de empresa inmediatamente
+  if (!DATA.fact[nombre])    DATA.fact[nombre]    = {};
+  if (!DATA.sit[nombre])     DATA.sit[nombre]     = {};
+  if (!DATA.notas[nombre])   DATA.notas[nombre]   = '';
+
+  // Propagar: actualizar todos los selectores
+  populateSelects();
+  buildRubros(); // refrescar el editor de rubros
+
+  // Limpiar formulario
+  document.getElementById('rub-nueva-nombre').value = '';
+  document.getElementById('rub-nueva-rubro').value  = '';
+  if (msg) {
+    msg.textContent = `✓ "${nombre}" agregada como ${rubro}`;
+    msg.style.color = '#47ffb4';
+    setTimeout(() => { msg.textContent = ''; }, 3000);
+  }
+
+  // Guardar en localStorage (persistencia completa)
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
 }
 
 function setRubro(emp, val, selEl) {
@@ -4819,14 +4961,37 @@ function buildPortafolio() {
 
   // Build dataset
   const allEmps = [...new Set([...Object.keys(DATA.fact), ...Object.keys(DATA.sit)])].filter(e=>emps.has(e));
+  // Índice de balances por empresa (priorizando el que coincide con refY, si no el más reciente)
+  const balPorEmpresa = {};
+  Object.values(_balances || {}).forEach(b => {
+    const emp = b.vinculada || b.empresa;
+    if (!emp) return;
+    const prev = balPorEmpresa[emp];
+    // Priorizar balance del año de referencia; si no, el más reciente
+    const esRefY = String(b.periodo) === String(refY);
+    const prevEsRefY = prev && String(prev.periodo) === String(refY);
+    if (!prev || (esRefY && !prevEsRefY) || (!prevEsRefY && (b.timestamp||0) > (prev.timestamp||0))) {
+      balPorEmpresa[emp] = b;
+    }
+  });
+
   let rows = allEmps.map(e => {
     const f    = DATA.fact[e]?.[refY] || 0;
     const r    = DATA.sit[e]?.[refY]  || null;
     const pd   = DATA.personal.find(d=>d.e===e);
     const p    = pd?.y?.[String(refY)] || 0;
-    const t    = (DATA.transferencias || []).filter(x=>x.empresa===e && x.año===refY).reduce((s,x)=>s+x.importe,0);
+    const t    = _transEmpresa(e).filter(x=>String(x.año)===String(refY)).reduce((s,x)=>s+(x.importe||0),0);
     const margen = f && r != null ? (r/f*100) : null;
-    return { e, f, r, p, t, margen };
+    // Indicadores del balance
+    const bal  = balPorEmpresa[e];
+    const ren  = bal?.indicadores?.rentabilidad || {};
+    const liq  = bal?.indicadores?.liquidez     || {};
+    const sol  = bal?.indicadores?.solvencia    || {};
+    const balRoe      = ren.roe               ?? null;
+    const balResNeto  = ren.resultado_neto     ?? null;
+    const balLiqCorr  = liq.liquidez_corriente ?? null;
+    const balPeriodo  = bal?.periodo           || null;
+    return { e, f, r, p, t, margen, bal, balRoe, balResNeto, balLiqCorr, balPeriodo };
   }).filter(r=>r.f||r.r||r.p||r.t);
 
   // Sort
@@ -4869,11 +5034,15 @@ function buildPortafolio() {
     <th ${thR}>Fact/Empleado</th>
     <th ${thR}>Transferencias</th>
     <th ${thR}>Depend. estatal</th>
+    <th ${thR} title="Resultado del ejercicio según balance cargado">Res. Balance</th>
+    <th ${thR} title="Retorno sobre patrimonio neto (balance)">ROE</th>
+    <th ${thR} title="Liquidez corriente (activo cte / pasivo cte)">Liquidez</th>
+    <th ${thStyle} title="Período del balance cargado">Balance</th>
     ${cmpHdrs}
   </tr></thead>`;
   const tb = document.createElement('tbody');
-  const tdL = `padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px`;
-  const tdR = `padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono)`;
+  const tdL = `padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;white-space:nowrap`;
+  const tdR = `padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);white-space:nowrap`;
 
   rows.forEach((r, i) => {
     const factColor = r.f > 0 ? 'var(--text)' : 'var(--dim)';
@@ -4905,6 +5074,18 @@ function buildPortafolio() {
       <td style="${tdR};color:#47e8ff">${fxemp}</td>
       <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fvFull(r.t):'—'}</td>
       <td style="${tdR};color:${depColor}">${dep}</td>
+      <td style="${tdR};color:${r.balResNeto==null?'var(--dim)':r.balResNeto>0?'var(--pos)':'var(--neg)'}">
+        ${r.balResNeto!=null?fvFull(r.balResNeto):'—'}
+      </td>
+      <td style="${tdR};color:${r.balRoe==null?'var(--dim)':r.balRoe>0.1?'var(--pos)':r.balRoe>0?'#e8ff47':'var(--neg)'}">
+        ${r.balRoe!=null?(r.balRoe*100).toFixed(1)+'%':'—'}
+      </td>
+      <td style="${tdR};color:${r.balLiqCorr==null?'var(--dim)':r.balLiqCorr>=1?'var(--pos)':'var(--neg)'}">
+        ${r.balLiqCorr!=null?r.balLiqCorr.toFixed(2)+'x':'—'}
+      </td>
+      <td style="${tdR.replace('text-align:right','text-align:center')};color:${r.balPeriodo?'var(--dim)':'var(--bd2)'};">
+        ${r.balPeriodo||'—'}
+      </td>
       ${hasCmp ? getCmpCols(r.e) : ''}`;
     tb.appendChild(tr);
   });
@@ -4957,7 +5138,17 @@ function buildPortafolio() {
 //  PANEL: EMPRESA
 // ═══════════════════════════════════════════════════════════
 function populateSelects() {
-  const companies = [...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit)])].sort();
+  // Guard: si rubros no está inicializado aún, inicializar con default
+  if (typeof rubros === 'undefined' || rubros === null) {
+    try { loadRubros(); } catch(e) {}
+  }
+  const _rubros = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  // Fuente de verdad: rubros (portafolio registrado) unificado con datos reales
+  const companies = [...new Set([
+    ...Object.keys(_rubros),
+    ...Object.keys(DATA.fact || {}),
+    ...Object.keys(DATA.sit  || {}),
+  ])].sort();
   const opts = companies.map(c=>`<option value="${c}">${c}</option>`).join('');
   const optsWithBlank = `<option value="">— Consolidado (todas) —</option>` + opts;
 
@@ -4975,6 +5166,23 @@ function populateSelects() {
   document.getElementById('sel-cc').innerHTML = cmpOpts;
   document.getElementById('sel-cb').value = 'CERDO DE LOS LLANOS';
   document.getElementById('sel-cc').value = 'AGUAS RIOJANAS';
+
+  // Selector de empresa en panel de balances — todas las empresas del portafolio
+  const selBalEmp = document.getElementById('bal-sel-empresa');
+  if (selBalEmp) {
+    const cur = selBalEmp.value;
+    const optsBalBlank = `<option value="">— Seleccioná una empresa del portafolio —</option>` + opts;
+    selBalEmp.innerHTML = optsBalBlank;
+    // Restaurar selección previa si sigue siendo válida
+    if (cur && companies.includes(cur)) selBalEmp.value = cur;
+    // Selector del card de vinculación (bal-vincular-vis)
+    const vincVis = document.getElementById('bal-vincular-vis');
+    if (vincVis) {
+      const curVinc = vincVis.value;
+      vincVis.innerHTML = `<option value="">— sin vincular —</option>` + opts;
+      if (curVinc && companies.includes(curVinc)) vincVis.value = curVinc;
+    }
+  }
 }
 
 // ── Notas analíticas por empresa ────────────────────────────────
@@ -5290,7 +5498,7 @@ function exportPortafolioCSV() {
     const r = DATA.sit[e]?.[lastY]  || null;
     const pd = DATA.personal.find(d=>d.e===e);
     const p  = pd?.y?.[String(lastY)] || 0;
-    const t  = (DATA.transferencias||[]).filter(x=>x.empresa===e&&x.año===lastY).reduce((s,x)=>s+x.importe,0);
+    const t  = _transEmpresa(e).filter(x=>String(x.año)===String(lastY)).reduce((s,x)=>s+(x.importe||0),0);
     const margen = f && r != null ? (r/f*100).toFixed(1) : '';
     const dep    = f > 0 && t > 0 ? (t/f*100).toFixed(1) : '';
     return [e, getRuboLabel(e), f||'', r!=null?r:'', margen, p||'', t||'', dep];
@@ -5405,19 +5613,23 @@ function clasificarTransferencia(cgto, observ, suel) {
 
 // ── Filtrar transferencias con selects ──────────────────────────
 function transFiltered() {
-  const año    = document.getElementById('sel-trans-año')?.value  || '';
-  const mes    = document.getElementById('sel-trans-mes')?.value  || '';
-  const saf    = document.getElementById('sel-trans-saf')?.value  || '';
-  const ben    = document.getElementById('sel-trans-ben')?.value  || '';
-  const cat    = document.getElementById('sel-trans-cat')?.value  || '';
   const buscar = (document.getElementById('inp-trans-buscar')?.value || '').trim().toLowerCase();
 
+  // Helper: obtener string de un campo para comparar con los filtros
+  const getVal = (t, prop) => {
+    const v = t[prop];
+    if (v == null || v === '' || (prop === 'año' && !v) || (prop === 'saf' && !v)) return '__sin_dato__';
+    return String(v);
+  };
+
   const result = DATA.transferencias.filter(t => {
-    if (año && String(t.año) !== año)           return false;
-    if (mes && String(t.mes) !== mes)           return false;
-    if (saf && t.saf !== saf)                   return false;
-    if (ben && t.beneficiario !== ben)           return false;
-    if (cat && t.categoria !== cat)             return false;
+    // Filtros multi-selección
+    if (_transFiltros.año && !_transFiltros.año.has(getVal(t, 'año')))           return false;
+    if (_transFiltros.mes && !_transFiltros.mes.has(getVal(t, 'mes')))           return false;
+    if (_transFiltros.saf && !_transFiltros.saf.has(getVal(t, 'saf')))           return false;
+    if (_transFiltros.ben && !_transFiltros.ben.has(getVal(t, 'beneficiario')))  return false;
+    if (_transFiltros.cat && !_transFiltros.cat.has(getVal(t, 'categoria')))     return false;
+    // Búsqueda texto libre
     if (buscar) {
       const haystack = [t.beneficiario, t.observacion, t.saf, t.organismo, t.cgto]
         .join(' ').toLowerCase();
@@ -5428,28 +5640,33 @@ function transFiltered() {
 
   // Actualizar resumen de filtros activos
   const activos = [];
-  if (año)    activos.push(`Año: ${año}`);
-  if (mes)    activos.push(`Mes: ${TRANS_MESES[parseInt(mes)]||mes}`);
-  if (saf)    activos.push(`SAF: ${saf}`);
-  if (ben)    activos.push(`Beneficiario: ${ben}`);
-  if (cat)    activos.push(`Categoría: ${cat}`);
-  if (buscar) activos.push(`Búsqueda: "${buscar}"`);
+  Object.entries(_transFiltros).forEach(([campo, sel]) => {
+    if (!sel) return;
+    const cfg  = TRANS_FILTRO_CFG[campo];
+    const n    = sel.size;
+    const prev = [...sel].slice(0,2).map(v => _transValLabel(campo, v)).join(', ');
+    activos.push(`${cfg.label}: ${prev}${n > 2 ? ` +${n-2}` : ''}`);
+  });
+  if (buscar) activos.push(`"${buscar}"`);
+
   const resEl = document.getElementById('trans-filtro-resumen');
   if (resEl) {
     resEl.textContent = activos.length
-      ? `Filtros activos: ${activos.join(' · ')} — ${result.length} de ${DATA.transferencias.length} registros`
+      ? `Filtros: ${activos.join(' · ')} — ${result.length} de ${DATA.transferencias.length} registros`
       : `${DATA.transferencias.length} registros totales`;
   }
   return result;
 }
 
 function limpiarFiltrosTrans() {
-  ['sel-trans-año','sel-trans-mes','sel-trans-saf','sel-trans-ben','sel-trans-cat'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
+  // Limpiar filtros multi-selección globales
+  Object.keys(_transFiltros).forEach(k => { _transFiltros[k] = null; });
+  Object.keys(TRANS_FILTRO_CFG).forEach(campo => actualizarBtnFiltroTrans(campo));
+  // Limpiar búsqueda texto libre
   const buscar = document.getElementById('inp-trans-buscar');
   if (buscar) buscar.value = '';
+  // Limpiar filtros de columna de la tabla
+  limpiarFiltrosColumnasTrans();
   buildTransferencias();
 }
 
@@ -5466,31 +5683,97 @@ function toggleTransTabla() {
 function renderTransTabla(rows) {
   const tbl = document.getElementById('tbl-trans');
   if (!tbl) return;
-  const COLS = ['SAF','Organismo','Beneficiario','FF','CGto','Observación','Mes','Año','Importe','Categoría'];
+  const COLS = ['SAF','Organismo','Beneficiario','FF','CGto','Observación','Mes','Año','Importe','Categoría','Archivo'];
+  // Columnas filtrables: índice → propiedad del objeto transferencia
+  const FILTER_COLS = {
+    0:'saf', 1:'organismo', 2:'beneficiario', 4:'cgto',
+    5:'observacion', 6:'mes', 7:'año', 9:'categoria', 10:'_archivo'
+  };
+
+  // Construir valores únicos por columna para los dropdowns
+  const colVals = {};
+  Object.entries(FILTER_COLS).forEach(([ci, prop]) => {
+    const vals = [...new Set(rows.map(t => {
+      const v = t[prop];
+      if (v == null || v === '') return '__vacio__';
+      if (prop === 'mes') return String(v);
+      return String(v);
+    }))].sort((a,b) => {
+      if (a === '__vacio__') return -1;
+      if (b === '__vacio__') return 1;
+      const na = parseFloat(a), nb = parseFloat(b);
+      return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b, 'es');
+    });
+    colVals[ci] = vals;
+  });
+
   tbl.innerHTML = `
-    <thead><tr>${COLS.map(c=>`<th style="text-align:${c==='Importe'?'right':'left'};
-      padding:5px 8px;white-space:nowrap;position:sticky;top:0;background:var(--s1);
-      border-bottom:2px solid var(--bd2)">${c}</th>`).join('')}</tr></thead>
+    <thead>
+      <tr>${COLS.map((c, i) => {
+        const filterable = FILTER_COLS[i] !== undefined;
+        const isRight = c === 'Importe';
+        const hasFilter = filterable && colVals[i]?.length > 1;
+        return `<th style="text-align:${isRight?'right':'left'};padding:5px 8px;
+          white-space:nowrap;position:sticky;top:0;background:var(--s1);
+          border-bottom:2px solid var(--bd2);user-select:none;
+          ${hasFilter?'cursor:pointer':''}">
+          <div style="display:flex;align-items:center;gap:4px;justify-content:${isRight?'flex-end':'flex-start'}">
+            <span>${c}</span>
+            ${hasFilter ? `<span data-col-drop="${i}"
+              onclick="abrirDropTrans(event,${i})"
+              style="font-size:8px;color:var(--dim);padding:1px 4px;border-radius:2px;
+              background:var(--s2);border:1px solid var(--bd2);cursor:pointer;
+              transition:all .15s;flex-shrink:0"
+              title="Filtrar por ${c}">▼</span>` : ''}
+          </div>
+        </th>`;
+      }).join('')}</tr>
+    </thead>
     <tbody>
     ${rows.map(t => {
       const realIdx = DATA.transferencias.indexOf(t);
       const cat   = t.categoria || 'Sin Clasificar';
       const color = (TRANS_COLORS[cat]||'#94a3b8').replace('cc','');
+      // Detectar campos incompletos para destacar la fila
+      const sinAño   = !t.año;
+      const sinMes   = !t.mes;
+      const sinBen   = !t.beneficiario;
+      const sinImp   = !t.importe;
+      const sinSAF   = !t.saf;
+      const sinObs   = !t.observacion;
+      const incompleto = sinAño || sinMes || sinBen || sinImp;
+      const rowBg    = incompleto ? 'rgba(255,140,71,.07)' : '';
+      const archivo  = (t._archivo || '').replace(/^.*[\\/]/, '').replace(/\.xls[x]?$/i,'');
+
       return `<tr id="trans-row-${realIdx}"
-        style="transition:background .15s;cursor:default"
+        style="transition:background .15s;cursor:default;background:${rowBg}"
         onmouseover="this.style.background='var(--s2)'"
-        onmouseout="if(!this.classList.contains('editing'))this.style.background=''">
-        <td style="padding:3px 8px;color:var(--dim);white-space:nowrap">${t.saf||'—'}</td>
+        onmouseout="if(!this.classList.contains('editing'))this.style.background='${rowBg}'">
+        <td style="padding:3px 8px;color:${sinSAF?'#ff8c47':'var(--dim)'};white-space:nowrap">${t.saf||'<span style=\"color:#ff8c47;font-size:8px\">sin dato</span>'}</td>
         <td style="padding:3px 8px;font-size:9px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-          title="${(t.organismo||'').replace(/"/g,"'")}">${(t.organismo||'').slice(0,20)}</td>
-        <td style="padding:3px 8px;font-weight:600;white-space:nowrap">${t.beneficiario||''}</td>
+          title="${(t.organismo||'').replace(/"/g,"'")}">${(t.organismo||'—').slice(0,20)}</td>
+        <td style="padding:3px 8px;font-weight:600;white-space:nowrap;color:${sinBen?'#ff8c47':''}">${t.beneficiario||'<span style=\"color:#ff8c47;font-size:8px\">sin beneficiario</span>'}</td>
         <td style="padding:3px 8px;color:var(--dim);text-align:center">${t.ff||''}</td>
         <td style="padding:3px 8px;font-family:monospace;text-align:center">${t.cgto||''}</td>
         <td style="padding:3px 8px;font-size:9px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-          title="${(t.observacion||'').replace(/"/g,"'")}">${(t.observacion||'').slice(0,65)}${(t.observacion||'').length>65?'…':''}</td>
-        <td style="padding:3px 8px;text-align:center">${TRANS_MESES[t.mes]||t.mes||'—'}</td>
-        <td style="padding:3px 8px;text-align:center">${t.año||'—'}</td>
-        <td style="padding:3px 8px;text-align:right;font-family:monospace;white-space:nowrap">${fvFull(t.importe)}</td>
+          title="${(t.observacion||'').replace(/"/g,"'")}">${sinObs?'<span style=\"color:#ff8c47;font-size:8px\">sin obs.</span>':(t.observacion||'').slice(0,65)+(t.observacion||'').length>65?'…':''}</td>
+        <td style="padding:3px 8px;text-align:center;color:${sinMes?'#ff8c47':''}">${TRANS_MESES[t.mes]||t.mes||'<span style=\"color:#ff8c47;font-size:8px\">—</span>'}</td>
+        <td style="padding:2px 4px;text-align:center">
+          ${sinAño
+            ? `<input type="number" value="" placeholder="Año"
+                onchange="editarAnoTrans(${realIdx}, this.value)"
+                style="width:56px;padding:3px 6px;background:rgba(255,140,71,.15);
+                border:1px solid #ff8c47;color:#ff8c47;font-family:var(--mono);
+                font-size:9px;border-radius:3px;text-align:center;outline:none"
+                title="Click para asignar año — campo obligatorio para filtros y reportes">`
+            : `<span title="Click para editar" onclick="editarAnoInline(this,${realIdx})"
+                style="cursor:pointer;padding:2px 6px;border-radius:3px;
+                border:1px solid transparent;font-size:9px;
+                onmouseenter='this.style.borderColor=\"var(--bd2)\"'"
+                >${t.año}</span>`
+          }
+        </td>
+        <td style="padding:3px 8px;text-align:right;font-family:monospace;white-space:nowrap;color:${sinImp?'#ff8c47':''}">${sinImp?'<span style=\"color:#ff8c47;font-size:8px\">sin importe</span>':fvFull(t.importe)}</td>
         <td style="padding:2px 6px;white-space:nowrap">
           <div style="display:flex;align-items:center;gap:4px">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
@@ -5505,9 +5788,422 @@ function renderTransTabla(rows) {
             </select>
           </div>
         </td>
+        <td style="padding:3px 8px;font-size:8.5px;color:var(--dim);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis"
+          title="${t._archivo||''}"
+        >${archivo||'—'}</td>
       </tr>`;
     }).join('')}
     </tbody>`;
+}
+
+// ── Estado de filtros globales multi-selección ───────────────────
+// { campo: Set(valores seleccionados) } — null = todos
+const _transFiltros = {
+  año: null, mes: null, saf: null, ben: null, cat: null
+};
+
+// Configuración de cada filtro
+const TRANS_FILTRO_CFG = {
+  año: { prop:'año',   label:'Año',         btnId:'btn-ftrans-año', lblId:'lbl-ftrans-año', nombreTodos:'Todos' },
+  mes: { prop:'mes',   label:'Mes',         btnId:'btn-ftrans-mes', lblId:'lbl-ftrans-mes', nombreTodos:'Todos' },
+  saf: { prop:'saf',   label:'SAF',         btnId:'btn-ftrans-saf', lblId:'lbl-ftrans-saf', nombreTodos:'Todos' },
+  ben: { prop:'beneficiario', label:'Beneficiario', btnId:'btn-ftrans-ben', lblId:'lbl-ftrans-ben', nombreTodos:'Todos' },
+  cat: { prop:'categoria',    label:'Categoría',    btnId:'btn-ftrans-cat', lblId:'lbl-ftrans-cat', nombreTodos:'Todas' },
+};
+
+const TRANS_MESES_N = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function _transValLabel(campo, v) {
+  if (v === '__sin_dato__') return '⚠ Sin dato';
+  if (campo === 'mes') return TRANS_MESES_N[parseInt(v)] || v;
+  return v;
+}
+
+// Abrir panel de filtro multi-selección
+function abrirFiltroTrans(campo, btnEl) {
+  cerrarPanelFiltroTrans(); // cerrar si hay otro abierto
+  const cfg = TRANS_FILTRO_CFG[campo];
+  if (!cfg) return;
+
+  // Valores únicos de los datos completos (no filtrados)
+  const vals = [...new Set(DATA.transferencias.map(t => {
+    const v = t[cfg.prop];
+    if (v == null || v === '' || (cfg.prop === 'año' && !v) || (cfg.prop === 'saf' && !v)) return '__sin_dato__';
+    return String(v);
+  }))].sort((a, b) => {
+    if (a === '__sin_dato__') return -1;
+    if (b === '__sin_dato__') return 1;
+    const na = parseFloat(a), nb = parseFloat(b);
+    return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b, 'es');
+  });
+
+  const activos = _transFiltros[campo] || new Set(vals);
+  const todosOn = activos.size >= vals.length;
+
+  const rect = btnEl.getBoundingClientRect();
+  const panel = document.createElement('div');
+  panel.id = 'trans-filtro-panel';
+  panel.dataset.campo = campo;
+  panel.style.cssText = `position:fixed;z-index:9999;background:var(--s1);
+    border:1px solid var(--bd2);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+    min-width:220px;max-width:320px;
+    top:${Math.min(rect.bottom + 3, window.innerHeight - 360)}px;
+    left:${Math.min(rect.left, window.innerWidth - 330)}px`;
+
+  panel.innerHTML = `
+    <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;
+      align-items:center;justify-content:space-between">
+      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
+        color:#47e8ff;font-weight:600">${cfg.label}</span>
+      <button onclick="cerrarPanelFiltroTrans()"
+        style="background:none;border:none;color:var(--dim);cursor:pointer;
+        font-size:13px;padding:0 2px;line-height:1">✕</button>
+    </div>
+    <div style="padding:6px 10px;border-bottom:1px solid var(--bd)">
+      <input type="search" id="ftrans-buscar-${campo}" placeholder="🔍 Buscar…"
+        oninput="filtrarListaFiltroTrans('${campo}')"
+        style="width:100%;padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;
+        outline:none;box-sizing:border-box">
+    </div>
+    <div style="padding:5px 10px;border-bottom:1px solid var(--bd)">
+      <label style="font-size:9px;color:var(--dim);cursor:pointer;
+        display:flex;align-items:center;gap:6px;user-select:none">
+        <input type="checkbox" id="ftrans-all-${campo}" ${todosOn?'checked':''}
+          onchange="toggleTodosFiltroTrans('${campo}',this.checked)"
+          style="cursor:pointer;accent-color:#47ffb4">
+        <span style="font-weight:600">(Seleccionar / Deseleccionar todo)</span>
+      </label>
+    </div>
+    <div id="ftrans-lista-${campo}" style="max-height:240px;overflow-y:auto;padding:4px 0">
+      ${vals.map(v => {
+        const lbl = _transValLabel(campo, v);
+        const color = v === '__sin_dato__' ? '#ff8c47' : 'var(--text)';
+        return `<label class="ftrans-item"
+          style="display:flex;align-items:center;gap:8px;padding:5px 12px;
+          cursor:pointer;user-select:none" data-val="${v.replace(/"/g,'&quot;')}"
+          onmouseover="this.style.background='var(--s2)'"
+          onmouseout="this.style.background=''">
+          <input type="checkbox" value="${v.replace(/"/g,'&quot;')}"
+            ${activos.has(v)?'checked':''}
+            onchange="sincronizarTodosFiltroTrans('${campo}')"
+            style="cursor:pointer;flex-shrink:0;accent-color:#47ffb4">
+          <span style="font-size:9.5px;font-family:var(--mono);color:${color};
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${lbl}">${lbl}</span>
+        </label>`;
+      }).join('')}
+    </div>
+    <div style="padding:7px 10px;border-top:1px solid var(--bd);display:flex;gap:6px">
+      <button onclick="aplicarFiltroTrans('${campo}')"
+        style="flex:1;padding:6px;background:rgba(71,255,180,.12);
+        border:1px solid #47ffb440;color:#47ffb4;font-family:var(--mono);
+        font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">
+        ✓ Aplicar
+      </button>
+      <button onclick="limpiarFiltroTrans('${campo}')"
+        style="padding:6px 10px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+        Limpiar
+      </button>
+    </div>`;
+
+  document.body.appendChild(panel);
+  document.getElementById(`ftrans-buscar-${campo}`)?.focus();
+
+  // Cerrar al hacer click fuera
+  setTimeout(() => {
+    document.addEventListener('click', _cerrarFiltroTransOutside, true);
+  }, 50);
+}
+
+function _cerrarFiltroTransOutside(e) {
+  const panel = document.getElementById('trans-filtro-panel');
+  if (panel && !panel.contains(e.target)) {
+    const campo = panel.dataset.campo;
+    const btn = document.getElementById(TRANS_FILTRO_CFG[campo]?.btnId);
+    if (btn && !btn.contains(e.target)) {
+      cerrarPanelFiltroTrans();
+    }
+  }
+}
+
+function cerrarPanelFiltroTrans() {
+  document.removeEventListener('click', _cerrarFiltroTransOutside, true);
+  document.getElementById('trans-filtro-panel')?.remove();
+}
+
+function filtrarListaFiltroTrans(campo) {
+  const buscar = (document.getElementById(`ftrans-buscar-${campo}`)?.value || '').toLowerCase();
+  document.querySelectorAll(`#ftrans-lista-${campo} .ftrans-item`).forEach(item => {
+    const txt = (item.querySelector('span')?.textContent || '').toLowerCase();
+    item.style.display = txt.includes(buscar) ? '' : 'none';
+  });
+}
+
+function toggleTodosFiltroTrans(campo, checked) {
+  document.querySelectorAll(`#ftrans-lista-${campo} .ftrans-item input[type=checkbox]`)
+    .forEach(cb => { cb.checked = checked; });
+}
+
+function sincronizarTodosFiltroTrans(campo) {
+  const items = [...document.querySelectorAll(`#ftrans-lista-${campo} .ftrans-item input[type=checkbox]`)];
+  const allCb = document.getElementById(`ftrans-all-${campo}`);
+  if (allCb) allCb.checked = items.every(cb => cb.checked);
+}
+
+function aplicarFiltroTrans(campo) {
+  const cfg = TRANS_FILTRO_CFG[campo];
+  const checks = [...document.querySelectorAll(`#ftrans-lista-${campo} .ftrans-item input[type=checkbox]`)];
+  const todos = new Set(checks.map(cb => cb.value));
+  const sel = new Set(checks.filter(cb => cb.checked).map(cb => cb.value));
+
+  if (sel.size === 0) {
+    // Nada seleccionado → no filtrar (mostrar todo)
+    _transFiltros[campo] = null;
+  } else if (sel.size === todos.size) {
+    // Todo seleccionado → sin filtro
+    _transFiltros[campo] = null;
+  } else {
+    _transFiltros[campo] = sel;
+  }
+
+  cerrarPanelFiltroTrans();
+  actualizarBtnFiltroTrans(campo);
+  buildTransferencias();
+}
+
+function limpiarFiltroTrans(campo) {
+  _transFiltros[campo] = null;
+  cerrarPanelFiltroTrans();
+  actualizarBtnFiltroTrans(campo);
+  buildTransferencias();
+}
+
+function actualizarBtnFiltroTrans(campo) {
+  const cfg = TRANS_FILTRO_CFG[campo];
+  const sel = _transFiltros[campo];
+  const btn = document.getElementById(cfg.btnId);
+  const lbl = document.getElementById(cfg.lblId);
+  if (!btn || !lbl) return;
+  if (!sel) {
+    lbl.textContent = `${cfg.label}: ${cfg.nombreTodos}`;
+    btn.style.borderColor = 'var(--bd2)';
+    btn.style.color = 'var(--text)';
+  } else {
+    const n = sel.size;
+    const preview = [...sel].slice(0,2).map(v => _transValLabel(campo, v)).join(', ');
+    lbl.textContent = `${cfg.label}: ${preview}${n > 2 ? ` +${n-2}` : ''}`;
+    btn.style.borderColor = '#47e8ff';
+    btn.style.color = '#47e8ff';
+  }
+}
+
+// ── Estado de filtros de columna (estilo Excel) ──────────────────
+const _transColFiltros = {}; // { colIdx: Set de valores seleccionados } — vacío = todos
+
+// Abrir dropdown de filtro para una columna
+function abrirDropTrans(event, colIdx) {
+  event.stopPropagation();
+  // Cerrar cualquier dropdown abierto
+  cerrarDropsTrans();
+
+  const btn   = event.currentTarget;
+  const rect  = btn.getBoundingClientRect();
+  const prop  = { 0:'saf',1:'organismo',2:'beneficiario',4:'cgto',
+                  5:'observacion',6:'mes',7:'año',9:'categoria',10:'_archivo' }[colIdx];
+  if (!prop) return;
+
+  // Valores únicos de todas las filas (no solo las visibles)
+  const todosVals = [...new Set(DATA.transferencias.map(t => {
+    const v = t[prop];
+    if (v == null || v === '' || v === 0 && prop === 'año') return '__vacio__';
+    return String(v);
+  }))].sort((a,b) => {
+    if (a==='__vacio__') return -1; if (b==='__vacio__') return 1;
+    const na=parseFloat(a),nb=parseFloat(b);
+    return !isNaN(na)&&!isNaN(nb) ? na-nb : a.localeCompare(b,'es');
+  });
+
+  const seleccionados = _transColFiltros[colIdx] || new Set(todosVals);
+  const todosActivos  = seleccionados.size === todosVals.length;
+
+  const drop = document.createElement('div');
+  drop.id = 'trans-col-drop';
+  drop.style.cssText = `position:fixed;z-index:9999;background:var(--s1);
+    border:1px solid var(--bd2);border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,.4);
+    min-width:200px;max-width:300px;overflow:hidden;
+    top:${Math.min(rect.bottom+2, window.innerHeight-320)}px;
+    left:${Math.min(rect.left, window.innerWidth-310)}px`;
+
+  const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const labelVal = v => {
+    if (v === '__vacio__') return '(sin dato)';
+    if (prop === 'mes') return MESES[parseInt(v)] || v;
+    return v.length > 40 ? v.slice(0,38)+'…' : v;
+  };
+  const colorVal = v => v === '__vacio__' ? '#ff8c47' : 'var(--text)';
+
+  drop.innerHTML = `
+    <div style="padding:8px 10px;border-bottom:1px solid var(--bd);display:flex;
+      align-items:center;justify-content:space-between">
+      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
+        color:var(--dim)">Filtrar columna</span>
+      <button onclick="cerrarDropsTrans()" style="background:none;border:none;
+        color:var(--dim);cursor:pointer;font-size:12px;padding:0">✕</button>
+    </div>
+    <div style="padding:6px 8px;border-bottom:1px solid var(--bd)">
+      <input type="search" id="drop-buscar-${colIdx}" placeholder="Buscar…"
+        oninput="filtrarListaDrop(${colIdx})"
+        style="width:100%;padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;
+        outline:none;box-sizing:border-box">
+    </div>
+    <div style="padding:4px 8px;border-bottom:1px solid var(--bd);display:flex;gap:8px">
+      <label style="font-size:9px;color:var(--dim);cursor:pointer;display:flex;
+        align-items:center;gap:4px">
+        <input type="checkbox" id="drop-all-${colIdx}"
+          ${todosActivos?'checked':''}
+          onchange="toggleTodosDropTrans(${colIdx},this.checked)"
+          style="cursor:pointer">
+        (Seleccionar todo)
+      </label>
+    </div>
+    <div id="drop-lista-${colIdx}" style="max-height:220px;overflow-y:auto;padding:4px 0">
+      ${todosVals.map(v => `
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 10px;
+          cursor:pointer;transition:background .1s" class="drop-item"
+          onmouseover="this.style.background='var(--s2)'"
+          onmouseout="this.style.background=''">
+          <input type="checkbox" value="${v.replace(/"/g,'&quot;')}"
+            ${seleccionados.has(v)?'checked':''}
+            onchange="cambiarDropTrans(${colIdx})"
+            style="cursor:pointer;flex-shrink:0">
+          <span style="font-size:9.5px;font-family:var(--mono);color:${colorVal(v)};
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${v === '__vacio__' ? 'Sin dato' : v}">${labelVal(v)}</span>
+        </label>`).join('')}
+    </div>
+    <div style="padding:6px 8px;border-top:1px solid var(--bd);display:flex;gap:6px">
+      <button onclick="aplicarDropTrans(${colIdx})"
+        style="flex:1;padding:5px;background:rgba(71,255,180,.1);border:1px solid #47ffb440;
+        color:#47ffb4;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+        ✓ Aplicar
+      </button>
+      <button onclick="limpiarDropTrans(${colIdx})"
+        style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+        Limpiar
+      </button>
+    </div>`;
+
+  document.body.appendChild(drop);
+
+  // Cerrar al hacer click fuera
+  setTimeout(() => {
+    document.addEventListener('click', cerrarDropsTrans, { once:true });
+  }, 10);
+}
+
+function filtrarListaDrop(colIdx) {
+  const buscar = (document.getElementById(`drop-buscar-${colIdx}`)?.value||'').toLowerCase();
+  document.querySelectorAll(`#drop-lista-${colIdx} .drop-item`).forEach(item => {
+    const txt = item.querySelector('span')?.textContent.toLowerCase() || '';
+    item.style.display = txt.includes(buscar) ? '' : 'none';
+  });
+}
+
+function toggleTodosDropTrans(colIdx, checked) {
+  document.querySelectorAll(`#drop-lista-${colIdx} input[type=checkbox]`)
+    .forEach(cb => { cb.checked = checked; });
+}
+
+function cambiarDropTrans(colIdx) {
+  const todos = document.querySelectorAll(`#drop-lista-${colIdx} input[type=checkbox]`);
+  const selCnt = [...todos].filter(cb => cb.checked).length;
+  const allCb  = document.getElementById(`drop-all-${colIdx}`);
+  if (allCb) allCb.checked = (selCnt === todos.length);
+}
+
+function aplicarDropTrans(colIdx) {
+  const checks = [...document.querySelectorAll(`#drop-lista-${colIdx} input[type=checkbox]`)];
+  const sel = new Set(checks.filter(cb=>cb.checked).map(cb=>cb.value));
+  const todos = new Set(checks.map(cb=>cb.value));
+  // Si todos están seleccionados, eliminar el filtro (= sin filtro)
+  if (sel.size === todos.size) {
+    delete _transColFiltros[colIdx];
+  } else {
+    _transColFiltros[colIdx] = sel;
+  }
+  cerrarDropsTrans();
+  aplicarFiltrosColumnasTrans();
+}
+
+function limpiarDropTrans(colIdx) {
+  delete _transColFiltros[colIdx];
+  cerrarDropsTrans();
+  aplicarFiltrosColumnasTrans();
+}
+
+function cerrarDropsTrans() {
+  const d = document.getElementById('trans-col-drop');
+  if (d) d.remove();
+}
+
+// Aplicar todos los filtros de columna al DOM de la tabla
+function aplicarFiltrosColumnasTrans() {
+  const PROP_MAP = {0:'saf',1:'organismo',2:'beneficiario',4:'cgto',
+                   5:'observacion',6:'mes',7:'año',9:'categoria',10:'_archivo'};
+  const tbody = document.querySelector('#tbl-trans tbody');
+  if (!tbody) return;
+
+  // Actualizar apariencia de los botones ▼ según si tienen filtro activo
+  Object.entries(PROP_MAP).forEach(([ci]) => {
+    const btn = document.querySelector(`[data-col-drop="${ci}"]`);
+    if (!btn) return;
+    const activo = !!_transColFiltros[ci];
+    btn.textContent = activo ? '▼●' : '▼';
+    btn.style.color  = activo ? '#47e8ff' : 'var(--dim)';
+    btn.style.borderColor = activo ? '#47e8ff44' : 'var(--bd2)';
+  });
+
+  // Filtrar filas
+  let visible = 0;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const idx = parseInt(tr.id?.replace('trans-row-',''));
+    if (isNaN(idx)) return;
+    const t = DATA.transferencias[idx];
+    if (!t) return;
+    const show = Object.entries(_transColFiltros).every(([ci, sel]) => {
+      const prop = PROP_MAP[ci];
+      if (!prop) return true;
+      const v = t[prop];
+      const vStr = (v == null || v === '' || (prop==='año' && !v)) ? '__vacio__' : String(v);
+      return sel.has(vStr);
+    });
+    tr.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  // Actualizar resumen
+  const resEl = document.getElementById('trans-filtro-resumen');
+  if (resEl) {
+    const total = tbody.querySelectorAll('tr').length;
+    const activos = Object.keys(_transColFiltros).length;
+    const COLS_N = {0:'SAF',1:'Organismo',2:'Beneficiario',4:'CGto',
+                   5:'Observación',6:'Mes',7:'Año',9:'Categoría',10:'Archivo'};
+    resEl.textContent = activos > 0
+      ? `Filtros activos (${Object.keys(_transColFiltros).map(c=>COLS_N[c]).join(', ')}) — ${visible} de ${total} registros`
+      : `${total} registros`;
+  }
+}
+
+// Limpiar todos los filtros de columna
+function limpiarFiltrosColumnasTrans() {
+  Object.keys(_transColFiltros).forEach(k => delete _transColFiltros[k]);
+  aplicarFiltrosColumnasTrans();
 }
 
 function resaltarFilaTrans(idx) {
@@ -5521,7 +6217,10 @@ function desresaltarFilaTrans(idx) {
 
 // ── Poblar selects de filtros ────────────────────────────────────
 function populateTransSelects() {
-  const años  = [...new Set(DATA.transferencias.map(t=>t.año).filter(Boolean))].sort();
+  // Incluir "Sin año" como opción identificable — filter(Boolean) lo excluía
+  const añosConDato = [...new Set(DATA.transferencias.map(t=>t.año).filter(Boolean))].sort();
+  const tieneSinAño = DATA.transferencias.some(t => !t.año);
+  const años = añosConDato; // se agrega la opción especial manualmente abajo
   const safs  = [...new Set(DATA.transferencias.map(t=>t.saf).filter(Boolean))].sort();
   const bens  = [...new Set(DATA.transferencias.map(t=>t.beneficiario).filter(Boolean))].sort();
   const cats  = TRANS_CATS;
@@ -5534,7 +6233,15 @@ function populateTransSelects() {
     if (prev && [...el.options].some(o=>o.value===String(prev))) el.value = prev;
   };
 
-  set('sel-trans-año', años);
+  // Poblar selector de año con opción especial "Sin año / sin dato"
+  const selAño = document.getElementById('sel-trans-año');
+  if (selAño) {
+    const prev = selAño.value;
+    selAño.innerHTML = '<option value="">Todos</option>' +
+      (tieneSinAño ? '<option value="__sin_año__" style="color:#ff8c47">⚠ Sin año / sin dato</option>' : '') +
+      añosConDato.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (prev && [...selAño.options].some(o => o.value === prev)) selAño.value = prev;
+  }
   set('sel-trans-saf', safs);
   set('sel-trans-ben', bens);
 
@@ -5580,14 +6287,20 @@ function buildTransferencias() {
       <div class="kpi-value">${fv(total)}</div>
       <div class="kpi-sub">${nPagos} pago${nPagos>1?'s':''} · ${nBen} beneficiario${nBen>1?'s':''}</div>
     </div>
-    ${topCat.slice(0,3).map(c=>`
+    ${topCat.map(c=>`
     <div class="kpi"><div class="kpi-accent" style="background:${TRANS_COLORS[c]}"></div>
       <div class="kpi-label">${c}</div>
       <div class="kpi-value">${fv(catTotals[c])}</div>
       <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(1)}% del total</div>
     </div>`).join('')}`;
 
-  document.getElementById('trans-total-lbl').textContent = `Total: ${fvFull(total)}`;
+  // Contar registros sin año
+  const sinAño = DATA.transferencias.filter(t => !t.año).length;
+  const msgSinAño = sinAño > 0
+    ? ` · <span style="color:#ff8c47;font-size:9px">⚠ ${sinAño} registro${sinAño>1?'s':''} sin año</span>`
+    : '';
+  const lbl = document.getElementById('trans-total-lbl');
+  if (lbl) lbl.innerHTML = `Total: ${fvFull(total)}` + msgSinAño;
 
   // ── Gráfico dona: composición por categoría ───────────────────
   const donutCats  = topCat.filter(c=>catTotals[c]>0);
@@ -5625,6 +6338,34 @@ function buildTransferencias() {
       backgroundColor: TRANS_COLORS[c],
       borderRadius: 3,
       stack: 'ben',
+    }))
+  },{
+    scales:{
+      x:{ stacked:true, ticks:{ maxRotation:45, color:'var(--text)', font:{size:9} } },
+      y:{ stacked:true, ticks:{ callback:v=>fvShort(v*1e6) } }
+    }
+  });
+
+  // ── Gráfico barras: por SAF emisor ───────────────────────────
+  const safMap = {};
+  rows.forEach(t => {
+    const s = t.saf || 'Sin SAF';
+    if (!safMap[s]) safMap[s] = {};
+    safMap[s][t.categoria] = (safMap[s][t.categoria]||0) + t.importe;
+  });
+  const safs = Object.keys(safMap).sort((a,b) =>
+    Object.values(safMap[b]).reduce((s,v)=>s+v,0) -
+    Object.values(safMap[a]).reduce((s,v)=>s+v,0)
+  ).slice(0,12);
+
+  mkChart('ch-trans-saf','bar',{
+    labels: safs.map(s=>s.length>22?s.slice(0,20)+'…':s),
+    datasets: TRANS_CATS.filter(c=>rows.some(t=>t.categoria===c)).map(c=>({
+      label: c,
+      data:  safs.map(s=>(safMap[s]?.[c]||0)/1e6),
+      backgroundColor: TRANS_COLORS[c],
+      borderRadius: 3,
+      stack: 'saf',
     }))
   },{
     scales:{
@@ -7908,10 +8649,11 @@ function tryParseSIDIF(wb, fname) {
       const categoria = clasificarTransferencia(cgto, observ, suel);
 
       rows.push({ saf, organismo:org, beneficiario:ben, ff,
-                  cgto: cgto || nroSIDIF, // usar nro SIDIF si no hay CGto
+                  cgto: cgto || nroSIDIF,
                   observacion:observ, incluye_sueldos:suel,
                   mes:mes||null, año:año||null, importe:imp,
-                  categoria, _hoja: sheetName });
+                  categoria, _hoja: sheetName,
+                  _archivo: fname || '' }); // nombre del archivo de carga
     }
     return rows;
   }
@@ -8660,7 +9402,8 @@ function buildSostenibilidad() {
   // Calcular transferencias por empresa para ese año
   const transEmp = {};
   (DATA.transferencias||[]).filter(t=>String(t.año)===yr).forEach(t=>{
-    transEmp[t.empresa] = (transEmp[t.empresa]||0) + t.importe;
+    const empKey = t.empresa || t.beneficiario || '';
+    if (empKey) transEmp[empKey] = (transEmp[empKey]||0) + t.importe;
   });
 
   const rows = emps.map(e => {
@@ -9714,6 +10457,8 @@ async function loadBalanceExcel(file) {
     _balActivo        = file.name;
     _balEmpresaActiva = _balances[file.name].empresa;
     setBalProgress(false);
+    // Poblar selectores con el universo completo antes de renderizar
+    populateSelects();
     renderBalanceUI();
     marcarPendienteGuardar();
     saveDataToLocalCache();
@@ -9821,9 +10566,12 @@ async function loadBalancePDF(file) {
 function guardarBalance(filename, texto, metodo) {
   const result = analizarBalanceLocal(filename, texto);
 
+  // Universo completo de empresas: todas las que aparecen en cualquier módulo
   const empresasPortafolio = [...new Set([
-    ...Object.keys(DATA.fact || {}),
-    ...Object.keys(DATA.sit  || {}),
+    ...Object.keys(DATA.fact   || {}),
+    ...Object.keys(DATA.sit    || {}),
+    ...Object.keys(DATA.notas  || {}),
+    ...(DATA.transferencias||[]).map(t=>t.beneficiario).filter(Boolean),
   ])].sort();
   const empresaSugerida = result.empresa || '';
 
@@ -9853,6 +10601,7 @@ function guardarBalance(filename, texto, metodo) {
     setBalProgress(false);
     _balEmpresaActiva = empresaFinal;
     _balActivo        = filename;
+    populateSelects(); // actualizar listas de empresa antes de renderizar
     renderBalanceUI();
     // Seleccionar la empresa y período recién cargados
     const selEmp = document.getElementById('bal-sel-empresa');
@@ -11447,8 +12196,13 @@ function showBalanceResult() {
   const vincVisEst = document.getElementById('bal-vincular-vis-estado');
   if (vincCard && vincVis) {
     vincCard.style.display = '';
-    // Poblar opciones con empresas del DATA
-    const empresas = Object.keys(DATA.fact || {}).sort();
+    // Poblar con universo completo: rubros (fuente de verdad) + DATA
+    const _rub2 = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+    const empresas = [...new Set([
+      ...Object.keys(_rub2),
+      ...Object.keys(DATA.fact || {}),
+      ...Object.keys(DATA.sit  || {}),
+    ])].sort();
     vincVis.innerHTML = '<option value="">— sin vincular —</option>' +
       empresas.map(e => `<option value="${e}" ${b.vinculada===e?'selected':''}>${e}</option>`).join('');
     if (vincVisEst) {
@@ -11603,8 +12357,8 @@ function showBalanceResult() {
   const solI = ind.solvencia    || {};
   const renI = ind.rentabilidad || {};
 
-  // Mapa de rubros: qué se encontró y qué no
-  const rubros = {
+  // Mapa de rubros encontrados: renombrado a rubrosMap para no colisionar con la global 'rubros'
+  const rubrosMap = {
     'Estado Patrimonial': [
       { lbl: 'Activo corriente',     val: liqI.activo_corriente  },
       { lbl: 'Pasivo corriente',     val: liqI.pasivo_corriente  },
@@ -11630,8 +12384,8 @@ function showBalanceResult() {
   };
 
   // ¿Hay rubros sin datos?
-  const sinDatos = Object.values(rubros).flat().filter(r => r.val == null);
-  const totalRubros = Object.values(rubros).flat().length;
+  const sinDatos = Object.values(rubrosMap).flat().filter(r => r.val == null);
+  const totalRubros = Object.values(rubrosMap).flat().length;
   const conDatos  = totalRubros - sinDatos.length;
   const pct       = Math.round(conDatos / totalRubros * 100);
 
@@ -11652,7 +12406,7 @@ function showBalanceResult() {
       <div style="height:4px;background:var(--s2);border-radius:2px;overflow:hidden;margin-bottom:10px">
         <div style="height:100%;width:${pct}%;background:${colorBarra};border-radius:2px;transition:width .4s"></div>
       </div>
-      ${Object.entries(rubros).map(([seccion, items]) => `
+      ${Object.entries(rubrosMap).map(([seccion, items]) => `
         <div style="margin-bottom:6px">
           <div style="font-size:8.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;
             margin-bottom:4px">${seccion}</div>
@@ -11742,11 +12496,175 @@ function showBalanceResult() {
         border-radius:3px;font-size:9.5px;color:#47ffb4;margin-bottom:12px;display:inline-flex;
         align-items:center;gap:6px">🟢 Sin alertas críticas detectadas</div>`;
 
+  // ── Diagnóstico financiero generado desde los indicadores reales ──
+  // Se recalcula en cada render para reflejar el estado actual de ind,
+  // incluyendo cambios hechos en el Editor de Datos.
+  const diagHtml = generarDiagnosticoFinanciero(liq, sol, ren, efi, b);
+
   document.getElementById('bal-diagnostico').innerHTML =
-    cobertura + alertHTML +
-    `<div style="font-size:11px;line-height:1.9;color:var(--text)">${b.diagnostico}</div>`;
+    cobertura + alertHTML + diagHtml;
 
   document.getElementById('bal-raw-txt').textContent = b.textoRaw;
+}
+
+// ── Genera diagnóstico financiero narrativo vinculado a los indicadores ──────
+function generarDiagnosticoFinanciero(liq, sol, ren, efi, b) {
+  const fmt = v => {
+    if (v == null) return null;
+    const s = v < 0 ? '−' : '', a = Math.abs(v);
+    if (a >= 1e9) return s + '$' + (a/1e6).toFixed(1) + 'M';
+    if (a >= 1e6) return s + '$' + (a/1e6).toFixed(1) + 'M';
+    if (a >= 1e3) return s + '$' + (a/1e3).toFixed(0) + 'K';
+    return s + '$' + a.toFixed(0);
+  };
+  const pct = v => v != null ? (v * 100).toFixed(1) + '%' : null;
+  const rat = v => v != null ? v.toFixed(2) + 'x' : null;
+
+  const secciones = [];
+
+  // ── LIQUIDEZ ───────────────────────────────────────────────
+  if (liq.liquidez_corriente != null || liq.activo_corriente != null) {
+    const parrafos = [];
+    if (liq.liquidez_corriente != null) {
+      const lc = liq.liquidez_corriente;
+      const eval_lc = lc >= 2   ? 'holgada — la empresa puede cubrir sus obligaciones de corto plazo con amplitud'
+                    : lc >= 1.5 ? 'adecuada — cubre sus obligaciones corrientes con margen razonable'
+                    : lc >= 1   ? 'ajustada — cubre sus obligaciones corrientes pero sin margen significativo'
+                    : lc >= 0.5 ? 'comprometida — el activo corriente es insuficiente para cubrir el pasivo corriente'
+                    : 'crítica — existe riesgo de incumplimiento de obligaciones de corto plazo';
+      parrafos.push(`La <strong>liquidez corriente es ${rat(lc)}</strong> — situación ${eval_lc}.`);
+    }
+    if (liq.liquidez_seca != null) {
+      const ls = liq.liquidez_seca;
+      parrafos.push(`La <strong>liquidez seca de ${rat(ls)}</strong> ${ls >= 1 ? 'confirma la capacidad de pago sin depender de inventarios' : 'indica dependencia de la realización de inventarios para hacer frente a deudas corrientes'}.`);
+    }
+    if (liq.capital_trabajo != null) {
+      const ct = liq.capital_trabajo;
+      parrafos.push(`El <strong>capital de trabajo es ${fmt(ct)}</strong> — ${ct > 0 ? 'positivo, lo que refleja cobertura de activos circulantes sobre pasivos circulantes' : 'negativo, señal de tensión financiera de corto plazo'}.`);
+    }
+    if (parrafos.length)
+      secciones.push({ titulo: 'Liquidez', color: liq.liquidez_corriente >= 1 ? '#47ffb4' : '#ff4766', texto: parrafos });
+  }
+
+  // ── SOLVENCIA ──────────────────────────────────────────────
+  if (sol.razon_endeudamiento != null || sol.patrimonio_neto != null) {
+    const parrafos = [];
+    if (sol.razon_endeudamiento != null) {
+      const re = sol.razon_endeudamiento;
+      const eval_re = re < 0.4  ? 'bajo endeudamiento — estructura financiera conservadora con amplio respaldo patrimonial'
+                    : re < 0.6  ? 'endeudamiento moderado — balance equilibrado entre deuda y capital propio'
+                    : re < 0.8  ? 'endeudamiento elevado — la financiación externa supera el 60% de los activos'
+                    : 'endeudamiento muy alto — la empresa depende fuertemente del capital ajeno';
+      parrafos.push(`La <strong>razón de endeudamiento es ${pct(re)}</strong> — ${eval_re}.`);
+    }
+    if (sol.deuda_patrimonio != null) {
+      const dp = sol.deuda_patrimonio;
+      parrafos.push(`La <strong>relación deuda/patrimonio de ${rat(dp)}</strong> ${dp < 1 ? 'indica que el capital propio supera al capital ajeno' : dp < 2 ? 'refleja un apalancamiento financiero moderado' : 'señala un apalancamiento significativo que amplifica tanto ganancias como pérdidas'}.`);
+    }
+    if (sol.patrimonio_neto != null) {
+      const pn = sol.patrimonio_neto;
+      parrafos.push(`El <strong>patrimonio neto es ${fmt(pn)}</strong> — ${pn > 0 ? 'la empresa presenta solvencia patrimonial positiva' : 'patrimonio neto negativo, indicador de insolvencia técnica'}.`);
+    }
+    if (parrafos.length)
+      secciones.push({ titulo: 'Solvencia', color: sol.razon_endeudamiento < 0.6 ? '#47e8ff' : '#ff8c47', texto: parrafos });
+  }
+
+  // ── RENTABILIDAD ───────────────────────────────────────────
+  if (ren.roe != null || ren.resultado_neto != null || ren.margen_neto != null) {
+    const parrafos = [];
+    if (ren.resultado_neto != null) {
+      const rn = ren.resultado_neto;
+      parrafos.push(`El <strong>resultado del ejercicio es ${fmt(rn)}</strong> — ${rn > 0 ? 'la empresa generó ganancias en el período' : 'la empresa registró pérdidas en el período'}.`);
+    }
+    if (ren.roe != null) {
+      const roe = ren.roe;
+      const eval_roe = roe > 0.2  ? 'excelente retorno sobre el capital propio'
+                     : roe > 0.1  ? 'buen retorno sobre el capital propio'
+                     : roe > 0    ? 'retorno positivo pero moderado sobre el capital propio'
+                     : 'retorno negativo — el capital invertido no está generando rendimiento';
+      parrafos.push(`El <strong>ROE es ${pct(roe)}</strong> — ${eval_roe}.`);
+    }
+    if (ren.roa != null)
+      parrafos.push(`El <strong>ROA de ${pct(ren.roa)}</strong> indica ${ren.roa > 0 ? 'que los activos están generando retornos positivos' : 'que los activos no están generando retornos suficientes'}.`);
+    if (ren.margen_neto != null)
+      parrafos.push(`El <strong>margen neto de ${pct(ren.margen_neto)}</strong> ${ren.margen_neto >= 0.1 ? 'refleja buena eficiencia en la conversión de ingresos a ganancias' : ren.margen_neto >= 0 ? 'es positivo pero ajustado' : 'es negativo — los costos y gastos superan los ingresos'}.`);
+    if (ren.ventas_ingresos != null)
+      parrafos.push(`Los <strong>ingresos totales son ${fmt(ren.ventas_ingresos)}</strong>${ren.costo_ventas != null ? ', con un costo de ventas de ' + fmt(Math.abs(ren.costo_ventas)) : ''}.`);
+    if (parrafos.length)
+      secciones.push({ titulo: 'Rentabilidad', color: ren.resultado_neto > 0 ? '#47ffb4' : '#ff4766', texto: parrafos });
+  }
+
+  // ── EFICIENCIA ─────────────────────────────────────────────
+  if (efi.rotacion_activos != null || efi.dias_cobro != null) {
+    const parrafos = [];
+    if (efi.rotacion_activos != null) {
+      const ra = efi.rotacion_activos;
+      parrafos.push(`La <strong>rotación de activos es ${rat(ra)}</strong> — ${ra >= 1 ? 'los activos generan ingresos superiores a su valor, reflejando alta eficiencia operativa' : ra >= 0.5 ? 'eficiencia operativa moderada en el uso de activos' : 'los activos no están siendo utilizados con plena eficiencia'}.`);
+    }
+    if (efi.dias_cobro != null)
+      parrafos.push(`El <strong>plazo de cobro promedio es ${Math.round(efi.dias_cobro)} días</strong> — ${efi.dias_cobro < 30 ? 'excelente gestión de cobranzas' : efi.dias_cobro < 60 ? 'plazo de cobro razonable' : 'plazo extendido que puede generar presión sobre la liquidez'}.`);
+    if (parrafos.length)
+      secciones.push({ titulo: 'Eficiencia', color: '#47e8ff', texto: parrafos });
+  }
+
+  // ── EVALUACIÓN GENERAL ─────────────────────────────────────
+  const hayDatos = secciones.length > 0;
+  if (!hayDatos) {
+    return `<div style="padding:12px 14px;background:var(--s3);border:1px solid var(--bd);
+      border-radius:4px;font-size:10px;color:var(--dim)">
+      Sin indicadores disponibles para generar el diagnóstico. Cargá el balance o completá
+      el Editor de Datos para ver el análisis financiero.
+    </div>`;
+  }
+
+  // Construir evaluación global sintetizada
+  const positivos = [], negativos = [];
+  if (liq.liquidez_corriente != null) {
+    if (liq.liquidez_corriente >= 1) positivos.push('liquidez corriente adecuada');
+    else negativos.push('liquidez corriente por debajo del umbral mínimo');
+  }
+  if (sol.razon_endeudamiento != null) {
+    if (sol.razon_endeudamiento < 0.6) positivos.push('nivel de endeudamiento moderado');
+    else negativos.push('nivel de endeudamiento elevado');
+  }
+  if (ren.resultado_neto != null) {
+    if (ren.resultado_neto > 0) positivos.push('resultado del ejercicio positivo');
+    else negativos.push('resultado del ejercicio negativo');
+  }
+  if (ren.roe != null) {
+    if (ren.roe > 0.1) positivos.push('ROE superior al 10%');
+    else if (ren.roe > 0) positivos.push('ROE positivo');
+    else negativos.push('ROE negativo');
+  }
+
+  const evalGlobal = negativos.length === 0
+    ? '✅ El balance presenta indicadores favorables en todos los ejes analizados.'
+    : positivos.length === 0
+    ? '⚠️ El balance presenta señales de alerta en múltiples indicadores.'
+    : `📊 Balance mixto: <strong>fortalezas</strong> en ${positivos.join(', ')}; <strong>áreas de atención</strong> en ${negativos.join(', ')}.`;
+
+  // Renderizar HTML
+  return `
+    <div style="margin-bottom:14px;padding:10px 14px;background:rgba(71,232,255,.05);
+      border:1px solid #47e8ff30;border-radius:4px;font-size:10px;line-height:1.7;color:var(--text)">
+      ${evalGlobal}
+    </div>
+    ${secciones.map(sec => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
+        color:${sec.color};margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;
+          background:${sec.color}"></span>
+        ${sec.titulo}
+      </div>
+      <div style="font-size:10.5px;line-height:1.85;color:var(--text)">
+        ${sec.texto.map(p => `<p style="margin:0 0 5px 0">${p}</p>`).join('')}
+      </div>
+    </div>`).join('')}
+    ${b.diagnostico ? `<div style="margin-top:10px;padding:8px 12px;background:var(--s3);
+      border:1px solid var(--bd);border-radius:4px;font-size:9.5px;color:var(--dim);
+      line-height:1.7">${b.diagnostico}</div>` : ''}
+  `;
 }
 
 // ── Tabla de indicadores con barra visual ─────────────────────────
@@ -13169,6 +14087,50 @@ function loadStateFromHash() {
 //  TRANSFERENCIAS — vista mensual
 // ═══════════════════════════════════════════════════════════
 // ── Cambiar categoría de una transferencia desde la tabla ─────────
+// ── Editar año de una transferencia ──────────────────────────────
+function editarAnoTrans(idx, valor) {
+  const año = parseInt(valor);
+  if (!año || año < 2000 || año > 2100) return;
+  if (!DATA.transferencias[idx]) return;
+  DATA.transferencias[idx].año = año;
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
+  populateTransSelects();
+  buildTransferencias();
+}
+
+// ── Editar año haciendo click en el valor existente ───────────
+function editarAnoInline(span, idx) {
+  const t = DATA.transferencias[idx];
+  if (!t) return;
+  const input = document.createElement('input');
+  input.type  = 'number';
+  input.value = t.año || '';
+  input.style.cssText = 'width:56px;padding:2px 4px;background:var(--s2);' +
+    'border:1px solid var(--y21);color:var(--text);font-family:var(--mono);' +
+    'font-size:9px;border-radius:3px;text-align:center;outline:none';
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const año = parseInt(input.value);
+    if (año >= 2000 && año <= 2100) {
+      t.año = año;
+      saveDataToLocalCache();
+      marcarPendienteGuardar();
+      populateTransSelects();
+      buildTransferencias();
+    } else {
+      buildTransferencias();
+    }
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Escape') { buildTransferencias(); }
+  });
+}
+
 function cambiarCategoriaTrans(idx, nuevaCat) {
   if (idx < 0 || idx >= DATA.transferencias.length) return;
   DATA.transferencias[idx].categoria = nuevaCat;
@@ -13368,7 +14330,7 @@ function buildTransTendencia() {
   const canvas = document.getElementById('ch-trans-trend');
   if (!canvas || !DATA.transferencias?.length) return;
 
-  // Acumular total por año, sin filtros (vista global de tendencia)
+  // Acumular total por año (nominal)
   const totalPorAño = {};
   DATA.transferencias.forEach(t => {
     const y = parseInt(t.año);
@@ -13378,35 +14340,96 @@ function buildTransTendencia() {
   });
 
   const años = Object.keys(totalPorAño).map(Number).sort();
-  if (años.length < 2) return; // Con un solo año no hay tendencia que mostrar
+  if (años.length < 2) return;
+
+  // Calcular variación nominal y real interanual
+  // Usamos realGrowthPct(v2,y2,v1,y1) que deflacta con IPC[y2]/IPC[y1]
+  // — mismo criterio que el resto del dashboard (facturación, resultado)
+  const varNom  = años.map((y, i) => {
+    if (i === 0) return null;
+    const prev = años[i-1];
+    return ((totalPorAño[y] - totalPorAño[prev]) / totalPorAño[prev] * 100);
+  });
+  const varReal = años.map((y, i) => {
+    if (i === 0) return null;
+    const prev = años[i-1];
+    const vr = realGrowthPct(totalPorAño[y], y, totalPorAño[prev], prev);
+    return vr; // null si no hay IPC para ese año
+  });
+
+  const hayInflacion = varReal.some(v => v != null);
 
   mkChart('ch-trans-trend', 'bar', {
     labels: años.map(String),
-    datasets: [{
-      label: 'Total transferencias',
-      data: años.map(y => totalPorAño[y] / 1e6),
-      backgroundColor: años.map(y => YCa(y)),
-      borderRadius: 4,
-    }]
+    datasets: [
+      {
+        label: 'Total nominal',
+        data: años.map(y => totalPorAño[y] / 1e6),
+        backgroundColor: años.map(y => YCa(y)),
+        borderRadius: 4,
+        yAxisID: 'y',
+        order: 2,
+      },
+      // Línea de variación real (eje secundario derecho)
+      ...(hayInflacion ? [{
+        label: 'Var. real % (deflactada)',
+        type: 'line',
+        data: varReal.map((v, i) => v != null ? { x: String(años[i]), y: v } : null).filter(Boolean),
+        borderColor: '#ff8c47',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderDash: [5, 3],
+        pointBackgroundColor: varReal.map(v => v == null ? 'transparent' : v >= 0 ? '#47ffb4' : '#ff4766'),
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        yAxisID: 'y2',
+        order: 1,
+      }] : [])
+    ]
   }, {
     plugins: {
-      legend: { display: false },
+      legend: { display: hayInflacion,
+        labels: { color:'var(--text)', font:{size:9}, boxWidth:12 } },
       tooltip: {
         callbacks: {
-          label: ctx => ` ${fv(ctx.raw * 1e6)}`,
+          label: ctx => {
+            if (ctx.dataset.yAxisID === 'y2')
+              return ` Var. real: ${ctx.raw.y >= 0 ? '▲' : '▼'} ${ctx.raw.y.toFixed(1)}%`;
+            return ` ${fv(ctx.raw * 1e6)}`;
+          },
           afterLabel: ctx => {
-            const y = años[ctx.dataIndex];
-            const prev = años[ctx.dataIndex - 1];
+            if (ctx.dataset.yAxisID === 'y2') return '';
+            const i = ctx.dataIndex;
+            const y = años[i], prev = años[i-1];
             if (!prev) return '';
-            const pct = ((totalPorAño[y] - totalPorAño[prev]) / totalPorAño[prev] * 100).toFixed(1);
-            return ` ${pct > 0 ? '▲' : '▼'} ${pct}% vs ${prev}`;
+            const prevY = años[i-1];
+            const nomPct = varNom[i]?.toFixed(1);
+            const realPct = varReal[i]?.toFixed(1);
+            // Inflación del período usando IPC para consistencia con realGrowthPct
+            const inflPeriodo = INFL.ipc[y] && INFL.ipc[prev]
+              ? ((INFL.ipc[y]/INFL.ipc[prevY])-1)*100
+              : INFL.anual[y] ?? null;
+            const lines = [];
+            if (nomPct != null) lines.push(` Var. nominal: ${nomPct > 0 ? '▲' : '▼'} ${nomPct}%`);
+            if (inflPeriodo != null) lines.push(` Inflación período ${prevY}→${y}: ${inflPeriodo.toFixed(1)}%`);
+            if (realPct != null) lines.push(` Var. real: ${realPct > 0 ? '▲' : '▼'} ${realPct}%`);
+            return lines.join(' | ');
           }
         }
       }
     },
     scales: {
-      x: { ticks: { color: ctx => YC[años[ctx.index]] || 'var(--text)', font: { size: 10, weight: '600' } } },
-      y: { ticks: { callback: v => fv(v * 1e6) } }
+      x: { ticks: { color: ctx => YC[años[ctx.index]] || 'var(--text)', font:{ size:10, weight:'600' } } },
+      y: { ticks: { callback: v => fv(v * 1e6) }, title: { display:true, text:'$ millones', color:'var(--dim)', font:{size:9} } },
+      ...(hayInflacion ? {
+        y2: {
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { callback: v => v.toFixed(0)+'%', color:'#ff8c47', font:{size:9} },
+          title: { display:true, text:'Var. real %', color:'#ff8c47', font:{size:9} }
+        }
+      } : {})
     }
   });
 }
@@ -13443,7 +14466,7 @@ function renderNetoKPI(emp, years) {
   const wrap = document.getElementById('emp-neto-kpi');
   if (!wrap) return;
   const transEmpYr = {};
-  (DATA.transferencias||[]).filter(t=>t.empresa===emp).forEach(t=>{
+  _transEmpresa(emp).forEach(t=>{
     transEmpYr[String(t.año)] = (transEmpYr[String(t.año)]||0)+t.importe;
   });
   const hasData = years.some(y=>(transEmpYr[y]||0)>0);
@@ -13501,7 +14524,7 @@ function buildCompletitudPanel() {
       (DATA.fact[e]?.[yr]||0) > 0,
       DATA.sit[e]?.[yr] != null,
       (DATA.personal||[]).some(d=>d.e===e && (d.y[yr]||0)>0),
-      (DATA.transferencias||[]).some(t=>t.empresa===e && String(t.año)===yr),
+      _transEmpresa(e).some(t=>String(t.año)===yr),
     ];
   };
 
@@ -14386,7 +15409,38 @@ function applyCloudData(cloud) {
             dias_pago:            null,
           },
         },
+        estructura_er: [], // se reconstruye desde balances_rubros abajo
       };
+    });
+  }
+
+  // balances_rubros: reconstruir estructura_er por empresa+periodo
+  if (Array.isArray(cloud.balances_rubros) && cloud.balances_rubros.length) {
+    // Agrupar filas por clave empresa_periodo
+    const rubrosPorBalance = {};
+    cloud.balances_rubros.forEach(r => {
+      if (!r.empresa || !r.periodo) return;
+      const key = r.empresa + '_' + r.periodo;
+      if (!rubrosPorBalance[key]) rubrosPorBalance[key] = [];
+      rubrosPorBalance[key].push({
+        key:             r.key    || '',
+        lbl:             r.lbl    || '',
+        val:             r.val !== '' && r.val != null ? parseFloat(r.val) : null,
+        negativo:        r.negativo         === 'SI',
+        libre:           r.libre            === 'SI',
+        libreDefaultNeg: r.libre_default_neg === 'SI',
+        calc:            r.calc             === 'SI',
+        formula:         r.formula          || null,
+        depFilas:        r.dep_filas ? r.dep_filas.split(',').map(Number).filter(Boolean) : null,
+        fila:            r.fila !== '' ? parseInt(r.fila) : null,
+        orden:           parseInt(r.orden)  || 0,
+      });
+    });
+    // Asignar estructura_er a cada balance, ordenada por orden
+    Object.entries(rubrosPorBalance).forEach(([key, rubros]) => {
+      if (_balances[key]) {
+        _balances[key].estructura_er = rubros.sort((a, b) => a.orden - b.orden);
+      }
     });
   }
 
@@ -14518,7 +15572,31 @@ function buildCloudPayload() {
     };
   });
 
-  return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows, notas: notasRows, presupuesto: presRows, balances: balRows };
+  // balances_rubros: hoja separada con estructura_er de cada balance
+  // Una fila por rubro: empresa + periodo identifican el balance
+  const balRubrosRows = Object.values(_balances || []).flatMap(b => {
+    const er = b.estructura_er || [];
+    if (!er.length) return [];
+    return er.map((r, i) => ({
+      empresa:          b.empresa   || '',
+      periodo:          b.periodo   || '',
+      orden:            i,
+      key:              r.key       || '',
+      lbl:              r.lbl       || '',
+      val:              r.val       ?? '',
+      negativo:         r.negativo  ? 'SI' : 'NO',
+      libre:            r.libre     ? 'SI' : 'NO',
+      libre_default_neg:r.libreDefaultNeg ? 'SI' : 'NO',
+      calc:             r.calc      ? 'SI' : 'NO',
+      formula:          r.formula   || '',
+      dep_filas:        r.depFilas  ? r.depFilas.join(',') : '',
+      fila:             r.fila      ?? '',
+    }));
+  });
+
+  return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
+           notas: notasRows, presupuesto: presRows, balances: balRows,
+           balances_rubros: balRubrosRows };
 }
 
 // ── Cache local (fallback sin conexión) ──────────────────────────
