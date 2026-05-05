@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -499,31 +499,130 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
 
 /* ═══ RESPONSIVE MOBILE ════════════════════════════════════ */
 @media (max-width: 768px) {
+  /* ── Layout base ── */
   .layout { flex-direction: column; }
-  .sidebar { width:100%;height:auto;flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--bd);padding:8px 10px;gap:4px; }
-  .nav { display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;padding:0; }
-  .nav-item { padding:5px 10px;font-size:10px;border-radius:3px; }
+
+  /* ── Sidebar → barra horizontal scrolleable ── */
+  .sidebar {
+    width:100%; height:auto; flex-direction:row; flex-wrap:nowrap;
+    border-right:none; border-bottom:1px solid var(--bd);
+    padding:6px 8px; gap:0; overflow-x:auto; overflow-y:hidden;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  }
+  .sidebar::-webkit-scrollbar { display:none; }
+  .sidebar > .logo-area { display:none; }
+  .nav { display:flex; flex-direction:row; flex-wrap:nowrap; gap:2px; padding:0; }
+  .nav-item {
+    padding:6px 10px; font-size:10px; border-radius:3px;
+    white-space:nowrap; flex-shrink:0;
+  }
   .nav-item::before { display:none; }
   .nav-group { display:none; }
-  .scroll-area { padding:10px 10px 30px; }
-  .topbar { padding:8px 10px 6px; }
-  .topbar-meta { gap:5px; }
-  .meta-tag { font-size:9px;padding:3px 7px; }
-  .kpi-strip { grid-template-columns:repeat(2,1fr) !important;gap:6px; }
-  .row2,.row3,.row4 { grid-template-columns:1fr !important; }
-  .evo-row { grid-template-columns:repeat(2,1fr);gap:6px; }
+  .nav-footer { display:none; }
+
+  /* ── Topbar ── */
+  .topbar-row1 { height:42px; padding:0 8px; }
+  .page-title { font-size:13px; }
+  .topbar-meta { gap:4px; }
+  .meta-tag { font-size:8.5px; padding:2px 5px; }
+  .tba-section { padding:0 5px; }
+  /* Ocultar labels de sección en topbar para ahorrar espacio */
+  .tba-section-label { display:none; }
+
+  /* ── Área de contenido ── */
+  .scroll-area { padding:10px 10px 60px; }
   .card { padding:10px 12px; }
-  .card-hd { flex-wrap:wrap;gap:3px; }
-  .page-title { font-size:16px; }
-  .sel-row { flex-wrap:wrap;gap:8px; }
+  .card-hd { flex-wrap:wrap; gap:3px; }
+
+  /* ── KPI strips ── */
+  .kpi-strip { grid-template-columns:repeat(2,1fr) !important; gap:6px; }
+  .kpi-band { flex-wrap:wrap; }
+  .kpi-band-item { min-width:calc(50% - 1px); border-bottom:1px solid var(--bd); }
+  .kpi { padding:10px 12px; }
+  .kpi-value { font-size:22px !important; }
+
+  /* ── Grids de filas ── */
+  .row2, .row3, .row4, .rowfull { grid-template-columns:1fr !important; }
+  .evo-row { grid-template-columns:repeat(2,1fr); gap:6px; }
+  .rub-grid { grid-template-columns:1fr !important; }
+  .rub-kpi-strip { grid-template-columns:repeat(2,1fr) !important; }
+
+  /* ── Gráficos ── */
   canvas { max-height:200px !important; }
+
+  /* ── Tablas: scroll horizontal ── */
+  .tbl-wrap, .rowfull { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
   table { font-size:9px; }
   table th, table td { padding:4px 6px !important; }
+
+  /* ── Selectores ── */
+  .sel-row { flex-wrap:wrap; gap:6px; }
+  .sel-row select, .sel-row .sel { min-width:0 !important; flex:1 1 140px; }
+
+  /* ── Filtros de transferencias / empresa ── */
+  #panel-transferencias .sel-row { flex-direction:column; }
+  #panel-transferencias .cs-chips { overflow-x:auto; flex-wrap:nowrap; }
+  .sel-filter { min-width:0 !important; flex:1 1 100% !important; }
+
+  /* ── Panel balances ── */
+  #panel-balances .row2 { flex-direction:column; }
+  #bal-editor-wrap { font-size:11px; }
+
+  /* ── Panel importar ── */
+  #panel-importar .map-row { flex-direction:column; }
+  .imp-ctrl-row { flex-wrap:wrap; gap:4px; }
+  .imp-ctrl-btn { font-size:9px; padding:5px 8px; }
+
+  /* ── Chips de año ── */
+  .cs-chips { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+
+  /* ── Heatmap y portafolio: scroll horizontal ── */
+  #panel-heatmap .rowfull,
   #panel-portafolio .rowfull { overflow-x:auto; }
+
+  /* ── Empresa financiera ── */
+  #panel-empresa .row2 { flex-direction:column; }
+
+  /* ── Modal login ── */
+  #login-overlay > div { width:92vw !important; max-width:360px; padding:20px; }
+
+  /* ── Cloud panel ── */
+  #cloud-panel { width:90vw !important; max-width:340px !important; right:4px !important; }
+
+  /* ── User panel ── */
+  #user-panel { width:88vw !important; max-width:300px !important; }
+
+  /* ── Vincular balance card ── */
+  #bal-vincular-card { flex-direction:column; align-items:stretch; }
 }
+
+/* ── Extra pequeño (≤480px) ── */
 @media (max-width: 480px) {
-  .kpi-value { font-size:20px !important; }
-  .evo-row { grid-template-columns:1fr 1fr; }
+  .kpi-value { font-size:18px !important; }
+  .evo-row { grid-template-columns:1fr; }
+  .kpi-strip { grid-template-columns:1fr 1fr !important; }
+  .nav-item { padding:5px 8px; font-size:9.5px; }
+  .scroll-area { padding:8px 8px 60px; }
+  .card-hd-title { font-size:10px; }
+  /* Tablas: fuente aún más pequeña */
+  table { font-size:8.5px; }
+  /* Gráficos más compactos */
+  canvas { max-height:160px !important; }
+  /* Chips de año más pequeños */
+  .chip[data-yr] { min-width:32px; padding:3px 6px; font-size:9px; }
+  /* Topbar mínimo */
+  .page-title { font-size:12px; }
+  .meta-tag { display:none; }
+  /* Balance editor vertical */
+  #bal-editor-patrimonial,
+  #bal-editor-resultados { gap:4px !important; }
+}
+
+/* ── Accesibilidad táctil: targets mínimos 44px ── */
+@media (max-width: 768px) {
+  .nav-item, button, .chip, select {
+    min-height: 36px;
+  }
 }
 
 /* ── PANELS ─────────────────────────────────────────── */
@@ -2207,7 +2306,7 @@ self.onmessage = async (e) => {
         <select class="sel" id="sel-trans-cat" onchange="buildTransferencias()">
           <option value="">Todas</option>
         </select>
-        <div style="flex:1;min-width:160px;position:relative">
+        <div class="sel-filter" style="flex:1;min-width:160px;position:relative">
           <input id="inp-trans-buscar" type="search" placeholder="🔍 Buscar en observaciones, beneficiario…"
             oninput="buildTransferencias()"
             style="width:100%;padding:5px 10px 5px 10px;background:var(--s2);border:1px solid var(--bd2);
@@ -2299,7 +2398,9 @@ self.onmessage = async (e) => {
             <span id="trans-tabla-toggle" style="font-size:10px;color:var(--dim)">▼ mostrar</span>
           </div>
           <div id="trans-tabla-wrap" style="display:none;overflow-x:auto">
+            <div class="tbl-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
             <table class="tbl" id="tbl-trans" style="font-size:10px;min-width:800px"></table>
+          </div>
           </div>
         </div>
 
