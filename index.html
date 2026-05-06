@@ -82,7 +82,7 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --s3:     #181b24;
   --bd:     #1e2230;
   --bd2:    #262b3a;
-  --y21:    #e8ff47;
+  --y21:    #b8c800; /* antes #e8ff47 — oscurecido para legibilidad en fondos claros */
   --y22:    #47e8ff;
   --y23:    #ff8c47;
   --y24:    #c447ff;
@@ -1281,9 +1281,14 @@ self.onmessage = async (e) => {
         <input id="new-user" placeholder="usuario" style="flex:1;padding:6px 8px;
           background:var(--s3);border:1px solid var(--bd2);color:var(--text);
           font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none">
-        <input id="new-pass" placeholder="contraseña" type="password" style="flex:1;padding:6px 8px;
-          background:var(--s3);border:1px solid var(--bd2);color:var(--text);
-          font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none">
+        <div style="flex:1;position:relative;display:flex">
+          <input id="new-pass" placeholder="contraseña" type="password" style="flex:1;padding:6px 8px;
+            padding-right:28px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+            font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:100%;box-sizing:border-box">
+          <button onclick="togglePassVis('new-pass',this)" style="position:absolute;right:2px;top:50%;
+            transform:translateY(-50%);background:none;border:none;color:var(--dim);
+            cursor:pointer;font-size:11px;padding:2px 4px">👁</button>
+        </div>
       </div>
       <button onclick="agregarUsuario()" style="width:100%;padding:7px;
         background:rgba(71,255,180,.1);border:1px solid #47ffb455;color:#47ffb4;
@@ -1375,6 +1380,24 @@ self.onmessage = async (e) => {
 
       <div class="topbar-actions">
 
+        <!-- ── BUSCADOR GLOBAL ───────────────────────────── -->
+        <div class="tba-section">
+          <div style="position:relative">
+            <input id="global-search" type="search" placeholder="🔍 Empresa…"
+              oninput="buscarGlobal(this.value)"
+              onkeydown="if(event.key==='Escape'){this.value='';cerrarBusquedaGlobal()}"
+              style="padding:4px 10px;background:var(--s2);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+              outline:none;width:140px;transition:width .2s"
+              onfocus="this.style.width='200px'" onblur="this.style.width='140px'">
+            <div id="global-search-results"
+              style="display:none;position:fixed;z-index:9999;
+              background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+              min-width:260px;max-height:360px;overflow-y:auto;
+              box-shadow:0 8px 24px rgba(0,0,0,.5);margin-top:2px"></div>
+          </div>
+        </div>
+
         <!-- ── DATOS ──────────────────────────────────────── -->
         <div class="tba-section">
           <div class="tba-section-label">Datos</div>
@@ -1385,6 +1408,8 @@ self.onmessage = async (e) => {
                 style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
                 onchange="handleImport(this.files[0]);showPanel('importar',null)">
             </label>
+            <button onclick="imprimirPanelActivo()" title="Exportar panel a PDF"
+              class="tba-btn" style="color:#47e8ff;border-color:#47e8ff44">🖨 PDF</button>
             <button class="tba-btn tba-btn-save" id="btn-guardar" onclick="toggleSavePanel()"
               title="Guardar datos">💾 Guardar</button>
           </div>
@@ -1448,23 +1473,28 @@ self.onmessage = async (e) => {
             </div>
             <div id="cloud-status-txt-top" style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
             <div id="storage-status" style="display:none;font-size:8px;font-family:var(--mono)"></div>
-            <button onclick="toggleUserPanel()" title="Gestión de sesión y usuarios"
-              style="display:flex;align-items:center;gap:4px;padding:3px 8px;
-              background:rgba(255,71,102,.06);border:1px solid rgba(255,71,102,.3);
-              color:var(--dim);font-size:8.5px;border-radius:3px;cursor:pointer;
-              font-family:var(--mono);white-space:nowrap;height:24px"
-              onmouseover="this.style.borderColor='#ff4766';this.style.color='#ff4766'"
-              onmouseout="this.style.borderColor='rgba(255,71,102,.3)';this.style.color='var(--dim)'">
-              👤 <span id="login-user-lbl">—</span> ▾
-            </button>
           </div>
         </div>
 
       </div><!-- /topbar-actions -->
     </div>
 
+    <!-- Botón de usuario — siempre visible en esquina superior derecha -->
+    <button id="btn-user-fixed" onclick="toggleUserPanel()"
+      title="Gestión de sesión y usuarios"
+      style="position:fixed;top:8px;right:12px;z-index:9400;
+      display:flex;align-items:center;gap:5px;padding:4px 10px;
+      background:rgba(255,71,102,.08);border:1px solid rgba(255,71,102,.3);
+      color:var(--dim);font-size:9px;border-radius:3px;cursor:pointer;
+      font-family:var(--mono);white-space:nowrap;height:28px;
+      box-shadow:0 2px 8px rgba(0,0,0,.3)"
+      onmouseover="this.style.borderColor='#ff4766';this.style.color='#ff4766'"
+      onmouseout="this.style.borderColor='rgba(255,71,102,.3)';this.style.color='var(--dim)'">
+      👤 <span id="login-user-lbl">—</span> ▾
+    </button>
+
     <!-- Panel flotante de usuario ─────────────────────────────── -->
-    <div id="user-panel" style="display:none;position:fixed;top:52px;right:12px;
+    <div id="user-panel" style="display:none;position:fixed;top:44px;right:12px;
       width:280px;background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
       box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:9500;overflow:hidden">
 
@@ -1955,6 +1985,9 @@ self.onmessage = async (e) => {
         <select class="sel" id="sel-pers-emp" onchange="buildPersonal()">
           <option value="">— Consolidado (todas) —</option>
         </select>
+        <span class="sel-label" style="margin-left:8px">Año base comparación</span>
+        <select class="sel" id="sel-pers-base" onchange="buildPersonal()">
+        </select>
       </div>
       <div class="rowfull card">
         <div class="card-hd"><span class="card-hd-title" id="pers-multi-lbl">Evolución de plantilla — top 14 empresas</span><span class="card-hd-unit">empleados</span></div>
@@ -2029,6 +2062,17 @@ self.onmessage = async (e) => {
         <div class="card">
           <div class="card-hd"><span class="card-hd-title">Personal</span><span class="card-hd-unit">empleados 2020–2026</span></div>
           <canvas id="ch-e-pers"></canvas>
+        </div>
+      </div>
+
+      <!-- Diagnóstico de balance vinculado -->
+      <div id="emp-bal-diag-wrap" style="display:none">
+        <div class="card" style="margin-top:0">
+          <div class="card-hd">
+            <span class="card-hd-title">📊 Diagnóstico financiero — balance cargado</span>
+            <span class="card-hd-unit" id="emp-bal-diag-periodo"></span>
+          </div>
+          <div id="emp-bal-diag-content" style="padding:4px 0"></div>
         </div>
       </div>
     </div>
@@ -2800,6 +2844,9 @@ self.onmessage = async (e) => {
         <div id="bal-error-msg" style="display:none;max-width:520px;margin:14px auto 0"></div>
       </div>
 
+      <!-- Aviso de archivo duplicado — visible aunque bal-empty esté oculto -->
+      <div id="bal-dup-msg" style="display:none;max-width:560px;margin:10px auto"></div>
+
       <!-- Barra de progreso -->
       <div id="bal-progress" style="display:none;padding:36px 24px;text-align:center" class="rowfull card">
         <div id="bal-progress-icon" style="font-size:32px;margin-bottom:10px">📄</div>
@@ -3336,18 +3383,57 @@ function saveUsuarios(users) {
   try { localStorage.setItem('lr_users_v1', JSON.stringify(users)); } catch(e) {}
 }
 
+function togglePassVis(inputId, btn) {
+  const inp = document.getElementById(inputId) ||
+              btn.previousElementSibling ||
+              btn.parentElement?.querySelector('input');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
 function renderUserList() {
   const el = document.getElementById('user-list');
   if (!el) return;
   const users = getUsuarios();
-  el.innerHTML = Object.keys(users).map(u =>
-    `<div style="display:flex;align-items:center;justify-content:space-between;
-      padding:4px 0;border-bottom:1px solid var(--bd)">
-      <span style="color:var(--text)">${u}</span>
-      ${u !== 'admin' ? `<button onclick="eliminarUsuario('${u}')" style="background:none;
-        border:none;color:var(--neg);cursor:pointer;font-size:11px;padding:0 4px">✕</button>` : ''}
-    </div>`
-  ).join('');
+  el.innerHTML = Object.keys(users).map(u => {
+    const passId = `pass-show-${u}`;
+    return `<div style="display:flex;align-items:center;gap:6px;
+        padding:5px 0;border-bottom:1px solid var(--bd);flex-wrap:wrap">
+      <span style="color:var(--text);font-family:var(--mono);font-size:9.5px;
+        min-width:60px;font-weight:600">${u}</span>
+      <div style="display:flex;align-items:center;gap:2px;flex:1">
+        <input id="${passId}" type="password" value="${users[u]}"
+          style="flex:1;min-width:80px;padding:3px 6px;background:var(--s3);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">
+        <button onclick="togglePassVis('${passId}',this)"
+          style="background:none;border:none;color:var(--dim);cursor:pointer;
+          font-size:11px;padding:1px 3px" title="Ver/ocultar">👁</button>
+        <button onclick="editarPassUsuario('${u}','${passId}')"
+          style="background:rgba(71,232,255,.1);border:1px solid #47e8ff30;color:#47e8ff;
+          font-size:8.5px;padding:2px 6px;border-radius:3px;cursor:pointer;
+          font-family:var(--mono)" title="Guardar nueva contraseña">✓</button>
+      </div>
+      ${u !== 'admin' ? `<button onclick="eliminarUsuario('${u}')"
+        style="background:none;border:none;color:var(--neg);cursor:pointer;
+        font-size:11px;padding:0 3px" title="Eliminar usuario">✕</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function editarPassUsuario(user, passId) {
+  const inp = document.getElementById(passId);
+  const nueva = inp?.value?.trim();
+  const msg = document.getElementById('msg-admin');
+  if (!nueva || nueva.length < 6) {
+    if (msg) { msg.textContent = 'Contraseña mínimo 6 caracteres'; msg.style.color='var(--neg)'; }
+    return;
+  }
+  const users = getUsuarios();
+  users[user] = nueva;
+  saveUsuarios(users);
+  if (msg) { msg.textContent = `✓ Contraseña de "${user}" actualizada`; msg.style.color='#47ffb4'; }
+  setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
 }
 
 function cambiarPassPropia() {
@@ -3442,6 +3528,27 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   40%      { transform: translateX(8px); }
   60%      { transform: translateX(-6px); }
   80%      { transform: translateX(6px); }
+}
+
+.tbl td.r, .tbl td.d { white-space:nowrap; }
+
+/* ═══ IMPRESIÓN / PDF ═══════════════════════════════════════════ */
+@media print {
+  body { background:#fff !important; color:#111 !important; }
+  .sidebar, .topbar, #login-overlay, #save-panel, #user-panel,
+  #cloud-panel, #export-menu, .sel-row, .chip, .imp-ctrl-row,
+  [id^="btn-"], .nav-footer, #panel-corr-masiva, #btn-user-fixed,
+  button:not(.print-keep) { display:none !important; }
+  .layout { display:block !important; }
+  .scroll-area { padding:0 !important; overflow:visible !important; }
+  .panel { display:block !important; page-break-inside:avoid; }
+  .card { break-inside:avoid; border:1px solid #ccc !important;
+          background:#fff !important; color:#111 !important; }
+  .kpi  { background:#f5f5f5 !important; color:#111 !important; }
+  .tbl th, .tbl td { color:#111 !important; border-color:#ccc !important; }
+  canvas { max-height:200px !important; }
+  .rowfull, .row2, .row3 { display:block !important; }
+  @page { margin:1.5cm; size:A4 landscape; }
 }
 </style>
 
@@ -3772,6 +3879,178 @@ function resetRubros() {
   buildRubros();
   rebuildActive();
 }
+// ── Timestamp en huso horario de Argentina (UTC-3, sin DST) ────────
+function nowAR() {
+  const d   = new Date();
+  const off = -3 * 60; // UTC-3 fijo (Argentina no usa DST)
+  const local = new Date(d.getTime() + off * 60000);
+  return local.toISOString().replace('Z', '-03:00');
+}
+
+// Formatear fecha AR para mostrar: "06/05/2026 14:32"
+function fmtFechaAR(isoStr) {
+  if (!isoStr) return '—';
+  try {
+    // Parsear y ajustar a UTC-3
+    const d   = new Date(isoStr);
+    const off = -3 * 60;
+    const local = new Date(d.getTime() + off * 60000);
+    const pad = n => String(n).padStart(2,'0');
+    return `${pad(local.getUTCDate())}/${pad(local.getUTCMonth()+1)}/${local.getUTCFullYear()} ${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`;
+  } catch(e) { return String(isoStr).slice(0,16).replace('T',' '); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ÍTEM 7A: Exportar panel activo a PDF
+// ══════════════════════════════════════════════════════════════════
+function imprimirPanelActivo() {
+  window.print();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ÍTEM 7B: Buscador global de empresas
+// ══════════════════════════════════════════════════════════════════
+let _busqTimer = null;
+
+function cerrarBusquedaGlobal() {
+  const r = document.getElementById('global-search-results');
+  if (r) r.style.display = 'none';
+}
+
+function buscarGlobal(q) {
+  const res = document.getElementById('global-search-results');
+  const inp = document.getElementById('global-search');
+  if (!res) return;
+  clearTimeout(_busqTimer);
+  q = (q || '').trim().toUpperCase();
+  if (q.length < 2) { cerrarBusquedaGlobal(); return; }
+
+  _busqTimer = setTimeout(() => {
+    // Buscar en todas las fuentes
+    const _rub = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+    const empresas = [...new Set([
+      ...Object.keys(DATA.fact || {}),
+      ...Object.keys(DATA.sit  || {}),
+      ...Object.keys(_rub),
+    ])].sort();
+
+    const matches = empresas.filter(e => e.toUpperCase().includes(q)).slice(0, 12);
+    if (!matches.length) { cerrarBusquedaGlobal(); return; }
+
+    // Posicionar debajo del input
+    const rect = inp?.getBoundingClientRect();
+    if (rect) {
+      res.style.top  = (rect.bottom + 3) + 'px';
+      res.style.left = rect.left + 'px';
+    }
+
+    res.innerHTML = matches.map(e => {
+      const f   = Object.values(DATA.fact[e] || {}).filter(Boolean).pop() || 0;
+      const r   = Object.values(DATA.sit[e]  || {}).filter(v=>v!=null).pop();
+      const rub = _rub[e] || '—';
+      return `<div onclick="irAEmpresa('${e.replace(/'/g,"\\'")}');cerrarBusquedaGlobal()"
+        style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bd)"
+        onmouseover="this.style.background='var(--s2)'"
+        onmouseout="this.style.background=''">
+        <div style="font-size:10px;font-weight:600;color:var(--text)">${e}</div>
+        <div style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">
+          ${rub} · Fact: ${f ? fv(f) : '—'} · Res: ${r != null ? fv(r) : '—'}
+        </div>
+      </div>`;
+    }).join('');
+    res.style.display = '';
+
+    // Cerrar al click fuera
+    setTimeout(() => {
+      document.addEventListener('click', function _c(e) {
+        if (!res.contains(e.target) && e.target !== inp) {
+          cerrarBusquedaGlobal();
+          document.removeEventListener('click', _c);
+        }
+      });
+    }, 50);
+  }, 180);
+}
+
+function irAEmpresa(emp) {
+  document.getElementById('global-search').value = '';
+  // Navegar al panel empresa con esta empresa seleccionada
+  showPanel('empresa', document.querySelector('[onclick*="empresa"]'));
+  setTimeout(() => {
+    const sel = document.getElementById('sel-emp');
+    if (sel) { sel.value = emp; buildEmpresa(); }
+  }, 80);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ÍTEM 7C: Historial de cambios por empresa
+// ══════════════════════════════════════════════════════════════════
+// _cambiosPorEmpresa: { empresa: [{ts, campo, valorAntes, valorDespues}] }
+const _cambiosPorEmpresa = {};
+
+function registrarCambioEmpresa(empresa, año, campo, antes, despues) {
+  if (!empresa) return;
+  if (!_cambiosPorEmpresa[empresa]) _cambiosPorEmpresa[empresa] = [];
+  _cambiosPorEmpresa[empresa].push({
+    ts: nowAR(), año, campo,
+    antes: antes ?? null,
+    despues: despues ?? null,
+  });
+  // Mantener últimos 50 cambios por empresa
+  if (_cambiosPorEmpresa[empresa].length > 50)
+    _cambiosPorEmpresa[empresa] = _cambiosPorEmpresa[empresa].slice(-50);
+}
+
+function getCambiosEmpresa(empresa) {
+  return (_cambiosPorEmpresa[empresa] || []).slice().reverse();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ÍTEM 7D: Ocultar Presupuesto si sin datos
+// ══════════════════════════════════════════════════════════════════
+function _actualizarVisibilidadPresupuesto() {
+  const tienePresup = (DATA.presupuesto || []).length > 0 ||
+    Object.keys(DATA.fact || {}).some(e =>
+      Object.values(DATA.fact[e] || {}).some(v => v > 0)
+    );
+  // Buscar el botón de presupuesto en el sidebar
+  const btnPres = [...document.querySelectorAll('.nav-item')]
+    .find(b => b.textContent.toLowerCase().includes('presupuesto'));
+  if (btnPres) {
+    const tieneDataPres = (DATA.presupuesto || []).length > 0;
+    btnPres.style.opacity = tieneDataPres ? '1' : '0.4';
+    btnPres.title = tieneDataPres ? '' : 'Sin datos de presupuesto cargados';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ÍTEM 7E: Validación de datos al importar
+// ══════════════════════════════════════════════════════════════════
+function validarFilasImport(rows, tipo) {
+  const warnings = [];
+  const errores  = [];
+  rows.forEach((row, i) => {
+    const emp = row.empresa || row.e || '';
+    const vals = Object.entries(row).filter(([k]) => /^20\d{2}$/.test(k));
+    vals.forEach(([yr, v]) => {
+      const n = parseFloat(v);
+      if (v !== '' && v != null && isNaN(n)) {
+        errores.push(`Fila ${i+1} (${emp}): valor no numérico en ${yr}: "${v}"`);
+      }
+      if (tipo === 'fact' && n < 0) {
+        warnings.push(`Fila ${i+1} (${emp}): facturación negativa en ${yr} (${fvFull(n)}) — ¿es correcto?`);
+      }
+      if (n === 0 && v !== '' && v != null) {
+        // 0 puede ser válido — no reportar como error
+      }
+      if (Math.abs(n) > 1e14) {
+        warnings.push(`Fila ${i+1} (${emp}): valor muy alto en ${yr}: ${fvFull(n)} — verificar`);
+      }
+    });
+  });
+  return { warnings, errores };
+}
+
 function getRubro(emp) { return rubros[emp] || 'Sin rubro'; }
 
 // ── Helper: obtener importe de transferencias para una empresa en un año ──
@@ -4930,8 +5209,23 @@ function buildResultado() {
 //  PANEL: PERSONAL
 // ═══════════════════════════════════════════════════════════
 function buildPersonal() {
-  const pYrs = ['2020','2021','2022','2023','2024','2025','2026'];
-  const pt = DATA.pers_totals;
+  const allPYrs = ys().map(String); // años disponibles en DATA
+  const pYrs = allPYrs.length ? allPYrs : ['2020','2021','2022','2023','2024','2025','2026'];
+  const lastY = pYrs[pYrs.length - 1];
+
+  // ── Poblar selector de año base ──
+  const selBase = document.getElementById('sel-pers-base');
+  if (selBase && !selBase.options.length) {
+    pYrs.forEach(y => {
+      const o = document.createElement('option');
+      o.value = y; o.textContent = y;
+      if (y === '2020') o.selected = true;
+      selBase.appendChild(o);
+    });
+  }
+  const baseYear = selBase?.value || pYrs[0] || '2020';
+
+  const pt     = DATA.pers_totals;
   const selEmp = document.getElementById('sel-pers-emp')?.value || '';
 
   if (selEmp) {
@@ -4974,35 +5268,78 @@ function buildPersonal() {
 
   } else {
     // ── MODO CONSOLIDADO (original) ───────────────────────
+    // KPIs dinámicos usando baseYear y lastY del selector
+    const totLastY = pt[lastY] || 0;
+    const totBaseY = pt[baseYear] || 0;
+    // Mayor empleador en lastY
+    const mayorEmpleador = [...DATA.personal]
+      .filter(d => d.y[lastY] > 0)
+      .sort((a, b) => (b.y[lastY]||0) - (a.y[lastY]||0))[0];
+    // Mayor crecimiento baseYear → lastY
+    const mayorCrecimiento = [...DATA.personal]
+      .filter(d => (d.y[baseYear]||0) > 3 && (d.y[lastY]||0) > 0)
+      .map(d => ({ e:d.e, g: pctNum(d.y[lastY]||0, d.y[baseYear]||1) }))
+      .sort((a,b) => b.g - a.g)[0];
+
     document.getElementById('kpi-pers').innerHTML = [
-      {lbl:'Nómina 2024',     val:fn(pt['2024']), sub:`▲ +${pctStr(pt['2024'],pt['2020'])} vs 2020`, cls:'up', ac:'#e8ff47'},
-      {lbl:'Nómina 2020',     val:fn(pt['2020']), sub:'Base de referencia',                          cls:'',   ac:'#47e8ff'},
-      {lbl:'Mayor empleador', val:'EDELAR',                      sub:'565 empleados en 2024',                       cls:'',   ac:'#ff8c47'},
-      {lbl:'Mayor crecimiento',val:'EDELAR',                     sub:`▲ +${pctStr(565,258)} vs 2020`,               cls:'up', ac:'#c447ff'},
-    ].map(k=>`<div class="kpi"><div class="kpi-accent" style="background:${k.ac}"></div><div class="kpi-label">${k.lbl}</div><div class="kpi-value">${k.val}</div><div class="kpi-sub ${k.cls}">${k.sub}</div></div>`).join('');
+      { lbl:`Nómina ${lastY}`,       val: fn(totLastY),
+        sub: totBaseY ? `▲ +${pctStr(totLastY, totBaseY)} vs ${baseYear}` : '—',
+        cls:'up', ac:'#e8ff47' },
+      { lbl:`Nómina ${baseYear} (base)`, val: fn(totBaseY),
+        sub:'Año base de comparación', cls:'', ac:'#47e8ff' },
+      { lbl:'Mayor empleador',
+        val: mayorEmpleador?.e || '—',
+        sub: mayorEmpleador ? `${fn(mayorEmpleador.y[lastY])} empleados en ${lastY}` : '',
+        cls:'', ac:'#ff8c47' },
+      { lbl:`Mayor crecimiento ${baseYear}→${lastY}`,
+        val: mayorCrecimiento?.e || '—',
+        sub: mayorCrecimiento ? `▲ +${mayorCrecimiento.g}% vs ${baseYear}` : '—',
+        cls:'up', ac:'#c447ff' },
+    ].map(k => `<div class="kpi"><div class="kpi-accent" style="background:${k.ac}"></div>
+      <div class="kpi-label">${k.lbl}</div>
+      <div class="kpi-value" style="font-size:${k.val.length>10?'16px':'22px'}">${k.val}</div>
+      <div class="kpi-sub ${k.cls}">${k.sub}</div></div>`).join('');
 
     document.getElementById('pers-multi-lbl').textContent  = 'Evolución de plantilla — top 14 empresas';
-    document.getElementById('pers-total-lbl').textContent  = 'Nómina total portafolio 2020–2026';
-    document.getElementById('pers-growth-lbl').textContent = 'Mayor crecimiento 2020→2024';
+    document.getElementById('pers-total-lbl').textContent  = `Nómina total portafolio ${pYrs[0]}–${lastY}`;
+    document.getElementById('pers-growth-lbl').textContent = `Mayor crecimiento ${baseYear}→${lastY}`;
 
-    const top14 = DATA.personal.filter(d=>d.y['2024']>0||d.y['2023']>0).sort((a,b)=>(b.y['2024']||b.y['2023'])-(a.y['2024']||a.y['2023'])).slice(0,14);
+    // Top 14 por último año disponible
+    const top14 = DATA.personal
+      .filter(d => pYrs.some(y => (d.y[y]||0) > 0))
+      .sort((a,b) => (b.y[lastY]||b.y[pYrs[pYrs.length-2]]||0) - (a.y[lastY]||a.y[pYrs[pYrs.length-2]]||0))
+      .slice(0, 14);
+
     const pColors = ['#2a2f40','#e8ff4777','#47e8ff77','#ff8c4799','#c447ff99'];
     mkChart('ch-p-multi','bar',{
-      labels: top14.map(d=>d.e.length>14?d.e.slice(0,12)+'…':d.e),
-      datasets: pYrs.map((y,i)=>({ label:y, data:top14.map(d=>d.y[y]||0), backgroundColor:pColors[i], borderRadius:2 }))
+      labels: top14.map(d => d.e.length>14 ? d.e.slice(0,12)+'…' : d.e),
+      datasets: pYrs.map((y,i) => ({
+        label: y,
+        data: top14.map(d => d.y[y]||0),
+        backgroundColor: pColors[i % pColors.length],
+        borderRadius: 2
+      }))
     });
 
     mkChart('ch-p-total','line',{
       labels: pYrs,
-      datasets:[{label:'Total empleados', data:pYrs.map(y=>pt[y]),
-        borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.45, pointRadius:5}]
-    },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>Number(v).toLocaleString('es-AR')}}}});
+      datasets:[{ label:'Total empleados', data: pYrs.map(y => pt[y]||0),
+        borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.45, pointRadius:5 }]
+    },{ plugins:{ legend:{ display:false } }, scales:{ y:{ ticks:{ callback: v => Number(v).toLocaleString('es-AR') } } } });
 
-    const grw = DATA.personal.filter(d=>d.y['2020']>3&&d.y['2024']>0).map(d=>({e:d.e,g:pctNum(d.y['2024'],d.y['2020'])})).sort((a,b)=>b.g-a.g).slice(0,10);
+    // Mayor crecimiento baseYear → lastY
+    const grw = DATA.personal
+      .filter(d => (d.y[baseYear]||0) > 3 && (d.y[lastY]||0) > 0)
+      .map(d => ({ e: d.e, g: pctNum(d.y[lastY]||0, d.y[baseYear]||1) }))
+      .sort((a,b) => b.g - a.g)
+      .slice(0, 10);
+
     mkChart('ch-p-growth','bar',{
-      labels: grw.map(d=>d.e.length>14?d.e.slice(0,12)+'…':d.e),
-      datasets:[{label:'Variación %', data:grw.map(d=>d.g), backgroundColor:grw.map(d=>d.g>=0?'#e8ff4799':'#ff476699'), borderRadius:3}]
-    },{indexAxis:'y',plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:9}}},x:{ticks:{callback:v=>v+'%'}}}});
+      labels: grw.map(d => d.e.length>14 ? d.e.slice(0,12)+'…' : d.e),
+      datasets:[{ label:'Variación %', data: grw.map(d=>d.g),
+        backgroundColor: grw.map(d => d.g>=0 ? '#e8ff4799' : '#ff476699'), borderRadius:3 }]
+    },{ indexAxis:'y', plugins:{ legend:{ display:false } },
+       scales:{ y:{ ticks:{ font:{ size:9 } } }, x:{ ticks:{ callback: v => v+'%' } } } });
   }
 }
 
@@ -5353,6 +5690,7 @@ function buildEmpresa() {
   if (!emp) return;
   renderEmpNotas(emp);
   renderNetoKPI(emp, DATA.years.map(String));
+  renderDiagnosticoEmpresa(emp);
   const years = ys();
   const fact = DATA.fact[emp] || {};
   const sit = DATA.sit[emp] || {};
@@ -5580,7 +5918,7 @@ function exportBaseCompleta() {
 
     // ── Pestaña: meta ────────────────────────────────────────────
     const metaRows = [
-      { clave: 'exportado_el',     valor: new Date().toISOString() },
+      { clave: 'exportado_el',     valor: nowAR() },
       { clave: 'empresas_fact',    valor: Object.keys(DATA.fact || {}).length },
       { clave: 'empresas_result',  valor: Object.keys(DATA.sit  || {}).length },
       { clave: 'empresas_pers',    valor: (DATA.personal || []).length },
@@ -5591,7 +5929,7 @@ function exportBaseCompleta() {
     XLSX.utils.book_append_sheet(wb, wsMeta, 'meta');
 
     // Descargar
-    const fecha = new Date().toISOString().slice(0,10);
+    const fecha = nowAR().slice(0,10);
     XLSX.writeFile(wb, 'LR_Dashboard_DB_' + fecha + '.xlsx');
 
     if (status) {
@@ -5841,7 +6179,7 @@ function exportarTransExcel() {
     XLSX.utils.book_append_sheet(wb, wsSumario, 'Resumen');
 
     // Nombre del archivo con filtros activos
-    const fechaStr = new Date().toISOString().slice(0,10);
+    const fechaStr = nowAR().slice(0,10);
     const filtrosStr = Object.values(_transFiltros).filter(Boolean).length > 0 ? '_filtrado' : '';
     XLSX.writeFile(wb, `transferencias${filtrosStr}_${fechaStr}.xlsx`);
   };
@@ -9828,7 +10166,13 @@ function buildSostenibilidad() {
     sel.value = years[years.length-1];
   }
   const yr  = sel ? String(sel.value) : String(years[years.length-1]);
-  const emps = empresasFiltradas();
+  // Sostenibilidad muestra todas las empresas con datos, sin filtro de rubro
+  const _rubros2 = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const emps = [...new Set([
+    ...Object.keys(DATA.fact   || {}),
+    ...Object.keys(DATA.sit    || {}),
+    ...Object.keys(_rubros2),
+  ])].sort();
 
   // Calcular transferencias por empresa para ese año
   const transEmp = {};
@@ -10585,9 +10929,90 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ── Dispatcher: PDF o Excel ─────────────────────────────────────
+// ── Dispatcher: PDF o Excel — con control de duplicados ─────────
 function loadBalanceArchivo(file) {
   if (!file) return;
+
+  // ── Detectar si el archivo ya fue cargado ──────────────────────
+  const fname     = file.name;
+  const yaExiste  = !!_balances[fname];
+
+  // También buscar por empresa+período si hay un balance con mismo nombre base
+  const fnameBase = fname.replace(/\.xlsx?$|\.pdf$/i, '').toLowerCase();
+  const similar   = Object.values(_balances).find(b => {
+    const bBase = (b.filename || '').replace(/\.xlsx?$|\.pdf$/i, '').toLowerCase();
+    return bBase === fnameBase && bBase.length > 3;
+  });
+
+  if (yaExiste || similar) {
+    const balExistente = _balances[fname] || similar;
+    const empresa  = balExistente?.empresa  || '—';
+    const periodo  = balExistente?.periodo  || '—';
+    const metodo   = balExistente?.metodo   || '';
+    const fechaCarga = balExistente?.cargadoEl
+      ? fmtFechaAR(balExistente.cargadoEl)
+      : balExistente?.timestamp
+      ? fmtFechaAR(new Date(balExistente.timestamp).toISOString())
+      : '—';
+
+    // Mostrar diálogo de confirmación en el panel de balances
+    const msgEl = document.getElementById('bal-dup-msg');
+    if (msgEl) {
+      msgEl.style.display = '';
+      msgEl.innerHTML = `
+        <div style="padding:14px 16px;background:rgba(255,140,71,.08);
+          border:1px solid #ff8c4740;border-radius:5px;font-family:var(--mono)">
+          <div style="font-size:10px;font-weight:600;color:#ff8c47;margin-bottom:8px">
+            ⚠ Este archivo ya fue cargado anteriormente
+          </div>
+          <div style="font-size:9.5px;color:var(--text);line-height:1.7;margin-bottom:12px">
+            <strong>Empresa:</strong> ${empresa}<br>
+            <strong>Período:</strong> ${periodo}<br>
+            <strong>Método:</strong> ${metodo}<br>
+            <strong>Fecha de carga:</strong> ${fechaCarga}
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:12px">
+            ¿Querés reemplazar el balance cargado con el nuevo archivo?
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="_confirmarCargaBalance(true)"
+              style="flex:1;padding:7px;background:rgba(71,232,255,.1);
+              border:1px solid #47e8ff40;color:#47e8ff;font-family:var(--mono);
+              font-size:9.5px;border-radius:3px;cursor:pointer;font-weight:600">
+              🔄 Sí, reemplazar
+            </button>
+            <button onclick="_confirmarCargaBalance(false)"
+              style="flex:1;padding:7px;background:var(--s2);border:1px solid var(--bd2);
+              color:var(--dim);font-family:var(--mono);font-size:9.5px;
+              border-radius:3px;cursor:pointer">
+              ✕ Cancelar
+            </button>
+          </div>
+        </div>`;
+      // Guardar el archivo pendiente para usarlo en _confirmarCargaBalance
+      window._pendingBalFile = file;
+      return; // Esperar confirmación del usuario
+    }
+  }
+
+  // Sin duplicado: cargar directamente
+  _ejecutarCargaBalance(file);
+}
+
+function _confirmarCargaBalance(reemplazar) {
+  const msgEl = document.getElementById('bal-dup-msg');
+  if (msgEl) msgEl.style.display = 'none';
+  const file = window._pendingBalFile;
+  window._pendingBalFile = null;
+  if (!file) return;
+  if (!reemplazar) return; // Cancelado
+  // Eliminar el balance existente antes de cargar el nuevo
+  const fname = file.name;
+  if (_balances[fname]) delete _balances[fname];
+  _ejecutarCargaBalance(file);
+}
+
+function _ejecutarCargaBalance(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (ext === 'xlsx' || ext === 'xls') {
     loadBalanceExcel(file);
@@ -10613,20 +11038,27 @@ function parsearExcelBalance(wb, XLSX) {
   const findSheet = (...keywords) => wb.SheetNames.find(sn =>
     keywords.some(kw => sn.toLowerCase().includes(kw.toLowerCase()))
   );
-  const snER  = findSheet('resultado', 'results', 'ganancias', 'perdidas');
-  const snSP  = findSheet('patrimonial', 'situacion', 'balance', 'activo');
+  // 'integrales' cubre "Resultados Integrales" (ARAUCO/NIIF)
+  const snER  = findSheet('resultado', 'results', 'ganancias', 'perdidas', 'integrales');
+  const snSP  = findSheet('patrimonial', 'situacion', 'balance', 'activo', 'financiera');
 
   // Mapa de nombres de campo para rubros comunes del ER
   // Determina negativo y libre según el nombre del rubro
-  const inferirSigno = (lbl) => {
+  const inferirSigno = (lbl, val) => {
     const l = lbl.toLowerCase();
-    const NEGA = ['costo','gasto','egreso','menos:','perdida','pérdida','impuesto'];
+    // Si el valor ya viene con signo negativo del Excel (NIIF — costos en paréntesis/negativo),
+    // marcarlo como signo libre para que el editor muestre el valor real sin forzar nada
+    const valorYaNegativo = typeof val === 'number' && val < 0;
+
+    const NEGA = ['costo','gasto','egreso','menos:','perdida','pérdida'];
     const LIBRE = ['financier','tenencia','recpam','monetar','rei ','resultado','rtdo','rdo.',
                    'impuesto','ganancia','utilidad','margen','neto','bruto','subtotal','sub-total',
-                   'sub total','total','ejercicio'];
+                   'sub total','total','ejercicio','diferencia de cambio','diferencias de cambio',
+                   'ingreso financiero','egreso financiero'];
     const LIBRE_DEF_NEG = ['impuesto'];
-    const esNeg  = NEGA.some(k => l.includes(k)) && !l.includes('ingreso') && !l.includes('venta');
-    const esLib  = LIBRE.some(k => l.includes(k));
+    const esNeg  = !valorYaNegativo && NEGA.some(k => l.includes(k))
+                   && !l.includes('ingreso') && !l.includes('venta');
+    const esLib  = valorYaNegativo || LIBRE.some(k => l.includes(k));
     const esLDN  = LIBRE_DEF_NEG.some(k => l.includes(k));
     return { negativo: esNeg && !esLib, libre: esLib, libreDefaultNeg: esLDN };
   };
@@ -10639,12 +11071,22 @@ function parsearExcelBalance(wb, XLSX) {
     const rango  = XLSX.utils.decode_range(ws['!ref'] || 'A1:C50');
     const maxRow = rango.e.r;
 
-    // Encontrar columna de datos (primera con valores numéricos en filas de datos)
-    let colDatos = 1; // default columna B (index 1)
-    for (let r = 1; r <= Math.min(maxRow, 20); r++) {
+    // Encontrar columna de datos: primera columna (c>=1) que tenga valores numéricos
+    // ARAUCO: col B = notas (strings "7.9"), col C = valores numéricos → colDatos = 2
+    let colDatos = 1; // default columna B
+    outer: for (let r = 1; r <= Math.min(maxRow, 25); r++) {
       const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
-      const cellB = ws[XLSX.utils.encode_cell({r, c: 1})];
-      if (cellA?.v && typeof cellB?.v === 'number') { colDatos = 1; break; }
+      if (!cellA?.v || typeof cellA.v !== 'string') continue;
+      const lbl = String(cellA.v).trim();
+      if (!lbl || lbl.length < 3) continue;
+      // Para esta fila con label, buscar la primera columna numérica (c=1..5)
+      for (let c = 1; c <= Math.min(5, rango.e.c); c++) {
+        const cell = ws[XLSX.utils.encode_cell({r, c})];
+        if (typeof cell?.v === 'number' && Math.abs(cell.v) > 0) {
+          colDatos = c;
+          break outer;
+        }
+      }
     }
 
     // Leer fila a fila
@@ -10665,37 +11107,51 @@ function parsearExcelBalance(wb, XLSX) {
       const lbl = _limpiarLabelExcel(labelRaw);
       if (!lbl) continue;
 
-      const { negativo, libre, libreDefaultNeg } = inferirSigno(lbl);
+      const { negativo, libre, libreDefaultNeg } = inferirSigno(lbl, valor);
       const esCalc = !!formula; // tiene fórmula → calculado
 
       // Resolver la fórmula a lista de filas dependientes para recalcular en JS
-      let depFilas = null; // array de números de fila que sumamos
+      // La fórmula usa la columna de datos real (colDatos → letra de columna Excel)
+      let depFilas = null;
       if (formula) {
         depFilas = [];
-        // Caso: SUM(B5:B7) → filas 5 a 7
-        const mRange = formula.match(/SUM\(B(\d+):B(\d+)\)/i);
+        // Letra de la columna de datos (A=0→'A', B=1→'B', C=2→'C', etc.)
+        const colLetra = String.fromCharCode(65 + colDatos);
+        // Caso: SUM(C7:C8) o SUM(B5:B7) → rango de filas
+        const reSumRange = new RegExp('SUM\\(' + colLetra + '(\\d+):' + colLetra + '(\\d+)\\)', 'i');
+        const mRange = formula.match(reSumRange);
         if (mRange) {
-          const desde = parseInt(mRange[1]), hasta = parseInt(mRange[2]);
-          for (let fi = desde; fi <= hasta; fi++) depFilas.push(fi);
+          for (let fi = parseInt(mRange[1]); fi <= parseInt(mRange[2]); fi++) depFilas.push(fi);
         }
-        // Caso: +B8+B12 o B8+B12 → filas individuales
-        const mSuma = formula.matchAll(/\+?B(\d+)/g);
-        for (const m of mSuma) depFilas.push(parseInt(m[1]));
-        depFilas = [...new Set(depFilas)].sort((a,b)=>a-b);
+        // Caso: +C11+C17 o C11+C17 → filas individuales
+        const reCols = new RegExp('\\+?' + colLetra + '(\\d+)', 'g');
+        for (const m of formula.matchAll(reCols)) depFilas.push(parseInt(m[1]));
+        depFilas = [...new Set(depFilas)].sort((a, b) => a - b);
       }
 
-      estructura_er.push({
-        lbl,
-        labelOriginal: labelRaw,
-        val:           valor,
-        negativo:      negativo && !esCalc,
-        libre:         libre || esCalc,
-        libreDefaultNeg,
-        calc:          esCalc,
-        formula:       formula || null,
-        depFilas,               // filas de las que depende este cálculo
-        fila:          r + 1,  // número de fila Excel (1-based)
-      });
+      // Excluir filas que son información complementaria (no rubros del ER)
+      const EXCLUIR_LABELS = [
+        'resultado por acción','cantidad de acciones','información por acción',
+        'otro resultado integral del ejercicio','otro resultado integral',
+        'resultado integral del ejercicio',  // es el total incluye ORI — no es el resultado neto
+        'diferencia por conversión','diferencias por conversión',
+      ];
+      if (EXCLUIR_LABELS.some(ex => lbl.toLowerCase().includes(ex))) {
+        // No incluir en estructura_er
+      } else {
+        estructura_er.push({
+          lbl,
+          labelOriginal: labelRaw,
+          val:           valor,
+          negativo:      negativo && !esCalc,
+          libre:         libre || esCalc,
+          libreDefaultNeg,
+          calc:          esCalc,
+          formula:       formula || null,
+          depFilas,
+          fila:          r + 1,
+        });
+      }
     }
   }
 
@@ -10714,16 +11170,36 @@ function parsearExcelBalance(wb, XLSX) {
   };
 
   if (snSP) {
-    const ws = wb.Sheets[snSP];
-    const maxRow = XLSX.utils.decode_range(ws['!ref']||'A1:C50').e.r;
-    const g = (k) => buscarFila(ws, maxRow, ...k);
-    ind.liquidez.activo_corriente  = g(['total activo corriente']);
-    ind.liquidez.pasivo_corriente  = g(['total pasivo corriente']);
-    ind.solvencia.activo_total     = g(['total activo','total del activo']);
-    ind.solvencia.activo_no_corriente = g(['total activo no corriente']);
-    ind.solvencia.pasivo_total     = g(['total pasivo','total del pasivo']);
-    ind.solvencia.pasivo_no_corriente = g(['total pasivo no corriente']);
-    ind.solvencia.patrimonio_neto  = g(['patrimonio neto']);
+    const ws   = wb.Sheets[snSP];
+    const rng  = XLSX.utils.decode_range(ws['!ref']||'A1:H50');
+    const maxR = rng.e.r, maxC = rng.e.c;
+
+    // Buscar en TODAS las columnas (soporta estructura de 2 columnas como ARAUCO)
+    const buscarFilaMultiCol = (ws, maxRow, maxCol, ...keywords) => {
+      for (let r = 0; r <= maxRow; r++) {
+        for (let ca = 0; ca <= maxCol; ca++) {
+          const cellA = ws[XLSX.utils.encode_cell({r, c: ca})];
+          const lbl   = String(cellA?.v||'').toLowerCase().trim();
+          if (keywords.some(k => lbl.includes(k))) {
+            // Buscar el primer valor numérico en las columnas siguientes
+            for (let cb = ca+1; cb <= Math.min(ca+4, maxCol); cb++) {
+              const cellV = ws[XLSX.utils.encode_cell({r, c: cb})];
+              if (typeof cellV?.v === 'number' && Math.abs(cellV.v) > 0) return cellV.v;
+            }
+          }
+        }
+      }
+      return null;
+    };
+
+    const g = (...k) => buscarFilaMultiCol(ws, maxR, maxC, ...k);
+    ind.liquidez.activo_corriente     = g('total activo corriente');
+    ind.liquidez.pasivo_corriente     = g('total pasivo corriente');
+    ind.solvencia.activo_total        = g('total activo','total del activo');
+    ind.solvencia.activo_no_corriente = g('total activo no corriente');
+    ind.solvencia.pasivo_total        = g('total pasivo','total del pasivo');
+    ind.solvencia.pasivo_no_corriente = g('total pasivo no corriente');
+    ind.solvencia.patrimonio_neto     = g('total patrimonio','patrimonio neto');
   }
 
   // Mapear rubros del ER a ind.rentabilidad usando labels conocidos
@@ -10738,22 +11214,37 @@ function parsearExcelBalance(wb, XLSX) {
     'costo_venta_locales':     ['costo de productos vendidos','costo productos vendidos','costo venta locales'],
     'res_bruto_locales':       ['resultado bruto venta productos','resultado bruto venta'],
     'sub_total_agro':          ['resultado bruto de explotación','resultado bruto explotación'],
-    'ventas_ingresos':         ['ventas ','ingresos por ventas'],
-    'costo_ventas':            ['costo de ventas','costo ventas'],
+    'ventas_ingresos':         ['ventas ','ingresos por ventas',
+                               'ingresos por ventas de servicios',  // ARAUCO NIIF
+                               'ingresos por servicios','ingresos operativos',
+                               'ingresos por generación','ingresos por energía'],
+    'costo_ventas':            ['costo de ventas','costo ventas',
+                               'costos operativos','costo operativo',  // ARAUCO NIIF
+                               'costo de los servicios','costo de servicios prestados'],
     'utilidad_bruta':          ['utilidad bruta','resultado bruto','ganancia bruta'],
     'gastos_administracion':   ['gastos de administración','gastos administración'],
     'gastos_comercializacion': ['gastos de comercialización','gastos comercialización'],
-    'gastos_operativos':       ['otros gastos de explotación','gastos operativos','gastos de explotación'],
+    'gastos_operativos':       ['otros gastos de explotación','gastos operativos','gastos de explotación',
+                               'gastos de operación','gastos operacionales'],
     'gastos_ejecucion_obras':  ['gastos de ejecución de obras','gastos ejecución obras'],
     'otros_ingresos':          ['otros ingresos'],
     'ingresos_obras_subsidios':['ingresos por obras y subsidios','ingresos obras'],
-    'resultado_financiero':    ['resultados financieros','resultados financieros y por tenencia'],
-    'recpam':                  ['recpam','resultado por exposición'],
-    'resultado_tenencia':      ['resultado por tenencia'],
-    'resultado_operativo':     ['sub-total resultado ordinario','subtotal resultado','resultado antes de impuesto'],
+    'resultado_financiero':    ['resultados financieros','resultados financieros y por tenencia',
+                               'resultado financiero neto',
+                               'resultado financiero'],
+    'recpam':                  ['recpam','resultado por exposición',
+                               'diferencias de cambio netas','diferencia de cambio'],  // ARAUCO NIIF
+    'resultado_tenencia':      ['resultado por tenencia','egresos financieros'],  // ARAUCO: egresos fin. separados
+    'resultado_operativo':     ['sub-total resultado ordinario','subtotal resultado',
+                               'resultado antes de impuesto',
+                               'resultado antes del impuesto a las ganancias',
+                               'resultado antes de impuestos',
+                               'resultado operativo'],  // ARAUCO: es el resultado antes de fin.
     'otros_egresos':           ['otros egresos'],
     'impuesto_ganancias':      ['impuesto a las ganancias','impuesto ganancias'],
-    'resultado_neto':          ['resultado del ejercicio','resultado neto','ganancia (pérdida)','pérdida del ejercicio'],
+    'resultado_neto':          ['resultado del ejercicio','resultado neto','ganancia (pérdida)',
+                               'pérdida del ejercicio','resultado integral del ejercicio',
+                               'resultado del período'],
   };
 
   estructura_er.forEach(rubro => {
@@ -10881,8 +11372,10 @@ async function loadBalanceExcel(file) {
       alertas:       [],
       textoRaw:      '',
       timestamp:     Date.now(),
+      cargadoEl:     nowAR(),
       metodo:        'Excel estructural',
       vinculada:     _balEmpresaActiva || '',
+      cargadoEl:     nowAR(),  // fecha/hora de carga en hora Argentina
     };
 
     _balActivo        = file.name;
@@ -11026,6 +11519,7 @@ function guardarBalance(filename, texto, metodo) {
       alertas:       result.alertas,
       textoRaw:      texto,
       timestamp:     Date.now(),
+      cargadoEl:     nowAR(),
       metodo:        metodo || 'Texto nativo',
       vinculada:     empresaFinal,
     };
@@ -12278,6 +12772,56 @@ function buildEstadoPatrimonial(b) {
 }
 
 // ── Estado de resultados (resumen) ─────────────────────────
+// ── Reporte ER generado directamente desde estructura_er del Excel ──────────
+// Garantiza consistencia total con el editor de datos: misma fuente, mismos valores,
+// mismos signos — sin reinterpretación de la lógica del reporte.
+function _buildERDesdeEstructura(b, fmtM) {
+  const er    = b.estructura_er;
+  const ingresos = er.find(r => !r.calc && r.val != null && r.val > 0)?.val || null;
+  const fmt   = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+
+  const filaHTML = (r) => {
+    const isCalc   = r.calc;
+    const val      = r.val;
+    if (val == null) return '';
+
+    const s        = val < 0 ? '−' : '';
+    const absVal   = Math.abs(val);
+    const color    = isCalc
+      ? (val >= 0 ? 'var(--pos)' : 'var(--neg)')
+      : 'var(--text)';
+    const bgColor  = isCalc ? 'var(--s3)' : 'transparent';
+    const weight   = isCalc ? '700' : '400';
+    const border   = isCalc ? 'border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);' : '';
+    const indent   = isCalc ? '0' : '12px';
+    const pctStr   = (isCalc && ingresos && ingresos !== 0)
+      ? `<span style="font-size:8.5px;color:var(--dim);margin-left:8px">${(val/ingresos*100).toFixed(1)}%</span>`
+      : '';
+    const formulaHint = r.formula
+      ? `title="Fórmula Excel: ${r.formula}"`
+      : '';
+
+    return `<div style="display:flex;justify-content:space-between;align-items:center;
+      padding:5px ${indent} 5px 8px;background:${bgColor};${border}">
+      <span style="font-size:10px;color:${isCalc?'var(--text)':r.negativo?'var(--dim)':'var(--text)'};
+        font-weight:${weight}" ${formulaHint}>${r.lbl}</span>
+      <span style="font-family:var(--mono);font-size:10px;font-weight:${weight};color:${color}">
+        ${s}$ ${fmt.format(absVal)}${pctStr}
+      </span>
+    </div>`;
+  };
+
+  const rows = er.map(r => filaHTML(r)).filter(Boolean).join('');
+
+  return `<div style="font-family:var(--mono)">
+    <div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.12em;
+      color:var(--dim);margin-bottom:8px;padding-left:8px">
+      Estado de Resultados — datos del Excel cargado
+    </div>
+    ${rows}
+  </div>`;
+}
+
 function buildEstadoResultados(b) {
   const ind = b.indicadores || {};
   const ren = ind.rentabilidad || {};
@@ -12293,6 +12837,12 @@ function buildEstadoResultados(b) {
     if (v == null || base == null || base === 0) return '';
     return `<span style="font-size:8.5px;color:var(--dim);margin-left:6px">${(v/base*100).toFixed(1)}%</span>`;
   };
+
+  // ── Si hay estructura_er del Excel, usar esa estructura directamente ──
+  // Garantiza que editor y reporte sean idénticos — misma fuente, mismos valores y signos
+  if (b.estructura_er?.length > 0) {
+    return _buildERDesdeEstructura(b, fmtM);
+  }
 
   // Calcular ingresos totales: ventas_ingresos directo, o suma de segmentos para empresas agro
   const _segsVenta = [ren.produccion_agro, ren.venta_hacienda, ren.venta_frigorifico,
@@ -13672,23 +14222,33 @@ function _renderBalEditor() {
       const rawVal    = fullKey ? (_getIndPath(ind, fullKey) ?? rubro.val) : rubro.val;
       const campoBase = campoMap[shortKey];
 
-      // Campo calculado (tiene fórmula en Excel o calcFn en el sistema):
-      // mostrar como readonly con el valor resuelto
+      // Campo calculado: usar depFilas del Excel si están disponibles (más preciso)
+      // Solo usar calcFn como fallback si no hay depFilas
       if (rubro.calc) {
-        // Usar valor del Excel directamente (ya resuelto por la fórmula)
-        const displayVal = rubro.val ?? (campoBase?.calcFn ? campoBase.calcFn(ind) : null);
+        let displayVal = null;
+
+        if (rubro.depFilas?.length && b.estructura_er) {
+          // Calcular usando la fórmula real del Excel: sumar los valores de las filas dependientes
+          const filaToVal = {};
+          b.estructura_er.forEach(r2 => { if (r2.fila != null) filaToVal[r2.fila] = r2.val ?? 0; });
+          displayVal = rubro.depFilas.reduce((s, f) => s + (filaToVal[f] ?? 0), 0);
+        } else {
+          // Fallback: calcFn del sistema o valor original del Excel
+          displayVal = campoBase?.calcFn ? campoBase.calcFn(ind) : rubro.val;
+        }
+
         if (displayVal == null) return '';
         const fmt   = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
         const s     = displayVal < 0 ? '−' : '';
         const color = displayVal < 0 ? 'var(--neg)' : 'var(--pos)';
-        const hint  = rubro.formula ? `formula: ${rubro.formula}` : 'calculado';
+        const hint  = rubro.formula ? `fórmula Excel: ${rubro.formula}` : 'calculado';
         return `<div style="display:flex;flex-direction:column;gap:3px">
           <label style="font-size:8.5px;color:var(--text);font-family:var(--mono);
             display:flex;align-items:center;gap:4px">
             <span style="width:6px;height:6px;border-radius:50%;background:#47e8ff;
               opacity:.6;flex-shrink:0;display:inline-block"></span>
             ${rubro.lbl}
-            <span style="font-size:7px;color:var(--dim)" title="${hint}">calculado</span>
+            <span style="font-size:7px;color:var(--dim)" title="${hint}">= ${rubro.formula||'calculado'}</span>
           </label>
           <div data-er-calc-fila="${rubro.fila}"
             style="padding:6px 10px;background:var(--s3);border:1px solid var(--bd);
@@ -14120,23 +14680,38 @@ function _balEditorGuardarInterno() {
     if (editVal != null) _setIndPath(ind, f.key, editVal);
   });
 
-  // 3b. Calcular derivados en múltiples pasadas para resolver la cadena completa:
-  // ventas_ingresos → utilidad_bruta → resultado_operativo → resultado_neto
-  // REGLA: si calcFn devuelve null (datos insuficientes), preservar el valor manual existente.
-  // Solo sobreescribir si calcFn produce un valor concreto (no null).
-  for (let pasada = 0; pasada < 4; pasada++) {
-    let cambio = false;
-    allEditorFields.forEach(f => {
-      if (!f.calc || !f.calcFn) return;
-      const calculado = f.calcFn(ind);
-      if (calculado == null) return; // no pisar valor manual si la cadena no se resuelve
-      const antes = _getIndPath(ind, f.key);
-      if (calculado !== antes) {
-        _setIndPath(ind, f.key, calculado);
-        cambio = true;
-      }
-    });
-    if (!cambio) break;
+  // 3b. Recalcular derivados — prioridad: fórmulas Excel (depFilas) > calcFn legacy
+  const erRubros3 = b?.estructura_er || [];
+  if (erRubros3.length && erRubros3.some(r => r.depFilas?.length)) {
+    // Construir mapa fila → valor actual
+    const fv3 = {};
+    erRubros3.forEach(r => { if (r.fila != null) fv3[r.fila] = r.val ?? 0; });
+
+    // Recalcular en orden ascendente de fila (dependencias en cascada)
+    erRubros3.filter(r => r.calc && r.depFilas?.length)
+             .sort((a, b2) => a.fila - b2.fila)
+             .forEach(rubro => {
+               const suma = rubro.depFilas.reduce((s, f) => s + (fv3[f] ?? 0), 0);
+               fv3[rubro.fila] = suma;
+               rubro.val = suma;
+               // Sincronizar en ind si tiene key mapeado
+               if (rubro.key && !rubro.key.startsWith('extra_')) {
+                 _setIndPath(ind, 'rentabilidad.' + rubro.key, suma);
+               }
+             });
+  } else {
+    // Fallback: múltiples pasadas con calcFn
+    for (let pasada = 0; pasada < 4; pasada++) {
+      let cambio = false;
+      allEditorFields.forEach(f => {
+        if (!f.calc || !f.calcFn) return;
+        const calculado = f.calcFn(ind);
+        if (calculado == null) return;
+        const antes = _getIndPath(ind, f.key);
+        if (calculado !== antes) { _setIndPath(ind, f.key, calculado); cambio = true; }
+      });
+      if (!cambio) break;
+    }
   }
 
   // Recalcular ratios derivados
@@ -15171,6 +15746,37 @@ function buildVarRealChart(emp, years, fact, inflData) {
 // ═══════════════════════════════════════════════════════════
 //  RESULTADO NETO en panel empresa
 // ═══════════════════════════════════════════════════════════
+// ── Diagnóstico de balance en panel empresa ──────────────────────
+function renderDiagnosticoEmpresa(emp) {
+  const wrap    = document.getElementById('emp-bal-diag-wrap');
+  const content = document.getElementById('emp-bal-diag-content');
+  const periodo = document.getElementById('emp-bal-diag-periodo');
+  if (!wrap || !content) return;
+
+  // Buscar el balance más reciente vinculado a esta empresa
+  const bal = Object.values(_balances || {})
+    .filter(b => b.empresa === emp || b.vinculada === emp)
+    .sort((a, b) => String(b.periodo).localeCompare(String(a.periodo)))[0];
+
+  if (!bal?.indicadores) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  wrap.style.display = '';
+  if (periodo) periodo.textContent = `Período ${bal.periodo || '—'} · ${bal.metodo || ''}`;
+
+  const liq = bal.indicadores.liquidez     || {};
+  const sol = bal.indicadores.solvencia    || {};
+  const ren = bal.indicadores.rentabilidad || {};
+  const efi = bal.indicadores.eficiencia   || {};
+
+  // Reutilizar generarDiagnosticoFinanciero
+  if (typeof generarDiagnosticoFinanciero === 'function') {
+    content.innerHTML = generarDiagnosticoFinanciero(liq, sol, ren, efi, bal);
+  }
+}
+
 function renderNetoKPI(emp, years) {
   const wrap = document.getElementById('emp-neto-kpi');
   if (!wrap) return;
@@ -15447,7 +16053,7 @@ async function probarPOST() {
     tab:       'meta',
     nota:      'test_conexion',
     updatedBy: 'test',
-    data:      { meta: [{ clave: 'test', valor: new Date().toISOString() }] }
+    data:      { meta: [{ clave: 'test', valor: nowAR() }] }
   };
 
   // Paso 1: POST no-cors
@@ -15474,10 +16080,10 @@ async function probarPOST() {
     if (esOk) {
       log('✓ GET exitoso — script responde correctamente', '#47ffb4');
       const savedAt = d.meta?.savedAt || '(sin fecha)';
-      log('  Último guardado: ' + String(savedAt).slice(0,19).replace('T',' '), '#47ffb4');
+      log('  Último guardado: ' + fmtFechaAR(savedAt), '#47ffb4');
       log('  Respuesta: ' + JSON.stringify(d).slice(0,120), 'var(--dim)');
       mostrarResultadoSync(true, '✓ Conexión verificada',
-        'El script responde. Último guardado: ' + String(savedAt).slice(0,16).replace('T',' '));
+        'El script responde. Último guardado: ' + fmtFechaAR(savedAt));
     } else {
       log('✗ GET respondió con error:', '#ff4766');
       log('  ' + JSON.stringify(d).slice(0,200), '#ff4766');
@@ -15524,7 +16130,7 @@ async function probarConexionCloud() {
     log('✓ fetch() funcionó', '#47ffb4');
     if (data.ok !== undefined) {
       mostrarResultadoSync(true, '✓ Conexión exitosa via fetch',
-        'El script responde.' + (data.meta?.savedAt ? ' Último guardado: ' + String(data.meta.savedAt).slice(0,16).replace('T',' ') : ' Planilla lista.'));
+        'El script responde.' + (data.meta?.savedAt ? ' Último guardado: ' + fmtFechaAR(data.meta.savedAt) : ' Planilla lista.'));
       updateCloudStatusBar('ok', 'Conectado');
       if (btn) { btn.textContent = '🔌 Probar'; btn.disabled = false; }
       return;
@@ -15541,7 +16147,7 @@ async function probarConexionCloud() {
     log('✓ JSONP funcionó', '#47ffb4');
     if (data.ok !== undefined) {
       mostrarResultadoSync(true, '✓ Conexión exitosa via JSONP',
-        'El script responde.' + (data.meta?.savedAt ? ' Último guardado: ' + String(data.meta.savedAt).slice(0,16).replace('T',' ') : ' Planilla lista.'));
+        'El script responde.' + (data.meta?.savedAt ? ' Último guardado: ' + fmtFechaAR(data.meta.savedAt) : ' Planilla lista.'));
       updateCloudStatusBar('ok', 'Conectado');
     } else {
       mostrarResultadoSync(false, 'Script responde pero con error', JSON.stringify(data).slice(0,120));
@@ -15658,7 +16264,7 @@ function postViaForm(url, data) {
       // Si no se puede leer (cross-origin), asumir éxito después de 2s
       setTimeout(() => {
         cleanup();
-        resolve({ ok: true, savedAt: new Date().toISOString(), note: 'Publicado (respuesta no verificable desde file://)' });
+        resolve({ ok: true, savedAt: nowAR(), note: 'Publicado (respuesta no verificable desde file://)' });
       }, 2000);
     };
 
@@ -15693,7 +16299,7 @@ async function postViaForm(url, data) {
       body:   JSON.stringify(data),
     });
     // no-cors no lanza error aunque falle — asumimos éxito
-    return { ok: true, savedAt: new Date().toISOString(), via: 'no-cors' };
+    return { ok: true, savedAt: nowAR(), via: 'no-cors' };
   } catch(e) {}
 
   // Método 2: form POST en iframe (último recurso)
@@ -15706,13 +16312,13 @@ async function postViaForm(url, data) {
 
     const timeout = setTimeout(() => {
       try { iframe.remove(); form.remove(); } catch(e2) {}
-      resolve({ ok: true, savedAt: new Date().toISOString(), via: 'form-timeout' });
+      resolve({ ok: true, savedAt: nowAR(), via: 'form-timeout' });
     }, 15000);
 
     iframe.onload = () => {
       clearTimeout(timeout);
       try { iframe.remove(); form.remove(); } catch(e2) {}
-      resolve({ ok: true, savedAt: new Date().toISOString(), via: 'form' });
+      resolve({ ok: true, savedAt: nowAR(), via: 'form' });
     };
 
     const form   = document.createElement('form');
@@ -15881,11 +16487,11 @@ async function syncToCloud(nota) {
           srvErr._serverBody = JSON.stringify(meta).slice(0, 300);
           throw srvErr;
         }
-        result = { ok: true, savedAt: meta.meta?.savedAt || new Date().toISOString() };
+        result = { ok: true, savedAt: meta.meta?.savedAt || nowAR() };
       } catch(e) {
         if (e._serverBody !== undefined) throw e; // error ya diagnosticado
         // CORS/red — asumimos éxito del no-cors POST (normal desde file://)
-        result = { ok: true, savedAt: new Date().toISOString() };
+        result = { ok: true, savedAt: nowAR() };
       }
     } catch(fetchErr) {
       // Fallback final: form POST en iframe
@@ -16321,7 +16927,7 @@ function saveDataToLocalCache() {
       presupuesto:   DATA.presupuesto || {},
       importHistory: DATA.importHistory || [],
       _balances:     Object.values(_balances || {}),
-      savedAt: new Date().toISOString()
+      savedAt: nowAR()
     };
     localStorage.setItem(LS_KEY, JSON.stringify(snap));
     actualizarIndicadorGuardado(snap.savedAt);
@@ -16397,7 +17003,7 @@ function exportarHTMLConDatos() {
       importHistory:  DATA.importHistory || [],
       _balances:      Object.values(_balances || {}),
       _cloudCfg:      _cloudUrl ? { url: _cloudUrl, token: _cloudToken, user: _cloudUser } : null,
-      savedAt:        new Date().toISOString(),
+      savedAt:        nowAR(),
     });
   } catch(e) {
     if (btn) { btn.textContent = '⬇ Descargar dashboard con datos'; btn.disabled = false; }
@@ -16450,7 +17056,7 @@ function exportarHTMLConDatos() {
       }
 
       // ── 3. Descargar ──────────────────────────────────────────
-      const fecha    = new Date().toISOString().slice(0, 10);
+      const fecha    = nowAR().slice(0, 10);
       const filename = 'dashboard_LR_' + fecha + '.html';
       const blob     = new Blob([htmlFinal], { type: 'text/html;charset=utf-8' });
       const a        = document.createElement('a');
@@ -16461,7 +17067,7 @@ function exportarHTMLConDatos() {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 
-      actualizarIndicadorGuardado(new Date().toISOString(), '📄 ' + filename);
+      actualizarIndicadorGuardado(nowAR(), '📄 ' + filename);
       if (btn) {
         btn.textContent = '✓ Descargado';
         setTimeout(() => { btn.textContent = '⬇ Descargar dashboard con datos'; btn.disabled = false; }, 2500);
@@ -16888,6 +17494,7 @@ setTimeout(() => {
     initCmpSelectors();
     updateVizSummary();
     buildResumen();
+    _actualizarVisibilidadPresupuesto();
     updateGapBadge();
     populateSelects();
     setTimeout(checkAlerts, 300);
