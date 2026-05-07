@@ -384,55 +384,49 @@ body {
 /* ── MAIN ─────────────────────────────────────────────── */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 .topbar {
-  display: flex; flex-direction: column;
-  padding: 0; background: var(--s1); border-bottom: 1px solid var(--bd);
+  background: var(--s1); border-bottom: 1px solid var(--bd);
   flex-shrink: 0; position: relative; z-index: 100;
 }
-/* Fila 1: título + acciones en una línea con scroll horizontal */
 .topbar-row1 {
   width: 100%; display: flex; align-items: center;
-  padding: 0 12px; height: 46px; flex-shrink: 0;
+  padding: 0 10px; height: 42px;
   overflow-x: auto; overflow-y: visible;
-  scrollbar-width: none; gap: 0;
+  scrollbar-width: none; gap: 6px;
 }
 .topbar-row1::-webkit-scrollbar { display: none; }
 .page-title {
-  font-family: var(--serif); font-size: 15px; color: var(--text); font-weight: 700;
-  white-space: nowrap; flex-shrink: 0; margin-right: 10px; padding-right: 10px;
+  font-family: var(--serif); font-size: 14px; color: var(--text); font-weight: 700;
+  white-space: nowrap; flex-shrink: 0; padding-right: 10px; margin-right: 4px;
   border-right: 1px solid var(--bd);
 }
 .page-title em { color: var(--y21); font-style: italic; }
 .topbar-meta { display: flex; gap: 5px; align-items: center; }
 .meta-tag {
-  padding: 3px 7px; border-radius: 2px; flex-shrink: 0;
-  border: 1px solid var(--bd); color: var(--dim); font-size: 9px; white-space: nowrap;
+  padding: 2px 6px; border-radius: 2px; flex-shrink: 0;
+  border: 1px solid var(--bd); color: var(--dim); font-size: 8.5px; white-space: nowrap;
 }
 .meta-tag.hi { border-color: var(--bd2); color: var(--text); }
-
-/* Grupo de botones: label encima + botones abajo */
 .topbar-actions {
-  display: flex; align-items: center; gap: 0; flex: 1; min-width: 0; height: 100%;
+  display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0;
 }
+/* Divisor visual entre grupos de botones */
+.tba-sep {
+  width: 1px; height: 18px; background: var(--bd); flex-shrink: 0; margin: 0 2px;
+}
+/* Sección legacy — mantener para compatibilidad pero sin labels */
 .tba-section {
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 0 8px; height: 100%; border-right: 1px solid var(--bd); flex-shrink: 0;
+  display: flex; align-items: center; padding: 0 2px; flex-shrink: 0;
 }
-.tba-section:last-child { border-right: none; }
-.tba-section-label {
-  font-size: 7px; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--dim); margin-bottom: 3px; white-space: nowrap;
-}
-.tba-section-btns {
-  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
-}
+.tba-section-label { display: none; } /* labels eliminados — información innecesaria */
+.tba-section-btns { display: flex; align-items: center; gap: 4px; }
 .tba-group { display: flex; align-items: center; gap: 4px; }
 .tba-label { display: none; }
 .tba-btns  { display: flex; gap: 4px; align-items: center; }
 .tba-btn {
-  padding: 3px 8px; font-size: 9px; font-family: var(--mono);
+  padding: 3px 9px; font-size: 9px; font-family: var(--mono);
   background: var(--s2); border: 1px solid var(--bd2); color: var(--dim);
   border-radius: 3px; cursor: pointer; white-space: nowrap; position: relative;
-  transition: border-color .12s, color .12s, background .12s; height: 24px;
+  transition: border-color .12s, color .12s, background .12s; height: 26px;
   display: flex; align-items: center; gap: 3px; flex-shrink: 0;
 }
 .tba-btn:hover { border-color: var(--y21); color: var(--text); background: var(--s3); }
@@ -441,16 +435,10 @@ body {
   background: rgba(232,255,71,.06);
 }
 .tba-btn-file:hover { border-color: var(--y21); background: rgba(232,255,71,.14); }
-.tba-btn-publish { color: #47ffb4; border-color: #47ffb455; background: rgba(71,255,180,.06); }
-.tba-btn-publish:hover { background: rgba(71,255,180,.14); border-color: #47ffb4; }
-.tba-btn-cfg { color: #47e8ff; border-color: #47e8ff44; background: rgba(71,232,255,.06); }
-.tba-btn-cfg:hover { background: rgba(71,232,255,.14); border-color: #47e8ff; }
-.tba-btn-full { color: var(--y21); border-color: #e8ff4744; background: rgba(232,255,71,.06); }
-.tba-btn-full:hover { background: rgba(232,255,71,.14); border-color: var(--y21); }
 .tba-btn-save { color: #47ffb4; border-color: #47ffb455; background: rgba(71,255,180,.06); font-weight:600; }
 .tba-btn-save:hover { background: rgba(71,255,180,.14); border-color: #47ffb4; }
 .tba-btn-save.saved { color: var(--dim); border-color: var(--bd); background: var(--s2); }
-.tba-divider { width: 1px; height: 20px; background: var(--bd); flex-shrink:0; align-self:center; margin: 0 3px; }
+.tba-divider { width: 1px; height: 18px; background: var(--bd); flex-shrink:0; margin: 0 2px; }
 #exp-status { font-size: 9px; color: var(--dim); }
 .export-menu-item {
   display:block; width:100%; padding:8px 14px; background:none; border:none;
@@ -1375,105 +1363,106 @@ self.onmessage = async (e) => {
     <!-- ══ TOPBAR ════════════════════════════════════════════ -->
     <div class="topbar-row1">
 
-      <!-- Título -->
+      <!-- Título del panel activo -->
       <div class="page-title" id="pg-title">Resumen <em>Consolidado</em></div>
 
       <div class="topbar-actions">
 
-        <!-- ── BUSCADOR GLOBAL ───────────────────────────── -->
-        <div class="tba-section">
-          <div style="position:relative">
-            <input id="global-search" type="search" placeholder="🔍 Empresa…"
-              oninput="buscarGlobal(this.value)"
-              onkeydown="if(event.key==='Escape'){this.value='';cerrarBusquedaGlobal()}"
-              style="padding:4px 10px;background:var(--s2);border:1px solid var(--bd2);
-              color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
-              outline:none;width:140px;transition:width .2s"
-              onfocus="this.style.width='200px'" onblur="this.style.width='140px'">
-            <div id="global-search-results"
-              style="display:none;position:fixed;z-index:9999;
-              background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
-              min-width:260px;max-height:360px;overflow-y:auto;
-              box-shadow:0 8px 24px rgba(0,0,0,.5);margin-top:2px"></div>
-          </div>
+        <!-- Buscador global -->
+        <div style="position:relative;flex-shrink:0">
+          <input id="global-search" type="search" placeholder="🔍 Empresa…"
+            oninput="buscarGlobal(this.value)"
+            onkeydown="if(event.key==='Escape'){this.value='';cerrarBusquedaGlobal()}"
+            style="padding:3px 10px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
+            outline:none;width:130px;height:26px;transition:width .2s;box-sizing:border-box"
+            onfocus="this.style.width='190px';this.style.borderColor='#47e8ff'"
+            onblur="this.style.width='130px';this.style.borderColor='var(--bd2)'">
+          <div id="global-search-results"
+            style="display:none;position:fixed;z-index:9999;
+            background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+            min-width:260px;max-height:360px;overflow-y:auto;
+            box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
         </div>
 
-        <!-- ── DATOS ──────────────────────────────────────── -->
-        <div class="tba-section">
-          <div class="tba-section-label">Datos</div>
-          <div class="tba-section-btns">
-            <label class="tba-btn tba-btn-file" title="Importar Excel / CSV">
-              📥 Cargar
-              <input type="file" id="file-imp-top" accept=".csv,.xlsx,.xls"
-                style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
-                onchange="handleImport(this.files[0]);showPanel('importar',null)">
-            </label>
-            <button onclick="imprimirPanelActivo()" title="Exportar panel a PDF"
-              class="tba-btn" style="color:#47e8ff;border-color:#47e8ff44">🖨 PDF</button>
-            <button class="tba-btn tba-btn-save" id="btn-guardar" onclick="toggleSavePanel()"
-              title="Guardar datos">💾 Guardar</button>
-          </div>
+        <div class="tba-sep"></div>
+
+        <!-- Grupo Datos: Importar · Exportar▾ · PDF · Guardar -->
+        <div style="position:relative;display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <label class="tba-btn tba-btn-file" title="Importar Excel / CSV de datos">
+            📥 Importar
+            <input type="file" id="file-imp-top" accept=".csv,.xlsx,.xls"
+              style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
+              onchange="handleImport(this.files[0]);showPanel('importar',null)">
+          </label>
+          <button class="tba-btn" onclick="toggleExportMenu()" id="btn-export-menu"
+            title="Exportar / Sheets">⬇ Exportar ▾</button>
+          <button class="tba-btn" onclick="imprimirPanelActivo()"
+            title="Imprimir / PDF del panel activo"
+            style="color:#47e8ff;border-color:#47e8ff44">🖨</button>
+          <button class="tba-btn tba-btn-save" id="btn-guardar" onclick="toggleSavePanel()"
+            title="Guardar datos">💾 Guardar</button>
         </div>
 
-        <!-- ── GOOGLE SHEETS ──────────────────────────────── -->
-        <div class="tba-section">
-          <div class="tba-section-label">Google Sheets</div>
-          <div class="tba-section-btns">
-            <button class="tba-btn" id="btn-sync-read" onclick="syncFromCloud()" title="Descargar datos desde Google Sheets">
-              <span id="cloud-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#94a3b8;margin-right:3px;vertical-align:middle"></span>↓ Sync
-            </button>
-            <button class="tba-btn tba-btn-publish" id="btn-sync-write" onclick="syncToCloud()" title="Publicar a Google Sheets">↑ Publicar</button>
-            <button class="tba-btn tba-btn-cfg" onclick="toggleCloudPanel()" title="Configurar Google Sheets" id="btn-cloud-cfg">⚙ Sheets</button>
-          </div>
-        </div>
-
-        <!-- ── EXPORTAR (menú desplegable) ───────────────── -->
-        <div class="tba-section" style="position:relative">
-          <div class="tba-section-label">Exportar</div>
-          <div class="tba-section-btns">
-            <button class="tba-btn" onclick="toggleExportMenu()" id="btn-export-menu" title="Opciones de exportación">
-              ⬇ Exportar ▾
-            </button>
-          </div>
+          <!-- Menú exportar -->
           <div id="export-menu" style="display:none;position:fixed;background:var(--s1);
-            border:1px solid var(--bd2);border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);
-            z-index:9000;min-width:150px;overflow:hidden">
-            <button onclick="exportXLSX();toggleExportMenu()" class="export-menu-item">📊 Excel</button>
-            <button onclick="exportPDF();toggleExportMenu()"  class="export-menu-item">📄 PDF</button>
-            <button onclick="exportPortafolioCSV();toggleExportMenu()" class="export-menu-item">📋 CSV Portafolio</button>
-            <button onclick="exportBaseCompleta();toggleExportMenu()" class="export-menu-item">🗃 Base completa</button>
+            border:1px solid var(--bd2);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.4);
+            z-index:9100;min-width:200px;overflow:hidden">
+            <div style="padding:6px 12px;font-size:8px;text-transform:uppercase;letter-spacing:.1em;
+              color:var(--dim);border-bottom:1px solid var(--bd);font-family:var(--mono)">Exportar</div>
+            <button onclick="exportXLSX();toggleExportMenu()" class="export-menu-item">📊 Excel — base completa</button>
+            <button onclick="exportBaseCompleta();toggleExportMenu()" class="export-menu-item">🗃 JSON — base completa</button>
+            <button onclick="exportPortafolioCSV();toggleExportMenu()" class="export-menu-item">📋 CSV — portafolio</button>
+            <button onclick="exportarTransExcel();toggleExportMenu()" class="export-menu-item">💸 Excel — transferencias filtradas</button>
+            <button onclick="imprimirPanelActivo();toggleExportMenu()" class="export-menu-item">🖨 PDF — panel activo</button>
+            <div style="padding:6px 12px;font-size:8px;text-transform:uppercase;letter-spacing:.1em;
+              color:var(--dim);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);
+              font-family:var(--mono)">Google Sheets</div>
+            <button onclick="syncFromCloud();toggleExportMenu()" class="export-menu-item">↓ Descargar desde Sheets</button>
+            <button onclick="syncToCloud();toggleExportMenu()" class="export-menu-item">↑ Publicar todo a Sheets</button>
+            <button onclick="syncSoloTransferencias();toggleExportMenu()" class="export-menu-item">↑ Publicar solo transferencias</button>
+            <button onclick="toggleCloudPanel();toggleExportMenu()" class="export-menu-item">⚙ Configurar Sheets</button>
           </div>
         </div>
 
-        <!-- ── VISUALIZACIÓN + HERRAMIENTAS ──────────────── -->
-        <div class="tba-section">
-          <div class="tba-section-label">Vista</div>
-          <div class="tba-section-btns">
-            <button class="tba-btn" id="alerts-badge" onclick="toggleAlertsPanel()"
-              title="Alertas" style="display:flex;align-items:center;gap:4px">
-              🔔<span id="alerts-count-lbl" style="display:none;min-width:14px;height:14px;
-                border-radius:7px;background:#ff4766;color:#fff;font-size:8px;
-                display:none;align-items:center;justify-content:center;padding:0 3px;font-weight:600">0</span>
-            </button>
-            <button class="tba-btn tba-btn-viz" id="btn-viz-panel" onclick="toggleVizPanel()" title="Filtros de visualización">⚙ Filtros</button>
-            <button class="tba-btn" onclick="openSearch()" title="Búsqueda (⌘K)">🔍</button>
-            <button class="tba-btn" onclick="enterPresMode()" title="Pantalla completa">⛶</button>
-          </div>
+        <!-- IDs ocultos para compatibilidad -->
+        <span id="cloud-dot" style="display:none"></span>
+        <button id="btn-sync-read"  style="display:none" onclick="syncFromCloud()"></button>
+        <button id="btn-sync-write" style="display:none" onclick="syncToCloud()"></button>
+        <button id="btn-cloud-cfg"  style="display:none" onclick="toggleCloudPanel()"></button>
+
+        <div class="tba-sep"></div>
+
+        <!-- Grupo Vista: alertas · filtros · pantalla completa -->
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+          <button class="tba-btn" id="alerts-badge" onclick="toggleAlertsPanel()"
+            title="Alertas del sistema" style="display:flex;align-items:center;gap:3px">
+            🔔 <span id="alerts-count-lbl"
+              style="display:none;min-width:16px;height:16px;border-radius:8px;
+              background:#ff4766;color:#fff;font-size:8px;font-weight:700;
+              align-items:center;justify-content:center;padding:0 3px">0</span>
+          </button>
+          <button class="tba-btn" id="btn-viz-panel" onclick="toggleVizPanel()"
+            title="Filtros de visualización">◎ Filtros</button>
+          <button class="tba-btn" onclick="enterPresMode()"
+            title="Pantalla completa">⛶</button>
         </div>
 
-        <!-- ── USUARIO (siempre visible, pegado a la derecha) -->
-        <div class="tba-section" style="border-right:none;margin-left:auto;flex-shrink:0">
-          <div class="tba-section-label">Sesión</div>
-          <div class="tba-section-btns">
-            <div class="meta-tag hi" id="meta-years" style="cursor:default;font-size:8px">—</div>
-            <div id="gap-badge" onclick="openGapModal()" title="Datos faltantes"
-              style="display:none;padding:2px 7px;border-radius:2px;border:1px solid #ff8c47;
-              color:#ff8c47;background:rgba(255,140,71,.08);font-size:8.5px;cursor:pointer;white-space:nowrap">
-              ⚠ <span id="gap-count">0</span>
-            </div>
-            <div id="cloud-status-txt-top" style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
-            <div id="storage-status" style="display:none;font-size:8px;font-family:var(--mono)"></div>
+        <!-- Estado y auto-sync — alineado a la derecha -->
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <div id="meta-years" class="meta-tag hi" style="cursor:default">—</div>
+          <div id="gap-badge" onclick="openGapModal()" title="Datos faltantes"
+            style="display:none;padding:2px 6px;border-radius:2px;border:1px solid #ff8c47;
+            color:#ff8c47;background:rgba(255,140,71,.08);font-size:8.5px;cursor:pointer;white-space:nowrap">
+            ⚠ <span id="gap-count">0</span>
           </div>
+          <div id="save-indicator" style="font-size:8.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap">Sin guardar aún</div>
+          <button id="btn-autosync-toggle" onclick="_toggleAutoSync()"
+            title="Auto-sync activo — click para pausar"
+            style="padding:2px 6px;background:none;border:1px solid rgba(71,255,180,.25);
+            color:#47ffb4;font-family:var(--mono);font-size:8px;border-radius:3px;cursor:pointer">🔄</button>
+          <div id="cloud-status-txt-top" style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
+          <div id="storage-status" style="display:none;font-size:8px;font-family:var(--mono)"></div>
         </div>
 
       </div><!-- /topbar-actions -->
@@ -1640,13 +1629,8 @@ self.onmessage = async (e) => {
 
       <!-- Estado -->
       <div style="padding:8px 16px;background:var(--s3)">
-        <div id="save-indicator" style="font-size:9px;color:var(--dim);font-family:var(--mono)">Sin guardar aún</div>
-        <button id="btn-autosync-toggle"
-          onclick="_toggleAutoSync()"
-          title="Auto-sync activo — click para pausar"
-          style="padding:2px 7px;background:none;border:1px solid rgba(71,255,180,.25);
-          color:#47ffb4;font-family:var(--mono);font-size:8.5px;border-radius:3px;
-          cursor:pointer;white-space:nowrap">🔄 Auto</button>
+        <!-- save-indicator movido al topbar -->
+        <span id="save-indicator-legacy" style="display:none"></span>
         <div id="cloud-sync-result" style="display:none;margin-top:6px;padding:7px 10px;
           border-radius:3px;font-size:9px;font-family:var(--mono);line-height:1.6"></div>
       </div>
@@ -2440,11 +2424,24 @@ self.onmessage = async (e) => {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
         <div id="trans-filtro-resumen" style="font-size:9px;color:var(--dim);font-family:var(--mono);
           flex:1;min-height:14px"></div>
+        <button onclick="toggleAuditoriaPanel()"
+          id="btn-auditoria-trans"
+          style="padding:3px 9px;background:rgba(71,232,255,.07);border:1px solid rgba(71,232,255,.25);
+          color:#47e8ff;font-family:var(--mono);font-size:8px;border-radius:3px;
+          cursor:pointer;white-space:nowrap">🔍 Auditoría</button>
         <button onclick="toggleCorreccionMasivaPanel()"
           id="btn-corr-masiva"
           style="padding:3px 9px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.25);
           color:var(--y21);font-family:var(--mono);font-size:8px;border-radius:3px;
           cursor:pointer;white-space:nowrap">🔧 Asignar mes masivo</button>
+      </div>
+
+      <!-- Panel de auditoría de transferencias -->
+      <div id="panel-auditoria-trans" style="display:none;margin-bottom:12px;padding:12px 14px;
+        background:rgba(71,232,255,.04);border:1px solid rgba(71,232,255,.2);border-radius:5px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
+          color:#47e8ff;margin-bottom:10px;font-family:var(--mono)">🔍 Auditoría de registros cargados</div>
+        <div id="auditoria-content"></div>
       </div>
 
       <!-- Panel de corrección masiva de mes -->
@@ -2538,6 +2535,55 @@ self.onmessage = async (e) => {
               ✓ Asignar año
             </button>
             <span id="corr-año-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
+          </div>
+        </div>
+
+        <!-- Eliminación masiva por período -->
+        <div style="padding:10px 12px;background:rgba(255,71,102,.05);border:1px solid rgba(255,71,102,.2);
+          border-radius:4px;margin-top:8px">
+          <div style="font-size:10px;font-weight:600;color:var(--neg);margin-bottom:4px">
+            D) Eliminar registros por período
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-bottom:10px">
+            Elimina <strong>definitivamente</strong> todos los registros que coincidan con el año
+            (y opcionalmente el mes) seleccionado. Esta acción no se puede deshacer.
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <!-- Año obligatorio -->
+            <select id="del-año" onchange="_actualizarDelPreview()"
+              style="padding:4px 8px;background:var(--s3);border:1px solid rgba(255,71,102,.3);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+              <option value="">— Elegir año —</option>
+            </select>
+
+            <!-- Mes opcional -->
+            <select id="del-mes" onchange="_actualizarDelPreview()"
+              style="padding:4px 8px;background:var(--s3);border:1px solid rgba(255,71,102,.2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+              <option value="">Año completo</option>
+              <option value="1">Enero</option><option value="2">Febrero</option>
+              <option value="3">Marzo</option><option value="4">Abril</option>
+              <option value="5">Mayo</option><option value="6">Junio</option>
+              <option value="7">Julio</option><option value="8">Agosto</option>
+              <option value="9">Septiembre</option><option value="10">Octubre</option>
+              <option value="11">Noviembre</option><option value="12">Diciembre</option>
+            </select>
+
+            <!-- Preview de cuántos registros se eliminarán -->
+            <span id="del-preview" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            <button onclick="eliminarTransPorPeriodo()"
+              style="padding:6px 16px;background:rgba(255,71,102,.15);border:1px solid rgba(255,71,102,.4);
+              color:var(--neg);font-family:var(--mono);font-size:9.5px;font-weight:600;
+              border-radius:3px;cursor:pointer"
+              onmouseover="this.style.background='rgba(255,71,102,.25)'"
+              onmouseout="this.style.background='rgba(255,71,102,.15)'">
+              🗑 Eliminar registros
+            </button>
+            <span id="del-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
           </div>
         </div>
       </div>
@@ -3534,20 +3580,42 @@ document.addEventListener('DOMContentLoaded', checkAuth);
 
 /* ═══ IMPRESIÓN / PDF ═══════════════════════════════════════════ */
 @media print {
+  /* Fondo y texto base */
   body { background:#fff !important; color:#111 !important; }
+
+  /* Ocultar interfaz navegación */
   .sidebar, .topbar, #login-overlay, #save-panel, #user-panel,
-  #cloud-panel, #export-menu, .sel-row, .chip, .imp-ctrl-row,
-  [id^="btn-"], .nav-footer, #panel-corr-masiva, #btn-user-fixed,
-  button:not(.print-keep) { display:none !important; }
-  .layout { display:block !important; }
-  .scroll-area { padding:0 !important; overflow:visible !important; }
-  .panel { display:block !important; page-break-inside:avoid; }
-  .card { break-inside:avoid; border:1px solid #ccc !important;
-          background:#fff !important; color:#111 !important; }
-  .kpi  { background:#f5f5f5 !important; color:#111 !important; }
+  #cloud-panel, #export-menu, .nav-footer, #panel-corr-masiva,
+  #btn-user-fixed, #btn-autosync-toggle, .sel-row,
+  .imp-ctrl-row, .kpi-strip,
+  button, label.tba-btn, input[type=file] { display:none !important; }
+
+  /* Mantener botones marcados explícitamente */
+  button.print-keep { display:inline-block !important; }
+
+  /* Layout */
+  .layout       { display:block !important; padding:0 !important; }
+  .scroll-area  { padding:12px !important; overflow:visible !important;
+                  height:auto !important; max-height:none !important; }
+
+  /* Ocultar TODOS los paneles — luego mostrar solo el activo */
+  .panel        { display:none !important; }
+  .panel.on     { display:block !important; }
+
+  /* Cards */
+  .card  { break-inside:avoid; border:1px solid #ccc !important;
+            background:#fff !important; color:#111 !important;
+            margin-bottom:12px !important; }
+  .kpi   { background:#f5f5f5 !important; color:#111 !important;
+            border:1px solid #ddd !important; }
   .tbl th, .tbl td { color:#111 !important; border-color:#ccc !important; }
-  canvas { max-height:200px !important; }
+  canvas { max-height:240px !important; }
   .rowfull, .row2, .row3 { display:block !important; }
+  .row2 > *, .row3 > * { width:100% !important; }
+
+  /* Tipografía */
+  * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
   @page { margin:1.5cm; size:A4 landscape; }
 }
 </style>
@@ -3904,7 +3972,19 @@ function fmtFechaAR(isoStr) {
 //  ÍTEM 7A: Exportar panel activo a PDF
 // ══════════════════════════════════════════════════════════════════
 function imprimirPanelActivo() {
+  // Asegurar que el panel activo tiene clase 'on' (para el CSS de impresión)
+  const panelActivo = document.querySelector('.panel.on');
+  if (!panelActivo) {
+    // Si no hay ninguno marcado, marcar el visible
+    const visible = [...document.querySelectorAll('.panel')].find(p => p.style.display !== 'none');
+    if (visible) visible.classList.add('on');
+  }
+  // Título de la página para el PDF
+  const titulo = document.getElementById('pg-title')?.textContent || 'Panel';
+  const tituloOriginal = document.title;
+  document.title = `BI La Rioja — ${titulo}`;
   window.print();
+  document.title = tituloOriginal;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -4009,17 +4089,12 @@ function getCambiosEmpresa(empresa) {
 //  ÍTEM 7D: Ocultar Presupuesto si sin datos
 // ══════════════════════════════════════════════════════════════════
 function _actualizarVisibilidadPresupuesto() {
-  const tienePresup = (DATA.presupuesto || []).length > 0 ||
-    Object.keys(DATA.fact || {}).some(e =>
-      Object.values(DATA.fact[e] || {}).some(v => v > 0)
-    );
-  // Buscar el botón de presupuesto en el sidebar
+  const tieneDataPres = (DATA.presupuesto || []).length > 0;
   const btnPres = [...document.querySelectorAll('.nav-item')]
     .find(b => b.textContent.toLowerCase().includes('presupuesto'));
   if (btnPres) {
-    const tieneDataPres = (DATA.presupuesto || []).length > 0;
-    btnPres.style.opacity = tieneDataPres ? '1' : '0.4';
-    btnPres.title = tieneDataPres ? '' : 'Sin datos de presupuesto cargados';
+    // Ocultar completamente si no hay datos — no aporta valor visible
+    btnPres.style.display = tieneDataPres ? '' : 'none';
   }
 }
 
@@ -8927,28 +9002,24 @@ function restoreFromSnapshot(snap) {
 //   3. Acumular las filas SIDIF activas (son filas individuales, no estados)
 function rebuildFromHistory() {
   const active = _importHistory.filter(h => !h.reverted);
-
-  // Separar SIDIF de las demás
   const nonSidif = active.filter(h => !h.sidifImport);
-  const sidifLoads = active.filter(h => h.sidifImport);
+
+  // ── Reconstruir fact/sit/personal/notas/presupuesto desde snapshots ──
+  // Las TRANSFERENCIAS se gestionan de forma independiente en DATA.transferencias
+  // y NO se reconstruyen desde el historial para evitar conflictos con Sheets.
 
   if (nonSidif.length) {
-    // Aplicar el snapAfter del último no-SIDIF (incluye todo lo anterior)
     const last = nonSidif[nonSidif.length - 1];
-    // Pero snapAfter puede incluir transferencias de SIDIF previas — limpiarlas
     const snap = JSON.parse(JSON.stringify(last.snapAfter));
-    snap.transferencias = JSON.parse(JSON.stringify(DATA_ORIGINAL.transferencias || []));
+    // Preservar las transferencias actuales — NO sobreescribir con el snapshot
+    const transActuales = DATA.transferencias.slice();
     restoreFromSnapshot(snap);
+    DATA.transferencias = transActuales;
   } else {
-    // Solo restaurar estado original sin transferencias SIDIF
+    const transActuales = DATA.transferencias.slice();
     restoreFromSnapshot(DATA_ORIGINAL);
-    DATA.transferencias = JSON.parse(JSON.stringify(DATA_ORIGINAL.transferencias || []));
+    DATA.transferencias = transActuales;
   }
-
-  // Acumular solo las filas SIDIF activas (cada load tiene sus propias filas)
-  sidifLoads.forEach(h => {
-    if (h.sidifRows) DATA.transferencias.push(...h.sidifRows);
-  });
 
   computeTotals();
   populateSelects();
@@ -8997,7 +9068,13 @@ function renderHistory() {
     const idx = _importHistory.length - 1 - ridx;  // índice real
     if (h.reverted) return '';
 
-    const ts  = new Date(h.ts).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const tsRaw = h.ts ? new Date(h.ts) : null;
+    // Usar fmtFechaAR si está disponible para mostrar en hora Argentina
+    const ts = tsRaw
+      ? (typeof fmtFechaAR === 'function'
+         ? fmtFechaAR(tsRaw.toISOString())
+         : tsRaw.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))
+      : '—';
 
     // ── Entrada de SINCRONIZACIÓN ────────────────────────────────
     if (h.tipo === 'sync') {
@@ -9028,6 +9105,7 @@ function renderHistory() {
     }
 
     // ── Entrada de IMPORTACIÓN de archivo ────────────────────────
+    const modo  = h.modo ? ` · ${h.modo === 'reemplazar' ? '🔄 reemplazado' : h.modo === 'solo_nuevos' ? '➕ solo nuevos' : 'importado'}` : '';
     const tipo  = h.erImport ? '📊 ER' : h.sidifImport ? '💸 Transf.' : '📄 Datos';
     const badge = h.erImport
       ? `<span class="imp-hist-badge" style="background:#e8ff4722;color:#e8ff47">${tipo}</span>`
@@ -9313,10 +9391,8 @@ function tryParseSIDIF(wb, fname) {
 
   if (!todasLasRows.length) return false;
 
-  // Agregar al dataset (acumula distintos períodos)
-  DATA.transferencias.push(...todasLasRows);
-  populateTransSelects();
-
+  // NO agregar aquí — el caller (_aplicarSIDIF) es responsable de agregar
+  // para evitar duplicación cuando hay detección de duplicados previa.
   const newTotal = todasLasRows.reduce((s,r)=>s+r.importe, 0);
   const sheetDesc = hojasImportadas.join(', ');
 
@@ -9524,39 +9600,243 @@ function _claveTrans(t) {
 }
 
 // ── Aplicar importación SIDIF con el modo elegido ─────────────────
+// ══════════════════════════════════════════════════════════════════
+//  AUDITORÍA DE TRANSFERENCIAS
+// ══════════════════════════════════════════════════════════════════
+function toggleAuditoriaPanel() {
+  const panel = document.getElementById('panel-auditoria-trans');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : '';
+  if (!open) renderAuditoriaTransferencias();
+}
+
+function renderAuditoriaTransferencias() {
+  const el = document.getElementById('auditoria-content');
+  if (!el) return;
+
+  const trans = DATA.transferencias || [];
+  const fmt  = v => v.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 });
+  const fmt2 = v => v.toLocaleString('es-AR', { maximumFractionDigits:0 });
+
+  // ── 1. Totales globales ───────────────────────────────────────
+  const totalGeneral = trans.reduce((s, t) => s + (t.importe||0), 0);
+  const sinMes  = trans.filter(t => !t.mes).length;
+  const sinAño  = trans.filter(t => !t.año).length;
+
+  // ── 2. Por año ───────────────────────────────────────────────
+  const porAño = {};
+  trans.forEach(t => {
+    const k = t.año || '__sin_año__';
+    if (!porAño[k]) porAño[k] = { cnt:0, total:0 };
+    porAño[k].cnt++;
+    porAño[k].total += (t.importe||0);
+  });
+
+  // ── 3. Por archivo ───────────────────────────────────────────
+  const porArchivo = {};
+  trans.forEach(t => {
+    const arch = (t._archivo || 'Sin archivo').replace(/^.*[\/]/, '');
+    if (!porArchivo[arch]) porArchivo[arch] = { cnt:0, total:0, años:new Set() };
+    porArchivo[arch].cnt++;
+    porArchivo[arch].total += (t.importe||0);
+    if (t.año) porArchivo[arch].años.add(t.año);
+  });
+
+  // ── 4. Detectar posibles duplicados ─────────────────────────
+  const claveMap = {};
+  let dupCnt = 0;
+  trans.forEach((t, i) => {
+    const k = _claveTrans(t);
+    if (!claveMap[k]) claveMap[k] = [];
+    claveMap[k].push(i);
+  });
+  const grupos_dup = Object.values(claveMap).filter(arr => arr.length > 1);
+  dupCnt = grupos_dup.reduce((s, arr) => s + arr.length - 1, 0);
+
+  // ── Render ──────────────────────────────────────────────────
+  const añoRows = Object.entries(porAño)
+    .sort(([a],[b]) => a === '__sin_año__' ? 1 : b === '__sin_año__' ? -1 : parseInt(a) - parseInt(b))
+    .map(([año, d]) => `
+      <tr>
+        <td style="padding:4px 8px;color:${año==='__sin_año__'?'#ff8c47':'var(--text)'};font-family:var(--mono)">
+          ${año === '__sin_año__' ? '⚠ Sin año' : año}
+        </td>
+        <td style="padding:4px 8px;text-align:right;font-family:var(--mono)">${fmt2(d.cnt)}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:var(--mono)">${fmt(d.total)}</td>
+      </tr>`).join('');
+
+  const archRows = Object.entries(porArchivo)
+    .sort(([,a],[,b]) => b.total - a.total)
+    .map(([arch, d]) => `
+      <tr>
+        <td style="padding:4px 8px;font-size:8.5px;font-family:var(--mono);max-width:200px;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${arch}">${arch}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:var(--mono)">${fmt2(d.cnt)}</td>
+        <td style="padding:4px 8px;text-align:right;font-family:var(--mono)">${fmt(d.total)}</td>
+        <td style="padding:4px 8px;font-size:8px;color:var(--dim)">${[...d.años].sort().join(', ')||'—'}</td>
+      </tr>`).join('');
+
+  const dupAlert = dupCnt > 0
+    ? `<div style="padding:8px 12px;background:rgba(255,140,71,.1);border:1px solid #ff8c4740;
+        border-radius:4px;margin-bottom:10px;font-size:9.5px">
+        ⚠ <strong>${dupCnt} posibles duplicados detectados</strong>
+        (misma clave beneficiario+año+mes+importe).
+        <button onclick="limpiarDuplicadosTrans()"
+          style="margin-left:12px;padding:3px 10px;background:rgba(255,140,71,.15);
+          border:1px solid #ff8c4740;color:#ff8c47;font-size:9px;border-radius:3px;cursor:pointer">
+          🗑 Eliminar duplicados
+        </button>
+      </div>`
+    : `<div style="padding:6px 10px;font-size:9px;color:#47ffb4;margin-bottom:10px">
+        ✓ Sin duplicados detectados</div>`;
+
+  el.innerHTML = `
+    <!-- Resumen global -->
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="padding:8px 14px;background:var(--s2);border-radius:4px;font-family:var(--mono)">
+        <div style="font-size:8px;color:var(--dim)">TOTAL REGISTROS</div>
+        <div style="font-size:16px;font-weight:700">${fmt2(trans.length)}</div>
+      </div>
+      <div style="padding:8px 14px;background:var(--s2);border-radius:4px;font-family:var(--mono)">
+        <div style="font-size:8px;color:var(--dim)">TOTAL IMPORTE</div>
+        <div style="font-size:16px;font-weight:700">${fmt(totalGeneral)}</div>
+      </div>
+      ${sinMes > 0 ? `<div style="padding:8px 14px;background:rgba(255,140,71,.08);border:1px solid #ff8c4730;border-radius:4px;font-family:var(--mono)">
+        <div style="font-size:8px;color:#ff8c47">SIN MES</div>
+        <div style="font-size:16px;font-weight:700;color:#ff8c47">${fmt2(sinMes)}</div>
+      </div>` : ''}
+      ${sinAño > 0 ? `<div style="padding:8px 14px;background:rgba(255,140,71,.08);border:1px solid #ff8c4730;border-radius:4px;font-family:var(--mono)">
+        <div style="font-size:8px;color:#ff8c47">SIN AÑO</div>
+        <div style="font-size:16px;font-weight:700;color:#ff8c47">${fmt2(sinAño)}</div>
+      </div>` : ''}
+    </div>
+
+    ${dupAlert}
+
+    <!-- Por año -->
+    <div style="font-size:9px;color:var(--dim);margin-bottom:4px;font-family:var(--mono)">TOTALES POR AÑO</div>
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="border-collapse:collapse;width:100%;font-size:9.5px">
+        <thead><tr style="border-bottom:1px solid var(--bd)">
+          <th style="padding:4px 8px;text-align:left;color:var(--dim)">Año</th>
+          <th style="padding:4px 8px;text-align:right;color:var(--dim)">Registros</th>
+          <th style="padding:4px 8px;text-align:right;color:var(--dim)">Importe</th>
+        </tr></thead>
+        <tbody>${añoRows}</tbody>
+        <tfoot><tr style="border-top:2px solid var(--bd);font-weight:700">
+          <td style="padding:5px 8px;font-family:var(--mono)">TOTAL</td>
+          <td style="padding:5px 8px;text-align:right;font-family:var(--mono)">${fmt2(trans.length)}</td>
+          <td style="padding:5px 8px;text-align:right;font-family:var(--mono)">${fmt(totalGeneral)}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+
+    <!-- Por archivo -->
+    <div style="font-size:9px;color:var(--dim);margin-bottom:4px;font-family:var(--mono)">TOTALES POR ARCHIVO IMPORTADO</div>
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;width:100%;font-size:9.5px">
+        <thead><tr style="border-bottom:1px solid var(--bd)">
+          <th style="padding:4px 8px;text-align:left;color:var(--dim)">Archivo</th>
+          <th style="padding:4px 8px;text-align:right;color:var(--dim)">Registros</th>
+          <th style="padding:4px 8px;text-align:right;color:var(--dim)">Importe</th>
+          <th style="padding:4px 8px;text-align:left;color:var(--dim)">Años</th>
+        </tr></thead>
+        <tbody>${archRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// Eliminar duplicados confirmados de DATA.transferencias
+function limpiarDuplicadosTrans() {
+  const seen = new Set();
+  const antes = DATA.transferencias.length;
+  DATA.transferencias = DATA.transferencias.filter(t => {
+    const k = _claveTrans(t);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const eliminados = antes - DATA.transferencias.length;
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
+  buildTransferencias();
+  renderAuditoriaTransferencias();
+  alert(`✓ ${eliminados} duplicados eliminados. Quedan ${DATA.transferencias.length} registros.`);
+}
+
+function _normFname(s) {
+  // Normalizar nombre de archivo para comparación robusta
+  return (s || '').toLowerCase().trim()
+    .replace(/\.xls[x]?$/, '').replace(/[-_\s]+/g, ' ').trim();
+}
+
 function _aplicarSIDIF(sidifResult, fname, modo) {
-  const fnameNorm = fname.toLowerCase().trim();
+  const fnameNorm = _normFname(fname);
+
+  console.log(`[SIDIF] modo=${modo} fname="${fname}" rows=${sidifResult.rows.length}`);
+  console.log(`[SIDIF] DATA.transferencias antes: ${DATA.transferencias.length} registros`);
 
   if (modo === 'reemplazar') {
-    // Eliminar todos los registros del archivo anterior (mismo nombre)
-    const cargaAnterior = _importHistory.find(h =>
-      !h.reverted && h.sidifImport &&
-      (h.fname || '').toLowerCase().trim() === fnameNorm
-    );
-    if (cargaAnterior) {
-      // Marcar como revertida la carga anterior
-      cargaAnterior.reverted = true;
-      // Eliminar de DATA.transferencias los registros de esa carga
-      // Identificamos por _archivo o por sidifRows guardados
-      const clavesPrevias = new Set((cargaAnterior.sidifRows || []).map(_claveTrans));
-      DATA.transferencias = DATA.transferencias.filter(t => !clavesPrevias.has(_claveTrans(t)));
-    } else {
-      // Sin carga anterior identificada: eliminar registros duplicados por clave
-      const clavesNuevas = new Set(sidifResult.rows.map(_claveTrans));
-      DATA.transferencias = DATA.transferencias.filter(t => !clavesNuevas.has(_claveTrans(t)));
+    // ── Identificar EXACTAMENTE qué registros pertenecen a este archivo ──────
+    // Prioridad: campo _archivo exacto → historial guardado → nada (nunca eliminar por similitud)
+
+    let eliminados = 0;
+
+    // Paso 1: eliminar por _archivo exacto (nombre completo)
+    const antesP1 = DATA.transferencias.length;
+    DATA.transferencias = DATA.transferencias.filter(t => {
+      const ta = (t._archivo || '').replace(/^.*[\/]/, ''); // nombre sin ruta
+      // Coincidencia exacta del nombre de archivo
+      return ta !== fname && ta !== fname.replace(/\.xls[x]?$/i, '');
+    });
+    eliminados = antesP1 - DATA.transferencias.length;
+    console.log(`[SIDIF] Reemplazar por _archivo exacto: ${eliminados} eliminados`);
+
+    // Paso 2: si no eliminó nada por _archivo, usar historial (rows guardados con año/mes/beneficiario)
+    if (eliminados === 0) {
+      const cargaAnterior = _importHistory.find(h =>
+        !h.reverted && h.sidifImport &&
+        _normFname(h.fname || '') === fnameNorm
+      );
+      if (cargaAnterior && cargaAnterior.sidifRows?.length > 0) {
+        cargaAnterior.reverted = true;
+        // Clave COMPLETA: incluye año y mes para no tocar otros períodos
+        const idsPrevios = new Set(cargaAnterior.sidifRows.map(r =>
+          `${(r.beneficiario||'').toUpperCase().trim()}|${r.año||''}|${r.mes||''}|${Math.round(r.importe||0)}`
+        ));
+        const antesP2 = DATA.transferencias.length;
+        DATA.transferencias = DATA.transferencias.filter(t =>
+          !idsPrevios.has(`${(t.beneficiario||'').toUpperCase().trim()}|${t.año||''}|${t.mes||''}|${Math.round(t.importe||0)}`)
+        );
+        eliminados = antesP2 - DATA.transferencias.length;
+        console.log(`[SIDIF] Reemplazar por historial: ${eliminados} eliminados`);
+      }
     }
-    // Agregar todos los registros del nuevo archivo
+
+    // Si no se pudo identificar el archivo anterior con certeza, NO eliminar nada más
+    // — es más seguro acumular y luego usar "Eliminar por período" manualmente
+    if (eliminados === 0) {
+      console.log(`[SIDIF] No se identificaron registros anteriores — se agregan sin eliminar`);
+    }
+
+    // Agregar registros del nuevo archivo
     DATA.transferencias.push(...sidifResult.rows);
+    console.log(`[SIDIF] Después de reemplazar: ${DATA.transferencias.length} registros`);
 
   } else if (modo === 'solo_nuevos') {
-    const clavesExistentes = new Set(DATA.transferencias.map(_claveTrans));
-    const nuevos = sidifResult.rows.filter(r => !clavesExistentes.has(_claveTrans(r)));
+    // Deduplicar solo por clave completa (beneficiario + año + mes + importe)
+    // NO usar clave sin fecha para no bloquear el mismo importe de distintos períodos
+    const clavesEx = new Set(DATA.transferencias.map(_claveTrans));
+    const nuevos = sidifResult.rows.filter(r => !clavesEx.has(_claveTrans(r)));
     DATA.transferencias.push(...nuevos);
-    sidifResult.imported = nuevos.length; // actualizar contador
+    sidifResult.imported = nuevos.length;
+    console.log(`[SIDIF] Solo nuevos: ${nuevos.length} de ${sidifResult.rows.length} agregados`);
 
   } else {
-    // 'todos': agregar sin filtrar
+    // 'todos': primera carga — agregar directamente
     DATA.transferencias.push(...sidifResult.rows);
+    console.log(`[SIDIF] Todos: ${sidifResult.rows.length} registros agregados`);
   }
 
   // Registrar en historial
@@ -9612,16 +9892,17 @@ function handleImportWorkbook(wb, fname) {
       (h.fname || '').toLowerCase().trim() === fnameNorm
     );
 
-    // ── Detectar duplicados por clave de registro ──────────────────
-    // Clave: beneficiario|año|mes|importe (identifica un pago único)
+    // ── Detectar duplicados: solo por clave completa (con año y mes) ──
+    // Esto evita marcar como duplicado el mismo importe de distintos períodos
     const claveReg = t =>
-      `${(t.beneficiario||'').toUpperCase()}|${t.año||''}|${t.mes||''}|${Math.round(t.importe||0)}`;
+      `${(t.beneficiario||'').toUpperCase().trim()}|${t.año||''}|${t.mes||''}|${Math.round(t.importe||0)}`;
 
     const clavesExistentes = new Set(DATA.transferencias.map(claveReg));
-    const rowsNuevos    = sidifResult.rows.filter(r => !clavesExistentes.has(claveReg(r)));
     const rowsDuplicados = sidifResult.rows.filter(r => clavesExistentes.has(claveReg(r)));
+    const rowsNuevos     = sidifResult.rows.filter(r => !clavesExistentes.has(claveReg(r)));
 
-    const hasDuplicados = rowsDuplicados.length > 0 || cargaAnterior;
+    // Mostrar diálogo solo si hay archivo anterior O hay duplicados reales (misma clave completa)
+    const hasDuplicados = cargaAnterior || rowsDuplicados.length > 0;
 
     // ── Si hay duplicados, pedir confirmación con opciones ─────────
     if (hasDuplicados) {
@@ -15231,13 +15512,122 @@ function _poblarCorrMasivaSelects() {
       archivosSinAño.map(a=>`<option value="${a}">${a}</option>`).join('');
   }
 
-  // Selector de año a asignar en opción C (todos los años posibles + nuevos)
+  // Selector de año a asignar en opción C
   const selAñoAsignar = document.getElementById('corr-año-asignar');
   if (selAñoAsignar) {
     const hoy = new Date().getFullYear();
     const todosAños = [...new Set([...años, ...Array.from({length:8},(_,i)=>hoy-7+i)])].sort();
     selAñoAsignar.innerHTML = '<option value="">— Año a asignar —</option>' +
       todosAños.map(y=>`<option value="${y}">${y}</option>`).join('');
+  }
+
+  // Selector de año en opción D (eliminar — solo años con datos)
+  const selDelAño = document.getElementById('del-año');
+  if (selDelAño) {
+    const prev = selDelAño.value;
+    selDelAño.innerHTML = '<option value="">— Elegir año —</option>' +
+      [...new Set(DATA.transferencias.map(t => t.año).filter(Boolean))].sort()
+        .map(y => `<option value="${y}" ${y == prev ? 'selected' : ''}>${y}</option>`).join('');
+    if (prev) _actualizarDelPreview();
+  }
+}
+
+// ── Sección D: Eliminar registros por período ──────────────────────
+
+// Poblar selector de año de eliminación y calcular preview en tiempo real
+function _actualizarDelPreview() {
+  const año = document.getElementById('del-año')?.value;
+  const mes  = parseInt(document.getElementById('del-mes')?.value) || null;
+  const prev = document.getElementById('del-preview');
+  if (!prev) return;
+
+  if (!año) { prev.textContent = ''; return; }
+
+  const afectados = DATA.transferencias.filter(t => {
+    if (String(t.año) !== año) return false;
+    if (mes && t.mes !== mes) return false;
+    return true;
+  });
+
+  const totalAfect = afectados.reduce((s, t) => s + (t.importe || 0), 0);
+  const MESES_N = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const periodo = mes ? `${MESES_N[mes]} ${año}` : `año ${año} completo`;
+  const fmt = v => Math.abs(v).toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 });
+
+  if (afectados.length === 0) {
+    prev.textContent = `Sin registros para ${periodo}`;
+    prev.style.color = 'var(--dim)';
+  } else {
+    prev.innerHTML = `<span style="color:var(--neg)">⚠ Se eliminarán <strong>${afectados.length}</strong> registros (${fmt(totalAfect)}) de ${periodo}</span>`;
+  }
+}
+
+function eliminarTransPorPeriodo() {
+  const año  = document.getElementById('del-año')?.value;
+  const mes  = parseInt(document.getElementById('del-mes')?.value) || null;
+  const res  = document.getElementById('del-resultado');
+
+  if (!año) {
+    if (res) { res.textContent = '⚠ Elegí un año primero.'; res.style.color = '#ff8c47'; }
+    return;
+  }
+
+  const MESES_N = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const periodo = mes ? `${MESES_N[mes]} ${año}` : `año ${año} completo`;
+
+  // Contar cuántos se van a eliminar
+  const afectados = DATA.transferencias.filter(t => {
+    if (String(t.año) !== año) return false;
+    if (mes && t.mes !== mes) return false;
+    return true;
+  });
+
+  if (afectados.length === 0) {
+    if (res) { res.textContent = 'Sin registros para ese período.'; res.style.color = 'var(--dim)'; }
+    return;
+  }
+
+  const totalAfect = afectados.reduce((s, t) => s + (t.importe || 0), 0);
+  const fmt = v => Math.abs(v).toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 });
+
+  // Confirmación explícita antes de eliminar
+  const ok = confirm(
+    `¿Confirmar eliminación?
+
+` +
+    `Período: ${periodo}
+` +
+    `Registros: ${afectados.length}
+` +
+    `Importe total: ${fmt(totalAfect)}
+
+` +
+    `Esta acción no se puede deshacer.`
+  );
+  if (!ok) return;
+
+  // Eliminar
+  const antes = DATA.transferencias.length;
+  DATA.transferencias = DATA.transferencias.filter(t => {
+    if (String(t.año) !== año) return true;
+    if (mes && t.mes !== mes) return true;
+    return false;
+  });
+  const eliminados = antes - DATA.transferencias.length;
+
+  // Actualizar UI
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
+  populateTransSelects();
+  buildTransferencias();
+  _actualizarDelPreview();
+
+  if (res) {
+    res.textContent = `✓ ${eliminados} registros eliminados de ${periodo}.`;
+    res.style.color = '#47ffb4';
+    setTimeout(() => { if (res) res.textContent = ''; }, 5000);
   }
 }
 
@@ -16005,7 +16395,17 @@ function updateCloudStatusBar(state, detail) {
   // Info tag en topbar
   const topTxt = document.getElementById('cloud-status-txt-top');
   if (topTxt) {
-    topTxt.textContent = state === 'syncing' ? '⏳ sync…' : state === 'ok' ? '✓ ' + (detail||'') : state === 'error' ? '✗ error' : '';
+    // Mostrar estado + fecha legible de última actualización
+    if (state === 'ok' && detail) {
+      const dStr = fmtFechaAR(detail) || detail;
+      topTxt.textContent = `Sheets: ${dStr}`;
+    } else if (state === 'syncing') {
+      topTxt.textContent = '⏳ sincronizando…';
+    } else if (state === 'error') {
+      topTxt.textContent = '✗ error Sheets';
+    } else {
+      topTxt.textContent = '';
+    }
     topTxt.style.color = s.color;
     topTxt.style.display = state === 'unconfigured' ? 'none' : 'inline';
   }
@@ -16417,6 +16817,69 @@ async function syncFromCloud(silent) {
 }
 
 // ── ESCRIBIR al Sheet (POST) ─────────────────────────────────────
+// ── Publicar solo las transferencias a Sheets ─────────────────────
+// Útil cuando las transferencias se cargaron en el dashboard pero no están en Sheets
+async function syncSoloTransferencias() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl || !_cloudToken) {
+    alert('Configurá la URL y token de Google Sheets primero (⚙ Sheets).');
+    return;
+  }
+
+  const n = (DATA.transferencias || []).length;
+  if (!n) { alert('No hay transferencias cargadas en el dashboard.'); return; }
+
+  const ok = confirm(
+    `¿Publicar ${n} registros de transferencias a Google Sheets?\n\n` +
+    `Esto reemplazará la hoja "transferencias" en el Spreadsheet.`
+  );
+  if (!ok) return;
+
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando transferencias…'; ind.style.color = '#47e8ff'; }
+
+  try {
+    const transRows = (DATA.transferencias || []).map(t => ({
+      saf:          t.saf          || '',
+      organismo:    t.organismo    || '',
+      beneficiario: t.beneficiario || '',
+      empresa:      t.empresa      || '',
+      ff:           t.ff           || '',
+      cgto:         t.cgto         || '',
+      observacion:  t.observacion  || '',
+      mes:          t.mes          || '',
+      año:          t.año          || '',
+      importe:      t.importe      || 0,
+      categoria:    t.categoria    || 'Sin Clasificar',
+      _archivo:     t._archivo     || '',
+      _hoja:        t._hoja        || '',
+    }));
+
+    const payload = {
+      token:     _cloudToken,
+      tab:       'all',
+      nota:      'Publicación de transferencias',
+      updatedBy: _cloudUser || 'cargador',
+      data:      { transferencias: transRows }
+    };
+
+    await fetch(_cloudUrl, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+
+    await new Promise(r => setTimeout(r, 2000));
+
+    if (ind) { ind.textContent = `✓ ${n} transferencias publicadas en Sheets`; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 5000);
+
+  } catch(err) {
+    if (ind) { ind.textContent = '✗ Error al publicar'; ind.style.color = 'var(--neg)'; }
+    alert('Error: ' + err.message);
+  }
+}
+
 async function syncToCloud(nota) {
   if (isReadonlyUser()) {
     showStorageStatus('⚠ Usuario de solo lectura — sin permisos de escritura', '#ff8c47');
@@ -16610,21 +17073,37 @@ function applyCloudData(cloud) {
     });
   }
 
-  // transferencias: rows tal cual
+  // transferencias: merge con los datos locales — Sheets es la fuente autoritativa
+  // pero si hay registros locales más recientes (por _archivo no en Sheets), preservarlos
   if (cloud.transferencias && cloud.transferencias.length) {
-    DATA.transferencias = cloud.transferencias.map(r => ({
-      saf:          r.saf || '',
-      organismo:    r.organismo || '',
+    const fromCloud = cloud.transferencias.map(r => ({
+      saf:          r.saf          || '',
+      organismo:    r.organismo    || '',
       beneficiario: r.beneficiario || '',
-      empresa:      r.empresa || '',
-      ff:           r.ff || '',
-      cgto:         r.cgto || '',
-      observacion:  r.observacion || '',
-      mes:          parseInt(r.mes) || 0,
-      año:          parseInt(r.año) || 0,
+      empresa:      r.empresa      || '',
+      ff:           r.ff           || '',
+      cgto:         r.cgto         || '',
+      observacion:  r.observacion  || '',
+      mes:          r.mes ? (parseInt(r.mes) || 0) : 0,
+      año:          r.año ? (parseInt(r.año) || 0) : 0,
       importe:      parseFloat(r.importe) || 0,
-      categoria:    r.categoria || 'Sin Clasificar',
+      categoria:    r.categoria    || 'Sin Clasificar',
+      _archivo:     r._archivo     || '',
+      _hoja:        r._hoja        || '',
     }));
+
+    // Detectar registros locales que NO están en Sheets (cargados después del último sync)
+    // usando _archivo como identificador de grupo
+    const archivosEnCloud = new Set(fromCloud.map(r => r._archivo).filter(Boolean));
+    const soloLocales = (DATA.transferencias || []).filter(t =>
+      t._archivo && !archivosEnCloud.has(t._archivo)
+    );
+
+    // Sheets + registros locales nuevos
+    DATA.transferencias = [...fromCloud, ...soloLocales];
+    if (soloLocales.length > 0) {
+      console.log(`[SYNC] Merge: ${fromCloud.length} de Sheets + ${soloLocales.length} solo locales`);
+    }
   }
 
   // notas
@@ -16793,8 +17272,22 @@ function buildCloudPayload() {
     return row;
   });
 
-  // transferencias
-  const transRows = (DATA.transferencias || []).map(t => ({ ...t }));
+  // transferencias — spread completo incluye _archivo y _hoja
+  const transRows = (DATA.transferencias || []).map(t => ({
+    saf:          t.saf          || '',
+    organismo:    t.organismo    || '',
+    beneficiario: t.beneficiario || '',
+    empresa:      t.empresa      || '',
+    ff:           t.ff           || '',
+    cgto:         t.cgto         || '',
+    observacion:  t.observacion  || '',
+    mes:          t.mes          || '',
+    año:          t.año          || '',
+    importe:      t.importe      || 0,
+    categoria:    t.categoria    || 'Sin Clasificar',
+    _archivo:     t._archivo     || '',  // campo clave para identificar origen
+    _hoja:        t._hoja        || '',
+  }));
 
   // notas: array de { empresa, nota }
   const notasRows = Object.entries(DATA.notas || {})
@@ -17380,41 +17873,11 @@ function clearStoredData() {
   showStorageStatus('Cache local borrado', '#ff8c47');
 }
 
-// ── Auto-publicar después de cada importación ────────────────────
-const _origHandleImportWorkbook = handleImportWorkbook;
-handleImportWorkbook = function(...args) {
-  _origHandleImportWorkbook.apply(this, args);
-  setTimeout(() => {
-    marcarPendienteGuardar();
-    // Si hay token y URL configurados, publicar automáticamente
-    if (_cloudToken && _cloudUrl) {
-      // Mostrar indicador de sync en curso
-      const indicator = document.getElementById('save-indicator');
-      if (indicator) {
-        indicator.textContent = '⏳ Publicando a Sheets automáticamente…';
-        indicator.style.color = '#e8ff47';
-      }
-      syncToCloud('Importación automática').then(() => {
-        if (indicator) {
-          indicator.textContent = '✓ Publicado a Sheets';
-          indicator.style.color = '#47ffb4';
-        }
-      }).catch(() => {
-        if (indicator) {
-          indicator.textContent = '⚠ No se pudo publicar automáticamente — hacé clic en ↑ Publicar';
-          indicator.style.color = '#ff8c47';
-        }
-      });
-    } else {
-      // Sin configuración de Sheets — recordar al usuario
-      const indicator = document.getElementById('save-indicator');
-      if (indicator) {
-        indicator.textContent = '💾 Datos sin publicar — usá ↑ Publicar o 💾 Guardar';
-        indicator.style.color = '#ff8c47';
-      }
-    }
-  }, 400);
-};
+// ── Auto-publicar: el auto-sync de 15s se encarga (ver _dispararAutoSync) ──
+// NO publicar inmediatamente tras handleImportWorkbook — hay race condition
+// cuando hay diálogo de duplicados: el setTimeout(400) ejecuta antes de que
+// el usuario confirme, enviando los datos SIN las nuevas transferencias a Sheets.
+// marcarPendienteGuardar() ya dispara el auto-sync con 15s de delay seguro.
 
 // ═══════════════════════════════════════════════════════════
 //  INIT
