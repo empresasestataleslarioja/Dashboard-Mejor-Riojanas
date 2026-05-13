@@ -1423,7 +1423,7 @@ self.onmessage = async (e) => {
           <button onclick="syncFromCloud();toggleExportMenu()" class="export-menu-item">↓ Descargar desde Sheets</button>
           <button onclick="syncToCloud();toggleExportMenu()" class="export-menu-item">↑ Publicar todo a Sheets</button>
           <button onclick="syncSoloTransferencias();toggleExportMenu()" class="export-menu-item">↑ Publicar solo transferencias</button>
-          <button onclick="toggleCloudPanel();toggleExportMenu()" class="export-menu-item">⚙ Configurar Sheets</button>
+          <button onclick="toggleExportMenu();setTimeout(function(){toggleCloudPanel(true);},60)" class="export-menu-item">⚙ Configurar Sheets</button>
           <div style="padding:5px 12px;font-size:8px;text-transform:uppercase;letter-spacing:.1em;
             color:var(--dim);border-top:1px solid var(--bd);font-family:var(--mono)">Mantenimiento</div>
           <button onclick="limpiezaTotalDatos();toggleExportMenu()" class="export-menu-item"
@@ -1604,7 +1604,7 @@ self.onmessage = async (e) => {
                 font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
                 ↓ Actualizar
               </button>
-              <button onclick="toggleCloudPanel();toggleSavePanel()" style="padding:7px 10px;
+              <button onclick="toggleSavePanel();setTimeout(function(){toggleCloudPanel(true);},60)" style="padding:7px 10px;
                 background:var(--s2);border:1px solid var(--bd2);color:var(--dim);
                 font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
                 ⚙
@@ -1710,7 +1710,27 @@ self.onmessage = async (e) => {
           Guardar configuración
         </button>
         <div id="cloud-cfg-msg" style="display:none;margin-top:6px;font-size:9px"></div>
-        <div id="cloud-cfg" style="display:none"></div><!-- compatibilidad -->
+        <div id="cloud-cfg" style="display:none"></div>
+
+        <!-- Bridge / Apps Script -->
+        <div style="border-top:1px solid var(--bd);padding-top:12px;margin-top:4px">
+          <div style="font-size:9px;color:var(--dim);margin-bottom:8px;line-height:1.6">
+            <strong style="color:var(--text)">Bridge Apps Script (lr_bridge_v3.gs)</strong><br>
+            Para actualizar el bridge en Google:
+            <ol style="margin:4px 0 0 14px;padding:0;font-size:8.5px;line-height:1.8">
+              <li>Abrí tu Spreadsheet de BI La Rioja</li>
+              <li>Menú <strong>Extensiones → Apps Script</strong></li>
+              <li>Seleccioná todo (Ctrl+A) y pegá el código del archivo .gs</li>
+              <li>Guardá (Ctrl+S)</li>
+              <li><strong>Implementar → Administrar implementaciones → ✏ → Nueva versión → Implementar</strong></li>
+            </ol>
+          </div>
+          <button onclick="descargarBridge()"
+            style="width:100%;padding:7px;background:rgba(71,232,255,.08);border:1px solid #47e8ff44;
+            color:#47e8ff;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+            ⬇ Descargar lr_bridge_v3.gs
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2271,30 +2291,43 @@ self.onmessage = async (e) => {
         </div>
         <div class="rub-grid" id="rub-editor"></div>
 
-        <!-- Agregar nueva empresa -->
-        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bd);
-          display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          <div style="font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
-            color:var(--dim);align-self:center;white-space:nowrap">+ Nueva empresa:</div>
-          <input id="rub-nueva-nombre" type="text" placeholder="Nombre de la empresa (mayúsculas)"
-            style="flex:2;min-width:180px;padding:6px 10px;background:var(--s2);
-            border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
-            font-size:10px;border-radius:3px;outline:none;text-transform:uppercase"
-            onfocus="this.style.borderColor='var(--y21)'"
-            onblur="this.style.borderColor='var(--bd2)'"
-            onkeydown="if(event.key==='Enter') agregarEmpresaRubro()">
-          <select id="rub-nueva-rubro"
-            style="flex:1;min-width:130px;padding:6px 10px;background:var(--s2);
-            border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
-            font-size:10px;border-radius:3px;outline:none">
-            <option value="">— Rubro —</option>
-          </select>
-          <button onclick="agregarEmpresaRubro()"
-            style="padding:6px 14px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.4);
-            color:#47ffb4;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;
-            white-space:nowrap">+ Agregar</button>
-          <span id="rub-nueva-msg" style="font-size:9px;font-family:var(--mono);
-            color:var(--dim);align-self:center"></span>
+        <!-- Agregar nuevo rubro y empresa — unificado -->
+        <div style="margin-top:14px;padding:12px 14px;border-top:1px solid var(--bd);
+          background:var(--s2);border-radius:0 0 5px 5px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <span style="font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;
+              color:#47e8ff;font-family:var(--mono);white-space:nowrap">+ Nuevo rubro</span>
+            <input id="rub-nuevo-nombre" type="text" placeholder="Nombre del rubro…"
+              style="flex:1;min-width:140px;padding:4px 8px;background:var(--s3);
+              border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
+              font-size:9.5px;border-radius:3px;outline:none"
+              onkeydown="if(event.key==='Enter')agregarRubroNuevo()">
+            <button onclick="agregarRubroNuevo()"
+              style="padding:4px 12px;background:rgba(71,232,255,.1);border:1px solid #47e8ff44;
+              color:#47e8ff;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              + Agregar rubro</button>
+          </div>
+          <div style="height:1px;background:var(--bd);margin:8px 0"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;
+              color:var(--y21);font-family:var(--mono);white-space:nowrap">+ Nueva empresa</span>
+            <input id="rub-nueva-nombre" type="text" placeholder="Nombre de la empresa…"
+              style="flex:2;min-width:160px;padding:4px 8px;background:var(--s3);
+              border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
+              font-size:9.5px;border-radius:3px;outline:none;text-transform:uppercase"
+              onkeydown="if(event.key==='Enter')agregarEmpresaRubro()">
+            <select id="rub-nueva-rubro"
+              style="flex:1;min-width:120px;padding:4px 8px;background:var(--s3);
+              border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
+              font-size:9px;border-radius:3px">
+              <option value="">— Rubro —</option>
+            </select>
+            <button onclick="agregarEmpresaRubro()"
+              style="padding:4px 12px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
+              color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              + Agregar empresa</button>
+            <span id="rub-nueva-msg" style="font-size:9px;font-family:var(--mono);color:var(--dim)"></span>
+          </div>
         </div>
       </div>
 
@@ -4107,13 +4140,34 @@ function loadRubros() {
     const saved = localStorage.getItem('lr_rubros_v4');
     rubros = saved ? JSON.parse(saved) : Object.assign({}, RUBROS_DEFAULT);
   } catch(e) { rubros = Object.assign({}, RUBROS_DEFAULT); }
+  // Cargar lista de rubros personalizada si existe
+  try {
+    const savedList = localStorage.getItem('lr_rubro_list_v4');
+    if (savedList) {
+      const { list, colors } = JSON.parse(savedList);
+      if (Array.isArray(list) && list.length >= RUBRO_LIST.length) {
+        list.forEach(r => {
+          if (!RUBRO_LIST.includes(r)) {
+            RUBRO_LIST.push(r);
+            RUBRO_COLORS[r] = colors?.[r] || '#47e8ff';
+            RUBRO_CSS[r]    = 'rb-custom';
+          }
+        });
+      }
+    }
+  } catch(e) {}
 }
 function saveRubros() {
   try {
+    // Guardar rubros + lista personalizada de rubros
     localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros));
+    localStorage.setItem('lr_rubro_list_v4', JSON.stringify({
+      list:   RUBRO_LIST,
+      colors: RUBRO_COLORS,
+    }));
     const st = document.getElementById('rub-save-status');
-    st.textContent = '✓ Guardado'; st.style.color = 'var(--pos)';
-    setTimeout(() => { st.textContent = ''; }, 2500);
+    if (st) { st.textContent = '✓ Guardado'; st.style.color = 'var(--pos)';
+      setTimeout(() => { st.textContent = ''; }, 2500); }
   } catch(e) {}
   rebuildActive();
 }
@@ -4801,6 +4855,9 @@ function buildRubros() {
     }]
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
+  // Estado del portafolio
+  buildEstadoPortafolio();
+
   // Evolución de facturación por rubro — líneas
   mkChart('ch-rub-evo','line',{
     labels: years.map(String),
@@ -4827,18 +4884,44 @@ function buildRubros() {
     }))
   });
 
-  // Editor de asignaciones
+  // Editor de asignaciones — con rename + agregar empresa + agregar rubro
   const editor = document.getElementById('rub-editor');
   editor.innerHTML = allEmps.map(emp => {
-    const r = getRubro(emp);
-    const col = RUBRO_COLORS[r];
-    const opts = [...RUBRO_LIST,'Sin rubro'].map(ro => `<option value="${ro}"${ro===r?' selected':''}>${ro}</option>`).join('');
-    return `<div class="rub-row" id="rubrow-${emp.replace(/\s+/g,'-')}">
+    const r    = getRubro(emp);
+    const opts = [...RUBRO_LIST,'Sin rubro'].map(ro =>
+      `<option value="${ro}"${ro===r?' selected':''}>${ro}</option>`).join('');
+    const empId = emp.replace(/[^a-zA-Z0-9]/g,'_');
+    return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}">
       <span class="rb ${RUBRO_CSS[r]}" style="flex-shrink:0">${r.slice(0,3)}</span>
-      <span class="rub-name" title="${emp}">${emp}</span>
+      <span class="rub-name" id="rubname-${empId}" title="${emp}"
+        ondblclick="_iniciarRenombre('${emp}')"
+        style="cursor:text" title="Doble click para renombrar">${emp}</span>
       <select class="rub-sel" onchange="setRubro('${emp}',this.value,this)">${opts}</select>
+      <button onclick="_iniciarRenombre('${emp}')"
+        style="padding:2px 6px;background:none;border:1px solid var(--bd2);
+        color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
+        title="Renombrar empresa">✎</button>
     </div>`;
-  }).join('');
+  }).join('') +
+  // Fila de nueva empresa integrada al final del editor
+  `<div class="rub-row" style="border-top:2px solid var(--bd);margin-top:4px;padding-top:8px">
+    <span style="font-size:9px;color:var(--dim);font-family:var(--mono);flex-shrink:0;width:28px">+</span>
+    <input id="rub-inline-nombre" type="text" placeholder="Nombre empresa…"
+      style="flex:1;padding:3px 8px;background:var(--s2);border:1px solid var(--bd2);
+      color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none"
+      onkeydown="if(event.key==='Enter')agregarEmpresaRubroInline()">
+    <select id="rub-inline-rubro"
+      style="padding:3px 8px;background:var(--s2);border:1px solid var(--bd2);
+      color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+      <option value="">— Rubro —</option>
+      ${RUBRO_LIST.map(r=>`<option value="${r}">${r}</option>`).join('')}
+    </select>
+    <button onclick="agregarEmpresaRubroInline()"
+      style="padding:3px 10px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
+      color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+      + Agregar
+    </button>
+  </div>`;
 }
 
 // ── Poblar el select de rubros en el formulario de nueva empresa ──
@@ -4901,6 +4984,99 @@ function agregarEmpresaRubro() {
   marcarPendienteGuardar();
 }
 
+// ── Renombrar empresa ─────────────────────────────────────────────
+function _iniciarRenombre(emp) {
+  const empId = emp.replace(/[^a-zA-Z0-9]/g,'_');
+  const span  = document.getElementById('rubname-' + empId);
+  if (!span) return;
+  const input = document.createElement('input');
+  input.type        = 'text';
+  input.value       = emp;
+  input.style.cssText = 'flex:1;padding:2px 6px;background:var(--s2);border:1px solid #47e8ff;' +
+    'color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:160px';
+  input.onblur  = () => _confirmarRenombre(emp, input.value.trim());
+  input.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { span.style.display=''; input.remove(); }
+  };
+  span.style.display = 'none';
+  span.parentNode.insertBefore(input, span);
+  input.select();
+}
+
+function _confirmarRenombre(empViejo, empNuevo) {
+  if (!empNuevo || empNuevo === empViejo) {
+    buildRubros(); return;
+  }
+  empNuevo = empNuevo.toUpperCase();
+  if (rubros[empNuevo] !== undefined) {
+    alert('Ya existe una empresa con ese nombre.');
+    buildRubros(); return;
+  }
+
+  // Migrar en rubros
+  const rubroActual = rubros[empViejo];
+  rubros[empNuevo] = rubroActual;
+  delete rubros[empViejo];
+
+  // Migrar en DATA
+  ['fact','sit','notas'].forEach(modulo => {
+    if (DATA[modulo] && DATA[modulo][empViejo] !== undefined) {
+      DATA[modulo][empNuevo] = DATA[modulo][empViejo];
+      delete DATA[modulo][empViejo];
+    }
+  });
+  // Personal
+  const pd = (DATA.personal || []).find(d => d.e === empViejo);
+  if (pd) pd.e = empNuevo;
+
+  saveRubros();
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
+  populateSelects();
+  buildRubros();
+}
+
+// ── Agregar empresa directamente desde el editor ──────────────────
+function agregarEmpresaRubroInline() {
+  const nombre = (document.getElementById('rub-inline-nombre')?.value || '').trim().toUpperCase();
+  const rubro  = document.getElementById('rub-inline-rubro')?.value || '';
+  if (!nombre) return;
+  if (!rubro)  { alert('Seleccioná un rubro para la empresa.'); return; }
+  if (rubros[nombre]) { alert('"' + nombre + '" ya existe.'); return; }
+
+  rubros[nombre] = rubro;
+  if (!DATA.fact[nombre])  DATA.fact[nombre]  = {};
+  if (!DATA.sit[nombre])   DATA.sit[nombre]   = {};
+  if (!DATA.notas[nombre]) DATA.notas[nombre] = '';
+
+  saveRubros();
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
+  populateSelects();
+  buildRubros();
+}
+
+// ── Agregar rubro nuevo a la lista ────────────────────────────────
+function agregarRubroNuevo() {
+  const input = document.getElementById('rub-nuevo-nombre');
+  const nombre = (input?.value || '').trim();
+  if (!nombre) { alert('Ingresá el nombre del rubro.'); return; }
+  if (RUBRO_LIST.includes(nombre)) { alert('Ese rubro ya existe.'); return; }
+
+  // Asignar color automático (ciclo de colores disponibles)
+  const colores = ['#47e8ff','#47ffb4','#ff8c47','#c447ff','#ff4766','#e8ff47','#ff6b80','#4787ff'];
+  const color   = colores[RUBRO_LIST.length % colores.length];
+  RUBRO_LIST.push(nombre);
+  RUBRO_COLORS[nombre] = color;
+  RUBRO_CSS[nombre]    = 'rb-custom';
+
+  if (input) input.value = '';
+  saveRubros();
+  populateSelects();
+  buildRubros();
+}
+
 function setRubro(emp, val, selEl) {
   rubros[emp] = val === 'Sin rubro' ? undefined : val;
   if (!val || val === 'Sin rubro') delete rubros[emp];
@@ -4918,6 +5094,75 @@ function filterRubroPanel(r) {
   document.querySelectorAll('#rub-chips .chip').forEach(ch => {
     if (ch.dataset.rub === r) ch.click();
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PANEL: ESTADO DEL PORTAFOLIO (cobertura de datos)
+// ═══════════════════════════════════════════════════════════
+function buildEstadoPortafolio() {
+  const cont = document.getElementById('estado-portafolio-cont');
+  if (!cont) return;
+
+  const _rub = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const allEmps = [...new Set([
+    ...Object.keys(_rub),
+    ...Object.keys(DATA.fact || {}),
+    ...Object.keys(DATA.sit  || {}),
+  ])].sort();
+
+  const lastY = ys().slice(-1)[0];
+  const fmt  = v => v > 0 ? '✓' : '—';
+
+  const tieneFact   = e => (DATA.fact?.[e]?.[lastY] || 0) > 0;
+  const tieneRes    = e => DATA.sit?.[e]?.[lastY] != null && DATA.sit[e][lastY] !== 0;
+  const tienePerso  = e => (DATA.personal||[]).find(d=>d.e===e) != null;
+  const tieneBal    = e => Object.values(_balances||{}).some(b=>b.empresa===e||b.vinculada===e);
+  const tieneRubro  = e => _rub[e] && _rub[e] !== 'Sin rubro';
+
+  // Score de cobertura 0-5
+  const score = e => [tieneFact,tieneRes,tienePerso,tieneBal,tieneRubro].filter(f=>f(e)).length;
+
+  const scoreColor = s => s===5?'#47ffb4':s>=3?'#e8ff47':s>=1?'#ff8c47':'#ff4766';
+
+  let html = `<table class="tbl" style="font-size:9.5px;width:100%">
+    <thead><tr style="position:sticky;top:0;background:var(--s1)">
+      <th style="text-align:left">Empresa</th>
+      <th style="text-align:left">Rubro</th>
+      <th title="Facturación ${lastY}">Fact.</th>
+      <th title="Resultado ${lastY}">Res.</th>
+      <th title="Personal">Pers.</th>
+      <th title="Balance cargado">Bal.</th>
+      <th title="Cobertura">Score</th>
+    </tr></thead><tbody>`;
+
+  allEmps.forEach((e,i) => {
+    const s   = score(e);
+    const bg  = i%2===0?'':'background:var(--s2)';
+    const rub = _rub[e] || 'Sin rubro';
+    const col = typeof RUBRO_COLORS !== 'undefined' ? (RUBRO_COLORS[rub]||'var(--dim)') : 'var(--dim)';
+    const celda = (ok, title='') =>
+      `<td style="text-align:center;color:${ok?'#47ffb4':'var(--bd2)'}" title="${title}">${ok?'✓':'—'}</td>`;
+    html += `<tr style="${bg}">
+      <td style="font-weight:600;white-space:nowrap">${e}</td>
+      <td><span style="font-size:8px;padding:1px 5px;border-radius:2px;
+        background:${col}22;color:${col};border:1px solid ${col}44">${rub}</span></td>
+      ${celda(tieneFact(e),  'Facturación ' + lastY)}
+      ${celda(tieneRes(e),   'Resultado ' + lastY)}
+      ${celda(tienePerso(e), 'Personal')}
+      ${celda(tieneBal(e),   'Balance cargado')}
+      <td style="text-align:center">
+        <span style="font-family:var(--mono);font-weight:700;color:${scoreColor(s)}">${s}/5</span>
+      </td>
+    </tr>`;
+  });
+
+  const completas = allEmps.filter(e=>score(e)===5).length;
+  html += `</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--bd)">
+    <td colspan="6" style="color:var(--dim);font-size:9px">${completas} de ${allEmps.length} empresas con cobertura completa</td>
+    <td></td>
+  </tr></tfoot></table>`;
+
+  cont.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -12064,7 +12309,12 @@ document.addEventListener('visibilitychange', () => {
 
 // Salvaguarda adicional: guardar antes de cerrar la pestaña
 window.addEventListener('beforeunload', () => {
-  try { saveDataToLocalCache(); } catch(e) {}
+  try {
+    saveDataToLocalCache();
+    // Guardar rubros explícitamente también
+    if (typeof rubros !== 'undefined')
+      localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros));
+  } catch(e) {}
 });
 
 // ── Dispatcher: PDF o Excel — con control de duplicados ─────────
@@ -17674,6 +17924,19 @@ function updateVizSummary() {
 
 
 // ── Panel flotante Cloud ─────────────────────────────────────────
+function descargarBridge() {
+  const codigo = "// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n//  lr_bridge_v3.gs \u2014 Google Apps Script\n//  Dashboard BI La Rioja v6\n//  Cambios vs v2:\n//    \u00b7 Soporte hojas: rubros, rubros_lista\n//    \u00b7 Protecci\u00f3n anti-duplicaci\u00f3n: transferencias y balances\n//      se reemplazan siempre por el payload completo (sin merge)\n//    \u00b7 Rubros: merge inteligente (no sobreescribir con vac\u00edo)\n//    \u00b7 Auditor\u00eda ampliada con rubros\n// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\nconst SHEET_ID    = '1WCs8iiEnGsa641l2vd5yTy2mczM96-KLVbrscD_Rw40';\nconst TOKEN_VALID = 'LR2025token';\n\nconst TAB = {\n  fact:           'fact',\n  resultado:      'resultado',\n  personal:       'personal',\n  transferencias: 'transferencias',\n  notas:          'notas',\n  presupuesto:    'presupuesto',\n  balances:       'balances',\n  balances_rubros:'balances_rubros',\n  rubros:         'rubros',\n  rubros_lista:   'rubros_lista',\n  meta:           'meta',\n  auditoria:      'auditoria',\n  log:            '_log',\n};\n\n// \u2500\u2500 GET \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction doGet(e) {\n  const tab = (e.parameter.tab || 'all').toLowerCase();\n  const ss  = SpreadsheetApp.openById(SHEET_ID);\n  if (tab === 'meta') return jsonResp({ meta: leerMeta(ss) });\n  return jsonResp({\n    fact:            leerHoja(ss, TAB.fact),\n    resultado:       leerHoja(ss, TAB.resultado),\n    personal:        leerHoja(ss, TAB.personal),\n    transferencias:  leerHoja(ss, TAB.transferencias),\n    notas:           leerHoja(ss, TAB.notas),\n    presupuesto:     leerHoja(ss, TAB.presupuesto),\n    balances:        leerHoja(ss, TAB.balances),\n    balances_rubros: leerHoja(ss, TAB.balances_rubros),\n    rubros:          leerHoja(ss, TAB.rubros),\n    rubros_lista:    leerHoja(ss, TAB.rubros_lista),\n    meta:            leerMeta(ss),\n  });\n}\n\n// \u2500\u2500 POST \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction doPost(e) {\n  const ss      = SpreadsheetApp.openById(SHEET_ID);\n  const savedAt = new Date().toISOString();\n\n  try {\n    let body;\n    const rawContents = (e.postData && e.postData.contents) ? e.postData.contents.trim() : '';\n    const rawParam    = (e.parameter && e.parameter.json)   ? e.parameter.json.trim()    : '';\n    const rawSrc      = rawContents || rawParam;\n\n    if (!rawSrc) {\n      escribirLog(ss, savedAt, 'ERROR_VACIO', 'Sin datos recibidos', JSON.stringify(e.parameter||{}));\n      return jsonResp({ ok: false, error: 'Sin datos en el request' });\n    }\n\n    try { body = JSON.parse(rawSrc); }\n    catch(parseErr) {\n      escribirLog(ss, savedAt, 'ERROR_PARSE', parseErr.message, rawSrc.slice(0, 300));\n      return jsonResp({ ok: false, error: 'JSON inv\u00e1lido: ' + parseErr.message });\n    }\n\n    const token   = body.token || '';\n    const payload = body.data  || {};\n    const updBy   = body.updatedBy || 'usuario';\n    const nota    = body.nota || '';\n\n    if (token !== TOKEN_VALID) {\n      escribirLog(ss, savedAt, 'ERROR_TOKEN', 'Token: ' + token, '');\n      return jsonResp({ ok: false, error: 'Token inv\u00e1lido' });\n    }\n\n    const resultados = {};\n\n    // \u2500\u2500 Secciones est\u00e1ndar (reemplazo total) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    ['fact','resultado','personal','notas','presupuesto'].forEach(sec => {\n      if (Array.isArray(payload[sec])) {\n        escribirHoja(ss, TAB[sec], payload[sec]);\n        resultados[sec] = payload[sec].length;\n      }\n    });\n\n    // \u2500\u2500 TRANSFERENCIAS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    // Reemplazo total con deduplicaci\u00f3n previa en el payload\n    // El dashboard ya env\u00eda datos deduplicados \u2014 el bridge solo escribe\n    if (Array.isArray(payload.transferencias)) {\n      // Deduplicar en el bridge tambi\u00e9n como segunda l\u00ednea de defensa\n      const seen = new Set();\n      const dedup = payload.transferencias.filter(r => {\n        const k = [r.beneficiario, r.a\u00f1o, r.mes, r.importe].join('|');\n        if (seen.has(k)) return false;\n        seen.add(k); return true;\n      });\n      escribirHoja(ss, TAB.transferencias, dedup);\n      resultados.transferencias = dedup.length;\n      if (dedup.length < payload.transferencias.length) {\n        resultados.transferencias_dedup = payload.transferencias.length - dedup.length;\n      }\n    }\n\n    // \u2500\u2500 BALANCES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    // Reemplazo total con deduplicaci\u00f3n previa (empresa+periodo)\n    if (Array.isArray(payload.balances)) {\n      const seen = new Set();\n      const dedup = payload.balances.filter(r => {\n        const k = (r.empresa || '') + '_' + (r.periodo || '');\n        if (seen.has(k)) return false;\n        seen.add(k); return true;\n      });\n      reemplazarHojaConHeaders(ss, TAB.balances, dedup);\n      resultados.balances = dedup.length;\n    } else {\n      resultados.balances_status = 'NO_RECIBIDO';\n    }\n\n    // \u2500\u2500 BALANCES_RUBROS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    if (Array.isArray(payload.balances_rubros)) {\n      escribirHoja(ss, TAB.balances_rubros, payload.balances_rubros);\n      resultados.balances_rubros = payload.balances_rubros.length;\n    }\n\n    // \u2500\u2500 RUBROS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    // Merge inteligente: si el dashboard env\u00eda rubros, reemplazar\n    // Si el payload es vac\u00edo, NO borrar los existentes en Sheets\n    if (Array.isArray(payload.rubros) && payload.rubros.length > 0) {\n      // Deduplicar por empresa\n      const seen = new Set();\n      const dedup = payload.rubros.filter(r => {\n        if (seen.has(r.empresa)) return false;\n        seen.add(r.empresa); return true;\n      });\n      escribirHoja(ss, TAB.rubros, dedup);\n      resultados.rubros = dedup.length;\n    }\n\n    // \u2500\u2500 RUBROS_LISTA \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    if (Array.isArray(payload.rubros_lista) && payload.rubros_lista.length > 0) {\n      escribirHoja(ss, TAB.rubros_lista, payload.rubros_lista);\n      resultados.rubros_lista = payload.rubros_lista.length;\n    }\n\n    escribirMeta(ss, savedAt, updBy, nota);\n    registrarAuditoria(ss, savedAt, updBy, nota, resultados);\n    escribirLog(ss, savedAt, 'OK', JSON.stringify(resultados), '');\n\n    return jsonResp({ ok: true, savedAt, resultados });\n\n  } catch(err) {\n    escribirLog(ss, savedAt, 'ERROR', err.message, err.stack ? err.stack.slice(0,300) : '');\n    return jsonResp({ ok: false, error: err.message });\n  }\n}\n\n// \u2500\u2500 Reemplazar hoja con headers expl\u00edcitos (balances) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction reemplazarHojaConHeaders(ss, nombre, rows) {\n  let hoja = ss.getSheetByName(nombre);\n  if (!hoja) {\n    if (!rows || rows.length === 0) return;\n    hoja = ss.insertSheet(nombre);\n  }\n  const maxRow = hoja.getMaxRows();\n  const maxCol = hoja.getMaxColumns();\n  if (maxRow > 0 && maxCol > 0) {\n    hoja.getRange(1, 1, maxRow, maxCol).clearContent();\n  }\n  if (!rows || rows.length === 0) return;\n  const headers = Object.keys(rows[0]);\n  const matrix  = [\n    headers,\n    ...rows.map(r => headers.map(h => {\n      const v = r[h];\n      return (v === null || v === undefined) ? '' : v;\n    }))\n  ];\n  hoja.getRange(1, 1, matrix.length, headers.length).setValues(matrix);\n}\n\n// \u2500\u2500 Escribir hoja gen\u00e9rica con reemplazo completo \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction escribirHoja(ss, nombre, rows) {\n  let hoja = ss.getSheetByName(nombre);\n  if (!hoja) hoja = ss.insertSheet(nombre);\n  hoja.clearContents();\n  if (!rows || rows.length === 0) return;\n  const headers = Object.keys(rows[0]);\n  const matrix  = [\n    headers,\n    ...rows.map(r => headers.map(h => {\n      const v = r[h];\n      return (v === null || v === undefined) ? '' : v;\n    }))\n  ];\n  hoja.getRange(1, 1, matrix.length, headers.length).setValues(matrix);\n}\n\n// \u2500\u2500 Leer hoja \u2192 array de objetos \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction leerHoja(ss, nombre) {\n  const hoja = ss.getSheetByName(nombre);\n  if (!hoja) return [];\n  const lastRow = hoja.getLastRow();\n  const lastCol = hoja.getLastColumn();\n  if (lastRow < 2 || lastCol < 1) return [];\n  const datos   = hoja.getRange(1, 1, lastRow, lastCol).getValues();\n  const headers = datos[0].map(String);\n  return datos.slice(1)\n    .filter(row => row.some(c => c !== '' && c !== null && c !== undefined))\n    .map(row => {\n      const obj = {};\n      headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? row[i] : ''; });\n      return obj;\n    });\n}\n\n// \u2500\u2500 Meta \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction leerMeta(ss) {\n  const hoja = ss.getSheetByName(TAB.meta);\n  if (!hoja || hoja.getLastRow() < 2) return {};\n  const vals = hoja.getRange(2, 1, 1, 3).getValues()[0];\n  return { savedAt: vals[0] || '', updatedBy: vals[1] || '', nota: vals[2] || '' };\n}\n\nfunction escribirMeta(ss, savedAt, updBy, nota) {\n  let hoja = ss.getSheetByName(TAB.meta);\n  if (!hoja) hoja = ss.insertSheet(TAB.meta);\n  hoja.clearContents();\n  hoja.getRange(1, 1, 2, 3).setValues([\n    ['savedAt','updatedBy','nota'],\n    [savedAt,  updBy,      nota ]\n  ]);\n}\n\n// \u2500\u2500 Log \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction escribirLog(ss, fecha, estado, mensaje, detalle) {\n  try {\n    let hoja = ss.getSheetByName(TAB.log);\n    if (!hoja) {\n      hoja = ss.insertSheet(TAB.log);\n      hoja.appendRow(['fecha','estado','mensaje','detalle']);\n    }\n    hoja.appendRow([fecha, estado, String(mensaje).slice(0,500), String(detalle).slice(0,500)]);\n    const last = hoja.getLastRow();\n    if (last > 101) hoja.deleteRows(2, last - 101);\n  } catch(e) {}\n}\n\n// \u2500\u2500 Auditor\u00eda \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction registrarAuditoria(ss, savedAt, updBy, nota, resultados) {\n  try {\n    let hoja = ss.getSheetByName(TAB.auditoria);\n    if (!hoja) {\n      hoja = ss.insertSheet(TAB.auditoria);\n      hoja.appendRow(['fecha','usuario','nota','fact','resultado','personal',\n                      'transferencias','notas','presupuesto','balances','rubros']);\n    }\n    hoja.appendRow([\n      savedAt, updBy, nota,\n      resultados.fact           || 0,\n      resultados.resultado      || 0,\n      resultados.personal       || 0,\n      resultados.transferencias || 0,\n      resultados.notas          || 0,\n      resultados.presupuesto    || 0,\n      resultados.balances       !== undefined ? resultados.balances : (resultados.balances_status || '?'),\n      resultados.rubros         || 0,\n    ]);\n    const last = hoja.getLastRow();\n    if (last > 201) hoja.deleteRows(2, last - 201);\n  } catch(e) {}\n}\n\n// \u2500\u2500 JSON response \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction jsonResp(data) {\n  return ContentService\n    .createTextOutput(JSON.stringify(data))\n    .setMimeType(ContentService.MimeType.JSON);\n}\n";
+  const blob = new Blob([codigo], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'lr_bridge_v3.gs';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function toggleCloudPanel(forceState) {
   const panel = document.getElementById('cloud-panel');
   if (!panel) return;
@@ -17690,7 +17953,12 @@ function toggleCloudPanel(forceState) {
 document.addEventListener('click', function(e) {
   const panel = document.getElementById('cloud-panel');
   const btn   = document.getElementById('btn-cloud-cfg');
-  if (panel && panel.style.display !== 'none' && !panel.contains(e.target) && e.target !== btn && !btn?.contains(e.target)) {
+  const menu  = document.getElementById('export-menu');
+  // No cerrar si el click fue en el menú exportar (el panel está a punto de abrirse)
+  if (menu && menu.contains(e.target)) return;
+  if (panel && panel.style.display !== 'none' &&
+      !panel.contains(e.target) &&
+      e.target !== btn && !btn?.contains(e.target)) {
     panel.style.display = 'none';
   }
 });
@@ -18568,6 +18836,53 @@ function applyCloudData(cloud) {
       Object.keys(_balances).length === 0) {
     // Forzar reconstrucción si venimos de restauración desde Sheets
     }
+  // Restaurar rubros desde Sheets
+  // Si hay rubros locales → merge (local prevalece, se agregan los de Sheets que falten)
+  // Si no hay locales → usar Sheets como fuente de restauración
+  if (Array.isArray(cloud.rubros) && cloud.rubros.length) {
+    const tieneLocales = Object.keys(rubros || {}).length > 0;
+    if (tieneLocales) {
+      // Merge: solo agregar los que no existen localmente
+      cloud.rubros.forEach(r => {
+        if (r.empresa && r.rubro && r.rubro !== 'Sin rubro' && !rubros[r.empresa]) {
+          rubros[r.empresa] = r.rubro;
+        }
+      });
+      console.log('[SYNC] Rubros: merge Sheets+local, total:', Object.keys(rubros).length);
+    } else {
+      // Sin locales → restaurar completo desde Sheets
+      cloud.rubros.forEach(r => {
+        if (r.empresa && r.rubro && r.rubro !== 'Sin rubro') {
+          rubros[r.empresa] = r.rubro;
+        }
+      });
+      console.log('[SYNC] Rubros restaurados desde Sheets:', Object.keys(rubros).length);
+    }
+    try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
+  }
+
+  // Restaurar lista de rubros personalizados
+  if (Array.isArray(cloud.rubros_lista) && cloud.rubros_lista.length) {
+    const nombresCloud = cloud.rubros_lista
+      .sort((a,b) => (a.orden||0) - (b.orden||0))
+      .map(r => r.nombre).filter(Boolean);
+    nombresCloud.forEach(r => {
+      if (r && !RUBRO_LIST.includes(r)) {
+        RUBRO_LIST.push(r);
+        if (cloud.rubros_lista.find) {
+          const entry = cloud.rubros_lista.find(x => x.nombre === r);
+          if (entry?.color) RUBRO_COLORS[r] = entry.color;
+        }
+        RUBRO_CSS[r] = 'rb-custom';
+      }
+    });
+    try {
+      localStorage.setItem('lr_rubro_list_v4', JSON.stringify({
+        list: RUBRO_LIST, colors: RUBRO_COLORS
+      }));
+    } catch(e) {}
+  }
+
   if (Array.isArray(cloud.balances_rubros) && cloud.balances_rubros.length &&
       Object.values(_balances).some(b => !b.estructura_er?.length)) {
     // Agrupar filas por clave empresa_periodo
@@ -18776,9 +19091,18 @@ function buildCloudPayload() {
     }));
   });
 
+  // Rubros: hoja con asignaciones empresa→rubro + lista de rubros personalizados
+  const rubrosRows = Object.entries(rubros || {}).map(([emp, rub]) => ({
+    empresa: emp, rubro: rub || 'Sin rubro'
+  }));
+  // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
+  const rubroListaRows = (typeof RUBRO_LIST !== 'undefined' ? RUBRO_LIST : []).map((r, i) => ({
+    orden: i, nombre: r, color: (typeof RUBRO_COLORS !== 'undefined' ? RUBRO_COLORS[r] : '') || ''
+  }));
+
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
            notas: notasRows, presupuesto: presRows, balances: balRows,
-           balances_rubros: balRubrosRows };
+           balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows };
 }
 
 // ── Cache local (fallback sin conexión) ──────────────────────────
@@ -18794,6 +19118,8 @@ function saveDataToLocalCache() {
       presupuesto:   DATA.presupuesto || {},
       importHistory: DATA.importHistory || [],
       _balances:     Object.values(_balances || {}),
+      _rubros:       rubros || {},
+      _rubroList:    RUBRO_LIST ? [...RUBRO_LIST] : [],
       savedAt: nowAR()
     };
     localStorage.setItem(LS_KEY, JSON.stringify(snap));
@@ -19172,6 +19498,23 @@ function loadDataFromLocalCache() {
       // Restaurar balances analizados desde _embeddedSnap
       // PERO: si localStorage tiene una versión más reciente (el usuario
       // eliminó balances después de exportar el HTML), usar esa.
+      // Restaurar rubros del snapshot si están disponibles
+      if (snap._rubros && Object.keys(snap._rubros).length > 0) {
+        const tieneLocales = Object.keys(rubros || {}).length > 0;
+        if (!tieneLocales) {
+          rubros = snap._rubros;
+          try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
+        }
+      }
+      if (Array.isArray(snap._rubroList) && snap._rubroList.length > RUBRO_LIST.length) {
+        snap._rubroList.forEach(r => {
+          if (r && !RUBRO_LIST.includes(r)) {
+            RUBRO_LIST.push(r);
+            RUBRO_CSS[r] = 'rb-custom';
+          }
+        });
+      }
+
       let balancesDesdeSnap = snap._balances || [];
       try {
         const lsRaw = localStorage.getItem(LS_KEY);
