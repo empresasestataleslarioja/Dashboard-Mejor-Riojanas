@@ -1446,6 +1446,8 @@ self.onmessage = async (e) => {
             color:var(--dim);border-top:1px solid var(--bd);font-family:var(--mono)">Mantenimiento</div>
           <button onclick="limpiezaTotalDatos();toggleExportMenu()" class="export-menu-item"
             style="color:#ff8c47">🧹 Limpiar duplicados + publicar a Sheets</button>
+          <button onclick="resetTransferenciasLocal();toggleExportMenu()" class="export-menu-item"
+            style="color:#ff4766">⚠ Resetear transferencias locales</button>
         </div>
 
         <!-- IDs ocultos para compatibilidad -->
@@ -2605,6 +2607,32 @@ self.onmessage = async (e) => {
       </div>
 
       <!-- Panel de auditoría de transferencias -->
+      <!-- Reset de emergencia -->
+      <div id="panel-reset-trans" style="display:none;margin-bottom:10px;padding:12px 14px;
+        background:rgba(255,71,102,.06);border:1px solid #ff476633;border-radius:4px">
+        <div style="font-size:9px;color:#ff4766;font-family:var(--mono);font-weight:700;margin-bottom:8px">
+          ⚠ RESETEAR TRANSFERENCIAS LOCALES
+        </div>
+        <div style="font-size:9px;color:var(--dim);margin-bottom:10px;line-height:1.6">
+          Elimina todas las transferencias del almacenamiento local de este browser.<br>
+          Usá esto solo si los datos locales están corruptos o incorrectos.<br>
+          <strong style="color:#ff4766">No afecta Google Sheets.</strong>
+          Después de resetear reimportá los archivos SIDIF.
+        </div>
+        <button onclick="ejecutarResetTrans()"
+          style="padding:6px 16px;background:rgba(255,71,102,.2);border:1.5px solid #ff4766;
+          color:#ff4766;font-family:var(--mono);font-size:10px;font-weight:700;
+          border-radius:3px;cursor:pointer">
+          ⚠ Confirmar reset — borrar transferencias locales
+        </button>
+        <button onclick="document.getElementById('panel-reset-trans').style.display='none'"
+          style="padding:6px 10px;background:none;border:1px solid var(--bd2);
+          color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:3px;
+          cursor:pointer;margin-left:8px">
+          Cancelar
+        </button>
+      </div>
+
       <div id="panel-auditoria-trans" style="display:none;margin-bottom:12px;padding:12px 14px;
         background:rgba(71,232,255,.04);border:1px solid rgba(71,232,255,.2);border-radius:5px">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
@@ -2633,6 +2661,12 @@ self.onmessage = async (e) => {
               style="padding:6px 14px;background:rgba(71,255,180,.1);border:1px solid #47ffb440;
               color:#47ffb4;font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer">
               ⬇ Exportar Excel de clasificaciones
+            </button>
+            <button onclick="restaurarTransDesdeBackup()"
+              style="padding:6px 14px;background:rgba(255,71,102,.08);border:1px solid #ff476644;
+              color:#ff4766;font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer;margin-left:6px"
+              title="Restaura el estado previo al último sync desde Sheets">
+              ↩ Restaurar backup pre-sync
             </button>
           </div>
 
@@ -9747,6 +9781,58 @@ function populateTransSelects() {
 }
 
 // ── Builder principal ────────────────────────────────────────────
+// ── Restaurar transferencias desde backup automático ─────────────
+function resetTransferenciasLocal() {
+  // Mostrar panel de confirmación en el módulo de transferencias
+  showPanel('transferencias', document.getElementById('nav-transferencias'));
+  setTimeout(() => {
+    const panel = document.getElementById('panel-reset-trans');
+    if (panel) {
+      panel.style.display = '';
+      panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+  }, 100);
+}
+
+function ejecutarResetTrans() {
+  if (!confirm('¿Confirmar borrado de transferencias locales?\n\nEsto NO afecta Google Sheets.\nDespués deberás reimportar los archivos SIDIF.')) return;
+  // Guardar backup antes de borrar
+  try {
+    localStorage.setItem('lr_trans_backup_v4',   JSON.stringify(DATA.transferencias || []));
+    localStorage.setItem('lr_trans_backup_fecha', new Date().toISOString());
+    localStorage.removeItem('lr_trans_v4');
+  } catch(e) {}
+  DATA.transferencias = [];
+  // Limpiar del snapshot también
+  try {
+    const snap = JSON.parse(localStorage.getItem('lr_snapshot_v4') || '{}');
+    snap.transferencias = [];
+    localStorage.setItem('lr_snapshot_v4', JSON.stringify(snap));
+  } catch(e) {}
+  document.getElementById('panel-reset-trans').style.display = 'none';
+  buildTransferencias();
+  showStorageStatus('✓ Transferencias locales borradas. Reimportá los archivos SIDIF.', '#ff8c47');
+}
+
+
+function restaurarTransDesdeBackup() {
+  const backup = localStorage.getItem('lr_trans_backup_v4');
+  const fecha  = localStorage.getItem('lr_trans_backup_fecha');
+  if (!backup) {
+    alert('No hay backup disponible.');
+    return;
+  }
+  const parsed = JSON.parse(backup);
+  const fechaFmt = fecha ? new Date(fecha).toLocaleString('es-AR') : '?';
+  if (!confirm(`¿Restaurar ${parsed.length} transferencias del backup (${fechaFmt})?\n\nEsto reemplazará los datos actuales (${DATA.transferencias.length} registros).`)) return;
+  DATA.transferencias = parsed;
+  saveDataToLocalCache();
+  marcarPendienteGuardar();
+  buildTransferencias();
+  showStorageStatus('✓ Transferencias restauradas desde backup', '#47ffb4');
+}
+
+
 function buildTransferencias() {
   const empty   = document.getElementById('trans-empty');
   const content = document.getElementById('trans-content');
@@ -20521,21 +20607,40 @@ function applyCloudData(cloud) {
       _hoja:        r._hoja        || '',
     }));
 
-    if (localLen === 0) {
-      // Sin datos locales → restaurar completo desde Sheets
-      DATA.transferencias = fromCloud;
-      console.log(`[SYNC] Transferencias restauradas desde Sheets: ${fromCloud.length}`);
-    } else {
-      // SIEMPRE mergear: Sheets es la fuente de verdad compartida
-      // Clave: beneficiario + año + mes + importe redondeado (evitar drift de float)
-      const claveTrans = r => `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
-      const claveSheets = new Set(fromCloud.map(claveTrans));
-      // Agregar los locales que Sheets no tiene (cargados en este dispositivo, aún no publicados)
-      const soloLocales = DATA.transferencias.filter(r => !claveSheets.has(claveTrans(r)));
-      DATA.transferencias = [...fromCloud, ...soloLocales];
-      try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
-      console.log(`[SYNC] Transferencias: ${fromCloud.length} de Sheets + ${soloLocales.length} solo locales = ${DATA.transferencias.length} total`);
-    }
+    // ── SHEETS ES LA FUENTE DE VERDAD PARA TRANSFERENCIAS ──────────
+    // Razón: el dashboard se usa desde múltiples dispositivos/orígenes
+    // (file://, GitHub Pages) con localStorage independientes.
+    // Sheets es el único punto de sincronización compartido.
+    //
+    // Lógica:
+    // 1. Backup automático del local antes de cualquier cambio
+    // 2. Sheets reemplaza el local (es la versión consolidada)
+    // 3. Se preservan los registros locales con _archivo que Sheets no tiene
+    //    (importados recientemente en este dispositivo, aún no publicados)
+
+    const claveTrans = r =>
+      `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
+
+    // Backup automático siempre antes de modificar
+    try {
+      localStorage.setItem('lr_trans_backup_v4',   JSON.stringify(DATA.transferencias || []));
+      localStorage.setItem('lr_trans_backup_fecha', new Date().toISOString());
+    } catch(e) {}
+
+    // Registros locales NO publicados (tienen _archivo pero no están en Sheets)
+    const claveSheets = new Set(fromCloud.map(claveTrans));
+    const noPublicados = (DATA.transferencias || []).filter(r =>
+      r._archivo && !claveSheets.has(claveTrans(r))
+    );
+
+    // Sheets + lo no publicado localmente
+    DATA.transferencias = [...fromCloud, ...noPublicados];
+    try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
+    console.log(
+      `[SYNC] Transferencias: ${fromCloud.length} desde Sheets` +
+      (noPublicados.length ? ` + ${noPublicados.length} locales no publicados` : '') +
+      ` = ${DATA.transferencias.length} total`
+    );
   }
 
   // notas
