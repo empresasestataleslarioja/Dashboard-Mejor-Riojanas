@@ -19821,7 +19821,10 @@ function updateCloudStatusBar(state, detail) {
   if (topTxt) {
     // Mostrar estado + fecha legible de última actualización
     if (state === 'ok' && detail) {
-      const dStr = fmtFechaAR(detail) || detail;
+      // detail puede ser un ISO string o un texto ya formateado
+      // Solo aplicar fmtFechaAR si parece un ISO (contiene T o tiene formato yyyy-mm-dd)
+      const looksISO = /^\d{4}-\d{2}-\d{2}/.test(detail);
+      const dStr = looksISO ? (fmtFechaAR(detail) || detail) : detail;
       topTxt.textContent = `Sheets: ${dStr}`;
     } else if (state === 'syncing') {
       topTxt.textContent = '⏳ sincronizando…';
@@ -20197,8 +20200,9 @@ async function syncFromCloud(silent) {
     saveDataToLocalCache();
 
     const lastUp    = data.meta?.ultima_actualizacion || data.meta?.savedAt;
-    const lastUpFmt = lastUp ? fmtFechaAR(lastUp) : '?';  // usar ISO original → no NaN
-    updateCloudStatusBar('ok', 'Actualizado ' + lastUpFmt);
+    const lastUpFmt = lastUp ? fmtFechaAR(lastUp) : '?';
+    // Pasar el ISO original al status bar para que fmtFechaAR lo procese correctamente
+    updateCloudStatusBar('ok', lastUp || lastUpFmt);
     const badge = document.getElementById('cloud-last-update');
     if (badge) { badge.style.display='block'; badge.textContent = 'Última publicación: ' + lastUpFmt; }
     showStorageStatus('✓ Datos actualizados desde el servidor', '#47e8ff');
@@ -20499,7 +20503,6 @@ function applyCloudData(cloud) {
   // Si los datos locales tienen contenido, preservarlos — son la fuente de verdad
   if (cloud.transferencias && cloud.transferencias.length) {
     const localLen = (DATA.transferencias || []).length;
-    const cloudLen = cloud.transferencias.length;
 
     // Convertir transferencias de Sheets al formato interno
     const fromCloud = cloud.transferencias.map(r => ({
@@ -20522,19 +20525,16 @@ function applyCloudData(cloud) {
       // Sin datos locales → restaurar completo desde Sheets
       DATA.transferencias = fromCloud;
       console.log(`[SYNC] Transferencias restauradas desde Sheets: ${fromCloud.length}`);
-    } else if (cloudLen > localLen) {
-      // Sheets tiene más registros → merge: tomar Sheets como base
-      // y agregar los locales que no estén en Sheets (por clave única)
-      const claveSheets = new Set(fromCloud.map(r =>
-        `${r.beneficiario}|${r.año}|${r.mes}|${r.importe}`));
-      const soloLocales = DATA.transferencias.filter(r =>
-        !claveSheets.has(`${r.beneficiario}|${r.año}|${r.mes}|${r.importe}`));
+    } else {
+      // SIEMPRE mergear: Sheets es la fuente de verdad compartida
+      // Clave: beneficiario + año + mes + importe redondeado (evitar drift de float)
+      const claveTrans = r => `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
+      const claveSheets = new Set(fromCloud.map(claveTrans));
+      // Agregar los locales que Sheets no tiene (cargados en este dispositivo, aún no publicados)
+      const soloLocales = DATA.transferencias.filter(r => !claveSheets.has(claveTrans(r)));
       DATA.transferencias = [...fromCloud, ...soloLocales];
       try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
-      console.log(`[SYNC] Transferencias mergeadas: ${fromCloud.length} de Sheets + ${soloLocales.length} solo locales`);
-    } else {
-      // Local >= Sheets → preservar locales (ya publicaron o tienen datos más recientes)
-      console.log(`[SYNC] Transferencias locales preservadas: ${localLen} (Sheets: ${cloudLen})`);
+      console.log(`[SYNC] Transferencias: ${fromCloud.length} de Sheets + ${soloLocales.length} solo locales = ${DATA.transferencias.length} total`);
     }
   }
 
@@ -20657,19 +20657,27 @@ function applyCloudData(cloud) {
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
-      // Merge: si ya existe localmente con timestamp mayor, preservar el local
       const local = DATA.flujos[clave];
-      if (local && (local.timestamp || 0) >= (parseInt(f.timestamp) || 0)) return;
+      const tsCloud = parseInt(f.timestamp) || 0;
+      const tsLocal = parseInt(local?.timestamp) || 0;
+      // Solo skip si el local tiene timestamp real Y es mayor que el de Sheets
+      // Si timestamp es 0 en ambos, o no existe localmente → tomar de Sheets
+      if (local && tsLocal > 0 && tsLocal > tsCloud) return;
       let rubros_parsed = [];
       try { rubros_parsed = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
+      let meses_parsed = [];
+      try { meses_parsed = f.meses ? JSON.parse(f.meses) : []; } catch(e) {
+        meses_parsed = typeof f.meses === 'string' ? f.meses.split(',').filter(Boolean) : [];
+      }
       DATA.flujos[clave] = {
         clave, empresa:f.empresa, periodo:f.periodo, tipo:f.tipo||'proyectado',
-        ipc: parseFloat(f.ipc)||0,
-        necesidad_fondos:     parseFloat(f.necesidad_fondos)||null,
-        necesidad_fondos_ant: parseFloat(f.necesidad_fondos_ant)||null,
-        timestamp:   parseInt(f.timestamp)||0,
-        cargadoEl:   f.cargado_el||'',
-        fuente:      f.fuente||'sheets',
+        ipc:              parseFloat(f.ipc)              || 0,
+        necesidad_fondos:     parseFloat(f.necesidad_fondos)     || null,
+        necesidad_fondos_ant: parseFloat(f.necesidad_fondos_ant) || null,
+        meses:       meses_parsed,
+        timestamp:   tsCloud,
+        cargadoEl:   f.cargado_el || '',
+        fuente:      f.fuente     || 'sheets',
         rubros:      rubros_parsed,
       };
     });
