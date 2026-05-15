@@ -20250,7 +20250,7 @@ async function postViaForm(url, data) {
   });
 }
 
-async function syncFromCloud(silent) {
+async function syncFromCloud(silent, opts) {
   if (!_cloudUrl) {
     if (!silent) showStorageStatus('⚠ Configurá la URL de Sheets en ⚙ Sheets', '#ff8c47');
     return;
@@ -20282,7 +20282,7 @@ async function syncFromCloud(silent) {
     }
 
     // Convertir formato flat (rows) → formato DATA del dashboard
-    applyCloudData(data);
+    applyCloudData(data, opts || {});
     saveDataToLocalCache();
 
     const lastUp    = data.meta?.ultima_actualizacion || data.meta?.savedAt;
@@ -20526,7 +20526,8 @@ async function syncToCloud(nota) {
 }
 
 // ── Convertir datos flat del Sheet → estructura DATA ─────────────
-function applyCloudData(cloud) {
+function applyCloudData(cloud, opts) {
+  opts = opts || {};
   // fact: rows con columnas: empresa, 2020, 2021, 2022, 2023, 2024, 2025, 2026
   if (cloud.fact && cloud.fact.length) {
     DATA.fact = {};
@@ -20585,12 +20586,16 @@ function applyCloudData(cloud) {
     });
   }
 
-  // transferencias: si los datos locales están vacíos, usar los de Sheets como restauración
-  // Si los datos locales tienen contenido, preservarlos — son la fuente de verdad
-  if (cloud.transferencias && cloud.transferencias.length) {
-    const localLen = (DATA.transferencias || []).length;
+  // TRANSFERENCIAS: nunca tocar en sync automático (skipTransferencias=true)
+  // Solo sincronizar cuando el usuario lo pide explícitamente desde el menú
+  if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
 
-    // Convertir transferencias de Sheets al formato interno
+    // ── REGLA DEFINITIVA: LOCAL NUNCA SE REEMPLAZA ──────────────────
+    // Local = fuente de verdad. Sheets = fuente adicional.
+    // Al descargar: solo se agregan registros de Sheets que el local NO tiene.
+    // Al publicar: el local sube completo a Sheets.
+    // NUNCA se reemplaza el local con Sheets.
+
     const fromCloud = cloud.transferencias.map(r => ({
       saf:          r.saf          || '',
       organismo:    r.organismo    || '',
@@ -20607,40 +20612,25 @@ function applyCloudData(cloud) {
       _hoja:        r._hoja        || '',
     }));
 
-    // ── SHEETS ES LA FUENTE DE VERDAD PARA TRANSFERENCIAS ──────────
-    // Razón: el dashboard se usa desde múltiples dispositivos/orígenes
-    // (file://, GitHub Pages) con localStorage independientes.
-    // Sheets es el único punto de sincronización compartido.
-    //
-    // Lógica:
-    // 1. Backup automático del local antes de cualquier cambio
-    // 2. Sheets reemplaza el local (es la versión consolidada)
-    // 3. Se preservan los registros locales con _archivo que Sheets no tiene
-    //    (importados recientemente en este dispositivo, aún no publicados)
-
     const claveTrans = r =>
       `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
 
-    // Backup automático siempre antes de modificar
-    try {
-      localStorage.setItem('lr_trans_backup_v4',   JSON.stringify(DATA.transferencias || []));
-      localStorage.setItem('lr_trans_backup_fecha', new Date().toISOString());
-    } catch(e) {}
-
-    // Registros locales NO publicados (tienen _archivo pero no están en Sheets)
-    const claveSheets = new Set(fromCloud.map(claveTrans));
-    const noPublicados = (DATA.transferencias || []).filter(r =>
-      r._archivo && !claveSheets.has(claveTrans(r))
-    );
-
-    // Sheets + lo no publicado localmente
-    DATA.transferencias = [...fromCloud, ...noPublicados];
-    try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
-    console.log(
-      `[SYNC] Transferencias: ${fromCloud.length} desde Sheets` +
-      (noPublicados.length ? ` + ${noPublicados.length} locales no publicados` : '') +
-      ` = ${DATA.transferencias.length} total`
-    );
+    if ((DATA.transferencias || []).length === 0) {
+      // Local vacío → restaurar desde Sheets (primer uso en este dispositivo)
+      DATA.transferencias = fromCloud;
+      console.log(`[SYNC] Trans restauradas (local vacío): ${fromCloud.length}`);
+    } else {
+      // Local tiene datos → solo agregar lo que falta
+      const claveLocal = new Set(DATA.transferencias.map(claveTrans));
+      const nuevas = fromCloud.filter(r => !claveLocal.has(claveTrans(r)));
+      if (nuevas.length > 0) {
+        DATA.transferencias = DATA.transferencias.concat(nuevas);
+        try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
+        console.log(`[SYNC] Trans: +${nuevas.length} nuevas desde Sheets → total ${DATA.transferencias.length}`);
+      } else {
+        console.log(`[SYNC] Trans locales al día: ${DATA.transferencias.length}`);
+      }
+    }
   }
 
   // notas
@@ -20786,12 +20776,10 @@ function applyCloudData(cloud) {
         rubros:      rubros_parsed,
       };
     });
-    try {
-      const snapAct = JSON.parse(localStorage.getItem('lr_snapshot_v4')||'{}');
-      snapAct._flujos = DATA.flujos;
-      localStorage.setItem('lr_snapshot_v4', JSON.stringify(snapAct));
-    } catch(e) {}
-    console.log('[SYNC] Flujos restaurados:', Object.keys(DATA.flujos).length);
+    // Actualizar snapshot con los flujos restaurados desde Sheets
+    // Usar saveDataToLocalCache para mantener todo consistente
+    try { saveDataToLocalCache(); } catch(e) {}
+    console.log('[SYNC] Flujos restaurados desde Sheets:', Object.keys(DATA.flujos).length);
   }
 
   // Restaurar rubros desde Sheets
@@ -21482,9 +21470,8 @@ function loadDataFromLocalCache() {
       // Restaurar balances analizados desde _embeddedSnap
       // PERO: si localStorage tiene una versión más reciente (el usuario
       // eliminó balances después de exportar el HTML), usar esa.
-      // Restaurar flujos del snapshot
-      if (snap._flujos && Object.keys(snap._flujos).length > 0 &&
-          !Object.keys(DATA.flujos || {}).length) {
+      // Restaurar flujos del snapshot — siempre, snap._flujos tiene prioridad
+      if (snap._flujos && Object.keys(snap._flujos).length > 0) {
         DATA.flujos = snap._flujos;
       }
       if (snap._flujos_config) DATA.flujos_config = snap._flujos_config;
@@ -21707,13 +21694,10 @@ setTimeout(() => {
   // Si hay Sheets configurado, sincronizar solo fact/sit/personal/balances
   // NO tocar transferencias — vienen del snapshot local que es la fuente de verdad
   if (_cloudUrl) {
-    syncFromCloud(true)
-      .then(() => {
-        // Sheets devolvió datos — pero NO llamar arrancar() de nuevo
-        // para no sobreescribir las transferencias ya cargadas del snapshot local.
-        // Solo reconstruir la vista activa sin resetear DATA.
-        rebuildActive();
-      })
+    // Al arrancar: sync silencioso que NO toca transferencias
+    // Las transferencias solo se sincronizan cuando el usuario lo pide explícitamente
+    syncFromCloud(true, { skipTransferencias: true })
+      .then(() => { rebuildActive(); })
       .catch(() => {});
   }
 }, 40);
