@@ -82,11 +82,11 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --s3:     #181b24;
   --bd:     #1e2230;
   --bd2:    #262b3a;
-  --y21:    #b8c800; /* antes #e8ff47 — oscurecido para legibilidad en fondos claros */
-  --y22:    #47e8ff;
+  --y21:    #c4d600; /* amarillo — legible en fondos oscuros */
+  --y22:    #38c5e0; /* cyan — levemente oscurecido */
   --y23:    #ff8c47;
   --y24:    #c447ff;
-  --pos:    #47ffb4;
+  --pos:    #2ecc8a; /* verde — más oscuro que #47ffb4, legible */
   --neg:    #ff4766;
   --text:   #d8dce8;
   --dim:    #4a5268;
@@ -233,7 +233,7 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 /* Tableau: clean crisp cards */
 [data-theme="tableau"] .card { box-shadow: 0 1px 4px rgba(0,0,0,.10); border-top: 3px solid var(--bd2); border-radius: 0; }
 [data-theme="tableau"] .kpi  { border-left: 4px solid var(--y21); }
-[data-theme="tableau"] .kpi-value { font-size: 28px; color: var(--y21); }
+[data-theme="tableau"] .kpi-value { font-size: 28px; color:#b8a000; }
 [data-theme="tableau"] .card-hd-title { font-weight: 700; font-size: 9px; }
 
 /* Density: tight, information-dense */
@@ -292,7 +292,7 @@ body {
   line-height: 1.3;
   color: var(--text);
 }
-.brand-title em { color: var(--y21); font-style: italic; }
+.brand-title em { color:#b8a000; font-style: italic; }
 .brand-sub {
   margin-top: 6px;
   font-size: 9px;
@@ -320,7 +320,7 @@ body {
   border-radius: 0 2px 2px 0;
 }
 .nav-item:hover { color: var(--text); background: var(--s2); }
-.nav-item.active { color: var(--y21); background: var(--s2); }
+.nav-item.active { color:#b8a000; background: var(--s2); }
 .nav-item.active::before { height: 20px; }
 .nav-dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
@@ -343,14 +343,14 @@ body {
 .chip.on-ali { border-color:#ff8c47; color:#ff8c47; background:rgba(255,140,71,.07); }
 .chip.on-ser { border-color:#47e8ff; color:#47e8ff; background:rgba(71,232,255,.07); }
 .chip.on-ind { border-color:#c447ff; color:#c447ff; background:rgba(196,71,255,.07); }
-.chip.on-pro { border-color:#47ffb4; color:#47ffb4; background:rgba(71,255,180,.07); }
+.chip.on-pro { border-color:#1a9e68; color:#1a9e68; background:rgba(71,255,180,.07); }
 .chip.on-sin { border-color:var(--dim); color:var(--text); background:rgba(74,82,104,.07); }
 /* Rubro badge inline */
 .rb { display:inline-block; padding:2px 6px; border-radius:2px; font-size:8.5px; font-family:var(--mono); }
 .rb-ali { background:rgba(255,140,71,.12); color:#ff8c47; border:1px solid rgba(255,140,71,.25); }
 .rb-ser { background:rgba(71,232,255,.12); color:#47e8ff; border:1px solid rgba(71,232,255,.25); }
 .rb-ind { background:rgba(196,71,255,.12); color:#c447ff; border:1px solid rgba(196,71,255,.25); }
-.rb-pro { background:rgba(71,255,180,.12); color:#47ffb4; border:1px solid rgba(71,255,180,.25); }
+.rb-pro { background:rgba(71,255,180,.12); color:#1a9e68; border:1px solid rgba(71,255,180,.25); }
 .rb-sin { background:rgba(74,82,104,.12);  color:var(--dim); border:1px solid var(--bd); }
 /* Rubro panel editor */
 .rub-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:8px; }
@@ -366,7 +366,7 @@ body {
   font-family:var(--mono); font-size:10px; padding:3px 7px; border-radius:2px;
   cursor:pointer; outline:none; transition:border-color .12s; flex-shrink:0;
 }
-.rub-sel:focus { border-color:var(--y21); }
+.rub-sel:focus { border-color:#b8a000; }
 /* rubro KPI bar */
 .rub-kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
 .rub-kpi {
@@ -399,7 +399,7 @@ body {
   white-space: nowrap; flex-shrink: 0; padding-right: 10px; margin-right: 4px;
   border-right: 1px solid var(--bd);
 }
-.page-title em { color: var(--y21); font-style: italic; }
+.page-title em { color:#b8a000; font-style: italic; }
 .topbar-meta { display: flex; gap: 5px; align-items: center; }
 .meta-tag {
   padding: 2px 6px; border-radius: 2px; flex-shrink: 0;
@@ -429,14 +429,14 @@ body {
   transition: border-color .12s, color .12s, background .12s; height: 26px;
   display: flex; align-items: center; gap: 3px; flex-shrink: 0;
 }
-.tba-btn:hover { border-color: var(--y21); color: var(--text); background: var(--s3); }
+.tba-btn:hover { border-color:#b8a000; color: var(--text); background: var(--s3); }
 .tba-btn-file {
-  overflow: hidden; border-color: rgba(232,255,71,.4); color: var(--y21);
+  overflow: hidden; border-color: rgba(232,255,71,.4); color:#b8a000;
   background: rgba(232,255,71,.06);
 }
-.tba-btn-file:hover { border-color: var(--y21); background: rgba(232,255,71,.14); }
-.tba-btn-save { color: #47ffb4; border-color: #47ffb455; background: rgba(71,255,180,.06); font-weight:600; }
-.tba-btn-save:hover { background: rgba(71,255,180,.14); border-color: #47ffb4; }
+.tba-btn-file:hover { border-color:#b8a000; background: rgba(232,255,71,.14); }
+.tba-btn-save { color:#1a9e68; border-color:#1a9e6855; background: rgba(71,255,180,.06); font-weight:600; }
+.tba-btn-save:hover { background: rgba(71,255,180,.14); border-color:#1a9e68; }
 .tba-btn-save.saved { color: var(--dim); border-color: var(--bd); background: var(--s2); }
 .tba-divider { width: 1px; height: 18px; background: var(--bd); flex-shrink:0; margin: 0 2px; }
 #exp-status { font-size: 9px; color: var(--dim); }
@@ -469,7 +469,7 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tba-btn-viz.open {
-  border-color: var(--y21); color: var(--y21); background: rgba(232,255,71,.08);
+  border-color:#b8a000; color:#b8a000; background: rgba(232,255,71,.08);
 }
 #viz-summary { font-size: 9px; color: var(--dim); }
 
@@ -629,7 +629,7 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
 .kpi-label { font-size: 8.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); margin-bottom:7px; }
 .kpi-value { font-family: var(--serif); font-size: 26px; line-height:1; }
 .kpi-sub { margin-top: 5px; font-size: 10px; color: var(--dim); }
-.kpi-sub.up { color: var(--pos); }
+.kpi-sub.up { color:#1a9e68; }
 .kpi-sub.dn { color: var(--neg); }
 
 /* ── KPI BAND (resumen: una sola fila compacta) ── */
@@ -649,7 +649,7 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
 .kpi-band-label { font-size: 8px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpi-band-value { font-family: var(--serif); font-size: 20px; line-height: 1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpi-band-sub { font-size: 9px; color: var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kpi-band-sub.up { color: var(--pos); }
+.kpi-band-sub.up { color:#1a9e68; }
 
 /* ── GRID LAYOUTS ───────────────────────────────────── */
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
@@ -702,7 +702,7 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   cursor: pointer; transition: all .12s; line-height: 1.4; white-space: nowrap;
 }
 .cht-btn:hover  { border-color: var(--bd2); color: var(--text); }
-.cht-btn.active { border-color: var(--y21); color: var(--y21); background: rgba(232,255,71,.06); }
+.cht-btn.active { border-color:#b8a000; color:#b8a000; background: rgba(232,255,71,.06); }
 
 /* ── TABLE ──────────────────────────────────────────── */
 .tbl { width:100%; border-collapse:collapse; }
@@ -718,7 +718,7 @@ body.layout-compacto .kpi-value { font-size: 20px; }
 
 /* ── PILL ───────────────────────────────────────────── */
 .pill { display:inline-block; padding:2px 6px; border-radius:2px; font-size:9px; }
-.pill-g { background:rgba(71,255,180,.1); color:var(--pos); }
+.pill-g { background:rgba(71,255,180,.1); color:#1a9e68; }
 .pill-r { background:rgba(255,71,102,.1); color:var(--neg); }
 .pill-a { background:rgba(255,140,71,.1); color:var(--y23); }
 .pill-v { background:rgba(196,71,255,.1); color:var(--y24); }
@@ -733,7 +733,7 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   border-radius:3px; cursor:pointer; outline:none; min-width:240px;
   transition: border-color .12s;
 }
-.sel:focus { border-color:var(--y21); }
+.sel:focus { border-color:#b8a000; }
 .sel-row { display:flex; align-items:center; gap:14px; margin-bottom:16px; flex-wrap:wrap; }
 .sel-label { font-size:8.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); }
 
@@ -770,7 +770,7 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   color:var(--dim); font-family:var(--mono); font-size:9px; border-radius:2px;
   cursor:pointer; text-align:center; transition:all .15s;
 }
-.exp-btn.xlsx:hover { border-color:#47ffb4; color:#47ffb4; }
+.exp-btn.xlsx:hover { border-color:#1a9e68; color:#1a9e68; }
 .exp-btn.pdf:hover  { border-color:#ff4766; color:#ff4766; }
 #exp-status { font-size:9px; color:var(--dim); margin-top:5px; min-height:12px; text-align:center; }
 .infl-row { display:flex; align-items:center; justify-content:space-between; }
@@ -780,8 +780,8 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   font-family:var(--mono); font-size:10px; padding:0; transition:color .15s;
 }
 .infl-dot { width:7px; height:7px; border-radius:50%; border:1.5px solid var(--dim); transition:all .15s; flex-shrink:0; }
-.infl-toggle-btn.on { color:var(--y21); }
-.infl-toggle-btn.on .infl-dot { background:var(--y21); border-color:var(--y21); }
+.infl-toggle-btn.on { color:#b8a000; }
+.infl-toggle-btn.on .infl-dot { background:var(--y21); border-color:#b8a000; }
 
 /* ── INFLATION BANNER ─────────────────── */
 .infl-banner {
@@ -790,16 +790,16 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap;
   background:var(--s1);
 }
-.infl-banner-title { font-size:8px; letter-spacing:.18em; text-transform:uppercase; color:var(--y21); margin-bottom:5px; }
+.infl-banner-title { font-size:8px; letter-spacing:.18em; text-transform:uppercase; color:#b8a000; margin-bottom:5px; }
 .infl-rates { display:flex; gap:14px; }
 .infl-yr-label { font-size:8px; color:var(--dim); margin-bottom:2px; text-align:center; }
-.infl-yr-val { font-family:var(--serif); font-size:16px; color:var(--y21); text-align:center; }
+.infl-yr-val { font-family:var(--serif); font-size:16px; color:#b8a000; text-align:center; }
 .infl-note { font-size:9px; color:var(--dim); line-height:1.6; }
-.infl-note strong { color:var(--y21); }
+.infl-note strong { color:#b8a000; }
 
 /* ── PANEL INFLACION ──────────────────── */
 .real-pill { display:inline-block; padding:2px 7px; border-radius:2px; font-size:9px; }
-.real-pos { background:rgba(71,255,180,.1); color:#47ffb4; }
+.real-pos { background:rgba(71,255,180,.1); color:#1a9e68; }
 .real-neg { background:rgba(255,71,102,.1); color:#ff4766; }
 
 /* ══════════════════════════════════════════════════
@@ -846,7 +846,7 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   white-space:nowrap; transition:all .12s;
 }
 .dt-tab:hover { color:var(--text); }
-.dt-tab.on { color:var(--y21); border-bottom-color:var(--y21); }
+.dt-tab.on { color:#b8a000; border-bottom-color:#b8a000; }
 #drill-body { padding:16px 20px; overflow-y:auto; flex:1; min-height:0; }
 /* drill stats row */
 .dstat-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
@@ -871,7 +871,7 @@ table.dtbl tbody tr:hover { background:var(--s3); }
 table.dtbl tbody td { padding:5px 9px; text-align:right; color:var(--text); }
 table.dtbl tbody td:first-child { text-align:left; color:var(--dim); }
 table.dtbl tbody tr.tbl-total td { background:var(--s3); font-weight:600; border-top:1px solid var(--bd2); }
-.dc { color:var(--pos)!important; }
+.dc { color:#1a9e68!important; }
 .dr { color:var(--neg)!important; }
 .dd { color:var(--dim)!important; }
 .dh { background:rgba(232,255,71,.06)!important; }
@@ -891,23 +891,23 @@ canvas { cursor:pointer; }
   margin-bottom:16px;
 }
 .import-drop:hover, .import-drop.drag-over {
-  border-color:var(--y21); background:rgba(232,255,71,.03);
+  border-color:#b8a000; background:rgba(232,255,71,.03);
 }
 .import-drop .drop-icon { font-size:30px; margin-bottom:10px; }
 .import-drop p { color:var(--dim); font-size:11px; line-height:1.7; }
-.import-drop strong { color:var(--y21); }
+.import-drop strong { color:#b8a000; }
 #import-preview {
   background:var(--s1); border:1px solid var(--bd); border-radius:4px;
   padding:14px; margin-bottom:12px; display:none;
 }
-#import-preview h4 { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--y21); margin-bottom:10px; }
+#import-preview h4 { font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:#b8a000; margin-bottom:10px; }
 .map-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:10.5px; flex-wrap:wrap; }
 .map-row label { color:var(--dim); width:180px; flex-shrink:0; font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
 .map-row select { flex:1; min-width:140px; padding:4px 7px; background:var(--s2); border:1px solid var(--bd2); color:var(--text); font-family:var(--mono); font-size:10px; border-radius:2px; }
-.map-row select:focus { outline:none; border-color:var(--y21); }
+.map-row select:focus { outline:none; border-color:#b8a000; }
 #import-result .imp-ok {
   background:rgba(71,255,180,.07); border:1px solid rgba(71,255,180,.2);
-  border-radius:3px; padding:10px 14px; font-size:11px; color:var(--pos);
+  border-radius:3px; padding:10px 14px; font-size:11px; color:#1a9e68;
 }
 /* ── IMPORT HISTORY & CONTROL ─────────── */
 .imp-ctrl-bar {
@@ -947,8 +947,8 @@ canvas { cursor:pointer; }
 .imp-hist-file { font-size:11px; color:var(--text); margin-bottom:2px; font-weight:500; }
 .imp-hist-meta { font-size:9px; color:var(--dim); }
 .imp-hist-badge { display:inline-block; padding:1px 5px; border-radius:2px; font-size:8px; }
-.ihb-new  { background:rgba(71,255,180,.1); color:var(--pos); }
-.ihb-upd  { background:rgba(232,255,71,.1); color:var(--y21); }
+.ihb-new  { background:rgba(71,255,180,.1); color:#1a9e68; }
+.ihb-upd  { background:rgba(232,255,71,.1); color:#b8a000; }
 .ihb-rev  { background:rgba(255,71,102,.1); color:var(--neg); }
 .imp-hist-actions { display:flex; gap:5px; flex-shrink:0; align-items:center; }
 .imp-hist-btn {
@@ -982,8 +982,8 @@ table.diff-tbl thead th {
 table.diff-tbl tbody tr { border-bottom:1px solid var(--bd); }
 table.diff-tbl tbody tr:hover { background:var(--s2); }
 table.diff-tbl tbody td { padding:5px 10px; }
-table.diff-tbl .d-new { color:var(--pos); }
-table.diff-tbl .d-chg { color:var(--y21); }
+table.diff-tbl .d-new { color:#1a9e68; }
+table.diff-tbl .d-chg { color:#b8a000; }
 table.diff-tbl .d-emp { color:var(--dim); }
 .diff-legend { display:flex; gap:14px; padding:8px 14px; font-size:9px; border-top:1px solid var(--bd); }
 .dl-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:middle; }
@@ -1204,7 +1204,7 @@ self.onmessage = async (e) => {
 
   <div style="text-align:center;margin-bottom:28px">
     <div style="font-family:var(--serif);font-size:26px;font-weight:700;color:var(--text)">
-      Dashboard <em style="color:var(--y21)">Empresas Estatales</em>
+      Dashboard <em style="color:#b8a000">Empresas Estatales</em>
     </div>
     <div style="font-size:10px;color:var(--dim);margin-top:5px;letter-spacing:.14em;text-transform:uppercase">
       La Rioja
@@ -1241,7 +1241,7 @@ self.onmessage = async (e) => {
 
     <button onclick="doLogin()"
       style="width:100%;padding:10px;background:rgba(232,255,71,.12);
-      border:1px solid var(--y21);color:var(--y21);font-size:12px;font-weight:600;
+      border:1px solid var(--y21);color:#b8a000;font-size:12px;font-weight:600;
       border-radius:4px;cursor:pointer;font-family:var(--mono);transition:background .15s"
       onmouseover="this.style.background='rgba(232,255,71,.22)'"
       onmouseout="this.style.background='rgba(232,255,71,.12)'">
@@ -1279,7 +1279,7 @@ self.onmessage = async (e) => {
         </div>
       </div>
       <button onclick="agregarUsuario()" style="width:100%;padding:7px;
-        background:rgba(71,255,180,.1);border:1px solid #47ffb455;color:#47ffb4;
+        background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;
         font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
         + Agregar
       </button>
@@ -1486,7 +1486,7 @@ self.onmessage = async (e) => {
           <button id="btn-autosync-toggle" onclick="_toggleAutoSync()"
             title="Auto-sync activo"
             style="padding:1px 5px;background:none;border:1px solid rgba(71,255,180,.3);
-            color:#47ffb4;font-family:var(--mono);font-size:8px;border-radius:3px;cursor:pointer">🔄</button>
+            color:#1a9e68;font-family:var(--mono);font-size:8px;border-radius:3px;cursor:pointer">🔄</button>
           <div id="cloud-status-txt-top" style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
           <div id="storage-status" style="display:none;font-size:8px;font-family:var(--mono)"></div>
         </div>
@@ -1552,21 +1552,21 @@ self.onmessage = async (e) => {
 
       <!-- Panel admin: gestión de usuarios (solo para admin) -->
       <div id="user-panel-admin" style="display:none;padding:12px 16px;border-bottom:1px solid var(--bd)">
-        <div style="font-size:9px;font-weight:600;color:var(--y21);margin-bottom:8px;
+        <div style="font-size:9px;font-weight:600;color:#b8a000;margin-bottom:8px;
           text-transform:uppercase;letter-spacing:.1em">⚙ Gestión de usuarios</div>
         <div id="user-list" style="margin-bottom:10px;font-size:9.5px;font-family:var(--mono)"></div>
         <div style="display:flex;gap:6px;margin-bottom:6px">
           <input id="inp-new-user" placeholder="usuario" style="flex:1;padding:5px 7px;
             background:var(--s3);border:1px solid var(--bd2);color:var(--text);
             font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none"
-            onfocus="this.style.borderColor='#47ffb4'" onblur="this.style.borderColor='var(--bd2)'">
+            onfocus="this.style.borderColor='#2ecc8a'" onblur="this.style.borderColor='var(--bd2)'">
           <input id="inp-new-pass" type="password" placeholder="contraseña" style="flex:1;padding:5px 7px;
             background:var(--s3);border:1px solid var(--bd2);color:var(--text);
             font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none"
-            onfocus="this.style.borderColor='#47ffb4'" onblur="this.style.borderColor='var(--bd2)'">
+            onfocus="this.style.borderColor='#2ecc8a'" onblur="this.style.borderColor='var(--bd2)'">
         </div>
         <button onclick="agregarUsuario()" style="width:100%;padding:6px;
-          background:rgba(71,255,180,.08);border:1px solid #47ffb455;color:#47ffb4;
+          background:rgba(71,255,180,.08);border:1px solid #2ecc8a55;color:#1a9e68;
           font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
           + Agregar usuario
         </button>
@@ -1615,7 +1615,7 @@ self.onmessage = async (e) => {
             </div>
             <div style="display:flex;gap:6px">
               <button onclick="syncToCloud();toggleSavePanel()" style="flex:1;padding:7px 10px;
-                background:rgba(71,255,180,.1);border:1px solid #47ffb455;color:#47ffb4;
+                background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;
                 font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
                 ↑ Publicar ahora
               </button>
@@ -1646,7 +1646,7 @@ self.onmessage = async (e) => {
               Descarga el dashboard con todos los datos adentro. Abrís ese archivo y ya tiene todo cargado.
             </div>
             <button onclick="exportarHTMLConDatos()" style="width:100%;padding:6px 14px;
-              background:rgba(232,255,71,.1);border:1px solid var(--y21);color:var(--y21);
+              background:rgba(232,255,71,.1);border:1px solid var(--y21);color:#b8a000;
               font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
               ⬇ Descargar dashboard con datos
             </button>
@@ -1694,12 +1694,12 @@ self.onmessage = async (e) => {
           ↓ Actualizar desde Sheets
         </button>
         <button onclick="syncToCloud()" style="flex:1;padding:7px;background:rgba(71,255,180,.1);
-          border:1px solid #47ffb455;color:#47ffb4;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+          border:1px solid #2ecc8a55;color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
           ↑ Publicar a Sheets
         </button>
       </div>
       <button onclick="probarPOST()" style="width:100%;padding:6px;margin-bottom:10px;
-        background:rgba(232,255,71,.06);border:1px solid rgba(232,255,71,.3);color:var(--y21);
+        background:rgba(232,255,71,.06);border:1px solid rgba(232,255,71,.3);color:#b8a000;
         font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
         🧪 Probar POST (diagnóstico de escritura)
       </button>
@@ -1717,7 +1717,7 @@ self.onmessage = async (e) => {
           style="width:100%;padding:6px 8px;background:var(--s3);border:1px solid var(--bd2);
           color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none;
           box-sizing:border-box;margin-bottom:9px"
-          onfocus="this.style.borderColor='#47ffb4'" onblur="this.style.borderColor='var(--bd2)'">
+          onfocus="this.style.borderColor='#2ecc8a'" onblur="this.style.borderColor='var(--bd2)'">
         <div style="font-size:9px;color:var(--dim);margin-bottom:5px">Tu nombre (aparece en el registro):</div>
         <input id="inp-cloud-user" placeholder="Ej: Ana García"
           style="width:100%;padding:6px 8px;background:var(--s3);border:1px solid var(--bd2);
@@ -1725,8 +1725,8 @@ self.onmessage = async (e) => {
           box-sizing:border-box;margin-bottom:12px"
           onfocus="this.style.borderColor='#c447ff'" onblur="this.style.borderColor='var(--bd2)'">
         <button onclick="saveCloudCfg()"
-          style="width:100%;padding:8px;background:rgba(71,255,180,.15);border:1px solid #47ffb4;
-          color:#47ffb4;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
+          style="width:100%;padding:8px;background:rgba(71,255,180,.15);border:1px solid #2ecc8a;
+          color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
           Guardar configuración
         </button>
         <div id="cloud-cfg-msg" style="display:none;margin-top:6px;font-size:9px"></div>
@@ -1767,7 +1767,7 @@ self.onmessage = async (e) => {
         <span class="cs-label">🎨 Tema</span>
         <div class="cs-chips" id="tema-chips" style="gap:4px">
           <div class="chip on-lay" data-tema="" onclick="setTheme('',this)" title="Ejecutivo oscuro">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e8ff47;margin-right:4px;vertical-align:middle"></span>Ejecutivo
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#c4d600;margin-right:4px;vertical-align:middle"></span>Ejecutivo
           </div>
           <div class="chip" data-tema="tableau" onclick="setTheme('tableau',this)" title="Tableau claro">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e8613c;margin-right:4px;vertical-align:middle"></span>Tableau
@@ -2330,7 +2330,7 @@ self.onmessage = async (e) => {
           <div style="height:1px;background:var(--bd);margin:8px 0"></div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <span style="font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;
-              color:var(--y21);font-family:var(--mono);white-space:nowrap">+ Nueva empresa</span>
+              color:#b8a000;font-family:var(--mono);white-space:nowrap">+ Nueva empresa</span>
             <input id="rub-nueva-nombre" type="text" placeholder="Nombre de la empresa…"
               style="flex:2;min-width:160px;padding:4px 8px;background:var(--s3);
               border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
@@ -2344,7 +2344,7 @@ self.onmessage = async (e) => {
             </select>
             <button onclick="agregarEmpresaRubro()"
               style="padding:4px 12px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
-              color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
               + Agregar empresa</button>
             <span id="rub-nueva-msg" style="font-size:9px;font-family:var(--mono);color:var(--dim)"></span>
           </div>
@@ -2384,7 +2384,7 @@ self.onmessage = async (e) => {
               </div>
               <button onclick="gestionRenombrar()"
                 style="padding:8px 16px;background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
-                color:var(--y21);font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+                color:#b8a000;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono);
                 white-space:nowrap;flex-shrink:0">
                 Renombrar →
               </button>
@@ -2418,7 +2418,7 @@ self.onmessage = async (e) => {
                 <select id="gest-merge-to"
                   style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid var(--bd2);
                   color:var(--text);font-family:var(--mono);font-size:10.5px;border-radius:3px;cursor:pointer;outline:none"
-                  onfocus="this.style.borderColor='#47ffb4'" onblur="this.style.borderColor='var(--bd2)'">
+                  onfocus="this.style.borderColor='#2ecc8a'" onblur="this.style.borderColor='var(--bd2)'">
                   <option value="">— Empresa que recibe —</option>
                 </select>
               </div>
@@ -2479,7 +2479,7 @@ self.onmessage = async (e) => {
             <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
               <button onclick="gestionNuevaEmpresa()"
                 style="padding:8px 18px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.4);
-                color:#47ffb4;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
+                color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
                 ＋ Crear empresa
               </button>
               <span id="gest-nueva-msg" style="font-size:9px;font-family:var(--mono)"></span>
@@ -2505,6 +2505,15 @@ self.onmessage = async (e) => {
 
       <!-- filtros multi-selección estilo Excel -->
       <div class="sel-row" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;align-items:center">
+
+        <!-- Empresa (multi-selección igual que demás filtros) -->
+        <button id="btn-ftrans-empresa" onclick="abrirFiltroTrans('empresa',this)"
+          class="trans-multi-btn"
+          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
+          color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px;
+          cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px">
+          <span id="lbl-ftrans-empresa">Empresa: Todas</span><span style="font-size:8px;color:var(--dim)">▼</span>
+        </button>
 
         <!-- Año -->
         <button id="btn-ftrans-año" onclick="abrirFiltroTrans('año',this)"
@@ -2571,7 +2580,7 @@ self.onmessage = async (e) => {
 
         <button onclick="exportarTransExcel()" title="Exportar detalle filtrado a Excel"
           style="padding:5px 12px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
-          color:#47ffb4;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+          color:#1a9e68;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);
           white-space:nowrap;display:flex;align-items:center;gap:5px"
           onmouseover="this.style.background='rgba(71,255,180,.18)'"
           onmouseout="this.style.background='rgba(71,255,180,.08)'">
@@ -2597,12 +2606,12 @@ self.onmessage = async (e) => {
         <button onclick="toggleClasifPanel()"
           id="btn-clasif-trans"
           style="padding:3px 9px;background:rgba(71,255,180,.07);border:1px solid rgba(71,255,180,.25);
-          color:#47ffb4;font-family:var(--mono);font-size:8px;border-radius:3px;
+          color:#1a9e68;font-family:var(--mono);font-size:8px;border-radius:3px;
           cursor:pointer;white-space:nowrap">🏷 Clasificaciones</button>
         <button onclick="toggleCorreccionMasivaPanel()"
           id="btn-corr-masiva"
           style="padding:3px 9px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.25);
-          color:var(--y21);font-family:var(--mono);font-size:8px;border-radius:3px;
+          color:#b8a000;font-family:var(--mono);font-size:8px;border-radius:3px;
           cursor:pointer;white-space:nowrap">🔧 Asignar mes masivo</button>
       </div>
 
@@ -2644,7 +2653,7 @@ self.onmessage = async (e) => {
       <div id="panel-clasif-trans" style="display:none;margin-bottom:12px;padding:14px 16px;
         background:rgba(71,255,180,.04);border:1px solid rgba(71,255,180,.2);border-radius:5px">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
-          color:#47ffb4;margin-bottom:12px;font-family:var(--mono)">🏷 Gestión de clasificaciones</div>
+          color:#1a9e68;margin-bottom:12px;font-family:var(--mono)">🏷 Gestión de clasificaciones</div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
@@ -2658,8 +2667,8 @@ self.onmessage = async (e) => {
               Hacé esto <strong>antes</strong> de recargar los archivos originales.
             </div>
             <button onclick="exportarClasificaciones()"
-              style="padding:6px 14px;background:rgba(71,255,180,.1);border:1px solid #47ffb440;
-              color:#47ffb4;font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer">
+              style="padding:6px 14px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a40;
+              color:#1a9e68;font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer">
               ⬇ Exportar Excel de clasificaciones
             </button>
             <button onclick="restaurarTransDesdeBackup()"
@@ -2709,7 +2718,7 @@ self.onmessage = async (e) => {
       <div id="panel-corr-masiva" style="display:none;padding:12px 14px;margin-bottom:10px;
         background:rgba(232,255,71,.04);border:1px solid rgba(232,255,71,.2);border-radius:5px">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
-          color:var(--y21);margin-bottom:10px;font-family:var(--mono)">
+          color:#b8a000;margin-bottom:10px;font-family:var(--mono)">
           🔧 Corrección masiva de mes
         </div>
 
@@ -2765,8 +2774,8 @@ self.onmessage = async (e) => {
               <option value="11">Noviembre</option><option value="12">Diciembre</option>
             </select>
             <button onclick="asignarMesMasivo()"
-              style="padding:5px 12px;background:rgba(71,255,180,.1);border:1px solid #47ffb440;
-              color:#47ffb4;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              style="padding:5px 12px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a40;
+              color:#1a9e68;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
               ✓ Asignar
             </button>
             <span id="corr-man-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
@@ -2792,7 +2801,7 @@ self.onmessage = async (e) => {
             </select>
             <button onclick="asignarAñoMasivo()"
               style="padding:5px 12px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
-              color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
               ✓ Asignar año
             </button>
             <span id="corr-año-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
@@ -3084,7 +3093,7 @@ self.onmessage = async (e) => {
         <div style="font-size:32px;margin-bottom:12px">🎯</div>
         <div style="font-size:14px;margin-bottom:8px;color:var(--text)">Sin datos de presupuesto</div>
         <div style="font-size:11px;margin-bottom:20px">Importá un archivo Excel con columnas: Empresa · Año · Presupuesto</div>
-        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 18px;background:rgba(232,255,71,.1);border:1px solid var(--y21);border-radius:3px;cursor:pointer;font-size:10px;color:var(--y21);font-family:var(--mono)">
+        <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 18px;background:rgba(232,255,71,.1);border:1px solid var(--y21);border-radius:3px;cursor:pointer;font-size:10px;color:#b8a000;font-family:var(--mono)">
           📥 Cargar presupuesto
           <input type="file" id="file-pres" accept=".xlsx,.xls,.csv" style="display:none" onchange="importPresupuesto(this.files[0])">
         </label>
@@ -3109,7 +3118,7 @@ self.onmessage = async (e) => {
           <div class="card-hd">
             <span class="card-hd-title">Detalle por empresa</span>
             <span class="card-hd-unit" id="pres-tbl-lbl"></span>
-            <label style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(232,255,71,.06);border:1px solid var(--y21);border-radius:2px;cursor:pointer;font-size:9px;color:var(--y21);font-family:var(--mono)">
+            <label style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(232,255,71,.06);border:1px solid var(--y21);border-radius:2px;cursor:pointer;font-size:9px;color:#b8a000;font-family:var(--mono)">
               ↻ Actualizar presupuesto
               <input type="file" id="file-pres2" accept=".xlsx,.xls,.csv" style="display:none" onchange="importPresupuesto(this.files[0])">
             </label>
@@ -3135,7 +3144,7 @@ self.onmessage = async (e) => {
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;
             background:rgba(232,255,71,.1);border:1px solid var(--y21);border-radius:3px;
-            cursor:pointer;font-size:11px;color:var(--y21);font-family:var(--mono)">
+            cursor:pointer;font-size:11px;color:#b8a000;font-family:var(--mono)">
             📄 Cargar balance PDF
             <input type="file" id="file-bal" accept=".pdf" style="display:none"
               onchange="loadBalanceArchivo(this.files[0])">
@@ -3191,7 +3200,7 @@ self.onmessage = async (e) => {
                     <option value="">— Seleccioná una empresa del portafolio —</option>
                   </select>
                   <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
-                    pointer-events:none;color:var(--y21);font-size:12px">▾</span>
+                    pointer-events:none;color:#b8a000;font-size:12px">▾</span>
                 </div>
                 <div id="bal-empresa-info" style="font-size:9px;color:var(--dim);font-family:var(--mono);min-height:13px"></div>
               </div>
@@ -3213,13 +3222,13 @@ self.onmessage = async (e) => {
                     <option value="">— Elegí una empresa primero —</option>
                   </select>
                   <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
-                    pointer-events:none;color:var(--y21);font-size:12px">▾</span>
+                    pointer-events:none;color:#b8a000;font-size:12px">▾</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;min-height:13px">
                   <span id="bal-cierre-det" style="font-size:8.5px;color:var(--dim);padding:2px 7px;
                     border:1px solid var(--bd);border-radius:2px;white-space:nowrap"></span>
-                  <span id="bal-fuente" style="font-size:8.5px;color:#47ffb4;padding:2px 7px;
-                    border:1px solid #47ffb440;border-radius:2px;white-space:nowrap"></span>
+                  <span id="bal-fuente" style="font-size:8.5px;color:#1a9e68;padding:2px 7px;
+                    border:1px solid #2ecc8a40;border-radius:2px;white-space:nowrap"></span>
                 </div>
               </div>
 
@@ -3227,7 +3236,7 @@ self.onmessage = async (e) => {
               <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;padding-bottom:18px">
                 <label id="btn-cargar-bal" style="display:flex;align-items:center;gap:6px;padding:8px 14px;
                   background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
-                  border-radius:4px;cursor:pointer;font-size:10px;color:var(--y21);
+                  border-radius:4px;cursor:pointer;font-size:10px;color:#b8a000;
                   font-family:var(--mono);white-space:nowrap;font-weight:600">
                   📄/📊 Cargar balance
                   <input type="file" id="file-bal2" accept=".pdf,.xlsx,.xls" style="display:none"
@@ -3253,7 +3262,7 @@ self.onmessage = async (e) => {
                 <div id="bal-empresa-det" style="font-size:13px;font-weight:600;color:var(--text);
                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">—</div>
                 <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
-                  <span id="bal-periodo-det" style="font-size:11px;color:var(--y21);font-family:var(--mono)">—</span>
+                  <span id="bal-periodo-det" style="font-size:11px;color:#b8a000;font-family:var(--mono)">—</span>
                   <span id="bal-status" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
                   <button onclick="editarPeriodoBalance()"
                     style="background:none;border:1px solid var(--bd);color:var(--dim);font-size:8px;
@@ -3293,7 +3302,7 @@ self.onmessage = async (e) => {
                 <option value="">— sin vincular —</option>
               </select>
               <span id="bal-vincular-vis-estado"
-                style="font-size:9px;font-family:var(--mono);color:#47ffb4"></span>
+                style="font-size:9px;font-family:var(--mono);color:#1a9e68"></span>
             </div>
           </div>
         </div>
@@ -3390,7 +3399,7 @@ self.onmessage = async (e) => {
             <!-- Estado de Resultados -->
             <div style="margin-bottom:14px">
               <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
-                color:#47ffb4;margin-bottom:8px;font-weight:600">Estado de Resultados</div>
+                color:#1a9e68;margin-bottom:8px;font-weight:600">Estado de Resultados</div>
               <div style="display:flex;flex-direction:column;gap:6px"
                 id="bal-editor-resultados"></div>
             </div>
@@ -3399,7 +3408,7 @@ self.onmessage = async (e) => {
             <div style="display:flex;gap:8px;align-items:center;padding-top:4px;border-top:1px solid var(--bd)">
               <button onclick="balEditorGuardar()"
                 style="padding:7px 18px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.4);
-                color:#47ffb4;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
+                color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
                 ✓ Guardar cambios
               </button>
               <button onclick="balEditorRecargar()"
@@ -3459,7 +3468,7 @@ self.onmessage = async (e) => {
 
       <label style="display:inline-flex;align-items:center;gap:6px;
         padding:5px 14px;background:rgba(71,255,180,.12);
-        border:1.5px solid #47ffb4;color:#47ffb4;border-radius:4px;
+        border:1.5px solid #2ecc8a;color:#1a9e68;border-radius:4px;
         cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:600">
         📥 Cargar Excel flujo
         <input type="file" accept=".xlsx,.xls" style="display:none"
@@ -3475,7 +3484,7 @@ self.onmessage = async (e) => {
 
       <button onclick="generarInformeFlujo()"
         style="padding:5px 14px;background:rgba(232,255,71,.08);
-        border:1.5px solid var(--y21);color:var(--y21);border-radius:4px;
+        border:1.5px solid var(--y21);color:#b8a000;border-radius:4px;
         cursor:pointer;font-family:var(--mono);font-size:10px">
         📄 Generar informe Word
       </button>
@@ -3489,7 +3498,7 @@ self.onmessage = async (e) => {
       padding:16px 18px;background:rgba(71,255,180,.04);
       border:1px solid rgba(71,255,180,.25);border-radius:6px">
       <div style="font-size:9px;text-transform:uppercase;letter-spacing:.12em;
-        color:#47ffb4;font-family:var(--mono);margin-bottom:14px;font-weight:600">
+        color:#1a9e68;font-family:var(--mono);margin-bottom:14px;font-weight:600">
         ✓ Datos detectados — confirmá antes de guardar
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px">
@@ -3531,8 +3540,8 @@ self.onmessage = async (e) => {
         border:1px solid var(--bd);border-radius:4px;max-height:220px;overflow-y:auto"></div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="confirmarGuardarFlujo()"
-          style="padding:6px 18px;background:rgba(71,255,180,.15);border:1.5px solid #47ffb4;
-          color:#47ffb4;font-family:var(--mono);font-size:10px;font-weight:700;
+          style="padding:6px 18px;background:rgba(71,255,180,.15);border:1.5px solid #2ecc8a;
+          color:#1a9e68;font-family:var(--mono);font-size:10px;font-weight:700;
           border-radius:4px;cursor:pointer">✓ Guardar flujo</button>
         <button onclick="_cerrarConfirmFlujo()"
           style="padding:6px 12px;background:none;border:1px solid var(--bd2);
@@ -3583,8 +3592,8 @@ self.onmessage = async (e) => {
         gap:8px;margin-bottom:12px"></div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="guardarFlujoManual()"
-          style="padding:6px 18px;background:rgba(71,255,180,.15);border:1.5px solid #47ffb4;
-          color:#47ffb4;font-family:var(--mono);font-size:10px;font-weight:700;
+          style="padding:6px 18px;background:rgba(71,255,180,.15);border:1.5px solid #2ecc8a;
+          color:#1a9e68;font-family:var(--mono);font-size:10px;font-weight:700;
           border-radius:4px;cursor:pointer">✓ Guardar</button>
         <button onclick="limpiarFlujoManual()"
           style="padding:6px 12px;background:none;border:1px solid var(--bd2);
@@ -3638,8 +3647,8 @@ self.onmessage = async (e) => {
           📋 Ver flujo individual
         </button>
         <button onclick="buildComparacionFlujos()"
-          style="padding:6px 16px;background:rgba(71,255,180,.1);border:1.5px solid #47ffb4;
-          color:#47ffb4;font-family:var(--mono);font-size:10px;font-weight:600;
+          style="padding:6px 16px;background:rgba(71,255,180,.1);border:1.5px solid #2ecc8a;
+          color:#1a9e68;font-family:var(--mono);font-size:10px;font-weight:600;
           border-radius:4px;cursor:pointer">
           ⇄ Comparar períodos
         </button>
@@ -4022,7 +4031,7 @@ function editarPassUsuario(user, passId) {
   const users = getUsuarios();
   users[user] = nueva;
   saveUsuarios(users);
-  if (msg) { msg.textContent = `✓ Contraseña de "${user}" actualizada`; msg.style.color='#47ffb4'; }
+  if (msg) { msg.textContent = `✓ Contraseña de "${user}" actualizada`; msg.style.color='#2ecc8a'; }
   setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
 }
 
@@ -4257,10 +4266,10 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   tr[style*="rgba(71,232,255"] { background: #f0fcff !important; }
 
   /* Textos de color en tablas — convertir a oscuro legible */
-  td[style*="color:#47ffb4"], td[style*="color: #47ffb4"] { color: #087848 !important; }
+  td[style*="color:#1a9e68"], td[style*="color:#1a9e68"] { color: #087848 !important; }
   td[style*="color:var(--neg)"], td[style*="color: var(--neg)"] { color: #a00 !important; }
-  td[style*="color:var(--pos)"], td[style*="color: var(--pos)"] { color: #070 !important; }
-  td[style*="color:var(--y21)"], td[style*="color: var(--y21)"] { color: #7a6000 !important; }
+  td[style*="color:#1a9e68"], td[style*="color:#1a9e68"] { color: #070 !important; }
+  td[style*="color:#b8a000"], td[style*="color:#b8a000"] { color: #7a6000 !important; }
   td[style*="color:#47e8ff"]  { color: #006080 !important; }
 
   /* ── Grillas ─────────────────────────────────────────────────────── */
@@ -4286,12 +4295,12 @@ document.addEventListener('DOMContentLoaded', checkAuth);
 
   /* ── Colores negativos/positivos globales ─────────────────────────── */
   [style*="color:var(--neg)"] { color: #a00 !important; }
-  [style*="color:var(--pos)"] { color: #070 !important; }
+  [style*="color:#1a9e68"] { color: #070 !important; }
   [style*="color:var(--dim)"] { color: #666 !important; }
   [style*="color:var(--text)"]{ color: #111 !important; }
-  [style*="color:#47ffb4"]    { color: #087848 !important; }
+  [style*="color:#1a9e68"]    { color: #087848 !important; }
   [style*="color:#47e8ff"]    { color: #006080 !important; }
-  [style*="color:var(--y21)"] { color: #7a6000 !important; }
+  [style*="color:#b8a000"] { color: #7a6000 !important; }
 
   /* ── Página ──────────────────────────────────────────────────────── */
   @page {
@@ -5559,7 +5568,7 @@ function buildRubros() {
     </select>
     <button onclick="agregarEmpresaRubroInline()"
       style="padding:3px 10px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
-      color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+      color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
       + Agregar
     </button>
   </div>`;
@@ -6129,9 +6138,9 @@ function _confirmarImportFlujo(res) {
         '<th style="text-align:right;padding:3px 8px;background:var(--s3);border-bottom:1px solid var(--bd)">Var %</th>' +
       '</tr></thead><tbody>' +
       res.rubros.map(r => {
-        const col = r.tipo==='ingreso'?'color:var(--pos)':r.tipo==='resultado'?'font-weight:600':'';
+        const col = r.tipo==='ingreso'?'color:#1a9e68':r.tipo==='resultado'?'font-weight:600':'';
         const vp  = r.var_pct != null ? ((r.var_pct*100)>=0?'+':'')+(r.var_pct*100).toFixed(1)+'%' : '—';
-        const vc  = r.var_pct == null ? 'color:var(--dim)' : r.var_pct > 0 ? 'color:var(--neg)' : 'color:var(--pos)';
+        const vc  = r.var_pct == null ? 'color:var(--dim)' : r.var_pct > 0 ? 'color:var(--neg)' : 'color:#1a9e68';
         return '<tr style="border-bottom:1px solid var(--bd2)">' +
           '<td style="padding:3px 8px;' + col + '">' + r.label + '</td>' +
           '<td style="padding:3px 8px;text-align:right">' + fmtV(r.actual) + '</td>' +
@@ -6424,7 +6433,7 @@ function _renderListaFlujos() {
         Sin flujos de fondos cargados
       </div>
       <div style="font-size:11px;color:var(--dim);line-height:1.7;max-width:360px;margin:0 auto">
-        Para comenzar, hacé clic en <strong style="color:var(--pos)">📥 Cargar Excel flujo</strong>
+        Para comenzar, hacé clic en <strong style="color:#1a9e68">📥 Cargar Excel flujo</strong>
         y seleccioná el archivo Excel con la hoja <em>FLUJO X MES</em>.<br>
         También podés usar <strong style="color:#47e8ff">✏ Carga manual</strong>
         para ingresar los valores directamente.
@@ -6582,7 +6591,7 @@ function buildVistaIndividualFlujo() {
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Fondos solicitados', v:fmt(necA),         c:'var(--neg)', big:true },
-    { l:'Total ingresos',     v:fmt(ingA),          c:'#47ffb4' },
+    { l:'Total ingresos',     v:fmt(ingA),          c:'#2ecc8a' },
     { l:'Total egresos',      v:fmt(egrA),          c:'var(--neg)' },
     { l:'Cobertura ing/egr',  v:covA,               c:'var(--text)' },
     { l:'IPC período',        v:f.ipc ? f.ipc + '%' : '—', c:'#47e8ff' },
@@ -6602,7 +6611,7 @@ function buildVistaIndividualFlujo() {
   // Función de estilo por tipo de rubro
   const _est = (lbl, tipo) => {
     const lUP = (lbl || '').toUpperCase();
-    if (tipo === 'ingreso' && lUP.includes('TOTAL')) return { bg:'rgba(71,255,180,.09)',bt:'border-top:2px solid #47ffb4',fw:'700',c:'#47ffb4',tag:'TOTAL ING' };
+    if (tipo === 'ingreso' && lUP.includes('TOTAL')) return { bg:'rgba(71,255,180,.09)',bt:'border-top:2px solid #2ecc8a',fw:'700',c:'#47ffb4',tag:'TOTAL ING' };
     if (tipo === 'ingreso')                          return { bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#47ffb4',tag:'' };
     if (tipo === 'total')                            return { bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)',tag:'TOTAL EGR' };
     if (tipo === 'resultado')                        return { bg:'rgba(232,255,71,.07)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)',tag:'RESULTADO' };
@@ -6750,7 +6759,7 @@ function buildComparacionFlujos() {
   const tbl = document.getElementById('tbl-flujos');
   const _estComp = (lbl, tipo) => {
     const lUP = (lbl||'').toUpperCase();
-    if (tipo==='ingreso'&&lUP.includes('TOTAL')) return {bg:'rgba(71,255,180,.08)',bt:'border-top:2px solid #47ffb4',fw:'700',c:'#47ffb4'};
+    if (tipo==='ingreso'&&lUP.includes('TOTAL')) return {bg:'rgba(71,255,180,.08)',bt:'border-top:2px solid #2ecc8a',fw:'700',c:'#47ffb4'};
     if (tipo==='ingreso') return {bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#47ffb4'};
     if (tipo==='total'||lUP.includes('TOTAL EGRES')) return {bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)'};
     if (tipo==='resultado'||lUP.includes('FONDOS')||lUP.includes('SUBTOTAL')||lUP.includes('DÉF')) return {bg:'rgba(232,255,71,.07)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)'};
@@ -6999,14 +7008,14 @@ function buildResumen() {
         <div style="font-size:12px;color:var(--dim);line-height:1.8;max-width:400px">
           Para ver el dashboard necesitás sincronizar con Google Sheets.<br>
           Hacé clic en <strong style="color:#47e8ff">↓ Sync</strong> en el topbar,<br>
-          o cargá un archivo Excel con <strong style="color:var(--y21)">📥 Cargar</strong>.
+          o cargá un archivo Excel con <strong style="color:#b8a000">📥 Cargar</strong>.
         </div>
         <div style="display:flex;gap:10px;margin-top:8px">
           <button onclick="syncFromCloud()" style="padding:10px 20px;background:rgba(71,232,255,.1);
             border:1px solid #47e8ff55;color:#47e8ff;font-size:11px;border-radius:4px;
             cursor:pointer;font-family:var(--mono)">↓ Sync desde Sheets</button>
           <label style="padding:10px 20px;background:rgba(232,255,71,.1);
-            border:1px solid var(--y21);color:var(--y21);font-size:11px;border-radius:4px;
+            border:1px solid var(--y21);color:#b8a000;font-size:11px;border-radius:4px;
             cursor:pointer;font-family:var(--mono);position:relative;overflow:hidden">
             📥 Cargar archivo
             <input type="file" accept=".csv,.xlsx,.xls"
@@ -7035,7 +7044,7 @@ function buildResumen() {
   const top5pct = allFactSorted.slice(0,5).reduce((s,[,f])=>s+(f[last]||0),0)/total_last*100;
 
   const kpiItems = [
-    {lbl:`Facturación ${last}`,    val:fv(tf[last]),    sub:`×${(tf[last]/tf[first]).toFixed(1)} vs ${first}`, cls:'up', ac:'#e8ff47'},
+    {lbl:`Facturación ${last}`,    val:fv(tf[last]),    sub:`×${(tf[last]/tf[first]).toFixed(1)} vs ${first}`, cls:'up', ac:'#c4d600'},
     {lbl:'Ejercicios analizados',  val:years.length,    sub:years.join(' · '),                               cls:'',   ac:'#47e8ff'},
     {lbl:`Superávit ${last}`,      val:fv(ts[last]),    sub:`${DATA.sup_count[last]} empresas positivas`,     cls:'up', ac:'#47ffb4'},
     {lbl:`Nómina ${last}`,         val:fn(DATA.pers_totals[String(last)]||0), sub:`+${pctStr(DATA.pers_totals[String(last)]||0, DATA.pers_totals['2020']||0)} vs 2020`, cls:'up', ac:'#c447ff'},
@@ -7069,7 +7078,7 @@ function buildResumen() {
   mkChart('ch-r-supdef','bar',{
     labels: years.map(String),
     datasets:[
-      {label:'Superávit', data:years.map(y=>(DATA.totals_sup[y]||0)/1e6), backgroundColor:'#47ffb499', borderRadius:3},
+      {label:'Superávit', data:years.map(y=>(DATA.totals_sup[y]||0)/1e6), backgroundColor:'#2ecc8a99', borderRadius:3},
       {label:'Déficit',   data:years.map(y=>(DATA.totals_def[y]||0)/1e6), backgroundColor:'#ff476699', borderRadius:3},
     ]
   },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
@@ -7140,8 +7149,8 @@ function buildFacturacion() {
     mkChart('ch-f-crec','bar',{
       labels: growths.map(g=>g.lbl),
       datasets:[
-        {label:'Crecimiento nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v!=null?(g.v>=0?'#47ffb499':'#ff476699'):'transparent'), borderRadius:4},
-        ...(showInflation ? [{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#e8ff4744', borderColor:'#e8ff47', borderWidth:1.5, borderRadius:4}] : []),
+        {label:'Crecimiento nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v!=null?(g.v>=0?'#2ecc8a99':'#ff476699'):'transparent'), borderRadius:4},
+        ...(showInflation ? [{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4}] : []),
         ...(showInflation&&growths.some(g=>g.real!=null) ? [{type:'line', label:'Crecimiento real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3, spanGaps:true}] : []),
       ]
     },{scales:{y:{ticks:{callback:v=>v+'%'}}}});
@@ -7152,7 +7161,7 @@ function buildFacturacion() {
       labels: years.map(String),
       datasets:[
         { label:'Facturación', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:4 },
-        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#47ffb499':'#ff476699'), borderRadius:4 },
+        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
@@ -7179,8 +7188,8 @@ function buildFacturacion() {
     mkChart('ch-f-crec','bar',{
       labels: growths.map(g=>g.lbl),
       datasets:[
-        {label:'Crecimiento nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v>=0?'#47ffb499':'#ff476699'), borderRadius:4},
-        ...(showInflation ? [{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#e8ff4744', borderColor:'#e8ff47', borderWidth:1.5, borderRadius:4}] : []),
+        {label:'Crecimiento nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v>=0?'#2ecc8a99':'#ff476699'), borderRadius:4},
+        ...(showInflation ? [{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4}] : []),
         ...(showInflation ? [{type:'line', label:'Crecimiento real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3}] : []),
       ]
     },{scales:{y:{ticks:{callback:v=>v+'%'}}}});
@@ -7192,7 +7201,7 @@ function buildFacturacion() {
     mkChart('ch-f-pie','doughnut',{
       labels:[...top5.map(([n])=>n.split(' ')[0]),'Otros'],
       datasets:[{data:[...top5.map(([,f])=>f[lastY]/1e6),otros/1e6],
-        backgroundColor:['#e8ff47cc','#47e8ffcc','#ff8c47cc','#c447ffcc','#47ffb4cc','#303640'],
+        backgroundColor:['#c4d600cc','#47e8ffcc','#ff8c47cc','#c447ffcc','#47ffb4cc','#303640'],
         borderWidth:0}]
     });
   }
@@ -7242,7 +7251,7 @@ function buildResDesglose() {
   const cont    = document.getElementById('res-desglose-content');
   const fmtCell = (v, key) => {
     if (v == null || v === 0) return '<span style="color:var(--dim)">—</span>';
-    const m = v < 0 ? 'color:var(--neg)' : key === 'resultado_operativo' || key === 'utilidad_bruta' ? (v > 0 ? 'color:var(--pos)' : 'color:var(--neg)') : '';
+    const m = v < 0 ? 'color:var(--neg)' : key === 'resultado_operativo' || key === 'utilidad_bruta' ? (v > 0 ? 'color:#1a9e68' : 'color:var(--neg)') : '';
     return `<span style="${m}">${fv(v)}</span>`;
   };
 
@@ -7367,7 +7376,7 @@ function buildErChartSection(emps, years) {
     mkChart('ch-er-bars','bar',{
       labels: lbl,
       datasets:[{ label:'Resultado Operativo', data: data.map(d=>d.v/1e6),
-        backgroundColor: data.map(d=>d.v>=0?'#47ffb499':'#ff476699'), borderRadius:4 }]
+        backgroundColor: data.map(d=>d.v>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 }]
     },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}},x:{ticks:{maxRotation:45}}}});
   })();
   </scr`+'ipt>';
@@ -7397,8 +7406,8 @@ function buildErWaterfallSection(emp, years, empEr) {
       labels: yrs.map(String),
       datasets: [
         {label:'Ventas Netas',      data:yrs.map(y=>(er[y]?.ventas_netas||0)/1e6),         backgroundColor:'#47e8ff88', borderRadius:3},
-        {label:'Utilidad Bruta',    data:yrs.map(y=>(er[y]?.utilidad_bruta||0)/1e6),        backgroundColor:'#e8ff4788', borderRadius:3},
-        {label:'Resultado Operativo',data:yrs.map(y=>(er[y]?.resultado_operativo||0)/1e6),  backgroundColor:yrs.map(y=>(er[y]?.resultado_operativo||0)>=0?'#47ffb499':'#ff476699'), borderRadius:3},
+        {label:'Utilidad Bruta',    data:yrs.map(y=>(er[y]?.utilidad_bruta||0)/1e6),        backgroundColor:'#c4d60088', borderRadius:3},
+        {label:'Resultado Operativo',data:yrs.map(y=>(er[y]?.resultado_operativo||0)/1e6),  backgroundColor:yrs.map(y=>(er[y]?.resultado_operativo||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:3},
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
@@ -7446,7 +7455,7 @@ function buildResultado() {
     mkChart('ch-rs-multi','bar',{
       labels: years.map(String),
       datasets:[{ label:'Resultado operativo', data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null),
-        backgroundColor:years.map(y=>(sit[y]||0)>=0?'#47ffb499':'#ff476699'), borderRadius:5 }]
+        backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:5 }]
     },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
     // Gráfico 2: facturación vs resultado
@@ -7454,7 +7463,7 @@ function buildResultado() {
       labels: years.map(String),
       datasets:[
         { label:'Facturación', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:4 },
-        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#47ffb499':'#ff476699'), borderRadius:4 },
+        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
@@ -7464,7 +7473,7 @@ function buildResultado() {
       datasets:[
         { label:'Ingresos (fact.)', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:'#47e8ff55', borderRadius:3 },
         { label:'Gastos estimados', data:years.map(y=>{ const f=fact[y]||0,s=sit[y]; return (f>0&&s!=null)?((f-s)/1e6):null; }), backgroundColor:'#ff476655', borderRadius:3 },
-        { label:'Resultado neto',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#47ffb499':'#ff476699'), borderRadius:3 },
+        { label:'Resultado neto',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:3 },
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
@@ -7498,7 +7507,7 @@ function buildResultado() {
     mkChart('ch-rs-sup','line',{
       labels: years.map(String),
       datasets:[
-        {label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), borderColor:'#47ffb4', backgroundColor:'#47ffb418', fill:true, tension:.4, pointRadius:5},
+        {label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), borderColor:'#2ecc8a', backgroundColor:'#47ffb418', fill:true, tension:.4, pointRadius:5},
         {label:'Déficit',   data:years.map(y=>(td[y]||0)/1e6), borderColor:'#ff4766', backgroundColor:'#ff476618', fill:true, tension:.4, pointRadius:5},
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
@@ -7601,7 +7610,7 @@ function buildPersonal() {
     document.getElementById('kpi-pers').innerHTML = [
       { lbl:`Nómina ${lastY}`,       val: fn(totLastY),
         sub: totBaseY ? `▲ +${pctStr(totLastY, totBaseY)} vs ${baseYear}` : '—',
-        cls:'up', ac:'#e8ff47' },
+        cls:'up', ac:'#c4d600' },
       { lbl:`Nómina ${baseYear} (base)`, val: fn(totBaseY),
         sub:'Año base de comparación', cls:'', ac:'#47e8ff' },
       { lbl:'Mayor empleador',
@@ -7921,7 +7930,7 @@ function renderTablaPersonal() {
     const active = _persTablaSort.col === col;
     const arrow  = active ? (_persTablaSort.dir > 0 ? ' ▲' : ' ▼') : '';
     const newDir = active ? -_persTablaSort.dir : -1;
-    const style  = 'cursor:pointer;white-space:nowrap;' + (active ? 'color:var(--y21)' : '');
+    const style  = 'cursor:pointer;white-space:nowrap;' + (active ? 'color:#b8a000' : '');
     // Usar onclick inline con data-col codificado en el atributo
     return '<th style="' + style + '" data-col="' + col + '" data-dir="' + newDir + '"' +
            ' onclick="_persTablaSort={col:this.dataset.col,dir:parseInt(this.dataset.dir)};renderTablaPersonal()">' +
@@ -8008,7 +8017,7 @@ function buildRanking() {
     const lastYr  = years[years.length-1];
     const smfRank = semaforoColor(r.e, lastYr, _semaforoMode);
     if (smfRank) tr.style.background = smfRank + '12';
-    tr.innerHTML = `<td class="d">${i+1}</td><td>${r.e}</td><td>${getRuboLabel(r.e)}</td>${cells}<td class="r" style="color:var(--y21);font-weight:500">${fvFull(r.fTotal)}</td>`;
+    tr.innerHTML = `<td class="d">${i+1}</td><td>${r.e}</td><td>${getRuboLabel(r.e)}</td>${cells}<td class="r" style="color:#b8a000;font-weight:500">${fvFull(r.fTotal)}</td>`;
     tb.appendChild(tr);
   });
   tbl.appendChild(tb);
@@ -8174,7 +8183,7 @@ function buildPortafolio() {
       label:'Empresa', pointRadius:6, pointHoverRadius:9,
       data: scData.map(r=>({x:r.f/1e6, y:(r.r||0)/1e6, label:r.e})),
       backgroundColor: scData.map(r=>r.r>=0?'#47ffb488':'#ff476688'),
-      borderColor:     scData.map(r=>r.r>=0?'#47ffb4':'#ff4766'),
+      borderColor:     scData.map(r=>r.r>=0?'#2ecc8a':'#ff4766'),
       borderWidth:1
     }]
   },{
@@ -8350,12 +8359,12 @@ function buildEmpresa() {
       label: 'Var. real %',
       data: realPcts,
       type: 'line',
-      borderColor: '#47ffb4',
+      borderColor: '#2ecc8a',
       backgroundColor: '#47ffb420',
       borderDash: [4,3],
       borderWidth: 1.8,
       pointRadius: realPcts.map(v => v!==null ? 4 : 0),
-      pointBackgroundColor: realPcts.map(v => v!==null ? (v>=0 ? '#47ffb4' : '#ff4766') : 'transparent'),
+      pointBackgroundColor: realPcts.map(v => v!==null ? (v>=0 ? '#2ecc8a' : '#ff4766') : 'transparent'),
       fill: false,
       tension: 0.35,
       yAxisID: 'yR',
@@ -8383,7 +8392,7 @@ function buildEmpresa() {
   mkChart('ch-e-res','bar',{
     labels: sitYears.map(String),
     datasets:[
-      {label:'Resultado', data:sitYears.map(y=>sit[y]/1e6), backgroundColor:sitYears.map(y=>(sit[y]>=0?'#47ffb4':'#ff4766')+'99'), borderRadius:5, yAxisID:'y'},
+      {label:'Resultado', data:sitYears.map(y=>sit[y]/1e6), backgroundColor:sitYears.map(y=>(sit[y]>=0?'#2ecc8a':'#ff4766')+'99'), borderRadius:5, yAxisID:'y'},
       realLineDsEmp(sitYears, y => sit[y]||0),
     ]
   },{plugins:{legend:{labels:{filter:i=>i.text!==''}}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}},...yRightAxis}});
@@ -8405,9 +8414,9 @@ function buildEmpresa() {
     datasets:[
       {label:'Margen %', data:margenYs.map(y=>parseFloat(((sit[y]||0)/(fact[y]||1)*100).toFixed(1))),
         borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.4, pointRadius:6, yAxisID:'y'},
-      {label:'Var. real', data:margenReal, type:'line', borderColor:'#47ffb4', backgroundColor:'transparent',
+      {label:'Var. real', data:margenReal, type:'line', borderColor:'#2ecc8a', backgroundColor:'transparent',
         borderDash:[4,3], borderWidth:1.8, pointRadius:margenReal.map(v=>v!==null?4:0),
-        pointBackgroundColor:margenReal.map(v=>v!==null?(v>=0?'#47ffb4':'#ff4766'):'transparent'),
+        pointBackgroundColor:margenReal.map(v=>v!==null?(v>=0?'#2ecc8a':'#ff4766'):'transparent'),
         tension:.35, yAxisID:'yR', spanGaps:false},
     ]
   },{plugins:{legend:{labels:{filter:i=>i.text!==''}}},scales:{y:{ticks:{callback:v=>v+'%'}},...yRightAxis}});
@@ -8492,7 +8501,7 @@ function renderERGraficosEmpresa(emp) {
       ? ren.resultado_neto / ren.ventas_ingresos * 100 : null;
 
     const colorSemaforo = (v, bueno, malo) =>
-      v == null ? 'var(--dim)' : v >= bueno ? '#47ffb4' : v >= malo ? '#ff8c47' : '#ff4766';
+      v == null ? 'var(--dim)' : v >= bueno ? '#2ecc8a' : v >= malo ? '#ff8c47' : '#ff4766';
 
     kpiEl.innerHTML =
       kpi('Resultado del ejercicio',
@@ -8558,11 +8567,11 @@ function renderERGraficosEmpresa(emp) {
     datasets.push({
       label: 'Resultado neto',
       data: [ren.resultado_neto / 1e6],
-      backgroundColor: (ren.resultado_neto >= 0 ? '#47ffb4' : '#ff4766') + 'ff',
+      backgroundColor: (ren.resultado_neto >= 0 ? '#2ecc8a' : '#ff4766') + 'ff',
       borderRadius: 4,
       stack: 'res',
       borderWidth: 2,
-      borderColor: ren.resultado_neto >= 0 ? '#47ffb4' : '#ff4766',
+      borderColor: ren.resultado_neto >= 0 ? '#2ecc8a' : '#ff4766',
     });
   }
 
@@ -8858,7 +8867,7 @@ function exportBaseCompleta() {
     XLSX.writeFile(wb, 'LR_Dashboard_DB_' + fecha + '.xlsx');
 
     if (status) {
-      status.innerHTML = '<span style="color:var(--pos)">✓ LR_Dashboard_DB_' + fecha + '.xlsx</span>';
+      status.innerHTML = '<span style="color:#1a9e68">✓ LR_Dashboard_DB_' + fecha + '.xlsx</span>';
       setTimeout(() => { status.innerHTML = ''; }, 6000);
     }
 
@@ -8892,7 +8901,7 @@ function exportPortafolioCSV() {
   const a      = document.createElement('a');
   a.href = url; a.download = 'portafolio_'+lastY+'.csv';
   a.click(); URL.revokeObjectURL(url);
-  document.getElementById('exp-status').innerHTML = '<span style="color:var(--pos)">✓ portafolio_'+lastY+'.csv</span>';
+  document.getElementById('exp-status').innerHTML = '<span style="color:#1a9e68">✓ portafolio_'+lastY+'.csv</span>';
   setTimeout(()=>{ document.getElementById('exp-status').innerHTML=''; }, 4000);
 }
 
@@ -9009,7 +9018,8 @@ function transFiltered() {
     if (_transFiltros.mes && !_transFiltros.mes.has(getVal(t, 'mes')))           return false;
     if (_transFiltros.saf && !_transFiltros.saf.has(getVal(t, 'saf')))           return false;
     if (_transFiltros.ben && !_transFiltros.ben.has(getVal(t, 'beneficiario')))  return false;
-    if (_transFiltros.cat && !_transFiltros.cat.has(getVal(t, 'categoria')))     return false;
+    if (_transFiltros.cat     && !_transFiltros.cat.has(getVal(t, 'categoria')))    return false;
+    if (_transFiltros.empresa && !_transFiltros.empresa.has(getVal(t, 'beneficiario'))) return false;
     // Búsqueda texto libre
     if (buscar) {
       const haystack = [t.beneficiario, t.observacion, t.saf, t.organismo, t.cgto]
@@ -9280,11 +9290,12 @@ function renderTransTabla(rows) {
 // ── Estado de filtros globales multi-selección ───────────────────
 // { campo: Set(valores seleccionados) } — null = todos
 const _transFiltros = {
-  año: null, mes: null, saf: null, ben: null, cat: null
+  año: null, mes: null, saf: null, ben: null, cat: null, empresa: null
 };
 
 // Configuración de cada filtro
 const TRANS_FILTRO_CFG = {
+  empresa: { prop:'beneficiario', label:'Empresa', btnId:'btn-ftrans-empresa', lblId:'lbl-ftrans-empresa', nombreTodos:'Todas' },
   año: { prop:'año',   label:'Año',         btnId:'btn-ftrans-año', lblId:'lbl-ftrans-año', nombreTodos:'Todos' },
   mes: { prop:'mes',   label:'Mes',         btnId:'btn-ftrans-mes', lblId:'lbl-ftrans-mes', nombreTodos:'Todos' },
   saf: { prop:'saf',   label:'SAF',         btnId:'btn-ftrans-saf', lblId:'lbl-ftrans-saf', nombreTodos:'Todos' },
@@ -9373,7 +9384,7 @@ function abrirFiltroTrans(campo, btnEl) {
         display:flex;align-items:center;gap:6px;user-select:none">
         <input type="checkbox" id="ftrans-all-${campo}" ${todosOn?'checked':''}
           onchange="toggleTodosFiltroTrans('${campo}',this.checked)"
-          style="cursor:pointer;accent-color:#47ffb4">
+          style="cursor:pointer;accent-color:#1a9e68">
         <span style="font-weight:600">(Seleccionar / Deseleccionar todo)</span>
       </label>
     </div>
@@ -9389,7 +9400,7 @@ function abrirFiltroTrans(campo, btnEl) {
           <input type="checkbox" value="${v.replace(/"/g,'&quot;')}"
             ${activos.has(v)?'checked':''}
             onchange="sincronizarTodosFiltroTrans('${campo}')"
-            style="cursor:pointer;flex-shrink:0;accent-color:#47ffb4">
+            style="cursor:pointer;flex-shrink:0;accent-color:#1a9e68">
           <span style="font-size:9.5px;font-family:var(--mono);color:${color};
             overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
             title="${lbl}">${lbl}</span>
@@ -9399,7 +9410,7 @@ function abrirFiltroTrans(campo, btnEl) {
     <div style="padding:7px 10px;border-top:1px solid var(--bd);display:flex;gap:6px">
       <button onclick="aplicarFiltroTrans('${campo}')"
         style="flex:1;padding:6px;background:rgba(71,255,180,.12);
-        border:1px solid #47ffb440;color:#47ffb4;font-family:var(--mono);
+        border:1px solid #2ecc8a40;color:#1a9e68;font-family:var(--mono);
         font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">
         ✓ Aplicar
       </button>
@@ -9453,6 +9464,9 @@ function sincronizarTodosFiltroTrans(campo) {
   const allCb = document.getElementById(`ftrans-all-${campo}`);
   if (allCb) allCb.checked = items.every(cb => cb.checked);
 }
+
+// aplicarFiltroTransEmpresa eliminada — ahora usa abrirFiltroTrans
+
 
 function aplicarFiltroTrans(campo) {
   const cfg = TRANS_FILTRO_CFG[campo];
@@ -9592,7 +9606,7 @@ function abrirDropTrans(event, colIdx) {
         <input type="checkbox" id="drop-all-col-${colIdx}"
           ${seleccionados.size >= todosVals.length ? 'checked' : ''}
           onchange="toggleTodosDropTrans(${colIdx}, this.checked)"
-          style="cursor:pointer;accent-color:#47ffb4">
+          style="cursor:pointer;accent-color:#1a9e68">
         <strong>(Seleccionar / Deseleccionar todo)</strong>
       </label>
     </div>
@@ -9609,7 +9623,7 @@ function abrirDropTrans(event, colIdx) {
           onmouseover="this.style.background='var(--s2)'"
           onmouseout="this.style.background=''">
           <input type="checkbox" value="${vEsc}" ${chk}
-            style="cursor:pointer;flex-shrink:0;accent-color:#47ffb4">
+            style="cursor:pointer;flex-shrink:0;accent-color:#1a9e68">
           <span style="font-size:9.5px;color:${color};overflow:hidden;
             text-overflow:ellipsis;white-space:nowrap"
             title="${lbl}">${lbl}</span>
@@ -9619,8 +9633,8 @@ function abrirDropTrans(event, colIdx) {
     <div style="padding:7px 10px;border-top:1px solid var(--bd);display:flex;gap:6px">
       <button
         onclick="aplicarDropTrans(${colIdx})"
-        style="flex:1;padding:6px;background:rgba(71,255,180,.12);border:1px solid #47ffb440;
-        color:#47ffb4;font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">
+        style="flex:1;padding:6px;background:rgba(71,255,180,.12);border:1px solid #2ecc8a40;
+        color:#1a9e68;font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">
         ✓ Aplicar
       </button>
       <button onclick="limpiarDropTrans(${colIdx})"
@@ -9744,6 +9758,7 @@ function desresaltarFilaTrans(idx) {
 
 // ── Poblar selects de filtros ────────────────────────────────────
 function populateTransSelects() {
+  // Empresa: el panel multi-select se puebla dinámicamente en abrirFiltroTrans('empresa')
   // Incluir "Sin año" como opción identificable — filter(Boolean) lo excluía
   const añosConDato = [...new Set(DATA.transferencias.map(t=>t.año).filter(Boolean))].sort();
   const tieneSinAño = DATA.transferencias.some(t => !t.año);
@@ -10139,7 +10154,7 @@ function buildInflacion() {
     labels: pairs.map(p=>p.lbl),
     datasets:[
       {label:'Crecimiento nominal %', data:pairs.map(p=>p.nom), backgroundColor:'#47e8ff99', borderRadius:4},
-      {label:'Inflación IPC %',       data:pairs.map(p=>p.infl??null), backgroundColor:'#e8ff4766', borderColor:'#e8ff47', borderWidth:1.5, borderRadius:4},
+      {label:'Inflación IPC %',       data:pairs.map(p=>p.infl??null), backgroundColor:'#c4d60066', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4},
     ]
   },{scales:{y:{ticks:{callback:v=>v+'%'}}}});
 
@@ -10148,7 +10163,7 @@ function buildInflacion() {
   mkChart('ch-infl-real','bar',{
     labels: years.slice(1).map((y,i)=>`${years[i]}→${y}`),
     datasets:[{label:'Crecimiento real %', data:realVals,
-      backgroundColor:realVals.map(v=>v!=null?(v>=0?'#47ffb499':'#ff476699'):'#44444444'), borderRadius:5}]
+      backgroundColor:realVals.map(v=>v!=null?(v>=0?'#2ecc8a99':'#ff476699'):'#44444444'), borderRadius:5}]
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}});
 
   // Tabla empresa nominal vs real (primer año con dato → último año con dato)
@@ -10165,7 +10180,7 @@ function buildInflacion() {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${e}</td><td class="r">${fvFull(v1)}</td><td class="r">${fvFull(v2)}</td>
       <td class="r" style="color:${nom>=0?'var(--pos)':'var(--neg)'}">${nom}%</td>
-      <td class="r" style="color:var(--y21)">${inflAcum!=null?inflAcum.toFixed(0)+'%':'—'}</td>
+      <td class="r" style="color:#b8a000">${inflAcum!=null?inflAcum.toFixed(0)+'%':'—'}</td>
       <td class="r" style="color:${real!=null?(real>=0?'var(--pos)':'var(--neg)'):'var(--dim)'}">${real!=null?real+'%':'—'}</td>
       <td>${real!=null?`<span class="real-pill ${real>=0?'real-pos':'real-neg'}">${real>=0?'▲ Creció real':'▼ Cayó real'}</span>`:'—'}</td>`;
     tb.appendChild(tr);
@@ -10246,13 +10261,26 @@ function computeGaps() {
   const years = ys();
   const gaps = [];
   const allEmps = [...new Set([...Object.keys(DATA.fact), ...Object.keys(DATA.sit)])];
+
+  // Empresas con al menos un balance cargado
+  const empsConBalance = new Set(
+    Object.values(_balances || {}).map(b => (b.empresa || '').toUpperCase().trim())
+  );
+  // Mapear nombre empresa del portafolio → tiene balance
+  const tieneBalance = emp => empsConBalance.has(emp.toUpperCase().trim()) ||
+    Object.values(_balances || {}).some(b =>
+      (b.empresa||'').toUpperCase().includes(emp.toUpperCase().substring(0,6)) ||
+      emp.toUpperCase().includes((b.empresa||'').toUpperCase().substring(0,6))
+    );
+
   allEmps.forEach(emp => {
     const missingFact = years.filter(y => !DATA.fact[emp] || !DATA.fact[emp][y] || DATA.fact[emp][y] === 0);
     const missingSit  = years.filter(y => !DATA.sit[emp]  || DATA.sit[emp][y] == null);
     const persEntry   = (DATA.personal||[]).find(d => d.e === emp);
     const missingPers = years.filter(y => !persEntry || !(persEntry.y[String(y)] > 0));
-    if (missingFact.length > 0 || missingSit.length > 0 || missingPers.length > 0) {
-      gaps.push({ emp, missingFact, missingSit, missingPers });
+    const sinBalance  = !tieneBalance(emp); // true = no tiene balance cargado
+    if (missingFact.length > 0 || missingSit.length > 0 || missingPers.length > 0 || sinBalance) {
+      gaps.push({ emp, missingFact, missingSit, missingPers, sinBalance });
     }
   });
   return gaps;
@@ -10265,9 +10293,10 @@ function updateGapBadge() {
   if (!badge || !cnt) return;
   if (gaps.length > 0) {
     // Contar empresas con cada tipo de gap
-    const nFact = gaps.filter(g=>g.missingFact.length>0).length;
-    const nRes  = gaps.filter(g=>g.missingSit.length>0).length;
-    const nPers = gaps.filter(g=>g.missingPers.length>0).length;
+    const nFact   = gaps.filter(g=>g.missingFact.length>0).length;
+    const nRes    = gaps.filter(g=>g.missingSit.length>0).length;
+    const nPers   = gaps.filter(g=>g.missingPers.length>0).length;
+    const nSinBal = gaps.filter(g=>g.sinBalance).length;
     cnt.textContent = gaps.length;
     badge.title = `${gaps.length} empresas con datos incompletos — Fact: ${nFact} · Res: ${nRes} · Personal: ${nPers}`;
     badge.style.display = '';
@@ -10286,7 +10315,7 @@ function openGapModal() {
   if (!body) return;
 
   if (gaps.length === 0) {
-    body.innerHTML = '<p style="color:var(--pos);padding:10px 0">✓ No hay datos faltantes en los años activos.</p>';
+    body.innerHTML = '<p style="color:#1a9e68;padding:10px 0">✓ No hay datos faltantes en los años activos.</p>';
   } else {
     // Estadísticas de gaps por dimensión
     const nFact = gaps.filter(g=>g.missingFact.length>0).length;
@@ -10300,34 +10329,60 @@ function openGapModal() {
 
     const thRow1 = `<tr>
       <th style="${thStyle};text-align:left" rowspan="2">Empresa</th>
-      ${thGroup('Facturación','#e8ff47',years.length)}
+      ${thGroup('Facturación','#c4d600',years.length)}
       ${thGroup('Resultado','#ff4766',years.length)}
       ${thGroup('Personal','#47e8ff',years.length)}
+      ${thGroup('Balance','#47ffb4',1)}
     </tr>`;
     const thRow2 = `<tr>
-      ${years.map(y=>`<th style="${thStyle};border-left:2px solid #e8ff4744">${y}</th>`).join('')}
+      ${years.map(y=>`<th style="${thStyle};border-left:2px solid #c4d60044">${y}</th>`).join('')}
       ${years.map(y=>`<th style="${thStyle};border-left:2px solid #ff476644">${y}</th>`).join('')}
       ${years.map(y=>`<th style="${thStyle};border-left:2px solid #47e8ff44">${y}</th>`).join('')}
+      <th style="${thStyle};border-left:2px solid #2ecc8a44">Cargado</th>
     </tr>`;
 
     const mkCell = (missing) =>
       `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2)">` +
       `<b style="font-size:13px;color:${missing?'#ff4766':'#47ffb4'}">${missing?'✕':'✓'}</b></td>`;
 
-    const rows = gaps.map(({emp, missingFact, missingSit, missingPers}) => {
+    const rows = gaps.map(({emp, missingFact, missingSit, missingPers, sinBalance}) => {
       const factCells = years.map(y => mkCell(missingFact.includes(y))).join('');
       const sitCells  = years.map(y => mkCell(missingSit.includes(y))).join('');
       const persCells = years.map(y => mkCell(missingPers.includes(y))).join('');
-      const hasPers   = missingPers.some(y=>true);
-      const rowBg     = (missingFact.length||missingSit.length) ? '' : 'background:rgba(71,232,255,.04)';
+      const rowBg = (missingFact.length||missingSit.length) ? '' : 'background:rgba(71,232,255,.04)';
+      const balEmp = Object.values(_balances || {}).filter(function(b) {
+        var empU = (b.empresa||'').toUpperCase().trim();
+        var gapU = emp.toUpperCase().trim();
+        return empU === gapU ||
+          empU.includes(gapU.substring(0,6)) ||
+          gapU.includes(empU.substring(0,6));
+      });
+      var nBal    = balEmp.length;
+      // Mostrar: año + tipo (PDF/Excel) de cada balance cargado
+      var perBal  = balEmp.map(function(b){
+        var per    = b.periodo || b.cierre || b.año || '?';
+        var metodo = b.metodo === 'excel' ? 'XLS' : b.metodo === 'pdf' ? 'PDF' : '';
+        return per + (metodo ? ' ('+metodo+')' : '');
+      }).join(' · ');
+      var balColor  = sinBalance ? '#ff4766' : '#2ecc8a';
+      var balBorder = sinBalance ? '#ff476622' : '#2ecc8a22';
+      const balCell = `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2);border-left:2px solid ${balBorder}">
+        <b style="font-size:13px;color:${balColor}">${sinBalance?'✕':'✓'}</b>
+        ${nBal > 0
+          ? '<div style="font-size:7.5px;color:var(--dim);margin-top:2px;line-height:1.5;white-space:nowrap">'
+            + nBal + ' cargado' + (nBal>1?'s':'') + '<br>'
+            + '<span style="color:var(--text);font-size:7px">' + perBal + '</span></div>'
+          : '<div style="font-size:7.5px;color:#ff4766aa;margin-top:1px">sin balance</div>'
+        }
+      </td>`;
       return `<tr style="border-bottom:1px solid var(--bd);${rowBg}">
         <td style="padding:5px 9px;font-size:10px;color:var(--text);white-space:nowrap">${emp}</td>
-        ${factCells}${sitCells}${persCells}
+        ${factCells}${sitCells}${persCells}${balCell}
       </tr>`;
     }).join('');
 
     const summary = `<div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap">
-      <div style="padding:5px 12px;background:rgba(232,255,71,.08);border:1px solid #e8ff4740;border-radius:3px;font-size:9.5px;color:#e8ff47;font-family:var(--mono)">
+      <div style="padding:5px 12px;background:rgba(232,255,71,.08);border:1px solid #c4d60040;border-radius:3px;font-size:9.5px;color:#8a9800;font-family:var(--mono)">
         Fact. faltante: <strong>${nFact}</strong>
       </div>
       <div style="padding:5px 12px;background:rgba(255,71,102,.08);border:1px solid #ff476640;border-radius:3px;font-size:9.5px;color:#ff4766;font-family:var(--mono)">
@@ -10342,7 +10397,7 @@ function openGapModal() {
     </div>`;
 
     const legend = `<div style="display:flex;gap:20px;margin-top:12px;font-size:10px;align-items:center;flex-wrap:wrap">
-      <span><b style="font-size:14px;color:#47ffb4">✓</b> &nbsp;Dato presente</span>
+      <span><b style="font-size:14px;color:#1a9e68">✓</b> &nbsp;Dato presente</span>
       <span><b style="font-size:14px;color:#ff4766">✕</b> &nbsp;Dato faltante</span>
     </div>`;
 
@@ -10949,7 +11004,7 @@ function getDrillConfig(id) {
           )
         },
         { label:'📈 Gráfico', chart:{ type:'bar', data:{ labels:years.map(String), datasets:[
-              { label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), backgroundColor:'#47ffb499', borderRadius:3 },
+              { label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), backgroundColor:'#2ecc8a99', borderRadius:3 },
               { label:'Déficit',   data:years.map(y=>(td[y]||0)/1e6), backgroundColor:'#ff476699', borderRadius:3 },
             ]}, opts:{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}}
           }
@@ -11042,8 +11097,8 @@ function getDrillConfig(id) {
           )
         },
         { label:'📈 Gráfico', chart:{ type:'bar', data:{ labels:growths.map(g=>g.lbl), datasets:[
-              { label:'Nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v>=0?'#47ffb499':'#ff476699'), borderRadius:4 },
-              { label:'Inflación %', data:growths.map(g=>g.infl), backgroundColor:'#e8ff4744', borderColor:'#e8ff47', borderWidth:1.5, borderRadius:4 },
+              { label:'Nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
+              { label:'Inflación %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4 },
               { type:'line', label:'Real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3 },
             ]}, opts:{scales:{y:{ticks:{callback:v=>v+'%'}}}} }
         },
@@ -11061,7 +11116,7 @@ function getDrillConfig(id) {
             sorted.map(([n,f])=>({ cells:[dc(n,'dd'),dc(fvd(f[lastY]||0)),dc(total?(f[lastY]/total*100).toFixed(1)+'%':'—','dd')] }))
           )
         },
-        { label:'📈 Gráfico', chart:{ type:'doughnut', data:{ labels:sorted.slice(0,7).map(([n])=>n.split(' ')[0]), datasets:[{ data:sorted.slice(0,7).map(([,f])=>f[lastY]/1e6), backgroundColor:['#e8ff47cc','#47e8ffcc','#ff8c47cc','#c447ffcc','#47ffb4cc','#ff4766cc','#303640'], borderWidth:0 }] }} },
+        { label:'📈 Gráfico', chart:{ type:'doughnut', data:{ labels:sorted.slice(0,7).map(([n])=>n.split(' ')[0]), datasets:[{ data:sorted.slice(0,7).map(([,f])=>f[lastY]/1e6), backgroundColor:['#c4d600cc','#47e8ffcc','#ff8c47cc','#c447ffcc','#47ffb4cc','#ff4766cc','#303640'], borderWidth:0 }] }} },
       ]
     };
   }
@@ -11101,7 +11156,7 @@ function getDrillConfig(id) {
           datasets: [
             { label: 'Facturación', data: rows.map(r=>r.fact/1e6), backgroundColor: '#47e8ff55', borderRadius: 3 },
             { label: 'Gastos estimados', data: rows.map(r=>r.gastos!==null?r.gastos/1e6:null), backgroundColor: '#ff476655', borderRadius: 3 },
-            { label: 'Resultado neto', data: rows.map(r=>r.res!==null?r.res/1e6:null), backgroundColor: rows.map(r=>(r.res||0)>=0?'#47ffb499':'#ff476699'), borderRadius: 3 },
+            { label: 'Resultado neto', data: rows.map(r=>r.res!==null?r.res/1e6:null), backgroundColor: rows.map(r=>(r.res||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius: 3 },
           ]
         },
         opts: { scales: { y: { ticks: { callback: v => fv(v*1e6) } } } }
@@ -11185,7 +11240,7 @@ function getDrillConfig(id) {
       tabs:[
         { label:'📊 Estadísticas', stats:years.flatMap(y=>[{l:`Superávit ${y}`,v:fvd(ts[y]||0),cls:'dc'},{l:`Déficit ${y}`,v:fvd(td[y]||0),cls:'dr'}]) },
         { label:'📈 Gráfico', chart:{ type:'line', data:{ labels:years.map(String), datasets:[
-              { label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), borderColor:'#47ffb4', backgroundColor:'#47ffb418', fill:true, tension:.4, pointRadius:5 },
+              { label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), borderColor:'#2ecc8a', backgroundColor:'#47ffb418', fill:true, tension:.4, pointRadius:5 },
               { label:'Déficit',   data:years.map(y=>(td[y]||0)/1e6), borderColor:'#ff4766', backgroundColor:'#ff476618', fill:true, tension:.4, pointRadius:5 },
             ]}, opts:{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}} }
         },
@@ -11211,7 +11266,7 @@ function getDrillConfig(id) {
             const sup = Object.entries(DATA.sit).filter(([,s])=>(s[y]||0)>0).sort((a,b)=>b[1][y]-a[1][y]);
             const def = Object.entries(DATA.sit).filter(([,s])=>(s[y]||0)<0).sort((a,b)=>a[1][y]-b[1][y]);
             return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-              <div><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#47ffb4;margin-bottom:8px">✓ Superavitarias (${sup.length})</div>${dTbl(['Empresa','Resultado'],sup.map(([n,s])=>({cells:[dc(n,'dd'),dc(fvd(s[y]),'dc')]})))}</div>
+              <div><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#1a9e68;margin-bottom:8px">✓ Superavitarias (${sup.length})</div>${dTbl(['Empresa','Resultado'],sup.map(([n,s])=>({cells:[dc(n,'dd'),dc(fvd(s[y]),'dc')]})))}</div>
               <div><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#ff4766;margin-bottom:8px">✗ Deficitarias (${def.length})</div>${dTbl(['Empresa','Resultado'],def.map(([n,s])=>({cells:[dc(n,'dd'),dc(fvd(s[y]),'dr')]})))}</div>
             </div>`;
           })()
@@ -11304,7 +11359,7 @@ function getDrillConfig(id) {
         },
         { label:'📈 Gráfico', chart:{ type:'bar', data:{ labels:pairs.map(p=>p.lbl), datasets:[
               { label:'Nominal %', data:pairs.map(p=>p.nom), backgroundColor:'#47e8ff99', borderRadius:4 },
-              { label:'Inflación %', data:pairs.map(p=>p.infl), backgroundColor:'#e8ff4766', borderColor:'#e8ff47', borderWidth:1.5, borderRadius:4 },
+              { label:'Inflación %', data:pairs.map(p=>p.infl), backgroundColor:'#c4d60066', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4 },
             ]}, opts:{scales:{y:{ticks:{callback:v=>v+'%'}}}} }
         },
       ]
@@ -11320,7 +11375,7 @@ function getDrillConfig(id) {
             years.slice(1).map((y,i)=>({ cells:[dc(`${years[i]}→${y}`),dc(pctNum(tf[y],tf[years[i]])+'%','dc'),dc(realVals[i]+'%',realVals[i]>=0?'dc':'dr'),dc(fvd(tf[years[i]])),dc(fvd(deflact(tf[y],y)),'dd')] }))
           )
         },
-        { label:'📈 Gráfico', chart:{ type:'bar', data:{ labels:years.slice(1).map((y,i)=>`${years[i]}→${y}`), datasets:[{ label:'Real %', data:realVals, backgroundColor:realVals.map(v=>v>=0?'#47ffb499':'#ff476699'), borderRadius:5 }] }, opts:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}} } },
+        { label:'📈 Gráfico', chart:{ type:'bar', data:{ labels:years.slice(1).map((y,i)=>`${years[i]}→${y}`), datasets:[{ label:'Real %', data:realVals, backgroundColor:realVals.map(v=>v>=0?'#2ecc8a99':'#ff476699'), borderRadius:5 }] }, opts:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}} } },
       ]
     };
   }
@@ -11377,7 +11432,7 @@ function getDrillConfig(id) {
               labels: years.map(String),
               datasets:[
                 { label:'Nominal', data:rows.map(r=>r.f/1e6), backgroundColor:'#47e8ff55', borderRadius:4 },
-                { label:'Real (base 2021)', data:rows.map(r=>Math.round(r.fR)/1e6), backgroundColor:'#e8ff4799', borderRadius:4 },
+                { label:'Real (base 2021)', data:rows.map(r=>Math.round(r.fR)/1e6), backgroundColor:'#c4d60099', borderRadius:4 },
               ]}, opts:{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}} }
           },
         ]
@@ -11418,12 +11473,12 @@ function getDrillConfig(id) {
               datasets:[
                 { label:'Facturación', data:compRows.map(r=>r.f/1e6), backgroundColor:'#47e8ff44', borderRadius:3 },
                 { label:'Gastos est.', data:compRows.map(r=>r.g!=null?r.g/1e6:null), backgroundColor:'#ff476644', borderRadius:3 },
-                { label:'Resultado', data:compRows.map(r=>r.s!=null?r.s/1e6:null), backgroundColor:compRows.map(r=>(r.s||0)>=0?'#47ffb499':'#ff476699'), borderRadius:3 },
+                { label:'Resultado', data:compRows.map(r=>r.s!=null?r.s/1e6:null), backgroundColor:compRows.map(r=>(r.s||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:3 },
               ]}, opts:{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}} }
           },
           { label:'📈 Resultado solo', chart:{ type:'bar', data:{
               labels: sitYrs.map(String),
-              datasets:[{ label:'Resultado', data:sitYrs.map(y=>sit[y]/1e6), backgroundColor:sitYrs.map(y=>(sit[y]>=0?'#47ffb4':'#ff4766')+'99'), borderRadius:5 }]
+              datasets:[{ label:'Resultado', data:sitYrs.map(y=>sit[y]/1e6), backgroundColor:sitYrs.map(y=>(sit[y]>=0?'#2ecc8a':'#ff4766')+'99'), borderRadius:5 }]
             }, opts:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}} }
           },
         ]
@@ -11476,7 +11531,7 @@ function getDrillConfig(id) {
               datasets:[
                 { label:'Facturación', data:mRows.map(r=>r.f/1e6), backgroundColor:'#47e8ff44', borderRadius:3 },
                 { label:'Gastos est.', data:mRows.map(r=>(r.f-r.s)/1e6), backgroundColor:'#ff476644', borderRadius:3 },
-                { label:'Resultado', data:mRows.map(r=>r.s/1e6), backgroundColor:mRows.map(r=>r.s>=0?'#47ffb499':'#ff476699'), borderRadius:3 },
+                { label:'Resultado', data:mRows.map(r=>r.s/1e6), backgroundColor:mRows.map(r=>r.s>=0?'#2ecc8a99':'#ff476699'), borderRadius:3 },
               ]}, opts:{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}} }
           },
         ]
@@ -11539,7 +11594,7 @@ function getDrillConfig(id) {
                 }),
                 backgroundColor: pYrs.slice(1).map((y,i) => {
                   const v=pers?.y[y]||0, p=pers?.y[pYrs[i]]||0;
-                  return v>=p ? '#47ffb499' : '#ff476699';
+                  return v>=p ? '#2ecc8a99' : '#ff476699';
                 }),
                 borderRadius:4,
               }]
@@ -11982,7 +12037,7 @@ function renderHistory() {
     // ── Entrada de SINCRONIZACIÓN ────────────────────────────────
     if (h.tipo === 'sync') {
       const isUp   = h.syncType === 'upload';
-      const color  = isUp ? '#47ffb4' : '#47e8ff';
+      const color  = isUp ? '#2ecc8a' : '#47e8ff';
       const icon   = isUp ? '↑' : '↓';
       const label  = isUp ? 'Publicación' : 'Descarga';
       const server = h.serverDate ? h.serverDate.slice(0,16).replace('T',' ') : '';
@@ -12011,7 +12066,7 @@ function renderHistory() {
     const modo  = h.modo ? ` · ${h.modo === 'reemplazar' ? '🔄 reemplazado' : h.modo === 'solo_nuevos' ? '➕ solo nuevos' : 'importado'}` : '';
     const tipo  = h.erImport ? '📊 ER' : h.sidifImport ? '💸 Transf.' : '📄 Datos';
     const badge = h.erImport
-      ? `<span class="imp-hist-badge" style="background:#e8ff4722;color:#e8ff47">${tipo}</span>`
+      ? `<span class="imp-hist-badge" style="background:#c4d60022;color:#8a9800">${tipo}</span>`
       : h.sidifImport
       ? `<span class="imp-hist-badge" style="background:#47e8ff22;color:#47e8ff">${tipo}</span>`
       : `<span class="imp-hist-badge ihb-new">${tipo}</span>`;
@@ -12611,7 +12666,7 @@ function renderAuditoriaTransferencias() {
           🗑 Eliminar duplicados
         </button>
       </div>`
-    : `<div style="padding:6px 10px;font-size:9px;color:#47ffb4;margin-bottom:6px">
+    : `<div style="padding:6px 10px;font-size:9px;color:#1a9e68;margin-bottom:6px">
         ✓ Sin duplicados detectados</div>`;
 
   el.innerHTML = `
@@ -12961,7 +13016,7 @@ function handleImportWorkbook(wb, fname) {
       document.getElementById('import-result').innerHTML = `
         <div style="padding:14px;background:var(--s2);border:1px solid var(--bd2);
           border-radius:5px;font-family:var(--mono)">
-          <div style="font-size:11px;font-weight:600;color:var(--y21);margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:#b8a000;margin-bottom:10px">
             ⚠ Posibles duplicados detectados — ${fname}
           </div>
           ${msgArchivo}${msgReg}
@@ -12977,8 +13032,8 @@ function handleImportWorkbook(wb, fname) {
               <span style="font-size:8.5px;color:var(--dim)">Eliminar la carga anterior<br>y cargar este archivo completo</span>
             </button>
             <button onclick="confirmarSIDIF('solo_nuevos','${fname.replace(/'/g,"\\'")}',{})"
-              style="flex:1;padding:8px 12px;background:rgba(71,255,180,.08);border:1px solid #47ffb430;
-              color:#47ffb4;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+              style="flex:1;padding:8px 12px;background:rgba(71,255,180,.08);border:1px solid #2ecc8a30;
+              color:#1a9e68;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
               text-align:center;line-height:1.5">
               ➕ <strong>Solo nuevos</strong><br>
               <span style="font-size:8.5px;color:var(--dim)">Agregar solo los ${rowsNuevos.length}<br>registros que no existen</span>
@@ -13032,7 +13087,7 @@ function handleImportWorkbook(wb, fname) {
           ${erDisc.map(d=>`<tr style="border-bottom:1px solid var(--bd)2">
             <td style="padding:2px 6px;color:var(--text)">${d.emp}</td>
             <td style="padding:2px 6px;color:var(--dim)">${d.campo}</td>
-            <td style="padding:2px 6px;text-align:right;color:var(--pos)">${fmtDisc(d.en_dashboard)}</td>
+            <td style="padding:2px 6px;text-align:right;color:#1a9e68">${fmtDisc(d.en_dashboard)}</td>
             <td style="padding:2px 6px;text-align:right;color:#ffb347">${fmtDisc(d.en_er)}</td>
           </tr>`).join('')}
           </tbody>
@@ -13046,7 +13101,7 @@ function handleImportWorkbook(wb, fname) {
     }
     let syncHtml = '';
     if (erSync && erSync.length) {
-      syncHtml = `<div style="font-size:10px;color:var(--pos);margin-top:4px">
+      syncHtml = `<div style="font-size:10px;color:#1a9e68;margin-top:4px">
         ✚ ${erSync.length} dato${erSync.length>1?'s':''} nuevo${erSync.length>1?'s':''} agregado${erSync.length>1?'s':''} a Facturación/Resultado
       </div>`;
     }
@@ -13251,13 +13306,13 @@ function applyImport() {
     nuevasHtml = `
     <div style="margin-top:10px;padding:10px 12px;background:rgba(232,255,71,.08);
       border:1px solid rgba(232,255,71,.3);border-radius:4px">
-      <div style="font-size:10px;font-weight:600;color:var(--y21);margin-bottom:6px">
+      <div style="font-size:10px;font-weight:600;color:#b8a000;margin-bottom:6px">
         ✨ ${empresasNuevas.length} empresa${empresasNuevas.length>1?'s':''} nueva${empresasNuevas.length>1?'s':''} incorporada${empresasNuevas.length>1?'s':''}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
         ${empresasNuevas.map(e=>`<span style="padding:2px 8px;background:rgba(232,255,71,.12);
           border:1px solid rgba(232,255,71,.3);border-radius:3px;font-size:9.5px;
-          font-family:var(--mono);color:var(--y21)">${e}</span>`).join('')}
+          font-family:var(--mono);color:#b8a000">${e}</span>`).join('')}
       </div>
       <div style="font-size:9px;color:var(--dim);line-height:1.6">
         Estas empresas fueron dadas de alta automáticamente en el dashboard.<br>
@@ -13522,7 +13577,7 @@ function buildSostenibilidad() {
   const moderad = rows.filter(r=>r.cuad==='Déficit moderado').length;
   const netoTot = rows.reduce((s,r)=>s+(r.neto||0),0);
   document.getElementById('kpi-sost').innerHTML = `
-    <div class="kpi"><div class="kpi-accent" style="background:#47ffb4"></div><div class="kpi-label">Autosuficientes</div><div class="kpi-value">${autosuf}</div><div class="kpi-sub">superávit · baja dependencia</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:#2ecc8a"></div><div class="kpi-label">Autosuficientes</div><div class="kpi-value">${autosuf}</div><div class="kpi-sub">superávit · baja dependencia</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#47e8ff"></div><div class="kpi-label">Subsidiadas viables</div><div class="kpi-value">${viable}</div><div class="kpi-sub">superávit · dependencia &gt;30%</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#ff8c47"></div><div class="kpi-label">Déficit moderado</div><div class="kpi-value">${moderad}</div><div class="kpi-sub">déficit · baja dependencia</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#ff4766"></div><div class="kpi-label">Críticas</div><div class="kpi-value">${critica}</div><div class="kpi-sub">déficit · alta dependencia</div></div>`;
@@ -13566,7 +13621,7 @@ function buildSostenibilidad() {
 
   // Tabla
   const tbl = document.getElementById('tbl-sost');
-  const cuadBg = {'Autosuficiente':'#47ffb420','Subsidiada viable':'#47e8ff20','Déficit moderado':'#ff8c4720','Crítica':'#ff476620'};
+  const cuadBg = {'Autosuficiente':'#2ecc8a20','Subsidiada viable':'#47e8ff20','Déficit moderado':'#ff8c4720','Crítica':'#ff476620'};
   tbl.innerHTML = `<thead><tr>
     <th>Empresa</th><th class="r">Facturación</th><th class="r">Resultado</th>
     <th class="r">Transferencias</th><th class="r">Resultado neto</th>
@@ -13693,7 +13748,7 @@ function buildHeatmap() {
     if (metric==='facturacion'||metric==='personal') {
       legEl.innerHTML = '<span>Bajo</span><div style="width:120px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(71,232,255,.2),rgba(71,232,255,.9))"></div><span>Alto</span>';
     } else {
-      legEl.innerHTML = '<span style="color:var(--neg)">Déficit</span><div style="width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(255,71,102,.8),var(--s3),rgba(71,255,180,.8))"></div><span style="color:var(--pos)">Superávit</span>';
+      legEl.innerHTML = '<span style="color:var(--neg)">Déficit</span><div style="width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(255,71,102,.8),var(--s3),rgba(71,255,180,.8))"></div><span style="color:#1a9e68">Superávit</span>';
     }
   }
 
@@ -13702,7 +13757,7 @@ function buildHeatmap() {
   const vals = sortedEmps.map(e=>getValue(e,lastY)).filter(v=>v!=null);
   const pos = vals.filter(v=>v>0).length, neg = vals.filter(v=>v<0).length;
   document.getElementById('kpi-heatmap').innerHTML = `
-    <div class="kpi"><div class="kpi-accent" style="background:#47ffb4"></div><div class="kpi-label">Positivos ${lastY}</div><div class="kpi-value">${pos}</div><div class="kpi-sub">empresas sobre 0</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:#2ecc8a"></div><div class="kpi-label">Positivos ${lastY}</div><div class="kpi-value">${pos}</div><div class="kpi-sub">empresas sobre 0</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#ff4766"></div><div class="kpi-label">Negativos ${lastY}</div><div class="kpi-value">${neg}</div><div class="kpi-sub">empresas bajo 0</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#47e8ff"></div><div class="kpi-label">Empresas mapeadas</div><div class="kpi-value">${sortedEmps.length}</div><div class="kpi-sub">${years.length} años</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#e8ff47"></div><div class="kpi-label">Métrica</div><div class="kpi-value" style="font-size:13px">${metricLabels[metric]||metric}</div><div class="kpi-sub">selector arriba</div></div>`;
@@ -13819,7 +13874,7 @@ function buildPresupuesto() {
   // Barras desvío absoluto
   mkChart('ch-pres-desvio','bar',{
     labels: rows.map(r=>r.e.length>14?r.e.slice(0,13)+'…':r.e),
-    datasets:[{label:'Desvío $',data:rows.map(r=>r.dev/1e6),backgroundColor:rows.map(r=>r.dev>=0?'#47ffb488':'#ff476688'),borderRadius:3}]
+    datasets:[{label:'Desvío $',data:rows.map(r=>r.dev/1e6),backgroundColor:rows.map(r=>r.dev>=0?'#2ecc8a88':'#ff476688'),borderRadius:3}]
   },{
     plugins:{legend:{display:false}},
     scales:{x:{ticks:{font:{size:8},maxRotation:45}},y:{ticks:{callback:v=>fvShort(v*1e6)}}}
@@ -14561,9 +14616,9 @@ function parsearExcelBalance(wb, XLSX) {
     const IGNORAR_ER = [
       // Prefijos solos sin valor
       'a)','b)','a+b)',
-      // ORI y resultado integral
+      // ORI y resultado integral — solo ignorar si son encabezados de sección sin valor
       'otro resultado integral del ejercicio','total otro resultado integral',
-      'resultado integral del ejercicio',
+      // 'resultado integral del ejercicio' eliminado: es un rubro real con fórmula
       // Info adicional
       'información adicional','información por acción',
       'resultado por acción','cantidad de acciones',
@@ -14613,10 +14668,14 @@ function parsearExcelBalance(wb, XLSX) {
       if (IGNORAR_ER.some(ig => lblL === ig)) continue;
 
       // ¿Es calculado? → SOLO si tiene fórmula con depFilas resolvibles
-      // Subtotales sin fórmula (valor manual) se marcan como libre=true pero editable
       const ES_SUBTOTAL_LABEL = /^(resultado|total|utilidad|ganancia|pérdida|sub.total)/i;
       const esCalcPorLabel = !formula && ES_SUBTOTAL_LABEL.test(lbl);
-      const esCalc = !!formula; // solo fórmulas reales del Excel
+      const esCalc = !!formula;
+      
+      // Ignorar encabezados de sección sin valor ni fórmula
+      // (la condición `if (valor === null) continue` anterior ya los filtra,
+      // pero esta línea añade seguridad para esCalcPorLabel sin valor)
+      if (esCalcPorLabel && valor == null) continue;
 
       // Resolver depFilas desde la fórmula
       let depFilas = [];
@@ -14707,7 +14766,10 @@ function parsearExcelBalance(wb, XLSX) {
     // Paso 2: inferir depFilas y calcular valores para subtotales
     for (let i = 0; i < estructura_er.length; i++) {
       const r = estructura_er[i];
+      // Solo actuar si NO tiene fórmula resuelta (depFilas vacíos o esCalcPorLabel)
+      // Si el parser ya resolvió depFilas desde la fórmula del Excel, no tocar
       if (!ES_TOTAL_LBL.test(r.lbl) && !r.formula) continue;
+      if (r.depFilas && r.depFilas.length > 0 && !r.esCalcPorLabel) continue; // ya resuelto
 
       // Candidatos: filas entre el subtotal anterior y este
       let ultimoCalcIdx = -1;
@@ -14771,6 +14833,13 @@ function parsearExcelBalance(wb, XLSX) {
     if (!ind.rentabilidad.ventas_ingresos) {
       const prim = estructura_er.find(r => !r.calc && r.val > 0);
       if (prim) ind.rentabilidad.ventas_ingresos = prim.val;
+    }
+    // Fallback resultado neto desde estructura_er
+    if (!ind.rentabilidad.resultado_neto && estructura_er.length > 0) {
+      const resER = estructura_er.find(r =>
+        r.calc && r.val != null && r.lbl && /resultado.*(ejercicio|period|neto)/i.test(r.lbl)
+      ) || [...estructura_er].reverse().find(r => r.calc && r.val != null);
+      if (resER) ind.rentabilidad.resultado_neto = resER.val;
     }
   }
 
@@ -15164,7 +15233,7 @@ function _mostrarModalEmpresaBalance(callback, empresas, sugerida) {
       📊 Vincular balance a empresa
     </div>
     <div style="font-size:10px;color:var(--dim);margin-bottom:14px;line-height:1.6">
-      ${tienePdf ? `El PDF sugiere: <strong style="color:var(--y21)">${sugerida}</strong><br>` : ''}
+      ${tienePdf ? `El PDF sugiere: <strong style="color:#b8a000">${sugerida}</strong><br>` : ''}
       Elegí la empresa del portafolio a la que pertenece este balance.
     </div>
     <div style="margin-bottom:12px">
@@ -15196,7 +15265,7 @@ function _mostrarModalEmpresaBalance(callback, empresas, sugerida) {
       </button>
       <button id="modal-bal-confirmar"
         style="padding:8px 20px;background:rgba(232,255,71,.12);border:1px solid var(--y21);
-        color:var(--y21);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600">
+        color:#b8a000;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600">
         Confirmar →
       </button>
     </div>`;
@@ -15617,6 +15686,7 @@ function analizarBalanceLocal(filename, texto) {
     '[Vv]entas?\\s+[Nn]etas?',
     '[Ii]ngresos?\\s+por\\s+[Ss]ervicios?',          // ← Aguas Riojanas
     '[Ii]ngresos?\\s+por\\s+[Vv]entas?',
+    '[Ii]ngresos?\\s+por\\s+[Vv]enta\\s+de\\s+',   // ← EDELAR: Ingresos por venta de energía
     '[Ii]ngresos?\\s+[Oo]perativos?\\s+[Nn]etos?',
     '[Ii]ngresos?\\s+[Oo]rdinarios?',
     '[Tt]otal\\s+[Ii]ngresos?',
@@ -16054,7 +16124,7 @@ function buildComparacionBalances() {
         const buena= row.lbl.includes('Endeud')||row.lbl.includes('Deuda') ? pct<0 : pct>0;
         const arrow= pct > 0 ? '▲' : '▼';
         varCell = `<td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:10px;
-          border-bottom:1px solid var(--bd2);color:${buena?'#47ffb4':'#ff4766'}">
+          border-bottom:1px solid var(--bd2);color:${buena?'#2ecc8a':'#ff4766'}">
           ${arrow} ${pct>0?'+':''}${pct.toFixed(1)}%</td>`;
       } else {
         varCell = `<td style="padding:6px 12px;border-bottom:1px solid var(--bd2);color:var(--dim)">—</td>`;
@@ -16081,7 +16151,7 @@ function buildComparacionBalances() {
   <div style="margin-top:8px;font-size:9px;color:var(--dim)">
     ✦ Cierre no calendario &nbsp;·&nbsp; ● Período activo &nbsp;·&nbsp;
     ▲▼ variación respecto al período anterior &nbsp;·&nbsp;
-    <span style="color:#47ffb4">Verde = favorable</span> · <span style="color:#ff4766">Rojo = desfavorable</span>
+    <span style="color:#1a9e68">Verde = favorable</span> · <span style="color:#ff4766">Rojo = desfavorable</span>
   </div>`;
 
 }
@@ -16139,7 +16209,7 @@ function _actualizarInfoEmpresa(emp) {
     el.innerHTML = '<span style="color:#ff8c47">Sin balances cargados — hacé clic en "Cargar balance PDF"</span>';
   } else {
     const pers = bals.map(b=>b.periodo).sort().join(' · ');
-    el.innerHTML = `${bals.length} balance${bals.length>1?'s':''} cargado${bals.length>1?'s':''} · períodos: <span style="color:var(--y21)">${pers}</span>`;
+    el.innerHTML = `${bals.length} balance${bals.length>1?'s':''} cargado${bals.length>1?'s':''} · períodos: <span style="color:#b8a000">${pers}</span>`;
   }
 }
 
@@ -16205,7 +16275,7 @@ function actualizarPeriodos() {
         background:var(--s2);border:1px solid var(--bd2);border-radius:3px;cursor:pointer;
         font-size:9px;font-family:var(--mono);white-space:nowrap;
         color:${b.esCierreNoCal?'#ff8c47':'var(--text)'}">
-        <input type="checkbox" value="${key}" checked style="accent-color:var(--y21);cursor:pointer">
+        <input type="checkbox" value="${key}" checked style="accent-color:#b8a000;cursor:pointer">
         ${b.periodo}${b.esCierreNoCal?' ✦':''}
       </label>`).join('');
   } else if (compRow) {
@@ -16395,7 +16465,7 @@ function _buildERDesdeEstructura(b, fmtM) {
     // Nivel 0: dato base — texto normal, negativo en rojo tenue
 
     const colorPos = nivel === 3 ? 'var(--y21)'
-                   : nivel === 2 ? '#47ffb4'
+                   : nivel === 2 ? '#2ecc8a'
                    : nivel === 1 ? '#47e8ff'
                    : 'var(--text)';
     const colorNeg = nivel === 3 ? 'var(--y21)'
@@ -16409,7 +16479,7 @@ function _buildERDesdeEstructura(b, fmtM) {
              : nivel === 1 ? 'rgba(71,232,255,.04)'
              : '';
     const bt = nivel === 3 ? 'border-top:2px solid var(--y21);border-bottom:2px solid var(--y21)'
-             : nivel === 2 ? `border-top:2px solid ${esNeg?'var(--neg)':'#47ffb4'}`
+             : nivel === 2 ? `border-top:2px solid ${esNeg?'var(--neg)':'#2ecc8a'}`
              : nivel === 1 ? `border-top:1px solid ${esNeg?'#ff8c4744':'#47e8ff44'}`
              : '';
     const fw    = nivel >= 2 ? '700' : nivel === 1 ? '600' : '400';
@@ -16424,7 +16494,7 @@ function _buildERDesdeEstructura(b, fmtM) {
 
     // Tag de nivel
     const tag = nivel === 3
-      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:rgba(232,255,71,.15);color:var(--y21);font-family:var(--mono);margin-left:6px">RESULTADO</span>`
+      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:rgba(232,255,71,.15);color:#b8a000;font-family:var(--mono);margin-left:6px">RESULTADO</span>`
       : nivel === 2
       ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:${esNeg?'rgba(255,71,102,.12)':'rgba(71,255,180,.12)'};color:${color};font-family:var(--mono);margin-left:6px">TOTAL</span>`
       : nivel === 1
@@ -16684,7 +16754,7 @@ function buildEstadoResultados(b) {
     return `<div style="padding:18px 12px;text-align:center;color:var(--dim);font-size:10px;line-height:1.8">
       <div style="font-size:20px;margin-bottom:8px">📋</div>
       El Estado de Resultados no se encontró en el texto extraído del PDF.<br>
-      Podés completar los valores manualmente desde el <strong style="color:var(--y21)">✎ Editor de datos</strong> a continuación.
+      Podés completar los valores manualmente desde el <strong style="color:#b8a000">✎ Editor de datos</strong> a continuación.
     </div>`;
   }
 
@@ -16728,7 +16798,7 @@ function vincularBalance() {
   const est = document.getElementById('bal-vincular-estado');
   if (est) {
     est.textContent = emp ? '✓ Vinculado a ' + emp : 'Sin vincular';
-    est.style.color = emp ? '#47ffb4' : 'var(--dim)';
+    est.style.color = emp ? '#2ecc8a' : 'var(--dim)';
   }
   // Actualizar selector con nueva etiqueta
   renderBalanceUI();
@@ -16797,7 +16867,7 @@ function showBalanceResult() {
     const isOCR = (b.metodo||'').includes('OCR');
     fuenteEl.textContent = b.metodo || 'Texto nativo';
     fuenteEl.style.color = isOCR ? '#ff8c47' : '#47ffb4';
-    fuenteEl.style.borderColor = isOCR ? '#ff8c4740' : '#47ffb440';
+    fuenteEl.style.borderColor = isOCR ? '#ff8c4740' : '#2ecc8a40';
   }
   if (vincSel && b.vinculada) vincSel.value = b.vinculada;
   if (vincEst) {
@@ -17005,7 +17075,7 @@ function showBalanceResult() {
 
   let cobertura = '';
   if (sinDatos.length > 0) {
-    const colorBarra = pct >= 80 ? '#47ffb4' : pct >= 50 ? '#e8ff47' : '#ff8c47';
+    const colorBarra = pct >= 80 ? '#2ecc8a' : pct >= 50 ? '#e8ff47' : '#ff8c47';
     cobertura = `
     <div style="margin-bottom:12px;padding:12px 14px;background:var(--s3);border:1px solid var(--bd);
       border-radius:4px">
@@ -17031,7 +17101,7 @@ function showBalanceResult() {
               return `<span style="padding:2px 8px;border-radius:3px;font-size:8.5px;
                 font-family:var(--mono);
                 background:${ok ? 'rgba(71,255,180,.08)' : 'rgba(255,71,102,.08)'};
-                border:1px solid ${ok ? '#47ffb440' : '#ff476640'};
+                border:1px solid ${ok ? '#2ecc8a40' : '#ff476640'};
                 color:${ok ? '#47ffb4' : '#ff4766'}">
                 ${ok ? '✓' : '✗'} ${r.lbl}${ok && fmt ? ': '+fmt : ''}
               </span>`;
@@ -17062,15 +17132,15 @@ function showBalanceResult() {
         </summary>
         <div style="padding:10px 12px;max-height:220px;overflow-y:auto;font-family:var(--mono)">
           ${aciertos.length ? `
-          <div style="font-size:8.5px;color:#47ffb4;margin-bottom:6px;font-weight:600">
+          <div style="font-size:8.5px;color:#1a9e68;margin-bottom:6px;font-weight:600">
             ENCONTRADOS (${aciertos.length})
           </div>
           ${aciertos.map(d => `
           <div style="font-size:8.5px;margin-bottom:3px;display:flex;gap:8px;align-items:baseline">
-            <span style="color:#47ffb4;flex-shrink:0">✓</span>
+            <span style="color:#1a9e68;flex-shrink:0">✓</span>
             <span style="color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
               title="${d.linea}">${d.linea.slice(0,60)}</span>
-            <span style="color:#47ffb4;flex-shrink:0;font-weight:600">
+            <span style="color:#1a9e68;flex-shrink:0;font-weight:600">
               $${Math.abs(d.valor)>=1e6?(Math.abs(d.valor)/1e6).toFixed(1)+'M':Math.abs(d.valor)>=1e3?(Math.abs(d.valor)/1e3).toFixed(0)+'K':d.valor}
             </span>
           </div>`).join('')}` : ''}
@@ -17106,8 +17176,8 @@ function showBalanceResult() {
           <span>${isCrit ? '🔴' : '🟡'}</span> ${a}
         </div>`;
       }).join('') + '</div>'
-    : `<div style="padding:6px 12px;background:rgba(71,255,180,.08);border:1px solid #47ffb440;
-        border-radius:3px;font-size:9.5px;color:#47ffb4;margin-bottom:12px;display:inline-flex;
+    : `<div style="padding:6px 12px;background:rgba(71,255,180,.08);border:1px solid #2ecc8a40;
+        border-radius:3px;font-size:9.5px;color:#1a9e68;margin-bottom:12px;display:inline-flex;
         align-items:center;gap:6px">🟢 Sin alertas críticas detectadas</div>`;
 
   // ── Diagnóstico financiero generado desde los indicadores reales ──
@@ -17640,7 +17710,7 @@ function _renderBalEditor() {
             <label style="font-size:8.5px;color:${hasValEdit?'var(--text)':'var(--dim)'};
               font-family:var(--mono);display:flex;align-items:center;gap:4px">
               <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;
-                background:${hasValEdit?'#47ffb4':'var(--bd2)'}"></span>
+                background:${hasValEdit?'#2ecc8a':'var(--bd2)'}"></span>
               ${f.lbl}
             </label>
             <input type="text" data-field="${f.editKey}" data-negativo="false"
@@ -17672,7 +17742,7 @@ function _renderBalEditor() {
           </label>
           <div data-calc-field="${f.key}"
             style="padding:6px 10px;background:var(--s3);border:1px solid var(--bd);
-            color:var(--pos);font-family:var(--mono);font-size:10px;border-radius:3px;font-weight:600;
+            color:#1a9e68;font-family:var(--mono);font-size:10px;border-radius:3px;font-weight:600;
             min-height:30px;display:flex;flex-direction:column;gap:2px">
             <span>${dispVal}</span>
             ${segsLabel ? `<span style="font-size:8px;color:var(--dim);font-weight:400">${segsLabel}</span>` : ''}
@@ -17787,7 +17857,7 @@ function _renderBalEditor() {
       <label style="font-size:8.5px;color:${hasVal?'var(--text)':'var(--dim)'};
         font-family:var(--mono);display:flex;align-items:center;gap:4px">
         <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;
-          background:${hasVal?'#47ffb4':'var(--bd2)'}"></span>
+          background:${hasVal?'#2ecc8a':'var(--bd2)'}"></span>
         ${f.lbl}
         <span style="font-size:7px;color:var(--dim);opacity:.7">(signo libre)</span>
       </label>
@@ -18521,7 +18591,7 @@ function saveCloudCfg() {
     localStorage.setItem(LS_CFG_KEY, JSON.stringify({ url:_cloudUrl, token:_cloudToken, user:_cloudUser }));
   } catch(e) {}
   updateCloudStatusBar('configured');
-  if (msg) { msg.style.display='block'; msg.style.color='#47ffb4'; msg.textContent='✓ Configuración guardada'; }
+  if (msg) { msg.style.display='block'; msg.style.color='#2ecc8a'; msg.textContent='✓ Configuración guardada'; }
   setTimeout(() => toggleCloudCfg(false), 1500);
   syncFromCloud();
 }
@@ -19012,7 +19082,7 @@ function importarClasificaciones(file) {
       buildTransferencias();
 
       if (res) {
-        res.innerHTML = `<span style="color:#47ffb4">✓ Clasificaciones restauradas:<br>
+        res.innerHTML = `<span style="color:#1a9e68">✓ Clasificaciones restauradas:<br>
           · ${exactos} por clave exacta<br>
           · ${porBen} por beneficiario<br>
           · ${sinMatch} sin coincidencia (conservan clasificación automática)</span>`;
@@ -19431,8 +19501,11 @@ function buildTransMensual() {
 
   const yr = sel ? parseInt(sel.value) : yrs[yrs.length - 1];
 
-  // Filtrar por año con comparación robusta
-  const rows = DATA.transferencias.filter(t => parseInt(t.año) === yr);
+  // Filtrar usando transFiltered() para respetar todos los filtros activos
+  // (empresa, SAF, beneficiario, categoría, búsqueda libre, etc.)
+  // Luego reducir al año seleccionado en el selector del gráfico mensual
+  const rowsFiltrados = transFiltered();
+  const rows = rowsFiltrados.filter(t => parseInt(t.año) === yr);
 
   // Acumular por mes y categoría
   // Aceptar también mes null/0 — los mostramos en todos los meses o los omitimos
@@ -19545,7 +19618,7 @@ function buildTransTendencia() {
         backgroundColor: 'transparent',
         borderWidth: 2,
         borderDash: [5, 3],
-        pointBackgroundColor: varReal.map(v => v == null ? 'transparent' : v >= 0 ? '#47ffb4' : '#ff4766'),
+        pointBackgroundColor: varReal.map(v => v == null ? 'transparent' : v >= 0 ? '#2ecc8a' : '#ff4766'),
         pointRadius: 5,
         pointHoverRadius: 7,
         tension: 0.3,
@@ -19617,7 +19690,7 @@ function buildVarRealChart(emp, years, fact, inflData) {
     labels: pairs.map(p=>p.lbl),
     datasets:[
       {label:'Nominal %',data:pairs.map(p=>p.nom.toFixed(1)),backgroundColor:'#47e8ff88',borderRadius:3},
-      {label:'Real %',   data:pairs.map(p=>p.real.toFixed(1)),backgroundColor:pairs.map(p=>p.real>=0?'#47ffb488':'#ff476688'),borderRadius:3},
+      {label:'Real %',   data:pairs.map(p=>p.real.toFixed(1)),backgroundColor:pairs.map(p=>p.real>=0?'#2ecc8a88':'#ff476688'),borderRadius:3},
     ]
   },{
     scales:{y:{ticks:{callback:v=>v+'%'}}},
@@ -19725,7 +19798,7 @@ function buildCompletitudPanel() {
     ];
   };
 
-  const ok='<span style="color:#47ffb4;font-size:10px">✓</span>';
+  const ok='<span style="color:#1a9e68;font-size:10px">✓</span>';
   const no='<span style="color:var(--bd2);font-size:10px">—</span>';
 
   let html = `<div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:9px;font-family:var(--mono)">
@@ -19977,7 +20050,7 @@ async function probarPOST() {
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(testPayload)
     });
-    log('✓ POST enviado (no-cors no devuelve respuesta)', '#47ffb4');
+    log('✓ POST enviado (no-cors no devuelve respuesta)', '#2ecc8a');
   } catch(e) {
     log('✗ POST falló: ' + e.message, '#ff4766');
   }
@@ -20040,7 +20113,7 @@ async function probarConexionCloud() {
   try {
     const r = await fetch(testUrl);
     const data = await r.json();
-    log('✓ fetch() funcionó', '#47ffb4');
+    log('✓ fetch() funcionó', '#2ecc8a');
     if (data.ok !== undefined) {
       mostrarResultadoSync(true, '✓ Conexión exitosa via fetch',
         'El script responde.' + (data.meta?.savedAt ? ' Último guardado: ' + fmtFechaAR(data.meta.savedAt) : ' Planilla lista.'));
@@ -21286,7 +21359,7 @@ function _toggleAutoSync() {
   const btn = document.getElementById('btn-autosync-toggle');
   if (btn) {
     btn.textContent = _autoSyncEnabled ? '🔄 Auto' : '⏸ Auto';
-    btn.style.color = _autoSyncEnabled ? '#47ffb4' : 'var(--dim)';
+    btn.style.color = _autoSyncEnabled ? '#2ecc8a' : 'var(--dim)';
     btn.title = _autoSyncEnabled
       ? 'Auto-sync activo — click para pausar'
       : 'Auto-sync pausado — click para activar';
@@ -21372,7 +21445,7 @@ function guardarDriveUrl() {
     return;
   }
   try { localStorage.setItem('lr_drive_url', url); } catch(e) {}
-  if (msg) { msg.textContent = url ? '✓ URL guardada' : 'URL eliminada'; msg.style.color = '#47ffb4'; }
+  if (msg) { msg.textContent = url ? '✓ URL guardada' : 'URL eliminada'; msg.style.color = '#2ecc8a'; }
   setTimeout(() => { if (msg) msg.textContent = ''; }, 2000);
 }
 
@@ -21745,7 +21818,7 @@ setTimeout(() => {
       </div>
 
       <!-- Format explanation -->
-      <div style="font-size:10px;font-weight:700;color:var(--y21);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">Estructura requerida — una fila por empresa por año</div>
+      <div style="font-size:10px;font-weight:700;color:#b8a000;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px">Estructura requerida — una fila por empresa por año</div>
 
       <!-- Column table -->
       <div style="border:1px solid var(--bd);border-radius:3px;overflow:hidden;margin-bottom:18px">
@@ -21763,13 +21836,13 @@ setTimeout(() => {
               <td style="padding:8px 12px;font-weight:700;color:var(--text)">Empresa</td>
               <td style="padding:8px 12px;color:var(--dim)">Empresa / Entidad / Company</td>
               <td style="padding:8px 12px;color:var(--text)">Texto — nombre exacto de la empresa</td>
-              <td style="padding:8px 12px;text-align:center"><b style="color:#47ffb4;font-size:13px">✓</b></td>
+              <td style="padding:8px 12px;text-align:center"><b style="color:#1a9e68;font-size:13px">✓</b></td>
             </tr>
             <tr style="border-bottom:1px solid var(--bd);background:var(--s2)">
               <td style="padding:8px 12px;font-weight:700;color:var(--text)">Año</td>
               <td style="padding:8px 12px;color:var(--dim)">Año / Periodo / Year</td>
               <td style="padding:8px 12px;color:var(--text)">Número entero: 2021, 2022, 2023 o 2024</td>
-              <td style="padding:8px 12px;text-align:center"><b style="color:#47ffb4;font-size:13px">✓</b></td>
+              <td style="padding:8px 12px;text-align:center"><b style="color:#1a9e68;font-size:13px">✓</b></td>
             </tr>
             <tr style="border-bottom:1px solid var(--bd)">
               <td style="padding:8px 12px;font-weight:700;color:var(--text)">Facturación</td>
@@ -21794,7 +21867,7 @@ setTimeout(() => {
       </div>
 
       <!-- Example preview -->
-      <div style="font-size:10px;font-weight:700;color:var(--y21);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px">Ejemplo de archivo correcto</div>
+      <div style="font-size:10px;font-weight:700;color:#b8a000;letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px">Ejemplo de archivo correcto</div>
       <div style="border:1px solid var(--bd);border-radius:3px;overflow:auto;margin-bottom:18px">
         <table style="width:100%;border-collapse:collapse;font-size:10px">
           <thead>
@@ -21809,30 +21882,30 @@ setTimeout(() => {
           <tbody>
             <tr style="border-bottom:1px solid var(--bd)">
               <td style="padding:6px 12px;color:var(--text);font-weight:600">EDELAR</td>
-              <td style="padding:6px 12px;text-align:center;color:var(--y21);font-weight:700">2021</td>
+              <td style="padding:6px 12px;text-align:center;color:#b8a000;font-weight:700">2021</td>
               <td style="padding:6px 12px;text-align:right;color:var(--text)">18200000000</td>
-              <td style="padding:6px 12px;text-align:right;color:#47ffb4">1820000000</td>
+              <td style="padding:6px 12px;text-align:right;color:#1a9e68">1820000000</td>
               <td style="padding:6px 12px;text-align:center;color:var(--text)">258</td>
             </tr>
             <tr style="border-bottom:1px solid var(--bd);background:var(--s2)">
               <td style="padding:6px 12px;color:var(--text);font-weight:600">EDELAR</td>
               <td style="padding:6px 12px;text-align:center;color:var(--y22);font-weight:700">2022</td>
               <td style="padding:6px 12px;text-align:right;color:var(--text)">22400000000</td>
-              <td style="padding:6px 12px;text-align:right;color:#47ffb4">2300000000</td>
+              <td style="padding:6px 12px;text-align:right;color:#1a9e68">2300000000</td>
               <td style="padding:6px 12px;text-align:center;color:var(--text)">312</td>
             </tr>
             <tr style="border-bottom:1px solid var(--bd)">
               <td style="padding:6px 12px;color:var(--text);font-weight:600">EPSE</td>
-              <td style="padding:6px 12px;text-align:center;color:var(--y21);font-weight:700">2021</td>
+              <td style="padding:6px 12px;text-align:center;color:#b8a000;font-weight:700">2021</td>
               <td style="padding:6px 12px;text-align:right;color:var(--text)">12400000000</td>
               <td style="padding:6px 12px;text-align:right;color:#ff4766">-450000000</td>
               <td style="padding:6px 12px;text-align:center;color:var(--dim)">—</td>
             </tr>
             <tr style="background:var(--s2)">
-              <td style="padding:6px 12px;color:#47ffb4;font-weight:600">MI EMPRESA SA</td>
+              <td style="padding:6px 12px;color:#1a9e68;font-weight:600">MI EMPRESA SA</td>
               <td style="padding:6px 12px;text-align:center;color:var(--y23);font-weight:700">2023</td>
               <td style="padding:6px 12px;text-align:right;color:var(--text)">5200000000</td>
-              <td style="padding:6px 12px;text-align:right;color:#47ffb4">480000000</td>
+              <td style="padding:6px 12px;text-align:right;color:#1a9e68">480000000</td>
               <td style="padding:6px 12px;text-align:center;color:var(--text)">45</td>
             </tr>
           </tbody>
@@ -21842,7 +21915,7 @@ setTimeout(() => {
       <!-- Notes -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div style="background:var(--s2);border:1px solid var(--bd);border-radius:3px;padding:12px 14px">
-          <div style="font-size:9px;font-weight:700;color:var(--y21);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px">✓ Lo que SÍ hace el sistema</div>
+          <div style="font-size:9px;font-weight:700;color:#b8a000;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px">✓ Lo que SÍ hace el sistema</div>
           <div style="font-size:9.5px;color:var(--text);line-height:1.7">
             Detecta columnas por nombre parcial<br>
             Actualiza empresas existentes<br>
