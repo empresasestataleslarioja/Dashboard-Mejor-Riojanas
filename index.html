@@ -20820,10 +20820,14 @@ function applyCloudData(cloud, opts) {
     // Forzar reconstrucción si venimos de restauración desde Sheets
     }
   // Restaurar flujos de fondos desde Sheets
+  // Log diagnóstico de flujos recibidos desde Sheets
+  console.log('[SYNC] cloud.flujos recibido:', Array.isArray(cloud.flujos) ? cloud.flujos.length + ' registros' : 'NO ES ARRAY / undefined', cloud.flujos ? JSON.stringify(cloud.flujos).slice(0,200) : 'null');
+
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
     const tieneLocales = Object.keys(DATA.flujos || {}).length > 0;
     cloud.flujos.forEach(f => {
-      if (!f.empresa || !f.periodo) return;
+      console.log('[SYNC] Procesando flujo:', f.empresa, f.periodo, 'ts:', f.timestamp, 'rubros_json len:', (f.rubros_json||'').length);
+      if (!f.empresa || !f.periodo) { console.log('[SYNC] SKIP: sin empresa/periodo'); return; }
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
       const local = DATA.flujos[clave];
       const tsCloud = parseInt(f.timestamp) || 0;
