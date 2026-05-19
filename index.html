@@ -20354,6 +20354,13 @@ async function syncFromCloud(silent, opts) {
       throw new Error('Respuesta inesperada del servidor: ' + JSON.stringify(data).slice(0, 100));
     }
 
+    // Log diagnóstico: ver exactamente qué keys devuelve el bridge
+    console.log('[SYNC] Keys en respuesta del bridge:', Object.keys(data || {}).join(', '));
+    console.log('[SYNC] data.flujos:', data.flujos === undefined ? 'UNDEFINED' : Array.isArray(data.flujos) ? data.flujos.length + ' filas' : typeof data.flujos);
+    if (Array.isArray(data.flujos) && data.flujos.length > 0) {
+      console.log('[SYNC] Primer flujo:', JSON.stringify(data.flujos[0]).slice(0, 150));
+    }
+
     // Convertir formato flat (rows) → formato DATA del dashboard
     applyCloudData(data, opts || {});
     saveDataToLocalCache();
