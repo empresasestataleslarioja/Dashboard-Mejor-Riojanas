@@ -21650,6 +21650,24 @@ function loadDataFromLocalCache() {
       console.log(`[LR] Balances desde localStorage: ${ddLS.restantes} (${ddLS.eliminados} duplicados)`);
       reAnalizarBalancesRestaurados();
     }
+    // Restaurar flujos desde localStorage — igual que en _embeddedSnap
+    if (cached._flujos && typeof cached._flujos === 'object' &&
+        Object.keys(cached._flujos).length > 0) {
+      DATA.flujos = cached._flujos;
+      console.log('[LR] Flujos desde localStorage:', Object.keys(cached._flujos).length);
+    }
+    if (cached._flujos_config) DATA.flujos_config = cached._flujos_config;
+
+    // Restaurar rubros desde localStorage
+    if (cached._rubros && typeof cached._rubros === 'object') {
+      Object.assign(rubros, cached._rubros);
+    }
+    if (cached._rubroList && Array.isArray(cached._rubroList)) {
+      cached._rubroList.forEach(r => {
+        if (r && !RUBRO_LIST.includes(r)) { RUBRO_LIST.push(r); RUBRO_CSS[r] = 'rb-custom'; }
+      });
+    }
+
     if (cached.savedAt) actualizarIndicadorGuardado(cached.savedAt, '📦 cache local');
     showStorageStatus('📦 Datos de cache local', '#47e8ff');
     console.log('[LR] ✓ Datos cargados desde localStorage');
