@@ -2060,6 +2060,22 @@ self.onmessage = async (e) => {
           <div id="pers-manual-años" style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
             <!-- Inputs de años generados por JS -->
           </div>
+          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono);
+            display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:4px">
+            <input type="checkbox" id="pers-manual-detalle-mes"
+              onchange="_persToggleDetalleMes(this.checked)"
+              style="cursor:pointer">
+            Detalle mensual
+          </label>
+          <!-- Detalle mensual por año -->
+          <div id="pers-manual-meses-wrap" style="display:none;width:100%;
+            margin-top:10px;padding:10px 12px;background:var(--s2);
+            border:1px solid var(--bd);border-radius:4px">
+            <div style="font-size:8.5px;color:var(--dim);font-family:var(--mono);
+              margin-bottom:8px">Detalle mensual — empleados por mes</div>
+            <div id="pers-manual-meses-grid"></div>
+          </div>
+
           <div style="display:flex;gap:6px">
             <button onclick="guardarPersonalManual()"
               style="padding:5px 14px;background:rgba(255,140,71,.15);border:1px solid rgba(255,140,71,.4);
@@ -2092,6 +2108,16 @@ self.onmessage = async (e) => {
           <canvas id="ch-p-growth" style="max-height:210px"></canvas>
         </div>
       </div>
+
+      <!-- Gráfico detalle mensual — visible solo cuando hay datos mensuales -->
+      <div id="pers-mensual-wrap" class="card" style="display:none;margin-top:12px">
+        <div class="card-hd">
+          <span class="card-hd-title" id="pers-mensual-lbl">Detalle mensual</span>
+          <span class="card-hd-unit">empleados por mes</span>
+        </div>
+        <canvas id="ch-p-mensual" style="max-height:180px"></canvas>
+      </div>
+
       <!-- Tabla detalle — solo en modo consolidado -->
       <div id="pers-tabla-wrap" class="card" style="margin-top:0">
         <div class="card-hd" style="display:flex;align-items:center;gap:8px">
@@ -7545,7 +7571,7 @@ function buildPersonal() {
   // ── C: Recalcular pers_totals desde DATA.personal ──────────
   // Garantiza que los KPIs reflejen los datos reales, no valores hardcodeados
   pYrs.forEach(y => {
-    const suma = DATA.personal.reduce((s, d) => s + (d.y[y] || 0), 0);
+    const suma = DATA.personal.reduce((s, d) => s + _persGetTotal(d, y), 0);
     if (suma > 0) DATA.pers_totals[y] = suma;
   });
   const pt = DATA.pers_totals;
@@ -7556,7 +7582,7 @@ function buildPersonal() {
     const pd = DATA.personal.find(d=>d.e===selEmp);
 
     document.getElementById('kpi-pers').innerHTML = pYrs.map((y,i) => {
-      const v = pd?.y[y]||0, prev = pd?.y[pYrs[i-1]]||0;
+      const v = _persGetTotal(pd, y), prev = _persGetTotal(pd, pYrs[i-1]);
       const delta = i>0&&prev ? `<div class="kpi-sub ${v>=prev?'up':'dn'}">${v>=prev?'▲':'▼'} ${Math.abs(pctNum(v,prev))}% vs ${pYrs[i-1]}</div>` : '<div class="kpi-sub">Base</div>';
       const ac = ['#4a5268','#e8ff47','#47e8ff','#ff8c47','#c447ff'][i];
       return `<div class="kpi"><div class="kpi-accent" style="background:${ac}"></div><div class="kpi-label">${selEmp} · ${y}</div><div class="kpi-value">${v ? fn(v) : '—'}</div>${delta}</div>`;
@@ -7566,7 +7592,7 @@ function buildPersonal() {
     document.getElementById('pers-total-lbl').textContent  = `${selEmp} — Empleados por año`;
     document.getElementById('pers-growth-lbl').textContent = `${selEmp} — Variación anual %`;
 
-    const vals = pYrs.map(y=>pd?.y[y]||0);
+    const vals = pYrs.map(y => _persGetTotal(pd, y));
     const pColors = ['#4a526899','#e8ff4799','#47e8ff99','#ff8c4799','#c447ff99'];
 
     // Gráfico 1: barras por año de esa empresa
@@ -7583,11 +7609,40 @@ function buildPersonal() {
     },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>Number(v).toLocaleString('es-AR')}}}});
 
     // Gráfico 3: variación año a año
-    const varData = pYrs.slice(1).map((y,i)=>{ const v=pd?.y[y]||0,p=pd?.y[pYrs[i]]||0; return p?pctNum(v,p):null; });
+    const varData = pYrs.slice(1).map((y,i)=>{ const v=_persGetTotal(pd,y),p=_persGetTotal(pd,pYrs[i]); return p?pctNum(v,p):null; });
     mkChart('ch-p-growth','bar',{
       labels: pYrs.slice(1).map((y,i)=>`${pYrs[i]}→${y}`),
       datasets:[{label:'Variación %', data:varData, backgroundColor:varData.map(v=>v==null?'transparent':v>=0?'#e8ff4799':'#ff476699'), borderRadius:3}]
     },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}});
+    // Gráfico 4: detalle mensual si existe para algún año
+    const selAñoMens = document.getElementById('sel-pers-base')?.value || pYrs[pYrs.length-1];
+    const meses = _persGetMeses(pd, selAñoMens);
+    const teneMeses = meses.some(v => v != null);
+    const wrapMensual = document.getElementById('pers-mensual-wrap');
+    if (wrapMensual) {
+      if (teneMeses) {
+        wrapMensual.style.display = '';
+        const MESES_L = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        const mesData = meses.map(v => v ?? 0);
+        document.getElementById('pers-mensual-lbl').textContent =
+          selEmp + ' — Detalle mensual ' + selAñoMens;
+        mkChart('ch-p-mensual','bar',{
+          labels: MESES_L,
+          datasets:[{
+            label: 'Empleados ' + selAñoMens,
+            data: mesData,
+            backgroundColor: mesData.map((v,i) => v === 0 ? '#47e8ff22' : '#47e8ff99'),
+            borderRadius: 3,
+          }]
+        },{
+          plugins:{ legend:{ display:false } },
+          scales:{ y:{ ticks:{ callback: v => Math.round(v) }, beginAtZero: true } }
+        });
+      } else {
+        wrapMensual.style.display = 'none';
+      }
+    }
+
     // Ocultar tabla en modo empresa
     const tw = document.getElementById('pers-tabla-wrap');
     if (tw) tw.style.display = 'none';
@@ -7599,12 +7654,12 @@ function buildPersonal() {
     const totBaseY = pt[baseYear] || 0;
     // Mayor empleador en lastY
     const mayorEmpleador = [...DATA.personal]
-      .filter(d => d.y[lastY] > 0)
-      .sort((a, b) => (b.y[lastY]||0) - (a.y[lastY]||0))[0];
+      .filter(d => _persGetTotal(d, lastY) > 0)
+      .sort((a, b) => _persGetTotal(b, lastY) - _persGetTotal(a, lastY))[0];
     // Mayor crecimiento baseYear → lastY
     const mayorCrecimiento = [...DATA.personal]
-      .filter(d => (d.y[baseYear]||0) > 3 && (d.y[lastY]||0) > 0)
-      .map(d => ({ e:d.e, g: pctNum(d.y[lastY]||0, d.y[baseYear]||1) }))
+      .filter(d => _persGetTotal(d,baseYear) > 3 && _persGetTotal(d,lastY) > 0)
+      .map(d => ({ e:d.e, g: pctNum(_persGetTotal(d,lastY), _persGetTotal(d,baseYear)||1) }))
       .sort((a,b) => b.g - a.g)[0];
 
     document.getElementById('kpi-pers').innerHTML = [
@@ -7615,7 +7670,7 @@ function buildPersonal() {
         sub:'Año base de comparación', cls:'', ac:'#47e8ff' },
       { lbl:'Mayor empleador',
         val: mayorEmpleador?.e || '—',
-        sub: mayorEmpleador ? `${fn(mayorEmpleador.y[lastY])} empleados en ${lastY}` : '',
+        sub: mayorEmpleador ? `${fn(_persGetTotal(mayorEmpleador,lastY))} empleados en ${lastY}` : '',
         cls:'', ac:'#ff8c47' },
       { lbl:`Mayor crecimiento ${baseYear}→${lastY}`,
         val: mayorCrecimiento?.e || '—',
@@ -7632,8 +7687,8 @@ function buildPersonal() {
 
     // Top 14 por último año disponible
     const top14 = DATA.personal
-      .filter(d => pYrs.some(y => (d.y[y]||0) > 0))
-      .sort((a,b) => (b.y[lastY]||b.y[pYrs[pYrs.length-2]]||0) - (a.y[lastY]||a.y[pYrs[pYrs.length-2]]||0))
+      .filter(d => pYrs.some(y => _persGetTotal(d,y) > 0))
+      .sort((a,b) => (_persGetTotal(b,lastY)||_persGetTotal(b,pYrs[pYrs.length-2])) - (_persGetTotal(a,lastY)||_persGetTotal(a,pYrs[pYrs.length-2])))
       .slice(0, 14);
 
     const pColors = ['#2a2f40','#e8ff4777','#47e8ff77','#ff8c4799','#c447ff99'];
@@ -7641,7 +7696,7 @@ function buildPersonal() {
       labels: top14.map(d => d.e.length>14 ? d.e.slice(0,12)+'…' : d.e),
       datasets: pYrs.map((y,i) => ({
         label: y,
-        data: top14.map(d => d.y[y]||0),
+        data: top14.map(d => _persGetTotal(d,y)),
         backgroundColor: pColors[i % pColors.length],
         borderRadius: 2
       }))
@@ -7655,8 +7710,8 @@ function buildPersonal() {
 
     // Mayor crecimiento baseYear → lastY
     const grw = DATA.personal
-      .filter(d => (d.y[baseYear]||0) > 3 && (d.y[lastY]||0) > 0)
-      .map(d => ({ e: d.e, g: pctNum(d.y[lastY]||0, d.y[baseYear]||1) }))
+      .filter(d => _persGetTotal(d,baseYear) > 3 && _persGetTotal(d,lastY) > 0)
+      .map(d => ({ e: d.e, g: pctNum(_persGetTotal(d,lastY), _persGetTotal(d,baseYear)||1) }))
       .sort((a,b) => b.g - a.g)
       .slice(0, 10);
 
@@ -7722,9 +7777,99 @@ function _persManualAutocargar(empresa) {
   const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
   años.forEach(function(y) {
     const inp = document.getElementById('pers-m-' + y);
-    if (inp) inp.value = pd.y[y] || '';
+    if (inp) { const tv = _persGetTotal(pd, y); inp.value = tv > 0 ? tv : ''; }
   });
+  // Si tiene detalle mensual, actualizarlo en el grid
+  if (pd.m && document.getElementById('pers-manual-detalle-mes')?.checked) {
+    _persRenderMesesGrid();
+  }
 }
+function _persGetTotal(d, y) {
+  if (!d || !d.y) return 0;
+  const v = d.y[y];
+  if (v == null) return 0;
+  if (typeof v === 'number') return v; // formato viejo
+  if (typeof v === 'object' && v.total != null) return v.total; // formato nuevo
+  return 0;
+}
+
+// ── Helper: obtener array de 12 meses para un año ─────────────────
+function _persGetMeses(d, y) {
+  if (!d || !d.m || !d.m[y]) return Array(12).fill(null);
+  return d.m[y];
+}
+
+// ── Toggle detalle mensual en carga manual ────────────────────────
+function _persToggleDetalleMes(checked) {
+  const wrap = document.getElementById('pers-manual-meses-wrap');
+  if (!wrap) return;
+  wrap.style.display = checked ? '' : 'none';
+  if (checked) _persRenderMesesGrid();
+}
+
+// ── Renderizar grilla de inputs mensuales ─────────────────────────
+function _persRenderMesesGrid() {
+  const grid = document.getElementById('pers-manual-meses-grid');
+  if (!grid) return;
+
+  const pYrs = ys().map(String);
+  const años = pYrs.length ? pYrs : ['2024','2025','2026'];
+  const MESES_LABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  // Pre-cargar valores si hay empresa seleccionada
+  const emp = document.getElementById('pers-manual-emp')?.value?.trim();
+  const pd  = emp ? DATA.personal.find(d => d.e.toLowerCase() === emp.toLowerCase()) : null;
+
+  let html = '';
+  años.forEach(y => {
+    const mActual = pd ? _persGetMeses(pd, y) : Array(12).fill(null);
+    const totalActual = pd ? _persGetTotal(pd, y) : '';
+    html += `<div style="margin-bottom:12px">
+      <div style="font-size:8.5px;color:#47e8ff;font-family:var(--mono);
+        margin-bottom:6px;font-weight:600">${y}</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px">
+        ${MESES_LABELS.map((m, i) => `
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <label style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">${m}</label>
+            <input type="number" min="0" step="1"
+              id="pers-mes-${y}-${i}"
+              value="${mActual[i] != null ? mActual[i] : ''}"
+              placeholder="—"
+              style="padding:3px 5px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;
+              outline:none;width:100%;text-align:center"
+              oninput="_persActualizarTotalMes('${y}')">
+          </div>`).join('')}
+      </div>
+      <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-top:4px">
+        Promedio anual calculado: <span id="pers-mes-total-${y}" style="color:#47ffb4;font-weight:600">
+          ${totalActual || '—'}
+        </span>
+      </div>
+    </div>`;
+  });
+
+  grid.innerHTML = html;
+}
+
+// ── Calcular promedio al cambiar un mes ───────────────────────────
+function _persActualizarTotalMes(y) {
+  const MESES_LABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const vals = MESES_LABELS.map((m, i) => {
+    const v = parseInt(document.getElementById(`pers-mes-${y}-${i}`)?.value);
+    return isNaN(v) ? null : v;
+  });
+  const filled = vals.filter(v => v != null);
+  const prom = filled.length ? Math.round(filled.reduce((s,v)=>s+v,0) / filled.length) : null;
+  const el = document.getElementById(`pers-mes-total-${y}`);
+  if (el) {
+    el.textContent = prom != null ? prom + ' (prom. ' + filled.length + ' meses)' : '—';
+  }
+  // Actualizar el input del total del año si existe
+  const inpAño = document.getElementById(`pers-manual-y-${y}`);
+  if (inpAño && prom != null) inpAño.value = prom;
+}
+
 
 function guardarPersonalManual() {
   const empInput = document.getElementById('pers-manual-emp');
@@ -7749,20 +7894,51 @@ function guardarPersonalManual() {
     return;
   }
 
+  // Recopilar detalle mensual si el toggle está activo
+  const tieneDetalleMes = document.getElementById('pers-manual-detalle-mes')?.checked;
+  const mData = {};
+  if (tieneDetalleMes) {
+    años.forEach(function(y) {
+      const meses = [];
+      let alguno = false;
+      for (let i = 0; i < 12; i++) {
+        const v = parseInt(document.getElementById('pers-mes-' + y + '-' + i)?.value);
+        const val = isNaN(v) ? null : v;
+        meses.push(val);
+        if (val != null) alguno = true;
+      }
+      if (alguno) {
+        mData[y] = meses;
+        // Si no se ingresó total anual, calcular como promedio de meses con dato
+        if (!yData[y]) {
+          const filled = meses.filter(v => v != null);
+          if (filled.length) yData[y] = Math.round(filled.reduce((s,v)=>s+v,0) / filled.length);
+        }
+      }
+    });
+  }
+
   // Guardar o actualizar
   const existing = DATA.personal.find(function(d) {
     return d.e.toLowerCase() === empresa.toLowerCase();
   });
   if (existing) {
     Object.assign(existing.y, yData);
-    existing.e = empresa; // normalizar nombre si difiere en mayúsculas
+    existing.e = empresa;
+    // Guardar detalle mensual si existe
+    if (Object.keys(mData).length) {
+      if (!existing.m) existing.m = {};
+      Object.assign(existing.m, mData);
+    }
   } else {
-    DATA.personal.push({ e: empresa, y: yData });
+    const nuevo = { e: empresa, y: yData };
+    if (Object.keys(mData).length) nuevo.m = mData;
+    DATA.personal.push(nuevo);
   }
 
-  // Recalcular totales
+  // Recalcular totales usando helper compatible
   años.forEach(function(y) {
-    DATA.pers_totals[y] = DATA.personal.reduce(function(s, d) { return s + (d.y[y] || 0); }, 0);
+    DATA.pers_totals[y] = DATA.personal.reduce(function(s, d) { return s + _persGetTotal(d, y); }, 0);
   });
 
   saveDataToLocalCache();
@@ -7809,9 +7985,26 @@ function importarNomina(file) {
           if (rows[i].some(c => /^20[0-9][0-9]$/.test(String(c)))) { headerRow = i; break; }
         }
         const headers = rows[headerRow].map(c => String(c).trim());
-        const yearCols = {};
-        headers.forEach((h, i) => { if (/^20[0-9][0-9]$/.test(h)) yearCols[h] = i; });
+        const yearCols = {};  // año → col index
+        const mesCols  = {};  // 'YYYY-MM' → col index
+        headers.forEach((h, i) => {
+          if (/^20[0-9][0-9]$/.test(h)) yearCols[h] = i;
+          // Detectar formato mes: 2024-01, 2024/01, Ene-2024, etc.
+          const mM = h.match(/^(20\d\d)[\/\-_](0?[1-9]|1[0-2])$/) ||
+                     h.match(/^(0?[1-9]|1[0-2])[\/\-_](20\d\d)$/);
+          if (mM) {
+            const yr = mM[1].length === 4 ? mM[1] : mM[2];
+            const mm = mM[1].length === 4 ? parseInt(mM[2]) : parseInt(mM[1]);
+            mesCols[yr + '-' + String(mm).padStart(2,'0')] = i;
+          }
+        });
         const yearList = Object.keys(yearCols).sort();
+        // También inferir años desde columnas de mes
+        Object.keys(mesCols).forEach(k => {
+          const y = k.slice(0,4);
+          if (!yearList.includes(y)) yearList.push(y);
+        });
+        yearList.sort();
         if (!yearList.length) throw new Error('No se encontraron columnas de años (2020, 2021…)');
 
         let importados = 0, actualizados = 0;
@@ -7819,19 +8012,60 @@ function importarNomina(file) {
           const empresa = String(row[0] || '').trim();
           if (!empresa || empresa.length < 2) return;
           const yData = {};
+          const mData = {};
+
+          // Leer totales anuales
           yearList.forEach(y => {
-            const n = parseInt(row[yearCols[y]]);
-            if (!isNaN(n) && n >= 0) yData[y] = n;
+            if (yearCols[y] !== undefined) {
+              const n = parseInt(row[yearCols[y]]);
+              if (!isNaN(n) && n >= 0) yData[y] = n;
+            }
           });
+
+          // Leer detalle mensual si hay columnas de mes
+          if (Object.keys(mesCols).length) {
+            yearList.forEach(y => {
+              const meses = Array(12).fill(null);
+              let alguno = false;
+              for (let m = 1; m <= 12; m++) {
+                const k = y + '-' + String(m).padStart(2,'0');
+                if (mesCols[k] !== undefined) {
+                  const n = parseInt(row[mesCols[k]]);
+                  if (!isNaN(n) && n >= 0) { meses[m-1] = n; alguno = true; }
+                }
+              }
+              if (alguno) {
+                mData[y] = meses;
+                // Si no hay total anual, calcular como promedio
+                if (!yData[y]) {
+                  const filled = meses.filter(v => v != null);
+                  if (filled.length) yData[y] = Math.round(filled.reduce((s,v)=>s+v,0)/filled.length);
+                }
+              }
+            });
+          }
+
           if (!Object.keys(yData).length) return;
           const existing = DATA.personal.find(d => d.e === empresa);
-          if (existing) { Object.assign(existing.y, yData); actualizados++; }
-          else { DATA.personal.push({ e: empresa, y: yData }); importados++; }
+          if (existing) {
+            Object.assign(existing.y, yData);
+            existing.e = empresa;
+            if (Object.keys(mData).length) {
+              if (!existing.m) existing.m = {};
+              Object.assign(existing.m, mData);
+            }
+            actualizados++;
+          } else {
+            const nuevo = { e: empresa, y: yData };
+            if (Object.keys(mData).length) nuevo.m = mData;
+            DATA.personal.push(nuevo);
+            importados++;
+          }
         });
 
-        // Recalcular totales
+        // Recalcular totales usando helper compatible
         yearList.forEach(y => {
-          DATA.pers_totals[y] = DATA.personal.reduce((s, d) => s + (d.y[y] || 0), 0);
+          DATA.pers_totals[y] = DATA.personal.reduce((s, d) => s + _persGetTotal(d, y), 0);
         });
 
         saveDataToLocalCache();
