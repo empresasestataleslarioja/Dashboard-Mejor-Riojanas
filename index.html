@@ -5428,29 +5428,43 @@ function _rptTransferencias(autoPrint) {
   const maxMes = Math.max(...totMes)||1;
 
   // SVG de barras verticales para mensual — 100% estable en impresión
-  var mensH = 80; var mensW_col = 44;
-  var mensTotal_W = mensW_col * 12;
-  // Altura extra para texto de monto arriba + mes abajo
-  var svgTotalH = mensH + 32;
-  var barMensualSVG = '<svg width="100%" height="'+svgTotalH+'" viewBox="0 0 '+mensTotal_W+' '+svgTotalH+'" style="display:block">';
-  MESES.forEach(function(m,i) {
-    var v    = totMes[i]||0;
-    var h    = maxMes > 0 ? Math.max(Math.round(v/maxMes*mensH), 2) : 2;
-    var isMax= v === maxMes;
+  // SVG mensual — limpio y simple
+  // Estructura: barra + mes encima + monto debajo del mes
+  var colW  = 80;
+  var barH  = 100;  // barras más altas
+  var padT  = 10;   // padding arriba
+  var padB  = 36;   // espacio para mes + monto
+  var svgW  = colW * 12;
+  var svgH  = barH + padT + padB;
+  var baseY = padT + barH;
+
+  var barMensualSVG = '<svg width="100%" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'" style="display:block">';
+
+  MESES.forEach(function(m, i) {
+    var v    = totMes[i] || 0;
+    var h    = maxMes > 0 ? Math.max(Math.round(v / maxMes * barH), 3) : 3;
+    var isMax = v > 0 && v === maxMes;
     var bg   = isMax ? '#0f6e56' : '#185fa5';
-    var x    = i * mensW_col;
-    var yTop = mensH - h;
+    var cx   = i * colW + colW / 2;
+    var bW   = colW * 0.6;
+    var bX   = cx - bW / 2;
+    var bY   = baseY - h;
+
     // Barra
-    barMensualSVG += '<rect x="'+(x+4)+'" y="'+yTop+'" width="'+(mensW_col-8)+'" height="'+h+'" fill="'+bg+'" rx="2"/>';
-    // Monto sobre la barra (solo si tiene valor)
+    barMensualSVG += '<rect x="'+bX.toFixed(0)+'" y="'+bY+'" width="'+bW.toFixed(0)+'" height="'+h+'" fill="'+bg+'" rx="3"/>';
+
+    // Mes — debajo de la barra
+    barMensualSVG += '<text x="'+cx+'" y="'+(baseY+14)+'" text-anchor="middle" font-size="12" font-family="Arial,sans-serif" fill="#444">'+m+'</text>';
+
+    // Monto — debajo del mes
     if (v > 0) {
-      var label = v>=1e6 ? '$'+(v/1e6).toFixed(0)+'M' : '$'+Math.round(v);
-      var yLbl  = Math.max(yTop - 3, 10);
-      barMensualSVG += '<text x="'+(x+mensW_col/2)+'" y="'+yLbl+'" text-anchor="middle" font-size="8" font-family="monospace" fill="'+bg+'" font-weight="600">'+label+'</text>';
+      var mLabel = v >= 1e6
+        ? '$' + (v/1e6).toFixed(1).replace('.',',') + 'M'
+        : '$' + Math.round(v).toLocaleString('es-AR');
+      barMensualSVG += '<text x="'+cx+'" y="'+(baseY+27)+'" text-anchor="middle" font-size="9" font-family="monospace" fill="#666">'+mLabel+'</text>';
     }
-    // Mes debajo
-    barMensualSVG += '<text x="'+(x+mensW_col/2)+'" y="'+(mensH+16)+'" text-anchor="middle" font-size="11" font-family="monospace" fill="#555">'+m+'</text>';
   });
+
   barMensualSVG += '</svg>';
   var barMensual = barMensualSVG;
 
@@ -5497,18 +5511,18 @@ function _rptTransferencias(autoPrint) {
     </div>
     <div class="r2">
       <div><div class="st">Top beneficiarias por monto</div>
-        <div class="cc">${_rptBarH(sortedBen.slice(0,6).map(function(e2){return {l:e2[0],v:e2[1].t,fmt:fM(e2[1].t)};}),'#185fa5')}</div>
+        <div class="cc" style="font-size:9pt">${_rptBarH(sortedBen.slice(0,8).map(function(e2){return {l:e2[0],v:e2[1].t,fmt:fM(e2[1].t)};}),'#185fa5')}</div>
       </div>
       <div><div class="st">Distribución por categoría</div>
-        <div class="cc">${_rptBarH(sortedCat.map(function(e2){return {l:e2[0],v:e2[1],fmt:fM(e2[1])};}), function(d){var i=sortedCat.findIndex(function(c){return c[0]===d.l;});return catCols[i%catCols.length];})}</div>
+        <div class="cc" style="font-size:9pt">${_rptBarH(sortedCat.map(function(e2){return {l:e2[0],v:e2[1],fmt:fM(e2[1])};}), function(d){var i=sortedCat.findIndex(function(c){return c[0]===d.l;});return catCols[i%catCols.length];})}</div>
       </div>
     </div>
     <div class="st">Evolución mensual</div>
-    <div class="cc" style="margin-bottom:12px">
-      <div style="display:flex;align-items:flex-end;gap:4px;height:70px;border-bottom:.5px solid #ddd;padding-bottom:4px">${barMensual}</div>
+    <div class="cc" style="margin-bottom:20px;padding:12px 14px 14px">
+      ${barMensual}
     </div>
-    <div class="st">${empFil?empFil+' · detalle mensual':'Detalle por empresa'}</div>
-    <div class="tw"><table>
+    <div class="st" style="margin-top:16px">${empFil?empFil+' · detalle mensual':'Detalle por empresa'}</div>
+    <div class="tw" style="page-break-before:auto"><table>
       <thead>${tablaHeader}</thead>
       <tbody>${tablaBody}</tbody>
     </table></div>
