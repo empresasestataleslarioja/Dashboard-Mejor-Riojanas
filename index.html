@@ -1418,7 +1418,11 @@ self.onmessage = async (e) => {
           <button class="tba-btn" onclick="toggleExportMenu()" id="btn-export-menu"
             title="Exportar / Sheets">⬇ Exportar ▾</button>
           <button class="tba-btn" onclick="imprimirPanelActivo()"
-            title="PDF del panel activo" style="color:#47e8ff;border-color:#47e8ff44">🖨</button>
+            title="Generar reporte PDF del panel activo"
+            style="color:#47e8ff;border-color:#47e8ff66;background:rgba(71,232,255,.08);
+            font-weight:500;padding:4px 10px;display:flex;align-items:center;gap:5px">
+            🖨 <span style="font-size:9px">Reporte</span>
+          </button>
           <button class="tba-btn tba-btn-save" id="btn-guardar" onclick="toggleSavePanel()"
             title="Guardar">💾 Guardar</button>
         </div>
@@ -4907,7 +4911,17 @@ function imprimirPanelActivo() {
   var reportHTML = '';
   if      (panelId === 'personal')       reportHTML = _rptPersonal();
   else if (panelId === 'balances')       reportHTML = _rptBalance();
-  else if (panelId === 'transferencias') reportHTML = _rptTransferencias();
+  else if (panelId === 'transferencias') {
+    try {
+      reportHTML = _rptTransferencias();
+    } catch(err) {
+      reportHTML = '<!DOCTYPE html><html><body style="font-family:Arial;padding:40px">'
+        + '<h2 style="color:#c0392b">Error generando reporte</h2>'
+        + '<pre style="background:#f5f5f5;padding:16px;border-radius:4px;font-size:11pt">'
+        + String(err) + '\n\n' + (err.stack||'') + '</pre>'
+        + '</body></html>';
+    }
+  }
   else {
     _imprimirPanelFallback(panelId, panelActivo);
     return;
@@ -4949,7 +4963,15 @@ function imprimirPanelActivo() {
       var autoprintScript = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
       if      (pid2==='personal')       html2 = _rptPersonal().replace('</head>', autoprintScript+'</head>');
       else if (pid2==='balances')       html2 = _rptBalance().replace('</head>', autoprintScript+'</head>');
-      else if (pid2==='transferencias') html2 = _rptTransferencias().replace('</head>', autoprintScript+'</head>');
+      else if (pid2==='transferencias') {
+        try {
+          html2 = _rptTransferencias().replace('</head>', autoprintScript+'</head>');
+        } catch(err2) {
+          html2 = '<!DOCTYPE html><html><body style="font-family:Arial;padding:40px">'
+            + '<h2 style="color:#c0392b">Error generando reporte</h2>'
+            + '<pre style="font-size:11pt">' + String(err2) + '</pre></body></html>';
+        }
+      }
       if (!html2) return;
       var b2  = new Blob([html2], {type:'text/html;charset=utf-8'});
       var u2  = URL.createObjectURL(b2);
@@ -4995,40 +5017,40 @@ function _rptCSS() {
   body{font-family:Arial,sans-serif;font-size:10pt;color:#111;background:#fff}
   .pg{padding:14px 18px 20px}
   .hdr{display:flex;justify-content:flex-end;border-bottom:1.5px solid #111;padding-bottom:6px;margin-bottom:12px}
-  .ht{font-size:12pt;font-weight:600;color:#111;text-align:right}
-  .hs{font-size:8pt;color:#555;margin-top:2px;text-align:right}
+  .ht{font-size:14pt;font-weight:700;color:#111;text-align:right}
+  .hs{font-size:9pt;color:#555;margin-top:3px;text-align:right}
   .kg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px}
   .kg3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px}
-  .kp{padding:10px 12px;border:.5px solid #ccc;border-radius:6px;background:#f7f7f7;page-break-inside:avoid}
+  .kp{padding:12px 14px;border:.5px solid #ccc;border-radius:6px;background:#f7f7f7;page-break-inside:avoid}
   .ka{height:3px;margin-bottom:6px}
-  .kl{font-size:7pt;color:#666;font-family:monospace;text-transform:uppercase;letter-spacing:.04em}
-  .kv{font-size:16pt;font-weight:600;color:#111;line-height:1.1;margin:3px 0}
-  .kv2{font-size:12pt;font-weight:600;color:#111;line-height:1.2;margin:3px 0}
-  .ks{font-size:7pt;color:#666}
+  .kl{font-size:7.5pt;color:#555;font-family:monospace;text-transform:uppercase;letter-spacing:.04em}
+  .kv{font-size:26pt;font-weight:700;color:#111;line-height:1;margin:4px 0}
+  .kv2{font-size:16pt;font-weight:700;color:#111;line-height:1.2;margin:3px 0}
+  .ks{font-size:8pt;color:#555}
   .up{color:#065030}.dn{color:#7a1a1a}
-  .st{font-size:7pt;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;font-family:monospace}
+  .st{font-size:7.5pt;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;font-family:monospace}
   .r2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   .r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
   .cc{border:.5px solid #ddd;border-radius:6px;padding:10px 12px;background:#fff;page-break-inside:avoid}
   .rr{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #eee}
   .rr:last-child{border-bottom:none}
-  .rl{font-size:8pt;color:#555}
-  .rv{font-size:8.5pt;font-weight:600;font-family:monospace;color:#111}
+  .rl{font-size:8.5pt;color:#444}
+  .rv{font-size:10pt;font-weight:600;font-family:monospace;color:#111}
   .pill{font-size:6.5pt;padding:2px 5px;border-radius:3px;font-family:monospace;margin-left:4px}
   .pu{background:#d4edda;color:#155724}.pd{background:#f8d7da;color:#721c24}.pn{background:#e9ecef;color:#555}
   .tw{border:.5px solid #ddd;border-radius:6px;overflow:hidden;margin-bottom:12px}
   table{width:100%;border-collapse:collapse;table-layout:fixed}
   thead tr{background:#f0f0f0}
-  th{padding:5px 8px;font-size:6.5pt;font-weight:600;color:#555;font-family:monospace;text-transform:uppercase;border-bottom:.5px solid #ccc;text-align:right;white-space:nowrap}
+  th{padding:5px 9px;font-size:7pt;font-weight:600;color:#555;font-family:monospace;text-transform:uppercase;border-bottom:.5px solid #ccc;text-align:right;white-space:nowrap}
   th:first-child{text-align:left}
-  td{padding:4px 8px;border-bottom:.5px solid #eee;font-size:7.5pt;font-family:monospace;text-align:right;color:#111}
-  td:first-child{text-align:left;font-family:Arial,sans-serif;color:#444}
+  td{padding:5px 9px;border-bottom:.5px solid #eee;font-size:8.5pt;font-family:monospace;text-align:right;color:#111}
+  td:first-child{text-align:left;font-family:Arial,sans-serif;color:#333;font-size:8.5pt}
   .sr td{background:#f5f5f5;font-weight:600;font-family:Arial,sans-serif!important;color:#111!important}
   .trt td{font-weight:600;border-top:1px solid #bbb}
   .trf td{font-weight:600;border-top:1.5px solid #888;background:#f0f0f0;color:#111!important}
   tr:last-child td{border-bottom:none}
   .ft{border-top:.5px solid #ccc;padding-top:5px;margin-top:8px;display:flex;justify-content:space-between}
-  .fx{font-size:6.5pt;color:#888;font-family:monospace}
+  .fx{font-size:7.5pt;color:#777;font-family:monospace}
   @page{margin:.7cm .7cm 1.2cm .7cm;size:A4 portrait}
   </style>`;
 }
@@ -5073,7 +5095,7 @@ function _rptBarH(items, colorFn) {
   var maxV = Math.max.apply(null, items.map(function(d){return d.v||0;})) || 1;
   var W = 300; // ancho SVG de la barra en px
   var H = 14;  // alto SVG
-  return '<table style="width:100%;border-collapse:collapse;font-size:7.5pt">'
+  return '<table style="width:100%;border-collapse:collapse;font-size:9pt">'
     + items.map(function(d) {
       var lbl = (d.l||'').length > 14 ? (d.l||'').slice(0,13)+'…' : (d.l||'');
       var pct = Math.max(((d.v||0)/maxV), 0.01);
@@ -5113,7 +5135,7 @@ function _rptPersonal(autoPrint) {
     var barrasMaxV = Math.max.apply(null, vals.filter(function(v){return v>0;})) || 1;
     var barrasMinV = Math.min.apply(null, vals.filter(function(v){return v>0;})) || 0;
     var barrasSVG_W = 400; var barrasSVG_H = 20;
-    var barras = '<table style="width:100%;border-collapse:collapse;font-size:9pt">'
+    var barras = '<table style="width:100%;border-collapse:collapse;font-size:11pt">'
       + pYrs.map(function(y,i) {
         var v   = vals[i] || 0;
         var pct = Math.max((v - barrasMinV + 20) / (barrasMaxV - barrasMinV + 40), 0.02);
@@ -5123,7 +5145,7 @@ function _rptPersonal(autoPrint) {
         var fw  = isL ? 700 : 400;
         var fc  = isL ? '#0f6e56' : '#111';
         return '<tr style="border:none">'
-          + '<td style="width:40px;font-family:monospace;color:#555;text-align:right;padding:3px 8px 3px 0;border:none">'+y+'</td>'
+          + '<td style="width:44px;font-family:monospace;color:#555;text-align:right;padding:4px 10px 4px 0;border:none">'+y+'</td>'
           + '<td style="padding:2px 0;border:none">'
           + '<svg width="100%" height="'+barrasSVG_H+'" viewBox="0 0 '+barrasSVG_W+' '+barrasSVG_H+'" preserveAspectRatio="none" style="display:block">'
           + '<rect x="0" y="0" width="'+barrasSVG_W+'" height="'+barrasSVG_H+'" fill="#e8e8e8" rx="3"/>'
@@ -5143,8 +5165,8 @@ function _rptPersonal(autoPrint) {
       const bc = vBase2===null?'':(parseFloat(vBase2)>=0?'up':'dn');
       const isL = y===lastY;
       return `<tr${isL?' style="background:#f9f9f9"':''}>
-        <td>${y}${y===baseYear?' <span style="font-size:7pt;color:#185fa5">(base)</span>':''}</td>
-        <td style="font-weight:${isL?700:400}">${v||'—'}</td>
+        <td style="font-size:13pt">${y}${y===baseYear?' <span style="font-size:8pt;color:#185fa5;font-weight:400">(base)</span>':''}</td>
+        <td style="font-size:${isL?'18pt':'13pt'};font-weight:${isL?700:500};color:${isL?'#0f6e56':'#111'}">${v||'—'}</td>
         <td class="${ic}">${vInt===null?'—':(parseFloat(vInt)>=0?'+':'')+vInt+'%'}</td>
         <td class="${bc}">${vBase2===null?'—':(parseFloat(vBase2)>=0?'+':'')+vBase2+'%'}</td>
       </tr>`;
@@ -5163,8 +5185,13 @@ function _rptPersonal(autoPrint) {
     _h.push('<div class="st">Evolución de plantilla '+pYrs[0]+'–'+lastY+'</div>');
     _h.push('<div class="cc" style="margin-bottom:12px">'+barras+'</div>');
     _h.push('<div class="st">Detalle por año</div>');
-    _h.push('<div class="tw"><table>');
-    _h.push('<thead><tr><th>Año</th><th>Empleados</th><th>Var. interanual</th><th>Var. vs base '+baseYear+'</th></tr></thead>');
+    _h.push('<div class="tw"><table style="font-size:13pt">');
+    _h.push('<thead><tr>'
+      + '<th style="font-size:9pt">Año</th>'
+      + '<th style="font-size:9pt">Empleados</th>'
+      + '<th style="font-size:9pt">Var. interanual</th>'
+      + '<th style="font-size:9pt">Var. vs base '+baseYear+'</th>'
+      + '</tr></thead>');
     _h.push('<tbody>'+tablaRows+'</tbody></table></div>');
     _h.push(_rptFooter());
     _h.push('</div></body></html>');
@@ -5185,7 +5212,7 @@ function _rptPersonal(autoPrint) {
     const minTot    = Math.min(...pYrs.map(y=>totals[y]).filter(v=>v>0));
 
     var totSVG_W = 400; var totSVG_H = 18;
-    var barrasTot = '<table style="width:100%;border-collapse:collapse;font-size:9pt">'
+    var barrasTot = '<table style="width:100%;border-collapse:collapse;font-size:11pt">'
       + pYrs.map(function(y,i) {
         var v   = totals[y] || 0;
         var pct = Math.max((v - minTot + 100) / (maxTot - minTot + 200), 0.02);
@@ -5193,7 +5220,7 @@ function _rptPersonal(autoPrint) {
         var bg  = isL ? '#0f6e56' : '#185fa5';
         var bw  = Math.round(pct * totSVG_W);
         return '<tr style="border:none">'
-          + '<td style="width:40px;font-family:monospace;color:#555;text-align:right;padding:3px 8px 3px 0;border:none">'+y+'</td>'
+          + '<td style="width:44px;font-family:monospace;color:#555;text-align:right;padding:4px 10px 4px 0;border:none">'+y+'</td>'
           + '<td style="padding:2px 0;border:none">'
           + '<svg width="100%" height="'+totSVG_H+'" viewBox="0 0 '+totSVG_W+' '+totSVG_H+'" preserveAspectRatio="none" style="display:block">'
           + '<rect x="0" y="0" width="'+totSVG_W+'" height="'+totSVG_H+'" fill="#e8e8e8" rx="3"/>'
@@ -5357,16 +5384,24 @@ function _rptBalance(autoPrint) {
 //   REPORTE: TRANSFERENCIAS
 // ══════════════════════════════════════════════════
 function _rptTransferencias(autoPrint) {
-  const rows   = transFiltered();
-  const empFil = _transFiltros.empresa ? [..._transFiltros.empresa][0] : null;
-  const añoFil = _transFiltros.año     ? [..._transFiltros.año].sort().join(', ') : 'todos';
+  var rows;
+  try { rows = transFiltered(); } catch(e) { rows = DATA.transferencias || []; }
+  const empFil  = _transFiltros.empresa ? [..._transFiltros.empresa][0] : null;
+  const añoFil  = _transFiltros.año     ? [..._transFiltros.año].sort().join(', ') : 'todos';
+  const subtitle = empFil
+    ? empFil + ' · año ' + añoFil + ' · todas las categorías'
+    : 'Portafolio completo · año ' + añoFil + ' · todas las categorías';
   const MESES  = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const CATS   = [...new Set(rows.map(r=>r.categoria).filter(Boolean))].sort();
   const total  = rows.reduce((s,r)=>s+(r.importe||0),0);
-  const fM     = v => v>=1e9?'$'+(v/1e9).toFixed(1)+'B':v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+Math.round(v).toLocaleString('es-AR');
-  const subtitle = empFil
-    ? `${empFil} · año ${añoFil} · ${CATS.length} categorías`
-    : `Portafolio completo · año ${añoFil} · todas las categorías`;
+  const fM     = function(v){
+    if(v==null) return '—';
+    var abs=Math.abs(v), sign=v<0?'-':'';
+    // Formatear con separador de miles usando es-AR
+    if(abs>=1e9) return sign+'$'+Math.round(abs/1e6).toLocaleString('es-AR')+'M';
+    if(abs>=1e6) return sign+'$'+(abs/1e6).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+    return sign+'$'+Math.round(abs).toLocaleString('es-AR');
+  };
 
   // Agrupar por beneficiario
   const byBen = {};
@@ -5393,17 +5428,28 @@ function _rptTransferencias(autoPrint) {
   const maxMes = Math.max(...totMes)||1;
 
   // SVG de barras verticales para mensual — 100% estable en impresión
-  var mensH = 70; var mensW_col = 40;
+  var mensH = 80; var mensW_col = 44;
   var mensTotal_W = mensW_col * 12;
-  var barMensualSVG = '<svg width="100%" height="'+(mensH+18)+'" viewBox="0 0 '+(mensTotal_W)+' '+(mensH+18)+'" style="display:block">';
+  // Altura extra para texto de monto arriba + mes abajo
+  var svgTotalH = mensH + 32;
+  var barMensualSVG = '<svg width="100%" height="'+svgTotalH+'" viewBox="0 0 '+mensTotal_W+' '+svgTotalH+'" style="display:block">';
   MESES.forEach(function(m,i) {
     var v    = totMes[i]||0;
     var h    = maxMes > 0 ? Math.max(Math.round(v/maxMes*mensH), 2) : 2;
     var isMax= v === maxMes;
     var bg   = isMax ? '#0f6e56' : '#185fa5';
     var x    = i * mensW_col;
-    barMensualSVG += '<rect x="'+(x+4)+'" y="'+(mensH-h)+'" width="'+(mensW_col-8)+'" height="'+h+'" fill="'+bg+'" rx="2"/>';
-    barMensualSVG += '<text x="'+(x+mensW_col/2)+'" y="'+(mensH+14)+'" text-anchor="middle" font-size="9" font-family="monospace" fill="#666">'+m+'</text>';
+    var yTop = mensH - h;
+    // Barra
+    barMensualSVG += '<rect x="'+(x+4)+'" y="'+yTop+'" width="'+(mensW_col-8)+'" height="'+h+'" fill="'+bg+'" rx="2"/>';
+    // Monto sobre la barra (solo si tiene valor)
+    if (v > 0) {
+      var label = v>=1e6 ? '$'+(v/1e6).toFixed(0)+'M' : '$'+Math.round(v);
+      var yLbl  = Math.max(yTop - 3, 10);
+      barMensualSVG += '<text x="'+(x+mensW_col/2)+'" y="'+yLbl+'" text-anchor="middle" font-size="8" font-family="monospace" fill="'+bg+'" font-weight="600">'+label+'</text>';
+    }
+    // Mes debajo
+    barMensualSVG += '<text x="'+(x+mensW_col/2)+'" y="'+(mensH+16)+'" text-anchor="middle" font-size="11" font-family="monospace" fill="#555">'+m+'</text>';
   });
   barMensualSVG += '</svg>';
   var barMensual = barMensualSVG;
@@ -5429,18 +5475,17 @@ function _rptTransferencias(autoPrint) {
     ).join('') + `<tr class="trf"><td>TOTAL</td>${totMes.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td>${fM(total)}</td></tr>`;
   } else {
     // Modo consolidado: trimestres
-    tablaHeader = `<tr><th style="width:28%">Beneficiaria</th><th>T1</th><th>T2</th><th>T3</th><th>T4</th><th>Total</th><th>% total</th><th>Categoría</th></tr>`;
+    const MESES_HDR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    tablaHeader = `<tr><th style="width:20%">Beneficiaria</th>${MESES_HDR.map(m=>`<th>${m}</th>`).join('')}<th>Total</th><th>%</th></tr>`;
     tablaBody = sortedBen.slice(0,15).map(([ben,d])=>{
-      const q=[0,1,2,3].map(q=>d.m.slice(q*3,(q+1)*3).reduce((s,v)=>s+v,0));
-      return `<tr><td>${ben}</td>${q.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td style="font-weight:600">${fM(d.t)}</td><td>${(d.t/total*100).toFixed(1)}%</td><td style="font-size:7pt;color:#666">${d.cat}</td></tr>`;
-    }).join('') + (() => {
-      const q=[0,1,2,3].map(q=>totMes.slice(q*3,(q+1)*3).reduce((s,v)=>s+v,0));
-      return `<tr class="trf"><td>TOTAL</td>${q.map(v=>`<td>${fM(v)}</td>`).join('')}<td>${fM(total)}</td><td>100%</td><td></td></tr>`;
-    })();
+      return `<tr><td>${ben}</td>${d.m.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td style="font-weight:600">${fM(d.t)}</td><td>${(d.t/total*100).toFixed(1)}%</td></tr>`;
+    }).join('') + `<tr class="trf"><td>TOTAL</td>${totMes.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td>${fM(total)}</td><td>100%</td></tr>`;
   }
 
   const nEmps = Object.keys(byBen).length;
   const mayorBen = sortedBen[0];
+
+  if (!rows || !rows.length) return '<html><body style="font-family:Arial;padding:40px"><h2>Sin datos de transferencias</h2><p>No hay transferencias cargadas o el filtro no devuelve resultados.</p></body></html>';
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transferencias</title>${_rptCSS()}</head><body><div class="pg">
     ${_rptHeader('Transferencias', subtitle)}
