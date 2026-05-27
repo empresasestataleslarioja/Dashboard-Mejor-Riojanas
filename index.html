@@ -2056,7 +2056,8 @@ self.onmessage = async (e) => {
                 style="padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
                 color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
                 outline:none;width:200px"
-                oninput="_persManualAutocargar(this.value)">
+                oninput="_persManualAutocargar(this.value)"
+                onchange="_persManualAutocargar(this.value)">
               <datalist id="pers-manual-emp-list"></datalist>
             </div>
           </div>
@@ -3869,8 +3870,9 @@ function doLogin() {
     return;
   }
 
-  // Verificar credenciales
-  const passEsperada = LOGIN_USERS[user];
+  // Verificar credenciales — combina usuarios hardcodeados + creados dinámicamente
+  const allUsers = loadUsuarios();  // LOGIN_USERS + lr_users_v1 de localStorage
+  const passEsperada = allUsers[user];
   if (!passEsperada || passEsperada !== pass) {
     if (msg) { msg.textContent = 'Usuario o contraseña incorrectos'; msg.style.color = 'var(--neg)'; }
     // Limpiar contraseña
@@ -4946,38 +4948,87 @@ function imprimirPanelActivo() {
     ].join(';');
     // Botones en JS puro — sin comillas anidadas en innerHTML
     bar.innerHTML = '<span style="color:#aaa;font-size:9pt;font-family:monospace">Vista previa del reporte</span>'
-      + '<div style="display:flex;gap:8px" id="_rpt_bar_btns"></div>';
+      + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap" id="_rpt_bar_right">'
+      + '<span style="color:#555;font-size:8pt;font-family:monospace">Secciones:</span>'
+      + '<div id="_rpt_chk_wrap" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'
+      + '<div style="display:flex;gap:8px" id="_rpt_bar_btns"></div>'
+      + '</div>';
 
     var btnImprimir = document.createElement('button');
     btnImprimir.textContent = '🖨 Imprimir';
     btnImprimir.style.cssText = 'padding:5px 14px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer';
     btnImprimir.onclick = function() {
-      // El reportHTML ya tiene el script de autoprint embebido
-      // Solo necesitamos regenerar el reporte con autoprint=true
-      var panelActivo2 = document.querySelector('.panel.on')
-        || [...document.querySelectorAll('.panel')].find(function(p){return p.offsetParent!==null;});
-      if (!panelActivo2) return;
-      var pid2 = panelActivo2.id.replace('panel-','');
-      var html2 = '';
-      // Reemplazar </head> por el script de autoprint antes del </head>
-      var autoprintScript = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
-      if      (pid2==='personal')       html2 = _rptPersonal().replace('</head>', autoprintScript+'</head>');
-      else if (pid2==='balances')       html2 = _rptBalance().replace('</head>', autoprintScript+'</head>');
-      else if (pid2==='transferencias') {
+      var ifrDoc = document.getElementById('_rpt_iframe') && document.getElementById('_rpt_iframe').contentDocument;
+
+      // Obtener secciones seleccionadas
+      var chks = document.querySelectorAll('.rpt-sec-chk');
+      var todasMarcadas = true;
+      var secIds = [];
+      chks.forEach(function(c) {
+        if (c.checked) secIds.push(c.dataset.secAnchor);
+        else todasMarcadas = false;
+      });
+
+      // Si todas seleccionadas o no hay checkboxes → imprimir todo
+      if (todasMarcadas || secIds.length === 0) {
+        var blobUrl2 = document.getElementById('_rpt_overlay').dataset.blobUrl;
+        if (!blobUrl2) return;
+        var autoprintScript = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
+        // Regenerar con autoprint
+        var panelActivo3 = document.querySelector('.panel.on')
+          || [...document.querySelectorAll('.panel')].find(function(p){return p.offsetParent!==null;});
+        if (!panelActivo3) return;
+        var pid3 = panelActivo3.id.replace('panel-','');
+        var html3 = '';
         try {
-          html2 = _rptTransferencias().replace('</head>', autoprintScript+'</head>');
-        } catch(err2) {
-          html2 = '<!DOCTYPE html><html><body style="font-family:Arial;padding:40px">'
-            + '<h2 style="color:#c0392b">Error generando reporte</h2>'
-            + '<pre style="font-size:11pt">' + String(err2) + '</pre></body></html>';
-        }
+          if      (pid3==='personal')       html3 = _rptPersonal();
+          else if (pid3==='balances')       html3 = _rptBalance();
+          else if (pid3==='transferencias') html3 = _rptTransferencias();
+          if (html3) html3 = html3.replace('</head>', autoprintScript+'</head>');
+        } catch(e3) { html3 = '<html><body><pre>'+String(e3)+'</pre></body></html>'; }
+        if (!html3) return;
+        var b3=new Blob([html3],{type:'text/html;charset=utf-8'});
+        var u3=URL.createObjectURL(b3);
+        var pw3=window.open(u3,'_blank');
+        if (!pw3) alert('Habilitá pop-ups.');
+        setTimeout(function(){URL.revokeObjectURL(u3);},15000);
+        return;
       }
-      if (!html2) return;
-      var b2  = new Blob([html2], {type:'text/html;charset=utf-8'});
-      var u2  = URL.createObjectURL(b2);
-      var pw  = window.open(u2, '_blank');
-      if (!pw) alert('Habilitá pop-ups para imprimir.');
-      setTimeout(function(){ URL.revokeObjectURL(u2); }, 15000);
+
+      // Imprimir solo secciones seleccionadas — regenerar HTML filtrado
+      var blobUrl4 = document.getElementById('_rpt_overlay').dataset.blobUrl;
+      if (!blobUrl4) return;
+      // Leer el HTML actual del Blob (ya tiene IDs inyectados)
+      fetch(blobUrl4).then(function(res){ return res.text(); }).then(function(html4){
+        try {
+          var parser4 = new DOMParser();
+          var doc4 = parser4.parseFromString(html4, 'text/html');
+          // Ocultar secciones no seleccionadas
+          // Ocultar secciones no seleccionadas
+          // Para sec_ IDs en .st: ocultar el div padre (la sección completa)
+          // Para sec_ IDs en divs: ocultar directamente
+          doc4.querySelectorAll('[id^="sec_"],[id^="rpt_sec_"]').forEach(function(el) {
+            if (!secIds.includes(el.id)) return;
+            // Marcar para mantener visible
+            el.dataset._keep = '1';
+          });
+          doc4.querySelectorAll('[id^="sec_"],[id^="rpt_sec_"]').forEach(function(el) {
+            if (!el.dataset._keep) {
+              // Ocultar: si es .st, ocultar su sección padre completa
+              var toHide = el.classList.contains('st') ? (el.parentElement || el) : el;
+              toHide.style.display = 'none';
+            }
+          });
+          var ap = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
+          var fhtml = '<!DOCTYPE html>' + doc4.documentElement.outerHTML;
+          fhtml = fhtml.replace('</head>', ap + '</head>');
+          var b4 = new Blob([fhtml], {type:'text/html;charset=utf-8'});
+          var u4 = URL.createObjectURL(b4);
+          var pw4 = window.open(u4, '_blank');
+          if (!pw4) alert('Habilitá pop-ups.');
+          setTimeout(function(){ URL.revokeObjectURL(u4); }, 15000);
+        } catch(ef){ console.error(ef); }
+      });
     };
 
     var btnCerrar = document.createElement('button');
@@ -4999,13 +5050,94 @@ function imprimirPanelActivo() {
     document.body.appendChild(overlay);
   }
 
+  // Extraer secciones via DOMParser e inyectar IDs antes de crear el Blob
+  var rptSecs = [];
+  try {
+    var parser2 = new DOMParser();
+    var rptDoc2 = parser2.parseFromString(reportHTML, 'text/html');
+    // Primero: secciones con ID explícito (sec_XXX)
+    rptDoc2.querySelectorAll('[id^="sec_"]').forEach(function(el) {
+      var txt = el.textContent.trim().replace(/[\n\r]+/g,' ').slice(0,30);
+      if (txt.length < 2) return;
+      rptSecs.push({ anchor: el.id, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
+    });
+    // Luego: .st sin ID previo
+    if (!rptSecs.length) {
+      var stEls2 = rptDoc2.querySelectorAll('.st');
+      stEls2.forEach(function(el, i) {
+        var txt = el.textContent.trim();
+        if (txt.length < 2) return;
+        el.id = 'rpt_sec_' + i;
+        rptSecs.push({ anchor: 'rpt_sec_' + i, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
+      });
+    }
+    // Rebuild HTML con IDs inyectados
+    var rebuilt = '<!DOCTYPE html>' + rptDoc2.documentElement.outerHTML;
+    if (rptSecs.length) reportHTML = rebuilt;
+  } catch(ep) {}
+
   // Cargar el reporte en el iframe via Blob
   var blob    = new Blob([reportHTML], {type:'text/html;charset=utf-8'});
   var blobUrl = URL.createObjectURL(blob);
   overlay.dataset.blobUrl = blobUrl;
 
   var iframe = document.getElementById('_rpt_iframe');
+  iframe._rptSecciones = rptSecs;
   iframe.src = blobUrl;
+
+  // Cuando carga, poblar selector de secciones
+  iframe._rptSecciones = rptSecs;
+
+  iframe.onload = function() {
+    var wrap = document.getElementById('_rpt_chk_wrap');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var secs = iframe._rptSecciones || [];
+    if (!secs.length) {
+      wrap.innerHTML = '<span style="font-size:8pt;color:#555;font-family:monospace">—</span>';
+      return;
+    }
+
+    // Checkbox "Todas"
+    var lblAll = document.createElement('label');
+    lblAll.style.cssText = 'font-size:8pt;color:#ccc;font-family:monospace;cursor:pointer;display:flex;align-items:center;gap:4px;padding:2px 8px;background:#222;border-radius:3px;border:1px solid #444';
+    var chkAll = document.createElement('input');
+    chkAll.type='checkbox'; chkAll.checked=true; chkAll.id='_rpt_chk_all'; chkAll.style.cursor='pointer';
+    chkAll.onchange = function(){
+      wrap.querySelectorAll('.rpt-sec-chk').forEach(function(c){ c.checked = chkAll.checked; });
+    };
+    lblAll.appendChild(chkAll);
+    lblAll.appendChild(document.createTextNode('Todas'));
+    wrap.appendChild(lblAll);
+
+    secs.forEach(function(sec) {
+      var lbl = document.createElement('label');
+      lbl.style.cssText = 'font-size:8pt;color:#aaa;font-family:monospace;cursor:pointer;display:flex;align-items:center;gap:4px;padding:2px 8px;background:#1a1f2e;border-radius:3px;border:1px solid #333';
+      var chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.checked = true;
+      chk.className = 'rpt-sec-chk';
+      chk.dataset.secAnchor = sec.anchor;
+      chk.style.cursor = 'pointer';
+      chk.onchange = function() {
+        var allChk = wrap.querySelectorAll('.rpt-sec-chk');
+        var allOn  = Array.from(allChk).every(function(c){ return c.checked; });
+        var chkAllEl = document.getElementById('_rpt_chk_all');
+        if (chkAllEl) chkAllEl.checked = allOn;
+      };
+      lbl.appendChild(chk);
+      lbl.appendChild(document.createTextNode(sec.lbl));
+      // Click navega a sección
+      lbl.onclick = function(ev) {
+        if (ev.target === chk) return;
+        try {
+          var ifrDoc = document.getElementById('_rpt_iframe').contentDocument;
+          var el = ifrDoc.getElementById(sec.anchor);
+          if (el) el.scrollIntoView({behavior:'smooth'});
+        } catch(e2) {}
+      };
+      wrap.appendChild(lbl);
+    });
+  };
 
   // Mostrar overlay
   overlay.style.display = 'flex';
@@ -5115,31 +5247,36 @@ function _rptBarH(items, colorFn) {
 }
 
 function _rptPersonal(autoPrint) {
-  const pYrs   = ys().map(String).filter(y => DATA.pers_totals[y] > 0 || DATA.personal.some(d=>_persGetTotal(d,y)>0));
+  const pYrs    = ys().map(String).filter(y => DATA.pers_totals[y] > 0 ||
+                    DATA.personal.some(d => _persGetTotal(d,y) > 0));
   const selBase = document.getElementById('sel-pers-base');
   const baseYear= selBase?.value || pYrs[0] || '2020';
-  const lastY   = pYrs[pYrs.length-1];
+  const lastY   = pYrs[pYrs.length-1] || '';
   const selEmp  = document.getElementById('sel-pers-emp')?.value || '';
 
   if (selEmp) {
-    // Modo empresa individual
-    const pd = DATA.personal.find(d=>d.e===selEmp);
-    if (!pd) return '<p>Sin datos</p>';
-    const vals   = pYrs.map(y=>_persGetTotal(pd,y));
-    const vBase  = _persGetTotal(pd, baseYear);
-    const vLast  = _persGetTotal(pd, lastY);
-    const varTotal = vBase ? pctStr(vLast, vBase) : '—';
-    const maxV   = Math.max(...vals);
-    const minV   = Math.min(...vals.filter(v=>v>0));
+    // ── MODO EMPRESA INDIVIDUAL ──────────────────────────────────
+    const pd = DATA.personal.find(d => d.e === selEmp);
+    if (!pd) return '<html><body>Sin datos para '+selEmp+'</body></html>';
 
-    var barrasMaxV = Math.max.apply(null, vals.filter(function(v){return v>0;})) || 1;
-    var barrasMinV = Math.min.apply(null, vals.filter(function(v){return v>0;})) || 0;
+    // Solo años con datos de esta empresa
+    const pYrsEmp     = pYrs.filter(y => _persGetTotal(pd,y) > 0);
+    const vals        = pYrsEmp.map(y => _persGetTotal(pd,y));
+    const lastYEmp    = pYrsEmp.length ? pYrsEmp[pYrsEmp.length-1] : lastY;
+    const baseYearEmp = pYrsEmp[0] || baseYear;
+    const vBase       = _persGetTotal(pd, baseYearEmp);
+    const vLast       = _persGetTotal(pd, lastYEmp);
+    const varTotal    = vBase && vLast ? pctStr(vLast, vBase) : '—';
+    const maxV        = vals.length ? Math.max(...vals) : 1;
+    const minV        = vals.length ? Math.min(...vals.filter(v=>v>0)) : 0;
+
+    // Barras SVG
     var barrasSVG_W = 400; var barrasSVG_H = 20;
     var barras = '<table style="width:100%;border-collapse:collapse;font-size:11pt">'
-      + pYrs.map(function(y,i) {
+      + pYrsEmp.map(function(y,i) {
         var v   = vals[i] || 0;
-        var pct = Math.max((v - barrasMinV + 20) / (barrasMaxV - barrasMinV + 40), 0.02);
-        var isL = y === lastY;
+        var pct = Math.max((v - minV + 20) / (maxV - minV + 40), 0.02);
+        var isL = y === lastYEmp;
         var bg  = isL ? '#0f6e56' : '#185fa5';
         var bw  = Math.round(pct * barrasSVG_W);
         var fw  = isL ? 700 : 400;
@@ -5152,20 +5289,21 @@ function _rptPersonal(autoPrint) {
           + '<rect x="0" y="0" width="'+bw+'" height="'+barrasSVG_H+'" fill="'+bg+'" rx="3"/>'
           + '</svg>'
           + '</td>'
-          + '<td style="width:50px;font-family:monospace;font-weight:'+fw+';color:'+fc+';text-align:right;padding:3px 0 3px 8px;border:none">'+(v||'—')+'</td>'
+          + '<td style="width:48px;font-family:monospace;font-weight:'+fw+';color:'+fc+';text-align:right;padding:4px 0 4px 10px;border:none">'+(v||'—')+'</td>'
           + '</tr>';
       }).join('') + '</table>';
 
-    let tablaRows = pYrs.map((y,i) => {
+    // Tabla detalle
+    let tablaRows = pYrsEmp.map((y,i) => {
       const v    = vals[i];
       const prev = i>0 ? vals[i-1] : null;
       const vInt = prev ? ((v-prev)/prev*100).toFixed(1) : null;
-      const vBase2 = vBase && y!==baseYear ? ((v-vBase)/vBase*100).toFixed(1) : null;
+      const vBase2 = vBase && y!==baseYearEmp ? ((v-vBase)/vBase*100).toFixed(1) : null;
       const ic = vInt===null?'':(parseFloat(vInt)>=0?'up':'dn');
       const bc = vBase2===null?'':(parseFloat(vBase2)>=0?'up':'dn');
-      const isL = y===lastY;
+      const isL = y===lastYEmp;
       return `<tr${isL?' style="background:#f9f9f9"':''}>
-        <td style="font-size:13pt">${y}${y===baseYear?' <span style="font-size:8pt;color:#185fa5;font-weight:400">(base)</span>':''}</td>
+        <td style="font-size:13pt">${y}${y===baseYearEmp?' <span style="font-size:8pt;color:#185fa5;font-weight:400">(base)</span>':''}</td>
         <td style="font-size:${isL?'18pt':'13pt'};font-weight:${isL?700:500};color:${isL?'#0f6e56':'#111'}">${v||'—'}</td>
         <td class="${ic}">${vInt===null?'—':(parseFloat(vInt)>=0?'+':'')+vInt+'%'}</td>
         <td class="${bc}">${vBase2===null?'—':(parseFloat(vBase2)>=0?'+':'')+vBase2+'%'}</td>
@@ -5173,24 +5311,22 @@ function _rptPersonal(autoPrint) {
     }).join('');
 
     var _h = [];
-    _h.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Personal</title>');
-    _h.push(_rptCSS());
-    _h.push('</head><body><div class="pg">');
-    _h.push(_rptHeader('Evolución de Personal', selEmp+' · '+pYrs[0]+'–'+lastY+' · base '+baseYear));
-    _h.push('<div class="kg3">');
-    _h.push(_rptKpi('Nómina '+lastY, vLast||'—', vBase?'▲ +'+varTotal+' vs '+baseYear:'—', '#0f6e56', vBase&&vLast>=vBase?'up':'dn'));
-    _h.push(_rptKpi('Nómina '+baseYear+' (base)', vBase||'—', 'Año base de comparación', '#185fa5', ''));
-    _h.push(_rptKpi('Crecimiento '+baseYear+'→'+lastY, vBase&&vLast?(((vLast-vBase)/vBase)*100).toFixed(1)+'%':'—', 'de '+vBase+' a '+vLast+' empleados', '#534ab7', vLast>=vBase?'up':'dn'));
+    _h.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Personal</title>'+_rptCSS()+'</head><body><div class="pg">');
+    _h.push(_rptHeader('Evolución de Personal', selEmp+' · '+baseYearEmp+'–'+lastYEmp+' · base '+baseYearEmp));
+    _h.push('<div class="kg3" id="sec_kpis">');
+    _h.push(_rptKpi('Nómina '+lastYEmp, vLast||'—', vBase?'▲ +'+varTotal+' vs '+baseYearEmp:'—', '#0f6e56', vBase&&vLast>=vBase?'up':'dn'));
+    _h.push(_rptKpi('Nómina '+baseYearEmp+' (base)', vBase||'—', 'Año base de comparación', '#185fa5', ''));
+    _h.push(_rptKpi('Crecimiento '+baseYearEmp+'→'+lastYEmp, vBase&&vLast?(((vLast-vBase)/vBase)*100).toFixed(1)+'%':'—', 'de '+vBase+' a '+vLast+' empleados', '#534ab7', vLast>=vBase?'up':'dn'));
     _h.push('</div>');
-    _h.push('<div class="st">Evolución de plantilla '+pYrs[0]+'–'+lastY+'</div>');
+    _h.push('<div class="st" id="sec_evol">Evolución de plantilla '+baseYearEmp+'–'+lastYEmp+'</div>');
     _h.push('<div class="cc" style="margin-bottom:12px">'+barras+'</div>');
-    _h.push('<div class="st">Detalle por año</div>');
+    _h.push('<div class="st" id="sec_tabla">Detalle por año</div>');
     _h.push('<div class="tw"><table style="font-size:13pt">');
     _h.push('<thead><tr>'
       + '<th style="font-size:9pt">Año</th>'
       + '<th style="font-size:9pt">Empleados</th>'
       + '<th style="font-size:9pt">Var. interanual</th>'
-      + '<th style="font-size:9pt">Var. vs base '+baseYear+'</th>'
+      + '<th style="font-size:9pt">Var. vs base '+baseYearEmp+'</th>'
       + '</tr></thead>');
     _h.push('<tbody>'+tablaRows+'</tbody></table></div>');
     _h.push(_rptFooter());
@@ -5198,19 +5334,21 @@ function _rptPersonal(autoPrint) {
     return _h.join('');
 
   } else {
-    // Modo consolidado
+    // ── MODO CONSOLIDADO ─────────────────────────────────────────
     const totals    = pYrs.reduce((acc,y)=>({...acc,[y]:DATA.personal.reduce((s,d)=>s+_persGetTotal(d,y),0)}),{});
     const totBase   = totals[baseYear]||0;
     const totLast   = totals[lastY]||0;
     const bySize    = [...DATA.personal].sort((a,b)=>_persGetTotal(b,lastY)-_persGetTotal(a,lastY));
     const mayorEmp  = bySize[0];
-    const byGrowth  = DATA.personal.filter(d=>_persGetTotal(d,baseYear)>3)
+    const byGrowth  = DATA.personal
+      .filter(d=>_persGetTotal(d,baseYear)>3)
       .map(d=>({e:d.e,g:pctNum(_persGetTotal(d,lastY),_persGetTotal(d,baseYear))}))
       .sort((a,b)=>b.g-a.g);
     const mayorCr   = byGrowth[0];
     const maxTot    = Math.max(...pYrs.map(y=>totals[y]));
     const minTot    = Math.min(...pYrs.map(y=>totals[y]).filter(v=>v>0));
 
+    // Barras SVG totales
     var totSVG_W = 400; var totSVG_H = 18;
     var barrasTot = '<table style="width:100%;border-collapse:collapse;font-size:11pt">'
       + pYrs.map(function(y,i) {
@@ -5220,7 +5358,7 @@ function _rptPersonal(autoPrint) {
         var bg  = isL ? '#0f6e56' : '#185fa5';
         var bw  = Math.round(pct * totSVG_W);
         return '<tr style="border:none">'
-          + '<td style="width:44px;font-family:monospace;color:#555;text-align:right;padding:4px 10px 4px 0;border:none">'+y+'</td>'
+          + '<td style="width:40px;font-family:monospace;color:#555;text-align:right;padding:3px 8px 3px 0;border:none">'+y+'</td>'
           + '<td style="padding:2px 0;border:none">'
           + '<svg width="100%" height="'+totSVG_H+'" viewBox="0 0 '+totSVG_W+' '+totSVG_H+'" preserveAspectRatio="none" style="display:block">'
           + '<rect x="0" y="0" width="'+totSVG_W+'" height="'+totSVG_H+'" fill="#e8e8e8" rx="3"/>'
@@ -5234,61 +5372,66 @@ function _rptPersonal(autoPrint) {
     const topGrow = byGrowth.slice(0,6).map(function(d){return {l:d.e,v:Math.max(0,d.g),fmt:'+'+d.g.toFixed(1)+'%'};});
     const topSize = bySize.slice(0,6).map(function(d){return {l:d.e,v:_persGetTotal(d,lastY)||0,fmt:String(_persGetTotal(d,lastY))};});
 
+    // Tabla consolidada — VAR usa año base PROPIO de cada empresa
     const sorted = [...DATA.personal].sort((a,b)=>_persGetTotal(b,lastY)-_persGetTotal(a,lastY));
     const tablaRows = sorted.map(d=>{
-      const vL=_persGetTotal(d,lastY), v0=_persGetTotal(d,baseYear), vP=_persGetTotal(d,pYrs[pYrs.length-2]);
-      const vi=vP?((vL-vP)/vP*100).toFixed(1):null;
-      const vb=v0?((vL-v0)/v0*100).toFixed(1):null;
-      const ic=vi===null?'':(parseFloat(vi)>=0?'up':'dn');
-      const bc=vb===null?'':(parseFloat(vb)>=0?'up':'dn');
+      // Año base propio: primer año con datos de la empresa
+      const empPYrs  = pYrs.filter(y => _persGetTotal(d,y) > 0);
+      const empBase  = empPYrs[0];           // primer año con dato
+      const empLast  = empPYrs.length ? empPYrs[empPYrs.length-1] : lastY;
+      const vL       = _persGetTotal(d, empLast);
+      const v0       = empBase ? _persGetTotal(d, empBase) : 0;
+      const vP       = _persGetTotal(d, pYrs[pYrs.length-2]);
+      const vi       = vP && vL ? ((vL-vP)/vP*100).toFixed(1) : null;
+      // Variación vs base PROPIA de la empresa
+      const vb       = v0 && vL && empBase !== empLast ? ((vL-v0)/v0*100).toFixed(1) : null;
+      const ic       = vi===null?'':(parseFloat(vi)>=0?'up':'dn');
+      const bc       = vb===null?'':(parseFloat(vb)>=0?'up':'dn');
+      // Columna de año base — mostrar qué año usa como base
+      const baseCol  = empBase ? `<span style="font-size:7pt;color:#555">${empBase}</span>` : '—';
       return `<tr><td>${d.e}</td>
-        <td>${_persGetTotal(d,baseYear)||'—'}</td>
-        ${pYrs.slice(1,-1).map(y=>`<td>${_persGetTotal(d,y)||'—'}</td>`).join('')}
-        <td style="font-weight:600">${vL||'—'}</td>
+        ${pYrs.map(y=>`<td>${_persGetTotal(d,y)||'—'}</td>`).join('')}
+        <td>${baseCol}</td>
         <td class="${ic}">${vi===null?'—':(parseFloat(vi)>=0?'+':'')+vi+'%'}</td>
         <td class="${bc}">${vb===null?'—':(parseFloat(vb)>=0?'+':'')+vb+'%'}</td>
       </tr>`;
     }).join('');
+
     const totRow = `<tr class="trf"><td>TOTAL PORTAFOLIO</td>
-      <td>${(totals[baseYear]||0).toLocaleString('es-AR')}</td>
-      ${pYrs.slice(1,-1).map(y=>`<td>${(totals[y]||0).toLocaleString('es-AR')}</td>`).join('')}
-      <td>${totLast.toLocaleString('es-AR')}</td>
+      ${pYrs.map(y=>`<td>${(totals[y]||0).toLocaleString('es-AR')}</td>`).join('')}
+      <td>${baseYear}</td>
       <td class="${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
       <td class="${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
     </tr>`;
 
-    const thYears = `<th>${baseYear}</th>${pYrs.slice(1,-1).map(y=>`<th>${y}</th>`).join('')}<th>${lastY}</th>`;
+    const thYears = pYrs.map(y=>`<th>${y}</th>`).join('');
 
-    var _h = [];
-    _h.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Personal</title>');
-    _h.push(_rptCSS());
-    _h.push('</head><body><div class="pg">');
-    _h.push(_rptHeader('Evolución de Personal','Portafolio completo · '+pYrs[0]+'–'+lastY+' · base '+baseYear));
-    _h.push('<div class="kg">');
-    _h.push(_rptKpi('Nómina total '+lastY, totLast.toLocaleString('es-AR'), '▲ +'+pctStr(totLast,totBase)+' vs '+baseYear, '#0f6e56', 'up'));
-    _h.push(_rptKpi('Nómina total '+baseYear, totBase.toLocaleString('es-AR'), 'Año base de comparación', '#185fa5', ''));
-    _h.push(_rptKpi2('Mayor empleador '+lastY, (mayorEmp&&mayorEmp.e)||'—', (_persGetTotal(mayorEmp,lastY)||0)+' empleados', '#ba7517', ''));
-    _h.push(_rptKpi2('Mayor crecimiento', (mayorCr&&mayorCr.e)||'—', '▲ +'+((mayorCr&&mayorCr.g)||0).toFixed(1)+'% '+baseYear+'→'+lastY, '#534ab7', 'up'));
-    _h.push('</div>');
-    _h.push('<div class="st">Evolución nómina total del portafolio</div>');
-    _h.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
-    _h.push('<div class="r2">');
-    _h.push('<div><div class="st">Top crecimiento '+baseYear+'→'+lastY+'</div><div class="cc">'+_rptBarH(topGrow,'#1d9e75')+'</div></div>');
-    _h.push('<div><div class="st">Top empleadores '+lastY+'</div><div class="cc">'+_rptBarH(topSize,'#185fa5')+'</div></div>');
-    _h.push('</div>');
-    _h.push('<div class="st">Detalle por empresa</div>');
-    _h.push('<div class="tw"><table>');
-    _h.push('<thead><tr><th style="width:24%">Empresa</th>'+thYears+'<th>Var. interanual</th><th>Var. vs '+baseYear+'</th></tr></thead>');
-    _h.push('<tbody>'+tablaRows+totRow+'</tbody></table></div>');
-    _h.push(_rptFooter());
-    _h.push('</div></body></html>');
-    return _h.join('');
+    var _h2 = [];
+    _h2.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Personal</title>'+_rptCSS()+'</head><body><div class="pg">');
+    _h2.push(_rptHeader('Evolución de Personal', 'Portafolio completo · '+pYrs[0]+'–'+lastY+' · base '+baseYear));
+    _h2.push('<div class="kg" id="sec_kpis">');
+    _h2.push(_rptKpi('Nómina total '+lastY, totLast.toLocaleString('es-AR'), '▲ +'+pctStr(totLast,totBase)+' vs '+baseYear, '#0f6e56', 'up'));
+    _h2.push(_rptKpi('Nómina total '+baseYear, totBase.toLocaleString('es-AR'), 'Año base de comparación', '#185fa5', ''));
+    _h2.push(_rptKpi2('Mayor empleador '+lastY, mayorEmp?.e||'—', (_persGetTotal(mayorEmp,lastY)||0)+' empleados', '#ba7517', ''));
+    _h2.push(_rptKpi2('Mayor crecimiento', mayorCr?.e||'—', '▲ +'+((mayorCr?.g)||0).toFixed(1)+'% '+baseYear+'→'+lastY, '#534ab7', 'up'));
+    _h2.push('</div>');
+    _h2.push('<div class="st" id="sec_evol">Evolución nómina total del portafolio</div>');
+    _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
+    _h2.push('<div class="r2" id="sec_top">');
+    _h2.push('<div><div class="st">Top crecimiento '+baseYear+'→'+lastY+'</div><div class="cc">'+_rptBarH(topGrow,'#1d9e75')+'</div></div>');
+    _h2.push('<div><div class="st">Top empleadores '+lastY+'</div><div class="cc">'+_rptBarH(topSize,'#185fa5')+'</div></div>');
+    _h2.push('</div>');
+    _h2.push('<div class="st" id="sec_tabla">Detalle por empresa</div>');
+    _h2.push('<div class="tw"><table>');
+    _h2.push('<thead><tr><th style="width:22%">Empresa</th>'+thYears+'<th>Base</th><th>Var. interanual</th><th>Var. vs base propia</th></tr></thead>');
+    _h2.push('<tbody>'+tablaRows+totRow+'</tbody></table></div>');
+    _h2.push(_rptFooter());
+    _h2.push('</div></body></html>');
+    return _h2.join('');
   }
 }
 
-// ══════════════════════════════════════════════════
-//   REPORTE: BALANCES
-// ══════════════════════════════════════════════════
+
 function _rptBalance(autoPrint) {
   const key = _balActivo || document.getElementById('bal-sel')?.value;
   if (!key || !_balances[key]) return '<p>Seleccioná un balance primero</p>';
@@ -5297,8 +5440,16 @@ function _rptBalance(autoPrint) {
   const ren = ind.rentabilidad || {};
   const liq = ind.liquidez    || {};
   const sol = ind.solvencia   || {};
+  const efi = ind.eficiencia  || {};
 
-  const fM = v => v==null?'—': (Math.abs(v)>=1e9 ? '$'+(v/1e9).toFixed(1)+'B' : Math.abs(v)>=1e6 ? '$'+(v/1e6).toFixed(1)+'M' : '$'+Math.round(v).toLocaleString('es-AR'));
+  const fM = function(v) {
+    if (v==null) return '—';
+    var abs=Math.abs(v), sign=v<0?'−':'';
+    if (abs>=1e9) return sign+'$ '+Math.round(abs/1e6).toLocaleString('es-AR')+' M';
+    if (abs>=1e6) return sign+'$ '+(abs/1e6).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+' M';
+    if (abs>=1e3) return sign+'$ '+Math.round(abs).toLocaleString('es-AR');
+    return sign+'$ '+abs.toFixed(0);
+  };
   const fP = v => v==null?'—':v.toFixed(1)+'%';
   const fR = v => v==null?'—':v.toFixed(2);
   const pC = (v,ok) => ok===true?'pu':ok===false?'pd':'pn';
@@ -5368,13 +5519,48 @@ function _rptBalance(autoPrint) {
   } else {
     _b.push('<div></div>');
   }
-  _b.push('<div><div class="st">Estructura financiera</div>');
-  _b.push('<div class="cc" style="margin-bottom:10px">'+_rptBarH(barItemsBal, function(d){return d.l.indexOf('Pasivo')>=0?'#e24b4a88':'#185fa5';})+'</div>');
-  _b.push('<div class="st">Composición</div><div class="cc">');
-  _b.push('<div class="rr"><span class="rl">Activo total</span><span class="rv">'+fM((sol.activo_corriente||0)+(sol.activo_no_corriente||0))+'</span></div>');
-  _b.push('<div class="rr"><span class="rl">Pasivo total</span><span class="rv">'+fM((sol.pasivo_corriente||0)+(sol.pasivo_no_corriente||0))+'</span></div>');
-  _b.push('<div class="rr"><span class="rl">Patrimonio neto</span><span class="rv">'+fM(sol.patrimonio_neto)+'</span></div>');
-  _b.push('</div></div></div>');
+  _b.push('<div><div class="st">Situación patrimonial</div>');
+  _b.push('<div class="tw"><table>');
+  _b.push('<thead><tr><th style="text-align:left;width:60%">Rubro</th><th>Importe</th></tr></thead><tbody>');
+  _b.push('<tr class="sr"><td colspan="2">Activo</td></tr>');
+  _b.push('<tr><td>Activo corriente</td><td>'+fM(sol.activo_corriente)+'</td></tr>');
+  _b.push('<tr><td>Activo no corriente</td><td>'+fM(sol.activo_no_corriente)+'</td></tr>');
+  _b.push('<tr class="trt"><td><b>Activo total</b></td><td><b>'+fM((sol.activo_corriente||0)+(sol.activo_no_corriente||0))+'</b></td></tr>');
+  _b.push('<tr class="sr"><td colspan="2">Pasivo</td></tr>');
+  _b.push('<tr><td>Pasivo corriente</td><td>'+fM(sol.pasivo_corriente)+'</td></tr>');
+  _b.push('<tr><td>Pasivo no corriente</td><td>'+fM(sol.pasivo_no_corriente)+'</td></tr>');
+  _b.push('<tr class="trt"><td><b>Pasivo total</b></td><td><b>'+fM((sol.pasivo_corriente||0)+(sol.pasivo_no_corriente||0))+'</b></td></tr>');
+  _b.push('<tr class="trf"><td><b>Patrimonio neto</b></td><td><b>'+fM(sol.patrimonio_neto)+'</b></td></tr>');
+  _b.push('</tbody></table></div>');
+  _b.push('</div>');        // cerrar segunda col del r2
+  _b.push('</div>');        // cerrar r2
+  // ── Diagnóstico financiero — ancho completo ──────────────────────
+  _b.push('<div style="width:100%;margin-top:14px">');
+  _b.push('<div class="st">Diagnóstico financiero</div>');
+  var diagTxt = generarDiagnosticoFinanciero(liq, sol, ren, efi, b);
+  // Convertir HTML de diagnóstico a versión imprimible (sin variables CSS)
+  // Limpiar estilos del dashboard y reconstruir con estilos de impresión
+  var diagPrint = diagTxt
+    .replace(/style="[^"]*"/g, '')          // quitar todos los estilos inline
+    .replace(/class="[^"]*"/g, '')          // quitar clases
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
+
+  // Agregar estilos de impresión específicos
+  var diagStyle = '<style>'
+    + '.diag-sec{margin-bottom:12px;padding:8px 12px;border-left:3px solid #185fa5;background:#f7f8fa}'
+    + '.diag-sec h4{font-size:8.5pt;font-weight:600;color:#185fa5;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}'
+    + '.diag-sec p{font-size:8pt;line-height:1.7;color:#222;margin-bottom:3px}'
+    + '.diag-sec strong{font-weight:600;color:#111}'
+    + '.diag-glob{padding:8px 12px;border:1px solid #ddd;border-radius:4px;background:#f0f4f8;margin-bottom:14px;font-size:8.5pt;color:#222;line-height:1.7}'
+    + '</style>';
+
+  // Reconstruir estructura diagnóstico con clases de impresión
+  var diagClean = diagPrint
+    .replace(/<div[^>]*margin-bottom:14px[^>]*>/g, '<div class="diag-sec">')
+    .replace(/<div[^>]*border:1px solid[^>]*>/g, '<div class="diag-glob">');
+
+  _b.push(diagStyle + '<div style="width:100%;font-size:8pt;line-height:1.7;color:#222">'+diagClean+'</div>');
+  _b.push('</div>');        // cerrar div diagnóstico
   _b.push(_rptFooter());
   _b.push('</div></body></html>');
   return _b.join('');
@@ -5384,151 +5570,113 @@ function _rptBalance(autoPrint) {
 //   REPORTE: TRANSFERENCIAS
 // ══════════════════════════════════════════════════
 function _rptTransferencias(autoPrint) {
-  var rows;
-  try { rows = transFiltered(); } catch(e) { rows = DATA.transferencias || []; }
-  const empFil  = _transFiltros.empresa ? [..._transFiltros.empresa][0] : null;
-  const añoFil  = _transFiltros.año     ? [..._transFiltros.año].sort().join(', ') : 'todos';
-  const subtitle = empFil
-    ? empFil + ' · año ' + añoFil + ' · todas las categorías'
-    : 'Portafolio completo · año ' + añoFil + ' · todas las categorías';
-  const MESES  = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const CATS   = [...new Set(rows.map(r=>r.categoria).filter(Boolean))].sort();
-  const total  = rows.reduce((s,r)=>s+(r.importe||0),0);
-  const fM     = function(v){
-    if(v==null) return '—';
-    var abs=Math.abs(v), sign=v<0?'-':'';
-    // Formatear con separador de miles usando es-AR
-    if(abs>=1e9) return sign+'$'+Math.round(abs/1e6).toLocaleString('es-AR')+'M';
-    if(abs>=1e6) return sign+'$'+(abs/1e6).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
-    return sign+'$'+Math.round(abs).toLocaleString('es-AR');
-  };
-
-  // Agrupar por beneficiario
-  const byBen = {};
-  rows.forEach(r=>{
-    const k=r.beneficiario||'Sin nombre';
-    if(!byBen[k]) byBen[k]={t:0, m:Array(12).fill(0), cat:r.categoria||'Otros'};
-    byBen[k].t += r.importe||0;
-    const mi = (r.mes||0)-1;
-    if(mi>=0&&mi<12) byBen[k].m[mi]+=(r.importe||0);
-  });
-  const sortedBen = Object.entries(byBen).sort((a,b)=>b[1].t-a[1].t);
-  const maxBen = sortedBen[0]?.[1]?.t||1;
-
-  // Agrupar por categoría
-  const byCat = {};
-  rows.forEach(r=>{ const k=r.categoria||'Otros'; byCat[k]=(byCat[k]||0)+(r.importe||0); });
-  const sortedCat = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
-  const maxCat = sortedCat[0]?.[1]||1;
-  const catCols = ['#185fa5','#0f6e56','#ba7517','#534ab7','#888780','#1d9e75','#e24b4a'];
-
-  // Mensual total
-  const totMes = Array(12).fill(0);
-  rows.forEach(r=>{ const mi=(r.mes||0)-1; if(mi>=0&&mi<12) totMes[mi]+=(r.importe||0); });
-  const maxMes = Math.max(...totMes)||1;
-
-  // SVG de barras verticales para mensual — 100% estable en impresión
-  // SVG mensual — limpio y simple
-  // Estructura: barra + mes encima + monto debajo del mes
-  var colW  = 80;
-  var barH  = 100;  // barras más altas
-  var padT  = 10;   // padding arriba
-  var padB  = 36;   // espacio para mes + monto
-  var svgW  = colW * 12;
-  var svgH  = barH + padT + padB;
-  var baseY = padT + barH;
-
-  var barMensualSVG = '<svg width="100%" height="'+svgH+'" viewBox="0 0 '+svgW+' '+svgH+'" style="display:block">';
-
-  MESES.forEach(function(m, i) {
-    var v    = totMes[i] || 0;
-    var h    = maxMes > 0 ? Math.max(Math.round(v / maxMes * barH), 3) : 3;
-    var isMax = v > 0 && v === maxMes;
-    var bg   = isMax ? '#0f6e56' : '#185fa5';
-    var cx   = i * colW + colW / 2;
-    var bW   = colW * 0.6;
-    var bX   = cx - bW / 2;
-    var bY   = baseY - h;
-
-    // Barra
-    barMensualSVG += '<rect x="'+bX.toFixed(0)+'" y="'+bY+'" width="'+bW.toFixed(0)+'" height="'+h+'" fill="'+bg+'" rx="3"/>';
-
-    // Mes — debajo de la barra
-    barMensualSVG += '<text x="'+cx+'" y="'+(baseY+14)+'" text-anchor="middle" font-size="12" font-family="Arial,sans-serif" fill="#444">'+m+'</text>';
-
-    // Monto — debajo del mes
-    if (v > 0) {
-      var mLabel = v >= 1e6
-        ? '$' + (v/1e6).toFixed(1).replace('.',',') + 'M'
-        : '$' + Math.round(v).toLocaleString('es-AR');
-      barMensualSVG += '<text x="'+cx+'" y="'+(baseY+27)+'" text-anchor="middle" font-size="9" font-family="monospace" fill="#666">'+mLabel+'</text>';
-    }
-  });
-
-  barMensualSVG += '</svg>';
-  var barMensual = barMensualSVG;
-
-  // Tabla detalle
-  const trodos = empFil
-    ? MESES.map((m,i)=>`<td>${fM(sortedBen[0]?.[1]?.m?.[i]||0)}</td>`).join('')
-    : '';
-
-  let tablaHeader, tablaBody;
-  if (empFil && sortedBen.length) {
-    // Modo empresa: detalle mensual
-    tablaHeader = `<tr><th style="width:22%">Categoría</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr>`;
-    const byCatEmp = {};
-    rows.forEach(r=>{
-      const k=r.categoria||'Otros';
-      if(!byCatEmp[k]){byCatEmp[k]={m:Array(12).fill(0),t:0};}
-      byCatEmp[k].t+=(r.importe||0);
-      const mi=(r.mes||0)-1; if(mi>=0&&mi<12) byCatEmp[k].m[mi]+=(r.importe||0);
-    });
-    tablaBody = Object.entries(byCatEmp).sort((a,b)=>b[1].t-a[1].t).map(([cat,d])=>
-      `<tr><td>${cat}</td>${d.m.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td style="font-weight:600">${fM(d.t)}</td></tr>`
-    ).join('') + `<tr class="trf"><td>TOTAL</td>${totMes.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td>${fM(total)}</td></tr>`;
-  } else {
-    // Modo consolidado: trimestres
-    const MESES_HDR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    tablaHeader = `<tr><th style="width:20%">Beneficiaria</th>${MESES_HDR.map(m=>`<th>${m}</th>`).join('')}<th>Total</th><th>%</th></tr>`;
-    tablaBody = sortedBen.slice(0,15).map(([ben,d])=>{
-      return `<tr><td>${ben}</td>${d.m.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td style="font-weight:600">${fM(d.t)}</td><td>${(d.t/total*100).toFixed(1)}%</td></tr>`;
-    }).join('') + `<tr class="trf"><td>TOTAL</td>${totMes.map(v=>`<td>${v>0?fM(v):'—'}</td>`).join('')}<td>${fM(total)}</td><td>100%</td></tr>`;
+  // Capturar canvas como imágenes PNG desde el dashboard
+  function canvasPng(id) {
+    var el = document.getElementById(id);
+    if (!el || !el.getContext) return '';
+    try { return el.toDataURL('image/png'); } catch(e) { return ''; }
   }
 
-  const nEmps = Object.keys(byBen).length;
-  const mayorBen = sortedBen[0];
+  // KPIs del panel
+  var kpiEl  = document.getElementById('kpi-trans');
+  var kpiTxt = kpiEl ? kpiEl.innerText.replace(/\n+/g,' | ') : '';
 
-  if (!rows || !rows.length) return '<html><body style="font-family:Arial;padding:40px"><h2>Sin datos de transferencias</h2><p>No hay transferencias cargadas o el filtro no devuelve resultados.</p></body></html>';
+  // Filtros activos
+  var empFil = _transFiltros.empresa ? [..._transFiltros.empresa][0] : null;
+  var añoFil = _transFiltros.año     ? [..._transFiltros.año].sort().join(', ') : 'todos';
+  var subtitle = empFil
+    ? empFil + ' · año ' + añoFil
+    : 'Portafolio completo · año ' + añoFil;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transferencias</title>${_rptCSS()}</head><body><div class="pg">
-    ${_rptHeader('Transferencias', subtitle)}
-    <div class="kg">
-      ${_rptKpi('Total transferido', fM(total), 'importe total del período', '#185fa5', '')}
-      ${_rptKpi('Beneficiarias', nEmps, 'empresas del portafolio', '#0f6e56', '')}
-      ${_rptKpi2('Mayor beneficiaria', mayorBen?mayorBen[0].split(' ').slice(0,2).join(' '):'—', mayorBen?fM(mayorBen[1].t)+' · '+(mayorBen[1].t/total*100).toFixed(1)+'%':'—', '#ba7517', '')}
-      ${_rptKpi('Cantidad de pagos', rows.length.toLocaleString('es-AR'), 'registros en el período', '#534ab7', '')}
-    </div>
-    <div class="r2">
-      <div><div class="st">Top beneficiarias por monto</div>
-        <div class="cc" style="font-size:9pt">${_rptBarH(sortedBen.slice(0,8).map(function(e2){return {l:e2[0],v:e2[1].t,fmt:fM(e2[1].t)};}),'#185fa5')}</div>
-      </div>
-      <div><div class="st">Distribución por categoría</div>
-        <div class="cc" style="font-size:9pt">${_rptBarH(sortedCat.map(function(e2){return {l:e2[0],v:e2[1],fmt:fM(e2[1])};}), function(d){var i=sortedCat.findIndex(function(c){return c[0]===d.l;});return catCols[i%catCols.length];})}</div>
-      </div>
-    </div>
-    <div class="st">Evolución mensual</div>
-    <div class="cc" style="margin-bottom:20px;padding:12px 14px 14px">
-      ${barMensual}
-    </div>
-    <div class="st" style="margin-top:16px">${empFil?empFil+' · detalle mensual':'Detalle por empresa'}</div>
-    <div class="tw" style="page-break-before:auto"><table>
-      <thead>${tablaHeader}</thead>
-      <tbody>${tablaBody}</tbody>
-    </table></div>
-    ${_rptFooter()}
-  </div></body></html>`;
+  // Imágenes de cada gráfico
+  var imgs = {
+    donut:   canvasPng('ch-trans-donut'),
+    saf:     canvasPng('ch-trans-saf'),
+    ben:     canvasPng('ch-trans-ben'),
+    mensual: canvasPng('ch-trans-mensual'),
+    cat:     canvasPng('ch-trans-cat'),
+    trend:   canvasPng('ch-trans-trend'),
+  };
+
+  // Subtítulos de KPIs
+  var rows = transFiltered ? transFiltered() : [];
+  var total = rows.reduce(function(s,r){return s+(r.importe||0);},0);
+  var nBen  = new Set(rows.map(function(r){return r.beneficiario||'';})).size;
+  var nPagos= rows.length;
+  function fM2(v){
+    if(!v) return '—';
+    var abs=Math.abs(v),sign=v<0?'-':'';
+    if(abs>=1e9) return sign+'$ '+Math.round(abs/1e9).toLocaleString('es-AR')+' B';
+    if(abs>=1e6) return sign+'$ '+(abs/1e6).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+' M';
+    return sign+'$ '+Math.round(abs).toLocaleString('es-AR');
+  }
+  var fechaStr = new Date().toLocaleDateString('es-AR',
+    {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  // CSS del reporte
+  var css = _rptCSS() + '<style>'
+    + '.img-chart{width:100%;display:block;border-radius:4px}'
+    + '.chart-card{border:.5px solid #ddd;border-radius:6px;padding:10px 12px;background:#fff;margin-bottom:12px;page-break-inside:avoid}'
+    + '.chart-title{font-size:7pt;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;font-family:monospace}'
+    + '.chart-unit{font-size:7pt;color:#999;font-family:monospace;float:right}'
+    + '.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px}'
+    + '.kp{padding:10px 12px;border:.5px solid #ccc;border-radius:6px;background:#f7f7f7}'
+    + '.kl{font-size:7pt;color:#666;font-family:monospace;text-transform:uppercase;letter-spacing:.04em}'
+    + '.kv{font-size:16pt;font-weight:600;color:#111;line-height:1;margin:3px 0}'
+    + '.ks{font-size:7pt;color:#666}'
+    + '.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}'
+    + '</style>';
+
+  // Construir HTML
+  var h = [];
+  h.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Transferencias</title>'+css+'</head><body><div class="pg">');
+
+  // Encabezado
+  h.push(_rptHeader('Transferencias', subtitle));
+
+  // KPIs
+  h.push('<div class="kpi-row" id="sec_kpis">');
+  h.push('<div class="kp"><div class="kl">Total transferido</div><div class="kv">'+fM2(total)+'</div><div class="ks">'+nPagos.toLocaleString('es-AR')+' pagos · '+nBen+' beneficiarias</div></div>');
+  // Desglose por categorías principales
+  var byCat = {};
+  rows.forEach(function(r){ var k=r.categoria||'Otros'; byCat[k]=(byCat[k]||0)+(r.importe||0); });
+  var cats = Object.entries(byCat).sort(function(a,b){return b[1]-a[1];}).slice(0,3);
+  cats.forEach(function(kv) {
+    h.push('<div class="kp"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:12pt">'+fM2(kv[1])+'</div><div class="ks">'+(kv[1]/total*100).toFixed(1)+'% del total</div></div>');
+  });
+  h.push('</div>');
+
+  // Fila 1: Composición + SAF
+  h.push('<div class="r2" id="sec_composicion">');
+  h.push('<div class="chart-card"><div class="chart-title">Composición por categoría <span class="chart-unit">$ total</span></div>'+(imgs.donut?'<img class="img-chart" src="'+imgs.donut+'">':'<p style="color:#999;font-size:8pt">Sin datos</p>')+'</div>');
+  h.push('<div class="chart-card"><div class="chart-title">Transferencias por SAF emisor <span class="chart-unit">$ millones</span></div>'+(imgs.saf?'<img class="img-chart" src="'+imgs.saf+'">':'<p style="color:#999;font-size:8pt">Sin datos</p>')+'</div>');
+  h.push('</div>');
+
+  // Por beneficiario
+  if (imgs.ben) {
+    h.push('<div class="chart-card" id="sec_beneficiario"><div class="chart-title">Transferencias por beneficiario <span class="chart-unit">$ millones · top 12</span></div><img class="img-chart" src="'+imgs.ben+'"></div>');
+  }
+
+  // Evolución mensual (solo si hay imagen)
+  if (imgs.mensual) {
+    h.push('<div class="chart-card" id="sec_mensual"><div class="chart-title">Evolución mensual de transferencias <span class="chart-unit">$ millones — por mes y año</span></div><img class="img-chart" src="'+imgs.mensual+'"></div>');
+  }
+
+  // Desglose por categoría
+  if (imgs.cat) {
+    h.push('<div class="chart-card" id="sec_cat"><div class="chart-title">Desglose por categoría <span class="chart-unit">$ millones</span></div><img class="img-chart" src="'+imgs.cat+'"></div>');
+  }
+
+  // Tendencia anual
+  if (imgs.trend) {
+    h.push('<div class="chart-card" id="sec_trend"><div class="chart-title">Tendencia anual de transferencias <span class="chart-unit">total por año — $ millones</span></div><img class="img-chart" src="'+imgs.trend+'"></div>');
+  }
+
+  h.push(_rptFooter());
+  h.push('</div></body></html>');
+  return h.join('');
 }
+
 
 function _imprimirPanelFallback(panelId, panelActivo) {
   const tituloPanel = (TITLES[panelId]||panelId).replace(/<[^>]+>/g,'').trim();
@@ -8579,21 +8727,55 @@ function _persManualInicializar() {
 }
 
 function _persManualAutocargar(empresa) {
-  // Si la empresa ya tiene datos, precargar en los inputs
   if (!empresa || empresa.length < 2) return;
-  const pd = DATA.personal.find(function(d) {
-    return d.e.toLowerCase() === empresa.toLowerCase();
-  });
-  if (!pd) return;
+
+  // Buscar empresa con match flexible (exacto primero, luego parcial)
+  const empL = empresa.toLowerCase().trim();
+  let pd = DATA.personal.find(function(d) { return d.e.toLowerCase() === empL; });
+  if (!pd) pd = DATA.personal.find(function(d) { return d.e.toLowerCase().startsWith(empL); });
+  if (!pd) pd = DATA.personal.find(function(d) { return d.e.toLowerCase().includes(empL); });
+
   const pYrs = ys().map(String);
   const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
+
+  // Limpiar todos los inputs primero
   años.forEach(function(y) {
     const inp = document.getElementById('pers-m-' + y);
-    if (inp) { const tv = _persGetTotal(pd, y); inp.value = tv > 0 ? tv : ''; }
+    if (inp) inp.value = '';
   });
-  // Si tiene detalle mensual, actualizarlo en el grid
-  if (pd.m && document.getElementById('pers-manual-detalle-mes')?.checked) {
+
+  if (!pd) return; // empresa nueva — campos vacíos
+
+  // Precargar valores del registro encontrado
+  // Normalizar el nombre en el input al nombre exacto del registro
+  const empInput = document.getElementById('pers-manual-emp');
+  if (empInput && pd) empInput.value = pd.e;
+
+  años.forEach(function(y) {
+    const inp = document.getElementById('pers-m-' + y);
+    if (inp) {
+      const tv = _persGetTotal(pd, y);
+      inp.value = tv > 0 ? tv : '';
+    }
+  });
+
+  // Detalle mensual
+  const chk = document.getElementById('pers-manual-detalle-mes');
+  if (pd.m) {
+    // Empresa tiene meses — activar toggle y mostrar grid
+    if (chk && !chk.checked) {
+      chk.checked = true;
+      const wrap = document.getElementById('pers-manual-meses-wrap');
+      if (wrap) wrap.style.display = '';
+    }
     _persRenderMesesGrid();
+  } else {
+    // Sin meses — desactivar toggle y ocultar grid
+    if (chk && chk.checked) {
+      chk.checked = false;
+      const wrap = document.getElementById('pers-manual-meses-wrap');
+      if (wrap) wrap.style.display = 'none';
+    }
   }
 }
 function _persGetTotal(d, y) {
@@ -9030,15 +9212,19 @@ function renderTablaPersonal() {
   var html = '<thead><tr style="position:sticky;top:0;background:var(--s1)">' +
     thSort('__emp__', 'Empresa') +
     pYrs.map(function(y) { return thSort(y, y); }).join('') +
-    thSort('__var__', 'Var. ' + baseY + '→' + lastY) +
+    thSort('__var__', 'Var. ' + (ys().map(String)[0]||baseY) + '→' + lastY) +
     '</tr></thead><tbody>';
 
   datos.forEach(function(d, i) {
-    var varPct = (d.y[baseY]||0) > 0
-      ? ((d.y[lastY]||0) - d.y[baseY]) / d.y[baseY] * 100 : null;
+    // Usar el primer año con datos de ESTA empresa como base real
+    var empBase = pYrs.find(function(y){ return _persGetTotal(d,y)>0; }) || baseY;
+    var vEmpBase = _persGetTotal(d, empBase);
+    var vEmpLast = _persGetTotal(d, lastY);
+    var varPct = vEmpBase > 0 && vEmpLast > 0
+      ? (vEmpLast - vEmpBase) / vEmpBase * 100 : null;
     var bg = i%2===0 ? '' : 'background:var(--s2)';
     html += '<tr style="' + bg + '"><td style="white-space:nowrap;font-weight:600">' + d.e + '</td>' +
-      pYrs.map(function(y) { return '<td style="text-align:right;font-family:var(--mono)">' + fmtV(d.y[y]||0) + '</td>'; }).join('') +
+      pYrs.map(function(y) { return '<td style="text-align:right;font-family:var(--mono)">' + fmtV(_persGetTotal(d,y)) + '</td>'; }).join('') +
       '<td style="text-align:right;font-family:var(--mono)">' + fmtVar(varPct) + '</td></tr>';
   });
 
@@ -21691,6 +21877,17 @@ async function syncToCloud(nota) {
 // ── Convertir datos flat del Sheet → estructura DATA ─────────────
 function applyCloudData(cloud, opts) {
   opts = opts || {};
+  // ── Restaurar usuarios en localStorage (sincronización entre dispositivos) ──
+  if (cloud.lr_users_extra && typeof cloud.lr_users_extra === 'object') {
+    try {
+      const base = { ...LOGIN_USERS };
+      const merged = { ...base, ...cloud.lr_users_extra };
+      localStorage.setItem('lr_users_v1', JSON.stringify(merged));
+    } catch(e) {}
+  }
+  if (Array.isArray(cloud.lr_readonly)) {
+    try { localStorage.setItem('lr_readonly_v1', JSON.stringify(cloud.lr_readonly)); } catch(e) {}
+  }
   // fact: rows con columnas: empresa, 2020, 2021, 2022, 2023, 2024, 2025, 2026
   if (cloud.fact && cloud.fact.length) {
     DATA.fact = {};
@@ -21740,12 +21937,33 @@ function applyCloudData(cloud, opts) {
       const emp = row.empresa;
       if (!emp) return;
       const yObj = {};
+      const mObj = {};
       DATA.years.forEach(y => {
-        const v = parseInt(row[String(y)]) || 0;
-        yObj[String(y)] = v;
-        DATA.pers_totals[String(y)] = (DATA.pers_totals[String(y)] || 0) + v;
+        const yStr = String(y);
+        // Leer meses primero
+        const meses = [];
+        let tieneMeses = false;
+        for (let m = 1; m <= 12; m++) {
+          const col = yStr + '_' + String(m).padStart(2, '0');
+          const vm = row[col] !== undefined && row[col] !== '' ? parseInt(row[col]) : null;
+          meses.push(vm != null && !isNaN(vm) ? vm : null);
+          if (vm != null && !isNaN(vm)) tieneMeses = true;
+        }
+        if (tieneMeses) mObj[yStr] = meses;
+        // Total anual: usar columna del año si tiene valor, o calcular promedio de meses
+        let v = parseInt(row[yStr]);
+        if (isNaN(v) || v === 0 || row[yStr] === '') {
+          if (tieneMeses) {
+            const filled = meses.filter(x => x != null);
+            v = filled.length ? Math.round(filled.reduce((s,x)=>s+x,0) / filled.length) : 0;
+          } else { v = 0; }
+        }
+        yObj[yStr] = v;
+        DATA.pers_totals[yStr] = (DATA.pers_totals[yStr] || 0) + v;
       });
-      DATA.personal.push({ e: emp, y: yObj });
+      const persEntry = { e: emp, y: yObj };
+      if (Object.keys(mObj).length > 0) persEntry.m = mObj;
+      DATA.personal.push(persEntry);
     });
   }
 
@@ -22062,7 +22280,20 @@ function buildCloudPayload() {
   // personal
   const persRows = (DATA.personal || []).map(d => {
     const row = { empresa: d.e };
-    years.forEach(y => { row[String(y)] = d.y[String(y)] || 0; });
+    years.forEach(y => {
+      const yStr = String(y);
+      const hasMeses = d.m && d.m[yStr] && d.m[yStr].some(v => v != null);
+      if (hasMeses) {
+        // Tiene meses: escribir columnas YYYY_MM, NO el total (se recalcula al leer)
+        row[yStr] = ''; // dejar vacío para indicar que el dato viene de meses
+        d.m[yStr].forEach((v, i) => {
+          row[yStr + '_' + String(i + 1).padStart(2, '0')] = v != null ? v : '';
+        });
+      } else {
+        // Solo tiene total anual: escribir la columna del año
+        row[yStr] = _persGetTotal(d, yStr) || 0;
+      }
+    });
     return row;
   });
 
@@ -22236,10 +22467,27 @@ function buildCloudPayload() {
     orden: i, nombre: r, color: (typeof RUBRO_COLORS !== 'undefined' ? RUBRO_COLORS[r] : '') || ''
   }));
 
+  // Usuarios creados dinámicamente (excluir LOGIN_USERS hardcodeados)
+  const usersExtra = (() => {
+    try {
+      const raw = localStorage.getItem('lr_users_v1');
+      if (!raw) return {};
+      const all = JSON.parse(raw);
+      const base = Object.keys(LOGIN_USERS);
+      const extra = {};
+      Object.entries(all).forEach(([u,p]) => { if (!base.includes(u)) extra[u] = p; });
+      return extra;
+    } catch(e) { return {}; }
+  })();
+  const readonlyExtra = (() => {
+    try { return JSON.parse(localStorage.getItem('lr_readonly_v1') || '[]'); }
+    catch(e) { return []; }
+  })();
+
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
            notas: notasRows, presupuesto: presRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
-           flujos: flujosRows };
+           flujos: flujosRows, lr_users_extra: usersExtra, lr_readonly: readonlyExtra };
 }
 
 // ── Cache local (fallback sin conexión) ──────────────────────────
