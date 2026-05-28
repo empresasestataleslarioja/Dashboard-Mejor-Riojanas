@@ -21971,22 +21971,7 @@ function applyCloudData(cloud, opts) {
   // Solo sincronizar cuando el usuario lo pide explícitamente desde el menú
   if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
 
-    // ── POLÍTICA DE SINCRONIZACIÓN ───────────────────────────────────
-    // forceReplace=true (sync manual explícito): Sheets reemplaza local completamente
-    // forceReplace=false (auto-sync al arrancar): solo se agregan registros nuevos
-    if (opts.forceReplace) {
-      DATA.transferencias = fromCloud;
-      console.log('[SYNC] Transferencias: Sheets reemplaza local (' + fromCloud.length + ' registros)');
-      // Recalcular años disponibles
-      fromCloud.forEach(function(t) {
-        var a = String(t.año || t.anio || '');
-        if (a && !DATA.years.includes(parseInt(a))) DATA.years.push(parseInt(a));
-      });
-      DATA.years.sort();
-    } else {
-    // ── REGLA PARA AUTO-SYNC: LOCAL NUNCA SE REEMPLAZA ───────────────
-    // Local = fuente de verdad. Sheets = fuente adicional.
-
+    // Normalizar registros de Sheets
     const fromCloud = cloud.transferencias.map(r => ({
       saf:          r.saf          || '',
       organismo:    r.organismo    || '',
@@ -22003,26 +21988,36 @@ function applyCloudData(cloud, opts) {
       _hoja:        r._hoja        || '',
     }));
 
-    const claveTrans = r =>
-      `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
-
-    if ((DATA.transferencias || []).length === 0) {
-      // Local vacío → restaurar desde Sheets (primer uso en este dispositivo)
+    if (opts.forceReplace) {
+      // Sync explícito: Sheets reemplaza local completamente
       DATA.transferencias = fromCloud;
-      console.log(`[SYNC] Trans restauradas (local vacío): ${fromCloud.length}`);
+      // Recalcular años disponibles
+      fromCloud.forEach(function(t) {
+        var a = String(t.año || t.anio || '');
+        if (a && !DATA.years.includes(parseInt(a))) DATA.years.push(parseInt(a));
+      });
+      DATA.years.sort();
+      console.log('[SYNC] Transferencias: Sheets reemplaza local (' + fromCloud.length + ' registros)');
     } else {
-      // Local tiene datos → solo agregar lo que falta
-      const claveLocal = new Set(DATA.transferencias.map(claveTrans));
-      const nuevas = fromCloud.filter(r => !claveLocal.has(claveTrans(r)));
-      if (nuevas.length > 0) {
-        DATA.transferencias = DATA.transferencias.concat(nuevas);
-        try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
-        console.log(`[SYNC] Trans: +${nuevas.length} nuevas desde Sheets → total ${DATA.transferencias.length}`);
+      // Auto-sync: solo agregar registros nuevos (deduplicar por clave)
+      const claveTrans = r =>
+        `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
+
+      if ((DATA.transferencias || []).length === 0) {
+        DATA.transferencias = fromCloud;
+        console.log(`[SYNC] Trans restauradas (local vacío): ${fromCloud.length}`);
       } else {
-        console.log(`[SYNC] Trans locales al día: ${DATA.transferencias.length}`);
+        const claveLocal = new Set(DATA.transferencias.map(claveTrans));
+        const nuevas = fromCloud.filter(r => !claveLocal.has(claveTrans(r)));
+        if (nuevas.length > 0) {
+          DATA.transferencias = DATA.transferencias.concat(nuevas);
+          try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
+          console.log(`[SYNC] Trans: +${nuevas.length} nuevas desde Sheets → total ${DATA.transferencias.length}`);
+        } else {
+          console.log(`[SYNC] Trans locales al día: ${DATA.transferencias.length}`);
+        }
       }
     }
-    } // cierre else auto-sync
   }
 
   // notas
