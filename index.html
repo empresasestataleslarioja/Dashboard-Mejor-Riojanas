@@ -21632,6 +21632,8 @@ async function syncFromCloud(silent, opts) {
 
     // Convertir formato flat (rows) → formato DATA del dashboard
     applyCloudData(data, opts || {});
+    // Limpiar localStorage antes de guardar para evitar datos viejos
+    try { localStorage.removeItem(LS_KEY); } catch(e) {}
     saveDataToLocalCache();
 
     const lastUp    = data.meta?.ultima_actualizacion || data.meta?.savedAt;
@@ -23165,7 +23167,10 @@ setTimeout(() => {
     // Las transferencias solo se sincronizan cuando el usuario lo pide explícitamente
     // Al arrancar: sincronizar TODO desde Sheets (Sheets es fuente de verdad en GitHub Pages)
   syncFromCloud(true, { forceReplace: true })
-      .then(() => { rebuildActive(); })
+      .then(() => {
+        // NO llamar loadDataFromLocalCache — los datos ya están en memoria desde el sync
+        rebuildActive();
+      })
       .catch(() => {});
   }
 }, 40);
