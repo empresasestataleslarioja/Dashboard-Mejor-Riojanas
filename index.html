@@ -1441,7 +1441,7 @@ self.onmessage = async (e) => {
           <div style="padding:6px 12px;font-size:8px;text-transform:uppercase;letter-spacing:.1em;
             color:var(--dim);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);
             font-family:var(--mono)">Google Sheets</div>
-          <button onclick="syncFromCloud();toggleExportMenu()" class="export-menu-item">↓ Descargar desde Sheets</button>
+          <button onclick="syncFromCloud(false,{forceReplace:true});toggleExportMenu()" class="export-menu-item">↓ Descargar desde Sheets</button>
           <button onclick="syncToCloud();toggleExportMenu()" class="export-menu-item">↑ Publicar todo a Sheets</button>
           <button onclick="syncSoloTransferencias();toggleExportMenu()" class="export-menu-item">↑ Publicar solo transferencias</button>
           <button onclick="toggleExportMenu();setTimeout(function(){toggleCloudPanel(true);},60)" class="export-menu-item">⚙ Configurar Sheets</button>
@@ -1622,7 +1622,7 @@ self.onmessage = async (e) => {
                 font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
                 ↑ Publicar ahora
               </button>
-              <button onclick="syncFromCloud();toggleSavePanel()" style="padding:7px 10px;
+              <button onclick="syncFromCloud(false,{forceReplace:true});toggleSavePanel()" style="padding:7px 10px;
                 background:rgba(71,232,255,.08);border:1px solid #47e8ff44;color:#47e8ff;
                 font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
                 ↓ Actualizar
@@ -1692,7 +1692,7 @@ self.onmessage = async (e) => {
 
       <!-- Botones sync -->
       <div style="display:flex;gap:8px;margin-bottom:6px">
-        <button onclick="syncFromCloud()" style="flex:1;padding:7px;background:rgba(71,232,255,.1);
+        <button onclick="syncFromCloud(false,{forceReplace:true})" style="flex:1;padding:7px;background:rgba(71,232,255,.1);
           border:1px solid #47e8ff55;color:#47e8ff;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
           ↓ Actualizar desde Sheets
         </button>
@@ -21971,11 +21971,21 @@ function applyCloudData(cloud, opts) {
   // Solo sincronizar cuando el usuario lo pide explícitamente desde el menú
   if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
 
-    // ── REGLA DEFINITIVA: LOCAL NUNCA SE REEMPLAZA ──────────────────
+    // ── POLÍTICA DE SINCRONIZACIÓN ───────────────────────────────────
+    // forceReplace=true (sync manual explícito): Sheets reemplaza local completamente
+    // forceReplace=false (auto-sync al arrancar): solo se agregan registros nuevos
+    if (opts.forceReplace) {
+      DATA.transferencias = fromCloud;
+      console.log('[SYNC] Transferencias: Sheets reemplaza local (' + fromCloud.length + ' registros)');
+      // Recalcular años disponibles
+      fromCloud.forEach(function(t) {
+        var a = String(t.año || t.anio || '');
+        if (a && !DATA.years.includes(parseInt(a))) DATA.years.push(parseInt(a));
+      });
+      DATA.years.sort();
+    } else {
+    // ── REGLA PARA AUTO-SYNC: LOCAL NUNCA SE REEMPLAZA ───────────────
     // Local = fuente de verdad. Sheets = fuente adicional.
-    // Al descargar: solo se agregan registros de Sheets que el local NO tiene.
-    // Al publicar: el local sube completo a Sheets.
-    // NUNCA se reemplaza el local con Sheets.
 
     const fromCloud = cloud.transferencias.map(r => ({
       saf:          r.saf          || '',
@@ -22012,6 +22022,7 @@ function applyCloudData(cloud, opts) {
         console.log(`[SYNC] Trans locales al día: ${DATA.transferencias.length}`);
       }
     }
+    } // cierre else auto-sync
   }
 
   // notas
@@ -22028,9 +22039,12 @@ function applyCloudData(cloud, opts) {
     const localCount = Object.keys(_balances).length;
     // Si hay balances locales, NO sobreescribir — local es fuente de verdad
     // Solo restaurar desde Sheets cuando _balances está vacío (sesión nueva)
-    if (localCount > 0) {
-      console.log(`[SYNC] Balances locales preservados: ${localCount} (Sheets tiene ${cloud.balances.length})`);
-    } else {
+    if (opts.forceReplace) {
+      // Sync manual: Sheets reemplaza local completamente
+      _balances = {};
+      console.log('[SYNC] Balances: Sheets reemplaza local (forceReplace)');
+    }
+    if (opts.forceReplace || localCount === 0) {
       // Sin datos locales → restaurar desde Sheets
       const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
       cloud.balances.forEach(r => {
@@ -22882,6 +22896,24 @@ function loadDataFromLocalCache() {
     try {
       Object.assign(DATA, snap);
 
+      // Si localStorage tiene datos más recientes que el snap, usarlos
+      // Esto cubre el caso donde se sincronizó desde Sheets después de exportar el HTML
+      try {
+        const lsSnapRaw = localStorage.getItem(LS_KEY);
+        if (lsSnapRaw) {
+          const lsSnap = JSON.parse(lsSnapRaw);
+          const snapTs = snap.savedAt    ? new Date(snap.savedAt).getTime()    : 0;
+          const lsTs   = lsSnap.savedAt  ? new Date(lsSnap.savedAt).getTime()  : 0;
+          if (lsTs > snapTs) {
+            // localStorage es más nuevo — usar sus transferencias y balances
+            if (Array.isArray(lsSnap.transferencias) && lsSnap.transferencias.length > 0) {
+              DATA.transferencias = lsSnap.transferencias;
+              console.log('[LR] Transferencias desde localStorage (' + DATA.transferencias.length + ') más reciente que snap');
+            }
+          }
+        }
+      } catch(eLs) {}
+
       // Restaurar balances analizados desde _embeddedSnap
       // PERO: si localStorage tiene una versión más reciente (el usuario
       // eliminó balances después de exportar el HTML), usar esa.
@@ -22972,6 +23004,13 @@ function loadDataFromLocalCache() {
     const cached = JSON.parse(raw);
     if (!cached.fact) return false;
     Object.assign(DATA, cached);
+    // Restaurar transferencias explícitamente (Object.assign puede no copiarlas si están vacías)
+    if (Array.isArray(cached.transferencias)) {
+      DATA.transferencias = cached.transferencias;
+      console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
+    } else {
+      console.log('[LR] Sin transferencias en localStorage');
+    }
     // Restaurar balances desde localStorage
     if (cached._balances && Array.isArray(cached._balances)) {
       cached._balances.forEach(b => {
@@ -23129,7 +23168,8 @@ setTimeout(() => {
   if (_cloudUrl) {
     // Al arrancar: sync silencioso que NO toca transferencias
     // Las transferencias solo se sincronizan cuando el usuario lo pide explícitamente
-    syncFromCloud(true, { skipTransferencias: true })
+    // Al arrancar: sincronizar TODO desde Sheets (Sheets es fuente de verdad en GitHub Pages)
+  syncFromCloud(true, { forceReplace: true })
       .then(() => { rebuildActive(); })
       .catch(() => {});
   }
