@@ -21632,8 +21632,25 @@ async function syncFromCloud(silent, opts) {
 
     // Convertir formato flat (rows) → formato DATA del dashboard
     applyCloudData(data, opts || {});
-    // Limpiar localStorage antes de guardar para evitar datos viejos
-    try { localStorage.removeItem(LS_KEY); } catch(e) {}
+    // Guardar inmediatamente en localStorage con los datos nuevos del sync
+    // Esto asegura que cualquier loadDataFromLocalCache posterior lea datos frescos
+    try {
+      // Guardar transferencias directamente
+      if (Array.isArray(DATA.transferencias) && DATA.transferencias.length > 0) {
+        localStorage.setItem('lr_trans_sync_v1', JSON.stringify({
+          data: DATA.transferencias,
+          ts: Date.now()
+        }));
+      }
+      // Guardar balances directamente
+      const balArr = Object.values(_balances || {});
+      if (balArr.length > 0) {
+        localStorage.setItem('lr_bal_sync_v1', JSON.stringify({
+          data: balArr,
+          ts: Date.now()
+        }));
+      }
+    } catch(eSave) {}
     saveDataToLocalCache();
 
     const lastUp    = data.meta?.ultima_actualizacion || data.meta?.savedAt;
@@ -23002,13 +23019,50 @@ function loadDataFromLocalCache() {
     if (!cached.fact) return false;
     Object.assign(DATA, cached);
     // Restaurar transferencias explícitamente (Object.assign puede no copiarlas si están vacías)
-    if (Array.isArray(cached.transferencias)) {
-      DATA.transferencias = cached.transferencias;
-      console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
-    } else {
-      console.log('[LR] Sin transferencias en localStorage');
+    // Prioridad: keys específicas de sync (más confiables que el cache general)
+    try {
+      const transSyncRaw = localStorage.getItem('lr_trans_sync_v1');
+      const mainRaw = LS_KEY ? localStorage.getItem(LS_KEY) : null;
+      const mainTs  = mainRaw ? (JSON.parse(mainRaw).savedAt ? new Date(JSON.parse(mainRaw).savedAt).getTime() : 0) : 0;
+      if (transSyncRaw) {
+        const tsSync = JSON.parse(transSyncRaw);
+        if (tsSync.ts > mainTs && Array.isArray(tsSync.data) && tsSync.data.length > 0) {
+          DATA.transferencias = tsSync.data;
+          console.log('[LR] Transferencias desde sync específico:', DATA.transferencias.length);
+        } else if (Array.isArray(cached.transferencias)) {
+          DATA.transferencias = cached.transferencias;
+          console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
+        }
+      } else if (Array.isArray(cached.transferencias)) {
+        DATA.transferencias = cached.transferencias;
+        console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
+      } else {
+        console.log('[LR] Sin transferencias en localStorage');
+      }
+    } catch(eLoadT) {
+      if (Array.isArray(cached.transferencias)) DATA.transferencias = cached.transferencias;
     }
     // Restaurar balances desde localStorage
+    // Prioridad para balances: key específica de sync
+    try {
+      const balSyncRaw = localStorage.getItem('lr_bal_sync_v1');
+      const mainRaw2 = LS_KEY ? localStorage.getItem(LS_KEY) : null;
+      const mainTs2  = mainRaw2 ? (JSON.parse(mainRaw2).savedAt ? new Date(JSON.parse(mainRaw2).savedAt).getTime() : 0) : 0;
+      if (balSyncRaw) {
+        const bsSync = JSON.parse(balSyncRaw);
+        if (bsSync.ts > mainTs2 && Array.isArray(bsSync.data) && bsSync.data.length > 0) {
+          _balances = {};
+          bsSync.data.forEach(b => {
+            if (b && b.empresa && b.periodo) {
+              const k = b.empresa + '_' + b.periodo;
+              _balances[k] = b;
+            }
+          });
+          console.log('[LR] Balances desde sync específico:', Object.keys(_balances).length);
+        }
+      }
+    } catch(eLoadB) {}
+
     if (cached._balances && Array.isArray(cached._balances)) {
       cached._balances.forEach(b => {
         if (b.empresa && b.periodo) {
