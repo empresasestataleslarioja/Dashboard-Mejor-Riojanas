@@ -1229,7 +1229,10 @@ self.onmessage = async (e) => {
     </div>
 
     <div style="margin-bottom:16px">
-      <div style="font-size:9px;color:var(--dim);margin-bottom:4px;letter-spacing:.08em;text-transform:uppercase">Contraseña</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:9px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase">Contraseña</div>
+        <button type="button" onclick="(function(){var i=document.getElementById('login-pass');var b=document.getElementById('login-pass-eye');i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'👁':'🙈';})()" id="login-pass-eye" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--dim);padding:0;line-height:1">👁</button>
+      </div>
       <input id="login-pass" type="password" placeholder="••••••••"
         autocomplete="current-password"
         style="width:100%;padding:8px 10px;background:var(--s3);border:1px solid var(--bd2);
@@ -15243,7 +15246,7 @@ function getCmpCols(emp) {
 //  Análisis por regex contables 100% local
 // ═══════════════════════════════════════════════════════════
 
-const _balances = {};
+let   _balances = {};
 let   _balActivo = null;
 
 // ── Cargar PDF.js ──────────────────────────────────────────
@@ -21604,16 +21607,31 @@ async function syncFromCloud(silent, opts) {
   try {
     const url = _cloudUrl + (_cloudUrl.includes('?') ? '&' : '?') + 'tab=all&t=' + Date.now();
 
-    // Intentar fetch normal primero (funciona desde http://)
-    // Si falla por CORS (file://), usar JSONP como fallback
+    // Fetch con timeout explícito de 55 segundos
+    async function fetchWithTimeout(u, ms) {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const tid  = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
+      try {
+        const resp = await fetch(u, ctrl ? { signal: ctrl.signal } : {});
+        if (tid) clearTimeout(tid);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return await resp.json();
+      } catch(e) {
+        if (tid) clearTimeout(tid);
+        throw e;
+      }
+    }
+
     let data;
     try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      data = await resp.json();
+      data = await fetchWithTimeout(url, 55000);
     } catch(fetchErr) {
       // Fallback JSONP — funciona desde file://
-      data = await fetchJSONP(url);
+      try {
+        data = await fetchJSONP(url);
+      } catch(jsonpErr) {
+        throw new Error('Sin conexión con Sheets. Verificá internet y que el bridge esté publicado correctamente.');
+      }
     }
     // El bridge devuelve {meta:{...}, fact:[...], balances:[...]} — sin campo "ok"
     // Solo rechazar si explícitamente viene ok:false con error
@@ -23220,11 +23238,8 @@ setTimeout(() => {
     // Al arrancar: sync silencioso que NO toca transferencias
     // Las transferencias solo se sincronizan cuando el usuario lo pide explícitamente
     // Al arrancar: sincronizar TODO desde Sheets (Sheets es fuente de verdad en GitHub Pages)
-  syncFromCloud(true, { forceReplace: true })
-      .then(() => {
-        // NO llamar loadDataFromLocalCache — los datos ya están en memoria desde el sync
-        rebuildActive();
-      })
+  syncFromCloud(true, { skipTransferencias: true })
+      .then(() => { rebuildActive(); })
       .catch(() => {});
   }
 }, 40);
