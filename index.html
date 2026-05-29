@@ -21762,15 +21762,40 @@ async function syncSoloTransferencias() {
       data:      { transferencias: transRows }
     };
 
-    await fetch(_cloudUrl, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
-    });
+    // Enviar en chunks de 500 registros para no superar límites del browser
+    const CHUNK = 500;
+    const rows  = payload.data.transferencias;
+    const total = rows.length;
+    let   enviados = 0;
+
+    for (let i = 0; i < total; i += CHUNK) {
+      const esUltimo = (i + CHUNK) >= total;
+      const chunk    = rows.slice(i, i + CHUNK);
+      const chunkPayload = {
+        token:     payload.token,
+        updatedBy: payload.updatedBy,
+        nota:      payload.nota,
+        data: {
+          // Solo en el primer chunk limpiar la hoja; en los siguientes append
+          transferencias: chunk,
+          _chunk_index:   Math.floor(i / CHUNK),
+          _chunk_total:   Math.ceil(total / CHUNK),
+          _chunk_append:  i > 0,  // true = el bridge hace append en vez de reemplazar
+        }
+      };
+      await fetch(_cloudUrl, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(chunkPayload)
+      });
+      enviados += chunk.length;
+      if (ind) ind.textContent = `⏳ Publicando… ${enviados}/${total} registros`;
+      // Pausa entre chunks para no saturar Apps Script
+      if (!esUltimo) await new Promise(r => setTimeout(r, 1500));
+    }
 
     await new Promise(r => setTimeout(r, 2000));
-
-    if (ind) { ind.textContent = `✓ ${n} transferencias publicadas en Sheets`; ind.style.color = '#47ffb4'; }
+    if (ind) { ind.textContent = `✓ ${total} transferencias publicadas en Sheets`; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 5000);
 
   } catch(err) {
