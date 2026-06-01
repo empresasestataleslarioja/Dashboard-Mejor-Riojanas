@@ -21747,11 +21747,34 @@ async function syncSoloTransferencias() {
     const total = payload.data.transferencias.length;
     if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
 
-    // Usar form POST para evitar límite de tamaño de no-cors
-    await postViaForm(_cloudUrl, payload);
+    // Enviar en chunks de 500 via no-cors con verificación
+    const CHUNK = 500;
+    const rows  = payload.data.transferencias;
+    let enviados = 0;
 
-    await new Promise(r => setTimeout(r, 4000));
-    if (ind) { ind.textContent = `✓ ${total} transferencias enviadas — verificá en Sheets`; ind.style.color = '#47ffb4'; }
+    for (let i = 0; i < total; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      const cp = {
+        token:     payload.token,
+        updatedBy: payload.updatedBy,
+        nota:      payload.nota,
+        data: {
+          transferencias: chunk,
+          _chunk_append:  i > 0,
+        }
+      };
+      await fetch(_cloudUrl, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(cp)
+      });
+      enviados += chunk.length;
+      if (ind) ind.textContent = `⏳ ${enviados}/${total}…`;
+      await new Promise(r => setTimeout(r, 2500));
+    }
+
+    await new Promise(r => setTimeout(r, 2000));
+    if (ind) { ind.textContent = `✓ ${total} transferencias publicadas`; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
 
   } catch(err) {
@@ -21829,9 +21852,13 @@ async function syncToCloud(nota) {
     // Con no-cors no podemos leer la respuesta, así que verificamos con un GET posterior.
     let result;
     try {
-      // Usar form POST para evitar límite de tamaño de no-cors
-      await postViaForm(_cloudUrl, payload);
-      await new Promise(r => setTimeout(r, 4000));
+      await fetch(_cloudUrl, {
+        method:  'POST',
+        mode:    'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body:    JSON.stringify(payload)
+      });
+      await new Promise(r => setTimeout(r, 2000));
       try {
         const check = await fetch(_cloudUrl + '?tab=meta&t=' + Date.now());
         if (!check.ok) {
