@@ -21719,20 +21719,15 @@ async function syncSoloTransferencias() {
   if (ind) { ind.textContent = '⏳ Publicando transferencias…'; ind.style.color = '#47e8ff'; }
 
   try {
+    // Campos mínimos para reducir tamaño del payload
     const transRows = (DATA.transferencias || []).map(t => ({
       saf:          t.saf          || '',
-      organismo:    t.organismo    || '',
       beneficiario: t.beneficiario || '',
       empresa:      t.empresa      || '',
-      ff:           t.ff           || '',
-      cgto:         t.cgto         || '',
-      observacion:  t.observacion  || '',
       mes:          t.mes          || '',
       año:          t.año          || '',
       importe:      t.importe      || 0,
       categoria:    t.categoria    || 'Sin Clasificar',
-      _archivo:     t._archivo     || '',
-      _hoja:        t._hoja        || '',
     }));
 
     const payload = {
@@ -21747,35 +21742,16 @@ async function syncSoloTransferencias() {
     const total = payload.data.transferencias.length;
     if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
 
-    // Enviar en chunks de 500 via no-cors con verificación
-    const CHUNK = 500;
-    const rows  = payload.data.transferencias;
-    let enviados = 0;
-
-    for (let i = 0; i < total; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      const cp = {
-        token:     payload.token,
-        updatedBy: payload.updatedBy,
-        nota:      payload.nota,
-        data: {
-          transferencias: chunk,
-          _chunk_append:  i > 0,
-        }
-      };
-      await fetch(_cloudUrl, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(cp)
-      });
-      enviados += chunk.length;
-      if (ind) ind.textContent = `⏳ ${enviados}/${total}…`;
-      await new Promise(r => setTimeout(r, 2500));
-    }
-
-    await new Promise(r => setTimeout(r, 2000));
-    if (ind) { ind.textContent = `✓ ${total} transferencias publicadas`; ind.style.color = '#47ffb4'; }
-    setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
+    // Envío único con campos mínimos
+    if (ind) ind.textContent = `⏳ Enviando ${total} transferencias…`;
+    await fetch(_cloudUrl, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+    await new Promise(r => setTimeout(r, 3000));
+    if (ind) { ind.textContent = `✓ ${total} transferencias enviadas — verificá en _log de Sheets`; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 8000);
 
   } catch(err) {
     if (ind) { ind.textContent = '✗ Error al publicar'; ind.style.color = 'var(--neg)'; }
