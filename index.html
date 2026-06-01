@@ -21650,25 +21650,6 @@ async function syncFromCloud(silent, opts) {
 
     // Convertir formato flat (rows) → formato DATA del dashboard
     applyCloudData(data, opts || {});
-    // Guardar inmediatamente en localStorage con los datos nuevos del sync
-    // Esto asegura que cualquier loadDataFromLocalCache posterior lea datos frescos
-    try {
-      // Guardar transferencias directamente
-      if (Array.isArray(DATA.transferencias) && DATA.transferencias.length > 0) {
-        localStorage.setItem('lr_trans_sync_v1', JSON.stringify({
-          data: DATA.transferencias,
-          ts: Date.now()
-        }));
-      }
-      // Guardar balances directamente
-      const balArr = Object.values(_balances || {});
-      if (balArr.length > 0) {
-        localStorage.setItem('lr_bal_sync_v1', JSON.stringify({
-          data: balArr,
-          ts: Date.now()
-        }));
-      }
-    } catch(eSave) {}
     saveDataToLocalCache();
 
     const lastUp    = data.meta?.ultima_actualizacion || data.meta?.savedAt;
@@ -21762,46 +21743,57 @@ async function syncSoloTransferencias() {
       data:      { transferencias: transRows }
     };
 
-    // Enviar en chunks de 500 registros para no superar límites del browser
-    const CHUNK = 500;
-    const rows  = payload.data.transferencias;
-    const total = rows.length;
-    let   enviados = 0;
+    // Enviar todo en un solo request
+    const total = payload.data.transferencias.length;
+    if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
 
-    for (let i = 0; i < total; i += CHUNK) {
-      const esUltimo = (i + CHUNK) >= total;
-      const chunk    = rows.slice(i, i + CHUNK);
-      const chunkPayload = {
-        token:     payload.token,
-        updatedBy: payload.updatedBy,
-        nota:      payload.nota,
-        data: {
-          // Solo en el primer chunk limpiar la hoja; en los siguientes append
-          transferencias: chunk,
-          _chunk_index:   Math.floor(i / CHUNK),
-          _chunk_total:   Math.ceil(total / CHUNK),
-          _chunk_append:  i > 0,  // true = el bridge hace append en vez de reemplazar
-        }
-      };
-      await fetch(_cloudUrl, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(chunkPayload)
-      });
-      enviados += chunk.length;
-      if (ind) ind.textContent = `⏳ Publicando… ${enviados}/${total} registros`;
-      // Pausa entre chunks para no saturar Apps Script
-      if (!esUltimo) await new Promise(r => setTimeout(r, 1500));
-    }
+    // Usar form POST para evitar límite de tamaño de no-cors
+    await postViaForm(_cloudUrl, payload);
 
-    await new Promise(r => setTimeout(r, 2000));
-    if (ind) { ind.textContent = `✓ ${total} transferencias publicadas en Sheets`; ind.style.color = '#47ffb4'; }
-    setTimeout(() => { if (ind) ind.textContent = ''; }, 5000);
+    await new Promise(r => setTimeout(r, 4000));
+    if (ind) { ind.textContent = `✓ ${total} transferencias enviadas — verificá en Sheets`; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
 
   } catch(err) {
     if (ind) { ind.textContent = '✗ Error al publicar'; ind.style.color = 'var(--neg)'; }
     alert('Error: ' + err.message);
   }
+}
+
+async // ── POST via form hidden — sin límite de tamaño, sin CORS preflight ──────────
+function postViaForm(url, payload) {
+  return new Promise(function(resolve) {
+    const json = JSON.stringify(payload);
+    const form = document.createElement('form');
+    form.method  = 'POST';
+    form.action  = url;
+    form.target  = '_lrPostFrame_' + Date.now();
+    form.style.display = 'none';
+    // Crear iframe destino para no navegar la página
+    const iframe = document.createElement('iframe');
+    iframe.name  = form.target;
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    // Campo con el JSON
+    const input = document.createElement('input');
+    input.type  = 'hidden';
+    input.name  = 'json';
+    input.value = json;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    // Resolver después de enviar
+    iframe.onload = function() {
+      setTimeout(function() {
+        try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
+        resolve();
+      }, 500);
+    };
+    setTimeout(function() {
+      try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
+      resolve();
+    }, 10000);
+    form.submit();
+  });
 }
 
 async function syncToCloud(nota) {
@@ -21837,14 +21829,9 @@ async function syncToCloud(nota) {
     // Con no-cors no podemos leer la respuesta, así que verificamos con un GET posterior.
     let result;
     try {
-      await fetch(_cloudUrl, {
-        method:  'POST',
-        mode:    'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body:    JSON.stringify(payload)
-      });
-      // no-cors no lanza error — esperamos 2s y verificamos con GET
-      await new Promise(r => setTimeout(r, 2000));
+      // Usar form POST para evitar límite de tamaño de no-cors
+      await postViaForm(_cloudUrl, payload);
+      await new Promise(r => setTimeout(r, 4000));
       try {
         const check = await fetch(_cloudUrl + '?tab=meta&t=' + Date.now());
         if (!check.ok) {
@@ -23062,49 +23049,15 @@ function loadDataFromLocalCache() {
     if (!cached.fact) return false;
     Object.assign(DATA, cached);
     // Restaurar transferencias explícitamente (Object.assign puede no copiarlas si están vacías)
-    // Prioridad: keys específicas de sync (más confiables que el cache general)
-    try {
-      const transSyncRaw = localStorage.getItem('lr_trans_sync_v1');
-      const mainRaw = LS_KEY ? localStorage.getItem(LS_KEY) : null;
-      const mainTs  = mainRaw ? (JSON.parse(mainRaw).savedAt ? new Date(JSON.parse(mainRaw).savedAt).getTime() : 0) : 0;
-      if (transSyncRaw) {
-        const tsSync = JSON.parse(transSyncRaw);
-        if (tsSync.ts > mainTs && Array.isArray(tsSync.data) && tsSync.data.length > 0) {
-          DATA.transferencias = tsSync.data;
-          console.log('[LR] Transferencias desde sync específico:', DATA.transferencias.length);
-        } else if (Array.isArray(cached.transferencias)) {
-          DATA.transferencias = cached.transferencias;
-          console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
-        }
-      } else if (Array.isArray(cached.transferencias)) {
-        DATA.transferencias = cached.transferencias;
-        console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
-      } else {
-        console.log('[LR] Sin transferencias en localStorage');
-      }
-    } catch(eLoadT) {
-      if (Array.isArray(cached.transferencias)) DATA.transferencias = cached.transferencias;
+    // Prioridad: keys específicas de     // Restaurar transferencias desde localStorage
+    if (Array.isArray(cached.transferencias) && cached.transferencias.length > 0) {
+      DATA.transferencias = cached.transferencias;
+      console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
+    } else {
+      console.log('[LR] Sin transferencias en localStorage');
     }
     // Restaurar balances desde localStorage
-    // Prioridad para balances: key específica de sync
-    try {
-      const balSyncRaw = localStorage.getItem('lr_bal_sync_v1');
-      const mainRaw2 = LS_KEY ? localStorage.getItem(LS_KEY) : null;
-      const mainTs2  = mainRaw2 ? (JSON.parse(mainRaw2).savedAt ? new Date(JSON.parse(mainRaw2).savedAt).getTime() : 0) : 0;
-      if (balSyncRaw) {
-        const bsSync = JSON.parse(balSyncRaw);
-        if (bsSync.ts > mainTs2 && Array.isArray(bsSync.data) && bsSync.data.length > 0) {
-          _balances = {};
-          bsSync.data.forEach(b => {
-            if (b && b.empresa && b.periodo) {
-              const k = b.empresa + '_' + b.periodo;
-              _balances[k] = b;
-            }
-          });
-          console.log('[LR] Balances desde sync específico:', Object.keys(_balances).length);
-        }
-      }
-    } catch(eLoadB) {}
+
 
     if (cached._balances && Array.isArray(cached._balances)) {
       cached._balances.forEach(b => {
@@ -23153,22 +23106,7 @@ function loadDataFromLocalCache() {
   }
 }
 
-// Compatibilidad con código anterior
-function saveDataToStorage()  { saveDataToLocalCache(); }
-function loadDataFromStorage(){ return loadDataFromLocalCache(); }
-function clearStoredData() {
-  if (!confirm('¿Borrar cache local?')) return;
-  localStorage.removeItem(LS_KEY);
-  showStorageStatus('Cache local borrado', '#ff8c47');
-}
-
-// ── Auto-publicar: el auto-sync de 15s se encarga (ver _dispararAutoSync) ──
-// NO publicar inmediatamente tras handleImportWorkbook — hay race condition
-// cuando hay diálogo de duplicados: el setTimeout(400) ejecuta antes de que
-// el usuario confirme, enviando los datos SIN las nuevas transferencias a Sheets.
-// marcarPendienteGuardar() ya dispara el auto-sync con 15s de delay seguro.
-
-// ═══════════════════════════════════════════════════════════
+// Compatibilidad con código anterior══════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════
 
