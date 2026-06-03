@@ -19800,6 +19800,10 @@ function mostrarBalError(msg) {
 //  SINCRONIZACIÓN CLOUD — Google Sheets via Apps Script
 //  Reemplaza localStorage con sincronización centralizada
 // ═══════════════════════════════════════════════════════════════
+// Auto-sync — declaradas temprano para evitar acceso antes de inicialización
+var AUTOSYNC_DELAY = 15000;
+var _autoSyncTimer = null;
+var _autoSyncEnabled = true;
 const LS_KEY      = 'lr_dashboard_data_v1';   // cache local
 const LS_CFG_KEY  = 'lr_cloud_cfg_v1';        // configuración
 
@@ -21719,15 +21723,20 @@ async function syncSoloTransferencias() {
   if (ind) { ind.textContent = '⏳ Publicando transferencias…'; ind.style.color = '#47e8ff'; }
 
   try {
-    // Campos mínimos para reducir tamaño del payload
     const transRows = (DATA.transferencias || []).map(t => ({
       saf:          t.saf          || '',
+      organismo:    t.organismo    || '',
       beneficiario: t.beneficiario || '',
       empresa:      t.empresa      || '',
+      ff:           t.ff           || '',
+      cgto:         t.cgto         || '',
+      observacion:  t.observacion  || '',
       mes:          t.mes          || '',
       año:          t.año          || '',
       importe:      t.importe      || 0,
       categoria:    t.categoria    || 'Sin Clasificar',
+      _archivo:     t._archivo     || '',
+      _hoja:        t._hoja        || '',
     }));
 
     const payload = {
@@ -21742,16 +21751,15 @@ async function syncSoloTransferencias() {
     const total = payload.data.transferencias.length;
     if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
 
-    // Envío único con campos mínimos
-    if (ind) ind.textContent = `⏳ Enviando ${total} transferencias…`;
+    if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
     await fetch(_cloudUrl, {
       method: 'POST', mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     });
     await new Promise(r => setTimeout(r, 3000));
-    if (ind) { ind.textContent = `✓ ${total} transferencias enviadas — verificá en _log de Sheets`; ind.style.color = '#47ffb4'; }
-    setTimeout(() => { if (ind) ind.textContent = ''; }, 8000);
+    if (ind) { ind.textContent = `✓ ${total} transferencias publicadas`; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
 
   } catch(err) {
     if (ind) { ind.textContent = '✗ Error al publicar'; ind.style.color = 'var(--neg)'; }
@@ -22753,9 +22761,7 @@ function actualizarIndicadorGuardado(isoDate, extra) {
 // ── Auto-sincronización con Sheets ───────────────────────────────
 // Cuando hay datos pendientes, espera AUTOSYNC_DELAY ms de inactividad
 // y luego sube automáticamente. Se cancela si hay otra modificación.
-const AUTOSYNC_DELAY = 15000; // 15 segundos de inactividad
-let _autoSyncTimer = null;
-let _autoSyncEnabled = true; // el usuario puede pausarlo
+// Declaraciones movidas al inicio del script para evitar temporal dead zone
 
 function _toggleAutoSync() {
   _autoSyncEnabled = !_autoSyncEnabled;
@@ -23201,10 +23207,7 @@ setTimeout(() => {
   // Si hay Sheets configurado, sincronizar solo fact/sit/personal/balances
   // NO tocar transferencias — vienen del snapshot local que es la fuente de verdad
   if (_cloudUrl) {
-    // Al arrancar: sync silencioso que NO toca transferencias
-    // Las transferencias solo se sincronizan cuando el usuario lo pide explícitamente
-    // Al arrancar: sincronizar TODO desde Sheets (Sheets es fuente de verdad en GitHub Pages)
-  syncFromCloud(true, { skipTransferencias: true })
+    syncFromCloud(true, { skipTransferencias: true })
       .then(() => { rebuildActive(); })
       .catch(() => {});
   }
