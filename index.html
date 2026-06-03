@@ -22761,7 +22761,10 @@ function actualizarIndicadorGuardado(isoDate, extra) {
 // ── Auto-sincronización con Sheets ───────────────────────────────
 // Cuando hay datos pendientes, espera AUTOSYNC_DELAY ms de inactividad
 // y luego sube automáticamente. Se cancela si hay otra modificación.
-// Declaraciones movidas al inicio del script para evitar temporal dead zone
+// Auto-sync: declaraciones en el mismo bloque que las funciones que las usan
+if (typeof _autoSyncTimer === 'undefined')   var _autoSyncTimer = null;
+if (typeof AUTOSYNC_DELAY === 'undefined')   var AUTOSYNC_DELAY = 15000;
+if (typeof _autoSyncEnabled === 'undefined') var _autoSyncEnabled = true;
 
 function _toggleAutoSync() {
   _autoSyncEnabled = !_autoSyncEnabled;
@@ -22777,7 +22780,8 @@ function _toggleAutoSync() {
 }
 
 function _dispararAutoSync() {
-  if (!_autoSyncEnabled) return;
+  // Verificación robusta — evita error si la variable no está inicializada
+  if (typeof _autoSyncEnabled === 'undefined' || !_autoSyncEnabled) return;
   if (!_cloudUrl || !_cloudToken) return; // sin configuración no hay auto-sync
   if (isReadonlyUser()) return;
   clearTimeout(_autoSyncTimer);
@@ -22812,7 +22816,7 @@ function marcarPendienteGuardar() {
     ind.style.color = '#ff8c47';
   }
   // Disparar auto-sync después de inactividad
-  _dispararAutoSync();
+  try { if (typeof _dispararAutoSync === 'function') _dispararAutoSync(); } catch(e) {}
 }
 
 // ── guardarDatos: alias para compatibilidad ───────────────────────
