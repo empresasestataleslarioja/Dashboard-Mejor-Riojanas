@@ -22500,9 +22500,10 @@ function saveDataToLocalCache() {
 //  PERSISTENCIA DE DATOS
 // ═══════════════════════════════════════════════════════════
 
-let _savePanelOpen = false;
+var _savePanelOpen = false;
 
 function toggleSavePanel() {
+  if (typeof _savePanelOpen === 'undefined') { window._savePanelOpen = false; }
   if (isReadonlyUser()) {
     showStorageStatus('⚠ Usuario de solo lectura — sin permisos de escritura', '#ff8c47');
     return;
