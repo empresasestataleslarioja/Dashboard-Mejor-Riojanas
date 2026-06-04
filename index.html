@@ -21548,56 +21548,7 @@ function postViaForm(url, data) {
   });
 }
 
-// POST via fetch no-cors (funciona desde file://, no devuelve respuesta legible)
-// Luego verificamos con un GET si los datos llegaron
-async function postViaForm(url, data) {
-  // Método 1: fetch con mode no-cors — el browser lo permite desde file://
-  // No podemos leer la respuesta pero el servidor la recibe
-  try {
-    await fetch(url, {
-      method: 'POST',
-      mode:   'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body:   JSON.stringify(data),
-    });
-    // no-cors no lanza error aunque falle — asumimos éxito
-    return { ok: true, savedAt: nowAR(), via: 'no-cors' };
-  } catch(e) {}
 
-  // Método 2: form POST en iframe (último recurso)
-  return new Promise((resolve) => {
-    const iframeName = 'lr_iframe_' + Date.now();
-    const iframe     = document.createElement('iframe');
-    iframe.name      = iframeName;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    const timeout = setTimeout(() => {
-      try { iframe.remove(); form.remove(); } catch(e2) {}
-      resolve({ ok: true, savedAt: nowAR(), via: 'form-timeout' });
-    }, 15000);
-
-    iframe.onload = () => {
-      clearTimeout(timeout);
-      try { iframe.remove(); form.remove(); } catch(e2) {}
-      resolve({ ok: true, savedAt: nowAR(), via: 'form' });
-    };
-
-    const form   = document.createElement('form');
-    form.method  = 'POST';
-    form.action  = url;
-    form.target  = iframeName;
-    form.style.display = 'none';
-
-    const input  = document.createElement('input');
-    input.type   = 'hidden';
-    input.name   = 'json';
-    input.value  = JSON.stringify(data);
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-  });
-}
 
 async function syncFromCloud(silent, opts) {
   if (!_cloudUrl) {
@@ -21752,11 +21703,7 @@ async function syncSoloTransferencias() {
     if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
 
     if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
-    await fetch(_cloudUrl, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
-    });
+    await postViaForm(_cloudUrl, payload);
     await new Promise(r => setTimeout(r, 3000));
     if (ind) { ind.textContent = `✓ ${total} transferencias publicadas`; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
@@ -21767,41 +21714,7 @@ async function syncSoloTransferencias() {
   }
 }
 
-async // ── POST via form hidden — sin límite de tamaño, sin CORS preflight ──────────
-function postViaForm(url, payload) {
-  return new Promise(function(resolve) {
-    const json = JSON.stringify(payload);
-    const form = document.createElement('form');
-    form.method  = 'POST';
-    form.action  = url;
-    form.target  = '_lrPostFrame_' + Date.now();
-    form.style.display = 'none';
-    // Crear iframe destino para no navegar la página
-    const iframe = document.createElement('iframe');
-    iframe.name  = form.target;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    // Campo con el JSON
-    const input = document.createElement('input');
-    input.type  = 'hidden';
-    input.name  = 'json';
-    input.value = json;
-    form.appendChild(input);
-    document.body.appendChild(form);
-    // Resolver después de enviar
-    iframe.onload = function() {
-      setTimeout(function() {
-        try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
-        resolve();
-      }, 500);
-    };
-    setTimeout(function() {
-      try { document.body.removeChild(form); document.body.removeChild(iframe); } catch(e) {}
-      resolve();
-    }, 10000);
-    form.submit();
-  });
-}
+
 
 async function syncToCloud(nota) {
   if (isReadonlyUser()) {
@@ -21836,12 +21749,7 @@ async function syncToCloud(nota) {
     // Con no-cors no podemos leer la respuesta, así que verificamos con un GET posterior.
     let result;
     try {
-      await fetch(_cloudUrl, {
-        method:  'POST',
-        mode:    'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body:    JSON.stringify(payload)
-      });
+      await postViaForm(_cloudUrl, payload);
       await new Promise(r => setTimeout(r, 2000));
       try {
         const check = await fetch(_cloudUrl + '?tab=meta&t=' + Date.now());
