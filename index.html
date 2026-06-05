@@ -21671,7 +21671,7 @@ async function syncSoloTransferencias() {
   if (!ok) return;
 
   const ind = document.getElementById('save-indicator');
-  if (ind) { ind.textContent = '⏳ Publicando transferencias…'; ind.style.color = '#47e8ff'; }
+  const setMsg = (txt, col) => { if (ind) { ind.textContent = txt; ind.style.color = col || '#47e8ff'; } };
 
   try {
     const transRows = (DATA.transferencias || []).map(t => ({
@@ -21690,26 +21690,50 @@ async function syncSoloTransferencias() {
       _hoja:        t._hoja        || '',
     }));
 
-    const payload = {
-      token:     _cloudToken,
-      tab:       'all',
-      nota:      'Publicación de transferencias',
-      updatedBy: _cloudUser || 'cargador',
-      data:      { transferencias: transRows }
-    };
+    const total = transRows.length;
+    const LOTE  = 1500;
+    const numLotes = Math.ceil(total / LOTE);
 
-    // Enviar todo en un solo request
-    const total = payload.data.transferencias.length;
-    if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
+    // Publicar en lotes: el primero reemplaza, los demás agregan
+    for (let i = 0; i < numLotes; i++) {
+      const lote      = transRows.slice(i * LOTE, (i + 1) * LOTE);
+      const esPrimero = i === 0;
+      setMsg(`⏳ Publicando lote ${i + 1}/${numLotes} (${lote.length} registros)…`);
 
-    if (ind) ind.textContent = `⏳ Publicando ${total} transferencias…`;
-    await postViaForm(_cloudUrl, payload);
-    await new Promise(r => setTimeout(r, 3000));
-    if (ind) { ind.textContent = `✓ ${total} transferencias publicadas`; ind.style.color = '#47ffb4'; }
-    setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
+      const payload = {
+        token:     _cloudToken,
+        updatedBy: _cloudUser || 'cargador',
+        nota:      `Transferencias lote ${i + 1}/${numLotes}`,
+        data: {
+          transferencias: lote,
+          _trans_modo: esPrimero ? 'reemplazar' : 'agregar',
+        }
+      };
+
+      await postViaForm(_cloudUrl, payload);
+      // Esperar a que Apps Script procese antes del siguiente lote
+      await new Promise(r => setTimeout(r, 3500));
+    }
+
+    // Verificar el total final en Sheets
+    setMsg('⏳ Verificando total en Sheets…');
+    await new Promise(r => setTimeout(r, 1500));
+    let enSheets = '?';
+    try {
+      const check = await fetch(_cloudUrl + '?tab=count_trans&t=' + Date.now());
+      const cj = await check.json();
+      enSheets = cj.transferencias != null ? cj.transferencias : '?';
+    } catch(e) {}
+
+    if (enSheets === total || enSheets === '?') {
+      setMsg(`✓ ${total} transferencias publicadas`, '#47ffb4');
+    } else {
+      setMsg(`⚠ Enviadas ${total}, en Sheets ${enSheets}. Reintentá si no coinciden.`, '#ff8c47');
+    }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 8000);
 
   } catch(err) {
-    if (ind) { ind.textContent = '✗ Error al publicar'; ind.style.color = 'var(--neg)'; }
+    setMsg('✗ Error al publicar: ' + err.message, 'var(--neg)');
     alert('Error: ' + err.message);
   }
 }
@@ -21735,12 +21759,18 @@ async function syncToCloud(nota) {
 
   try {
     // Convertir DATA del dashboard → formato flat para el Sheet
+    const fullData = buildCloudPayload();
+    // Separar transferencias (van por lotes) del resto (va en un envío)
+    const transferencias = fullData.transferencias || [];
+    const restoData = Object.assign({}, fullData);
+    delete restoData.transferencias;
+
     const payload = {
       token:     _cloudToken,
       tab:       'all',
       nota:      nota || 'Actualización manual',
       updatedBy: _cloudUser || 'cargador',
-      data:      buildCloudPayload()
+      data:      restoData
     };
 
     // POST a Google Apps Script
@@ -21750,7 +21780,26 @@ async function syncToCloud(nota) {
     let result;
     try {
       await postViaForm(_cloudUrl, payload);
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 2500));
+
+      // Publicar transferencias por lotes (Sheets manda)
+      if (transferencias.length > 0) {
+        const LOTE = 1500;
+        const numLotes = Math.ceil(transferencias.length / LOTE);
+        for (let i = 0; i < numLotes; i++) {
+          const lote = transferencias.slice(i * LOTE, (i + 1) * LOTE);
+          const tPayload = {
+            token:     _cloudToken,
+            updatedBy: _cloudUser || 'cargador',
+            nota:      `Transferencias lote ${i + 1}/${numLotes}`,
+            data: { transferencias: lote, _trans_modo: i === 0 ? 'reemplazar' : 'agregar' }
+          };
+          showStorageStatus(`⏳ Publicando transferencias ${i + 1}/${numLotes}…`, '#47e8ff');
+          await postViaForm(_cloudUrl, tPayload);
+          await new Promise(r => setTimeout(r, 3500));
+        }
+      }
+
       try {
         const check = await fetch(_cloudUrl + '?tab=meta&t=' + Date.now());
         if (!check.ok) {
@@ -21938,9 +21987,8 @@ function applyCloudData(cloud, opts) {
   // TRANSFERENCIAS: nunca tocar en sync automático (skipTransferencias=true)
   // Solo sincronizar cuando el usuario lo pide explícitamente desde el menú
   if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
-
-    // Normalizar registros de Sheets
-    const fromCloud = cloud.transferencias.map(r => ({
+    // SHEETS MANDA: reemplazar completamente las transferencias locales
+    DATA.transferencias = cloud.transferencias.map(r => ({
       saf:          r.saf          || '',
       organismo:    r.organismo    || '',
       beneficiario: r.beneficiario || '',
@@ -21948,44 +21996,20 @@ function applyCloudData(cloud, opts) {
       ff:           r.ff           || '',
       cgto:         r.cgto         || '',
       observacion:  r.observacion  || '',
-      mes:          r.mes   ? (parseInt(r.mes)   || 0) : 0,
-      año:          r.año   ? (parseInt(r.año)   || 0) : 0,
+      mes:          r.mes   ? (parseInt(r.mes) || 0) : 0,
+      año:          r.año   ? (parseInt(r.año) || 0) : 0,
       importe:      parseFloat(r.importe) || 0,
       categoria:    r.categoria    || 'Sin Clasificar',
       _archivo:     r._archivo     || '',
       _hoja:        r._hoja        || '',
     }));
-
-    if (opts.forceReplace) {
-      // Sync explícito: Sheets reemplaza local completamente
-      DATA.transferencias = fromCloud;
-      // Recalcular años disponibles
-      fromCloud.forEach(function(t) {
-        var a = String(t.año || t.anio || '');
-        if (a && !DATA.years.includes(parseInt(a))) DATA.years.push(parseInt(a));
-      });
-      DATA.years.sort();
-      console.log('[SYNC] Transferencias: Sheets reemplaza local (' + fromCloud.length + ' registros)');
-    } else {
-      // Auto-sync: solo agregar registros nuevos (deduplicar por clave)
-      const claveTrans = r =>
-        `${(r.beneficiario||'').toUpperCase().trim()}|${r.año}|${r.mes}|${Math.round(parseFloat(r.importe)||0)}`;
-
-      if ((DATA.transferencias || []).length === 0) {
-        DATA.transferencias = fromCloud;
-        console.log(`[SYNC] Trans restauradas (local vacío): ${fromCloud.length}`);
-      } else {
-        const claveLocal = new Set(DATA.transferencias.map(claveTrans));
-        const nuevas = fromCloud.filter(r => !claveLocal.has(claveTrans(r)));
-        if (nuevas.length > 0) {
-          DATA.transferencias = DATA.transferencias.concat(nuevas);
-          try { localStorage.setItem('lr_trans_v4', JSON.stringify(DATA.transferencias)); } catch(e) {}
-          console.log(`[SYNC] Trans: +${nuevas.length} nuevas desde Sheets → total ${DATA.transferencias.length}`);
-        } else {
-          console.log(`[SYNC] Trans locales al día: ${DATA.transferencias.length}`);
-        }
-      }
-    }
+    // Recalcular años disponibles
+    DATA.transferencias.forEach(t => {
+      const a = parseInt(t.año);
+      if (a && !DATA.years.includes(a)) DATA.years.push(a);
+    });
+    DATA.years.sort();
+    console.log('[SYNC] Transferencias desde Sheets:', DATA.transferencias.length);
   }
 
   // notas
@@ -21999,15 +22023,10 @@ function applyCloudData(cloud, opts) {
   // reemplazamos _balances completamente — no mergeamos — para que las
   // eliminaciones realizadas en el dashboard se reflejen correctamente.
   if (Array.isArray(cloud.balances)) {
-    const localCount = Object.keys(_balances).length;
-    // Si hay balances locales, NO sobreescribir — local es fuente de verdad
-    // Solo restaurar desde Sheets cuando _balances está vacío (sesión nueva)
-    if (opts.forceReplace) {
-      // Sync manual: Sheets reemplaza local completamente
-      _balances = {};
-      console.log('[SYNC] Balances: Sheets reemplaza local (forceReplace)');
-    }
-    if (opts.forceReplace || localCount === 0) {
+    // SHEETS MANDA: siempre reemplazar balances locales con los de Sheets
+    _balances = {};
+    console.log('[SYNC] Balances desde Sheets:', cloud.balances.length);
+    if (true) {
       // Sin datos locales → restaurar desde Sheets
       const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
       cloud.balances.forEach(r => {
@@ -22109,17 +22128,12 @@ function applyCloudData(cloud, opts) {
   console.log('[SYNC] cloud.flujos recibido:', Array.isArray(cloud.flujos) ? cloud.flujos.length + ' registros' : 'NO ES ARRAY / undefined', cloud.flujos ? JSON.stringify(cloud.flujos).slice(0,200) : 'null');
 
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
-    const tieneLocales = Object.keys(DATA.flujos || {}).length > 0;
+    // SHEETS MANDA: reemplazar todos los flujos con los de Sheets
+    DATA.flujos = {};
     cloud.flujos.forEach(f => {
-      console.log('[SYNC] Procesando flujo:', f.empresa, f.periodo, 'ts:', f.timestamp, 'rubros_json len:', (f.rubros_json||'').length);
-      if (!f.empresa || !f.periodo) { console.log('[SYNC] SKIP: sin empresa/periodo'); return; }
+      if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
-      const local = DATA.flujos[clave];
       const tsCloud = parseInt(f.timestamp) || 0;
-      const tsLocal = parseInt(local?.timestamp) || 0;
-      // Solo skip si el local tiene timestamp real Y es mayor que el de Sheets
-      // Si timestamp es 0 en ambos, o no existe localmente → tomar de Sheets
-      if (local && tsLocal > 0 && tsLocal > tsCloud) return;
       let rubros_parsed = [];
       try { rubros_parsed = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
       let meses_parsed = [];
@@ -23117,12 +23131,11 @@ setTimeout(() => {
   loadDataFromLocalCache();
   arrancar();
 
-  // Si hay Sheets configurado, sincronizar solo fact/sit/personal/balances
-  // NO tocar transferencias — vienen del snapshot local que es la fuente de verdad
+  // SHEETS MANDA: al abrir, traer TODO desde Sheets (fuente de verdad)
   if (_cloudUrl) {
-    syncFromCloud(true, { skipTransferencias: true })
+    syncFromCloud(true, {})
       .then(() => { rebuildActive(); })
-      .catch(() => {});
+      .catch(() => { console.log('[SYNC] Sin conexión al arrancar, usando caché local'); });
   }
 }, 40);
 </script>
