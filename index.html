@@ -1362,10 +1362,10 @@ self.onmessage = async (e) => {
     </button>
 
     <div class="nav-group"><strong>Análisis avanzado</strong></div>
-    <button class="nav-item" onclick="showPanel('sostenibilidad',this)">
+    <button class="nav-item" onclick="showPanel('sostenibilidad',this)" style="display:none">
       <span class="nav-dot"></span>🟢 <strong>Sostenibilidad fiscal</strong>
     </button>
-    <button class="nav-item" onclick="showPanel('heatmap',this)">
+    <button class="nav-item" onclick="showPanel('heatmap',this)" style="display:none">
       <span class="nav-dot"></span>🔥 <strong>Mapa de calor</strong>
     </button>
     <button class="nav-item" onclick="showPanel('presupuesto',this)">
@@ -2167,8 +2167,31 @@ self.onmessage = async (e) => {
     <!-- ══ RANKINGS ══════════════════════════════════════ -->
     <div class="panel" id="panel-ranking">
       <div class="kpi-strip" id="kpi-rank"></div>
+
+      <!-- Selector de criterio de ranking -->
+      <div class="rowfull card" style="margin-bottom:12px;padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">Ordenar por</span>
+          <select class="sel" id="rank-criterio" onchange="buildRanking()" style="min-width:200px">
+            <option value="fact_total">Facturación total (todos los años)</option>
+            <option value="fact_ultimo">Facturación último año</option>
+            <option value="crecimiento">Crecimiento interanual (%)</option>
+            <option value="resultado">Resultado acumulado</option>
+            <option value="margen">Margen (resultado/facturación)</option>
+          </select>
+          <span id="rank-criterio-desc" style="font-size:10px;color:var(--dim)"></span>
+        </div>
+      </div>
+
+      <!-- Barras comparativas -->
+      <div class="rowfull card" style="margin-bottom:12px">
+        <div class="card-hd"><span class="card-hd-title" id="rank-barras-titulo">Comparación visual</span></div>
+        <div id="rank-barras" style="padding:12px 16px"></div>
+      </div>
+
+      <!-- Tabla completa -->
       <div class="rowfull card">
-        <div class="card-hd"><span class="card-hd-title">Ranking completo de facturación por año — con resultado</span></div>
+        <div class="card-hd"><span class="card-hd-title">Ranking completo por año — con resultado y variación</span></div>
         <div style="overflow-x:auto"><table class="tbl" id="tbl-rank"></table></div>
       </div>
     </div>
@@ -3431,6 +3454,15 @@ self.onmessage = async (e) => {
             <span class="card-hd-unit" id="bal-comp-lbl"></span>
           </div>
           <div id="bal-comp-contenido"></div>
+        </div>
+
+        <!-- Comparativo reexpresado (año actual vs anterior reexpresado del mismo balance) -->
+        <div class="rowfull card" id="bal-reexp-wrap" style="display:none;margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Comparativo reexpresado (moneda homogénea)</span>
+            <span class="card-hd-unit" id="bal-reexp-lbl"></span>
+          </div>
+          <div id="bal-reexp-contenido"></div>
         </div>
 
         <!-- ══ EDITOR DE DATOS ══════════════════════════════ -->
@@ -9252,8 +9284,11 @@ function renderTablaPersonal() {
 function buildRanking() {
   const years = ys();
   const lastY = years[years.length-1];
+  const prevY = years.length > 1 ? years[years.length-2] : null;
   const empFiltradas = new Set(empresasFiltradas());
+  const criterio = document.getElementById('rank-criterio')?.value || 'fact_total';
 
+  // KPIs: líderes por año
   document.getElementById('kpi-rank').innerHTML = years.map((y,i)=>{
     const sorted = Object.entries(DATA.fact).filter(([e,f])=>f[y]>0&&empFiltradas.has(e)).sort((a,b)=>b[1][y]-a[1][y]);
     const leader = sorted[0];
@@ -9264,32 +9299,108 @@ function buildRanking() {
       <div class="kpi-sub">${leader?fv(leader[1][y]):''}</div></div>`;
   }).join('');
 
-  // Build full ranking table
+  // Construir datos por empresa
   const allEmps = [...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit)])].filter(e=>empFiltradas.has(e));
-  const rows = allEmps.map(e=>{
-    const fTotal = years.reduce((s,y)=>s+(DATA.fact[e]?.[y]||0),0);
-    const fByYear = years.map(y=>DATA.fact[e]?.[y]||0);
-    const sByYear = years.map(y=>DATA.sit[e]?.[y]);
-    return {e, fTotal, fByYear, sByYear};
-  }).filter(r=>r.fTotal>0).sort((a,b)=>b.fTotal-a.fTotal);
+  const datos = allEmps.map(e=>{
+    const fTotal   = years.reduce((s,y)=>s+(DATA.fact[e]?.[y]||0),0);
+    const fByYear  = years.map(y=>DATA.fact[e]?.[y]||0);
+    const sByYear  = years.map(y=>DATA.sit[e]?.[y]);
+    const sTotal   = years.reduce((s,y)=>s+(DATA.sit[e]?.[y]||0),0);
+    const fUltimo  = DATA.fact[e]?.[lastY] || 0;
+    const fPrev    = prevY ? (DATA.fact[e]?.[prevY] || 0) : 0;
+    const crecim   = fPrev > 0 ? ((fUltimo - fPrev) / fPrev * 100) : null;
+    const margen   = fTotal > 0 ? (sTotal / fTotal * 100) : null;
+    return { e, fTotal, fByYear, sByYear, sTotal, fUltimo, fPrev, crecim, margen };
+  }).filter(r=>r.fTotal>0 || r.sTotal!==0);
 
+  // Ordenar según criterio
+  const desc = {
+    fact_total:  'Suma de facturación de todos los años',
+    fact_ultimo: `Facturación del año ${lastY}`,
+    crecimiento: prevY ? `Variación ${prevY} → ${lastY}` : 'Requiere 2+ años',
+    resultado:   'Suma de resultados (superávit/déficit)',
+    margen:      'Resultado total / Facturación total',
+  };
+  const descEl = document.getElementById('rank-criterio-desc');
+  if (descEl) descEl.textContent = desc[criterio] || '';
+
+  const sortFn = {
+    fact_total:  (a,b)=>b.fTotal - a.fTotal,
+    fact_ultimo: (a,b)=>b.fUltimo - a.fUltimo,
+    crecimiento: (a,b)=>(b.crecim ?? -Infinity) - (a.crecim ?? -Infinity),
+    resultado:   (a,b)=>b.sTotal - a.sTotal,
+    margen:      (a,b)=>(b.margen ?? -Infinity) - (a.margen ?? -Infinity),
+  }[criterio];
+  datos.sort(sortFn);
+
+  // Valor a graficar en barras según criterio
+  const valBarra = (r) => ({
+    fact_total:  r.fTotal,
+    fact_ultimo: r.fUltimo,
+    crecimiento: r.crecim ?? 0,
+    resultado:   r.sTotal,
+    margen:      r.margen ?? 0,
+  }[criterio]);
+  const fmtBarra = (r) => {
+    const v = valBarra(r);
+    if (criterio === 'crecimiento' || criterio === 'margen')
+      return (v>=0?'+':'') + v.toLocaleString('es-AR',{maximumFractionDigits:1}) + '%';
+    return fvFull(v);
+  };
+
+  // ── BARRAS comparativas ──
+  const top = datos.slice(0, 15);
+  const maxAbs = Math.max(...top.map(r=>Math.abs(valBarra(r))), 1);
+  const tituloEl = document.getElementById('rank-barras-titulo');
+  if (tituloEl) tituloEl.textContent = 'Comparación visual — ' + (desc[criterio]||'');
+
+  const barrasHTML = top.map((r,i)=>{
+    const v = valBarra(r);
+    const pct = Math.abs(v) / maxAbs * 100;
+    const neg = v < 0;
+    const col = (criterio==='crecimiento'||criterio==='margen'||criterio==='resultado')
+      ? (neg ? 'var(--neg)' : 'var(--pos)')
+      : YC[lastY] || '#47e8ff';
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+      <div style="width:22px;font-size:10px;color:var(--dim);text-align:right">${i+1}</div>
+      <div style="width:160px;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.e}">${r.e}</div>
+      <div style="flex:1;background:rgba(255,255,255,.04);border-radius:3px;height:18px;position:relative">
+        <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;opacity:.85"></div>
+      </div>
+      <div style="width:120px;font-size:10px;text-align:right;font-weight:500;color:${neg?'var(--neg)':'var(--text)'}">${fmtBarra(r)}</div>
+    </div>`;
+  }).join('');
+  const barrasEl = document.getElementById('rank-barras');
+  if (barrasEl) barrasEl.innerHTML = barrasHTML || '<div style="color:var(--dim);font-size:10px">Sin datos para mostrar.</div>';
+
+  // ── TABLA con variación interanual ──
   const tbl = document.getElementById('tbl-rank');
   tbl.innerHTML = `<thead><tr>
     <th>#</th><th>Empresa</th><th>Rubro</th>
-    ${years.map(y=>`<th class="r"><span style="color:${YC[y]}">${y}</span> Fact.</th><th class="r">Resultado</th>`).join('')}
-    <th class="r">Total</th>
+    ${years.map(y=>`<th class="r"><span style="color:${YC[y]}">${y}</span></th>`).join('')}
+    <th class="r">Var. ${prevY||''}→${lastY}</th>
+    <th class="r">Result. acum.</th>
+    <th class="r">Margen</th>
+    <th class="r">Total fact.</th>
   </tr></thead>`;
   const tb = document.createElement('tbody');
-  rows.forEach((r,i)=>{
+  datos.forEach((r,i)=>{
     const tr = document.createElement('tr');
     const cells = years.map((y,j)=>{
-      const f = r.fByYear[j], s = r.sByYear[j];
-      return `<td class="r">${f>0?fvFull(f):'—'}</td><td class="r">${s!=null&&s!==0?'<span style="color:'+(s>0?'var(--pos)':'var(--neg)')+'">'+fvFull(s)+'</span>':'—'}</td>`;
+      const f = r.fByYear[j];
+      return `<td class="r">${f>0?fvFull(f):'—'}</td>`;
     }).join('');
-    const lastYr  = years[years.length-1];
-    const smfRank = semaforoColor(r.e, lastYr, _semaforoMode);
+    const varCol = r.crecim==null ? '—' :
+      `<span style="color:${r.crecim>=0?'var(--pos)':'var(--neg)'}">${r.crecim>=0?'▲':'▼'} ${Math.abs(r.crecim).toLocaleString('es-AR',{maximumFractionDigits:1})}%</span>`;
+    const margenCol = r.margen==null ? '—' :
+      `<span style="color:${r.margen>=0?'var(--pos)':'var(--neg)'}">${r.margen.toLocaleString('es-AR',{maximumFractionDigits:1})}%</span>`;
+    const resCol = r.sTotal!==0 ?
+      `<span style="color:${r.sTotal>0?'var(--pos)':'var(--neg)'}">${fvFull(r.sTotal)}</span>` : '—';
+    const smfRank = semaforoColor(r.e, lastY, _semaforoMode);
     if (smfRank) tr.style.background = smfRank + '12';
-    tr.innerHTML = `<td class="d">${i+1}</td><td>${r.e}</td><td>${getRuboLabel(r.e)}</td>${cells}<td class="r" style="color:#b8a000;font-weight:500">${fvFull(r.fTotal)}</td>`;
+    tr.innerHTML = `<td class="d">${i+1}</td><td>${r.e}</td><td>${getRuboLabel(r.e)}</td>${cells}
+      <td class="r">${varCol}</td><td class="r">${resCol}</td><td class="r">${margenCol}</td>
+      <td class="r" style="color:#b8a000;font-weight:500">${fvFull(r.fTotal)}</td>`;
     tb.appendChild(tr);
   });
   tbl.appendChild(tb);
@@ -15913,12 +16024,20 @@ function parsearExcelBalance(wb, XLSX) {
     for (let r = 0; r <= rng.e.r; r++) {
       const cellA = ws[XLSX.utils.encode_cell({r, c: colLabel})];
       const cellD = ws[XLSX.utils.encode_cell({r, c: colDatos})];
+      // Columna comparativa (año anterior reexpresado), normalmente colDatos+1
+      const cellC = ws[XLSX.utils.encode_cell({r, c: colDatos + 1})];
 
       const labelRaw = String(cellA?.v || '').trim();
       if (!labelRaw || labelRaw.length < 2) continue;
 
       let valor = typeof cellD?.v === 'number' ? cellD.v : null;
       const formula = cellD?.f || null;
+      // Valor comparativo (año anterior reexpresado)
+      let valorComp = typeof cellC?.v === 'number' ? cellC.v : null;
+      if (valorComp === null && cellC?.f) {
+        const calcC = evalCell(ws, r, colDatos + 1, new Set());
+        if (typeof calcC === 'number') valorComp = calcC;
+      }
 
       // Sin valor cacheado pero con fórmula → evaluar en JS
       if (valor === null && formula) {
@@ -15986,6 +16105,7 @@ function parsearExcelBalance(wb, XLSX) {
         labelOriginal: labelRaw,
         key,
         val:            valor,
+        valComp:        valorComp,
         negativo,
         libre,
         libreDefaultNeg: false,
@@ -16249,12 +16369,60 @@ async function loadBalanceExcel(file) {
     const wsAny = wb.Sheets[snAny];
     const getCellText = (r, c) => String(wsAny[XLSX.utils.encode_cell({r, c})]?.v || '').trim();
     const empresa = getCellText(0, 0) || file.name.replace(/\.xlsx?$/i, '');
-    // Buscar período en primeras filas
+    // Buscar período PRIORIZANDO el header de la columna de datos usada (colDatos)
+    // En balances comparativos hay varias columnas (ej: 31/12/2024 | 31/12/2023);
+    // el período correcto es el de la columna de datos que efectivamente se lee.
     let periodo = '?';
-    for (let r = 0; r <= 5; r++) {
-      const txt = getCellText(r, 0);
-      const m = txt.match(/([12]\d{3})/);
-      if (m) { periodo = m[1]; break; }
+    // 1. Leer del header de la columna de datos (filas 0-6 de esa columna)
+    for (let r = 0; r <= 6 && periodo === '?'; r++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c: colDatos })];
+      if (!cell) continue;
+      let txtH = '';
+      if (cell.w) txtH = String(cell.w);
+      else if (typeof cell.v === 'string') txtH = cell.v;
+      else if (cell.v instanceof Date) txtH = Utilities ? '' : cell.v.getFullYear() + '';
+      // Buscar fecha DD/MM/YYYY o solo el año
+      let mh = txtH.match(/\d{1,2}[/\-]\d{1,2}[/\-]([12]\d{3})/);
+      if (mh) { periodo = mh[1]; break; }
+      mh = txtH.match(/([12]\d{3})/);
+      if (mh) { periodo = mh[1]; break; }
+      // Si la celda es una fecha real (número de serie con formato fecha)
+      if (typeof cell.v === 'number' && cell.v > 30000 && cell.v < 80000) {
+        try {
+          const d = XLSX.SSF.parse_date_code(cell.v);
+          if (d && d.y >= 2000 && d.y <= 2100) { periodo = String(d.y); break; }
+        } catch(eD) {}
+      }
+    }
+    // 2. Fallback: buscar año en col A (formato viejo)
+    if (periodo === '?') {
+      for (let r = 0; r <= 5; r++) {
+        const txt = getCellText(r, 0);
+        const m = txt.match(/([12]\d{3})/);
+        if (m) { periodo = m[1]; break; }
+      }
+    }
+
+    // Detectar período COMPARATIVO (año anterior reexpresado) del header de colDatos+1
+    let periodoComp = '?';
+    for (let r = 0; r <= 6 && periodoComp === '?'; r++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c: colDatos + 1 })];
+      if (!cell) continue;
+      let txtH = cell.w ? String(cell.w) : (typeof cell.v === 'string' ? cell.v : '');
+      let mh = txtH.match(/\d{1,2}[/\-]\d{1,2}[/\-]([12]\d{3})/);
+      if (mh) { periodoComp = mh[1]; break; }
+      mh = txtH.match(/([12]\d{3})/);
+      if (mh) { periodoComp = mh[1]; break; }
+      if (typeof cell.v === 'number' && cell.v > 30000 && cell.v < 80000) {
+        try {
+          const d = XLSX.SSF.parse_date_code(cell.v);
+          if (d && d.y >= 2000 && d.y <= 2100) { periodoComp = String(d.y); break; }
+        } catch(eD) {}
+      }
+    }
+    // Si no se detectó, asumir año anterior al principal
+    if (periodoComp === '?' && periodo !== '?') {
+      periodoComp = String(parseInt(periodo) - 1);
     }
 
     // Determinar tipo_empresa desde estructura_er
@@ -16282,6 +16450,7 @@ async function loadBalanceExcel(file) {
       filename:      file.name,
       empresa:       _empNombre,
       periodo,
+      periodoComp,
       esCierreNoCal: false,
       cierreMes:     12,
       tipo:          'Balance General / Estado de Resultados',
@@ -17428,6 +17597,74 @@ function buildComparacionBalances() {
 
 }
 
+// ── Comparativo reexpresado: año actual vs anterior reexpresado (mismo balance) ──
+function buildComparativoReexpresado() {
+  const wrap = document.getElementById('bal-reexp-wrap');
+  const cont = document.getElementById('bal-reexp-contenido');
+  const lbl  = document.getElementById('bal-reexp-lbl');
+  if (!wrap || !cont) return;
+
+  const key = _balActivo || document.getElementById('bal-sel')?.value;
+  const b = key ? _balances[key] : null;
+
+  // Solo mostrar si el balance tiene datos comparativos (valComp)
+  const tieneComp = b && Array.isArray(b.estructura_er) &&
+    b.estructura_er.some(r => r.valComp != null && r.valComp !== 0);
+
+  if (!b || !tieneComp) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+
+  const pAct  = b.periodo || '?';
+  const pComp = b.periodoComp || (pAct !== '?' ? String(parseInt(pAct) - 1) : '?');
+  if (lbl) lbl.textContent = b.empresa + ' · ' + pAct + ' vs ' + pComp + ' (reexpresado)';
+
+  const fM = function(v) {
+    if (v == null) return '—';
+    const abs = Math.abs(v), sign = v < 0 ? '−' : '';
+    if (abs >= 1e9) return sign + '$ ' + (abs/1e9).toLocaleString('es-AR',{maximumFractionDigits:2}) + ' MM';
+    if (abs >= 1e6) return sign + '$ ' + (abs/1e6).toLocaleString('es-AR',{maximumFractionDigits:1}) + ' M';
+    return sign + '$ ' + abs.toLocaleString('es-AR',{maximumFractionDigits:0});
+  };
+  const fVar = function(act, comp) {
+    if (act == null || comp == null || comp === 0) return '—';
+    const v = (act - comp) / Math.abs(comp) * 100;
+    const col = v >= 0 ? '#1a9e68' : '#ff4766';
+    const arrow = v >= 0 ? '▲' : '▼';
+    return `<span style="color:${col}">${arrow} ${Math.abs(v).toLocaleString('es-AR',{maximumFractionDigits:1})}%</span>`;
+  };
+
+  const filas = b.estructura_er
+    .filter(r => r.val != null || r.valComp != null)
+    .map(r => {
+      const esTotal = /total|utilidad|resultado|patrimonio/i.test(r.lbl);
+      const peso = esTotal ? 'font-weight:600' : '';
+      return `<tr style="${peso}">
+        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px">${r.lbl}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right">${fM(r.val)}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;color:var(--dim)">${fM(r.valComp)}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right">${fVar(r.val, r.valComp)}</td>
+      </tr>`;
+    }).join('');
+
+  cont.innerHTML = `
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">Rubro</th>
+      <th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">${pAct}</th>
+      <th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">${pComp} (reexp.)</th>
+      <th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">Var.</th>
+    </tr></thead>
+    <tbody>${filas}</tbody>
+  </table></div>
+  <div style="margin-top:8px;font-size:9px;color:var(--dim)">
+    Ambas columnas en moneda homogénea del ejercicio ${pAct}, según el balance oficial. La variación refleja el cambio real descontada la inflación.
+  </div>`;
+}
+
+
 
 // ═══════════════════════════════════════════════════════════
 //  NAVEGACIÓN: dropdowns empresa → período → resultado
@@ -18097,6 +18334,7 @@ function renderBalanceUI() {
   renderListaArchivos();
   poblarVincularSel();
   buildComparacionBalances();
+  buildComparativoReexpresado();
 }
 
 function buildBalances() {
@@ -18461,9 +18699,9 @@ function showBalanceResult() {
     cobertura + alertHTML + diagHtml;
 
   document.getElementById('bal-raw-txt').textContent = b.textoRaw;
+  // Actualizar comparativos al cambiar de balance activo
+  try { buildComparativoReexpresado(); } catch(e) {}
 }
-
-// ── Genera diagnóstico financiero narrativo vinculado a los indicadores ──────
 function generarDiagnosticoFinanciero(liq, sol, ren, efi, b) {
   const fmt = v => {
     if (v == null) return null;
@@ -18725,6 +18963,8 @@ function clearAllBalances() {
   if (!confirm('¿Limpiar todos los balances analizados?')) return;
   Object.keys(_balances).forEach(k=>delete _balances[k]);
   _balActivo = null;
+  // Limpiar también de la persistencia local para que no reaparezcan al recargar
+  try { saveDataToLocalCache(); } catch(e) {}
   buildBalances();
 }
 
@@ -22024,6 +22264,7 @@ function applyCloudData(cloud, opts) {
         filename:     key,
         empresa:      r.empresa,
         periodo:      r.periodo,
+        periodoComp:  r.periodo_comp || (r.periodo ? String(parseInt(r.periodo) - 1) : ''),
         moneda:       r.moneda || 'ARS',
         cierreMes:    parseInt(r.cierre_mes) || 12,
         esCierreNoCal: r.es_cierre_no_cal === 'SI',
@@ -22099,7 +22340,16 @@ function applyCloudData(cloud, opts) {
             dias_pago:            null,
           },
         },
-        estructura_er: [], // se reconstruye desde balances_rubros abajo
+        estructura_er: (function() {
+          // Reconstruir desde estructura_json (incluye val y valComp)
+          if (r.estructura_json) {
+            try {
+              const arr = JSON.parse(r.estructura_json);
+              if (Array.isArray(arr) && arr.length > 0) return arr;
+            } catch(e) {}
+          }
+          return []; // si no hay JSON, se reconstruye desde balances_rubros abajo
+        })(),
       };
       });
     } // fin else (restaurar desde Sheets)
@@ -22321,6 +22571,7 @@ function buildCloudPayload() {
     return {
       empresa:               b.empresa    || '',
       periodo:               b.periodo    || '',
+      periodo_comp:          b.periodoComp || '',
       moneda:                b.moneda     || 'ARS',
       cierre_mes:            b.cierreMes  || 12,
       es_cierre_no_cal:      b.esCierreNoCal ? 'SI' : 'NO',
@@ -22389,6 +22640,8 @@ function buildCloudPayload() {
       // Diagnóstico
       alertas:               (b.alertas || []).join(' | '),
       diagnostico:           (b.diagnostico || '').slice(0, 500),
+      // Estructura completa (incluye val y valComp para comparativo reexpresado)
+      estructura_json:       JSON.stringify(b.estructura_er || []),
     };
   });
 
