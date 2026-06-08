@@ -21691,29 +21691,22 @@ async function syncSoloTransferencias() {
     }));
 
     const total = transRows.length;
-    const LOTE  = 1500;
-    const numLotes = Math.ceil(total / LOTE);
 
-    // Publicar en lotes: el primero reemplaza, los demás agregan
-    for (let i = 0; i < numLotes; i++) {
-      const lote      = transRows.slice(i * LOTE, (i + 1) * LOTE);
-      const esPrimero = i === 0;
-      setMsg(`⏳ Publicando lote ${i + 1}/${numLotes} (${lote.length} registros)…`);
-
-      const payload = {
-        token:     _cloudToken,
-        updatedBy: _cloudUser || 'cargador',
-        nota:      `Transferencias lote ${i + 1}/${numLotes}`,
-        data: {
-          transferencias: lote,
-          _trans_modo: esPrimero ? 'reemplazar' : 'agregar',
-        }
-      };
-
-      await postViaForm(_cloudUrl, payload);
-      // Esperar a que Apps Script procese antes del siguiente lote
-      await new Promise(r => setTimeout(r, 3500));
-    }
+    // Envío ÚNICO — sin lotes. El form POST no tiene el límite del no-cors,
+    // y el bridge ahora lee bien e.parameter.json. Enviar todo de una evita
+    // los problemas de orden/timing entre lotes.
+    setMsg(`⏳ Publicando ${total} transferencias…`);
+    const payload = {
+      token:     _cloudToken,
+      updatedBy: _cloudUser || 'cargador',
+      nota:      'Publicación de transferencias',
+      data: {
+        transferencias: transRows,
+        _trans_modo: 'reemplazar',
+      }
+    };
+    await postViaForm(_cloudUrl, payload);
+    await new Promise(r => setTimeout(r, 4000));
 
     // Verificar el total final en Sheets
     setMsg('⏳ Verificando total en Sheets…');
@@ -21782,22 +21775,17 @@ async function syncToCloud(nota) {
       await postViaForm(_cloudUrl, payload);
       await new Promise(r => setTimeout(r, 2500));
 
-      // Publicar transferencias por lotes (Sheets manda)
+      // Publicar transferencias en un solo envío (Sheets manda)
       if (transferencias.length > 0) {
-        const LOTE = 1500;
-        const numLotes = Math.ceil(transferencias.length / LOTE);
-        for (let i = 0; i < numLotes; i++) {
-          const lote = transferencias.slice(i * LOTE, (i + 1) * LOTE);
-          const tPayload = {
-            token:     _cloudToken,
-            updatedBy: _cloudUser || 'cargador',
-            nota:      `Transferencias lote ${i + 1}/${numLotes}`,
-            data: { transferencias: lote, _trans_modo: i === 0 ? 'reemplazar' : 'agregar' }
-          };
-          showStorageStatus(`⏳ Publicando transferencias ${i + 1}/${numLotes}…`, '#47e8ff');
-          await postViaForm(_cloudUrl, tPayload);
-          await new Promise(r => setTimeout(r, 3500));
-        }
+        showStorageStatus(`⏳ Publicando ${transferencias.length} transferencias…`, '#47e8ff');
+        const tPayload = {
+          token:     _cloudToken,
+          updatedBy: _cloudUser || 'cargador',
+          nota:      'Transferencias',
+          data: { transferencias: transferencias, _trans_modo: 'reemplazar' }
+        };
+        await postViaForm(_cloudUrl, tPayload);
+        await new Promise(r => setTimeout(r, 4000));
       }
 
       try {
