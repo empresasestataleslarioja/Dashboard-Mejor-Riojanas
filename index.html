@@ -4962,6 +4962,9 @@ function imprimirPanelActivo() {
   var reportHTML = '';
   if      (panelId === 'personal')       reportHTML = _rptPersonal();
   else if (panelId === 'balances')       reportHTML = _rptBalance();
+  else if (panelId === 'resumen')        reportHTML = _rptResumen();
+  else if (panelId === 'resultado')      reportHTML = _rptResultado();
+  else if (panelId === 'empresa')        reportHTML = _rptERMensual();
   else if (panelId === 'transferencias') {
     try {
       reportHTML = _rptTransferencias();
@@ -5293,6 +5296,160 @@ function _rptBarH(items, colorFn) {
         + '<td style="width:62px;text-align:right;font-weight:600;font-family:monospace;color:#111;padding:3px 0 3px 6px;border:none">'+(d.fmt||d.v)+'</td>'
         + '</tr>';
     }).join('') + '</table>';
+}
+
+// ── Reporte: Resumen ejecutivo ──
+function _rptResumen() {
+  const years = ys().map(String);
+  const fmt = v => {
+    if (v == null) return '—';
+    const a = Math.abs(v), s = v<0?'−':'';
+    if (a >= 1e9) return s+'$'+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+' MM';
+    if (a >= 1e6) return s+'$'+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';
+    return s+'$'+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+  };
+  const lastY = years[years.length-1];
+  const totFact = DATA.totals_fact[lastY] || 0;
+  const totSup  = DATA.totals_sup[lastY] || 0;
+  const totDef  = DATA.totals_def[lastY] || 0;
+  const nSup    = DATA.sup_count[lastY] || 0;
+  const nDef    = DATA.def_count[lastY] || 0;
+
+  const kpis = `<div class="kg">
+    ${_rptKpi('Facturación '+lastY, fmt(totFact), years.length+' años', '#185fa5')}
+    ${_rptKpi('Superávit '+lastY, fmt(totSup), nSup+' empresas', '#0f6e56')}
+    ${_rptKpi('Déficit '+lastY, fmt(totDef), nDef+' empresas', '#c0392b')}
+    ${_rptKpi('Resultado neto', fmt(totSup+totDef), (totSup+totDef)>=0?'positivo':'negativo', (totSup+totDef)>=0?'#0f6e56':'#c0392b')}
+  </div>`;
+
+  // Tabla de facturación por año
+  const filaFact = years.map(y=>`<td style="text-align:right">${fmt(DATA.totals_fact[y]||0)}</td>`).join('');
+  const filaSup  = years.map(y=>`<td style="text-align:right;color:#0f6e56">${fmt(DATA.totals_sup[y]||0)}</td>`).join('');
+  const filaDef  = years.map(y=>`<td style="text-align:right;color:#c0392b">${fmt(DATA.totals_def[y]||0)}</td>`).join('');
+  const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+
+  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:10pt;margin-top:8px">
+    <thead><tr><th style="text-align:left">Concepto</th>${ths}</tr></thead>
+    <tbody>
+      <tr><td>Facturación total</td>${filaFact}</tr>
+      <tr><td>Superávit acumulado</td>${filaSup}</tr>
+      <tr><td>Déficit acumulado</td>${filaDef}</tr>
+    </tbody>
+  </table>`;
+
+  // Top 10 empresas por facturación del último año
+  const topEmp = Object.entries(DATA.fact)
+    .map(([e,f])=>({e, v:f[lastY]||0}))
+    .filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,10);
+  const topBars = _rptBarH(topEmp.map(x=>({label:x.e, value:x.v})), ()=>'#185fa5');
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+    + _rptHeader('Resumen Ejecutivo', 'Empresas estatales de La Rioja · '+lastY)
+    + kpis
+    + '<div class="st">Evolución consolidada</div><div class="tw">'+tabla+'</div></div>'
+    + '<div class="st">Top 10 empresas por facturación '+lastY+'</div><div class="tw">'+topBars+'</div></div>'
+    + _rptFooter()
+    + '</div></body></html>';
+}
+
+// ── Reporte: Resultado (superávit / déficit) ──
+function _rptResultado() {
+  const years = ys().map(String);
+  const lastY = years[years.length-1];
+  const fmt = v => {
+    if (v == null) return '—';
+    const a = Math.abs(v), s = v<0?'−':'';
+    if (a >= 1e9) return s+'$'+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+' MM';
+    if (a >= 1e6) return s+'$'+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';
+    return s+'$'+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+  };
+
+  // Empresas ordenadas por resultado del último año
+  const emps = Object.keys(DATA.sit)
+    .map(e=>({e, v: DATA.sit[e]?.[lastY] ?? null, serie: years.map(y=>DATA.sit[e]?.[y])}))
+    .filter(x=>x.v!=null)
+    .sort((a,b)=>(b.v||0)-(a.v||0));
+
+  const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+  const filas = emps.map(x=>{
+    const celdas = x.serie.map(v=>`<td style="text-align:right;${v<0?'color:#c0392b':(v>0?'color:#0f6e56':'')}">${v!=null&&v!==0?fmt(v):'—'}</td>`).join('');
+    return `<tr><td style="text-align:left">${x.e}</td>${celdas}</tr>`;
+  }).join('');
+
+  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9pt">
+    <thead><tr><th style="text-align:left">Empresa</th>${ths}</tr></thead>
+    <tbody>${filas}</tbody></table>`;
+
+  // Barras de las mejores y peores
+  const mejores = emps.slice(0,8).map(x=>({label:x.e, value:x.v}));
+  const peores  = emps.slice(-8).reverse().map(x=>({label:x.e, value:x.v}));
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+    + _rptHeader('Resultado por Empresa', 'Superávit / Déficit · '+lastY)
+    + '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(mejores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
+    + '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(peores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
+    + '<div class="st">Detalle por año</div><div class="tw">'+tabla+'</div></div>'
+    + _rptFooter()
+    + '</div></body></html>';
+}
+
+// ── Reporte: ER mensual de la empresa seleccionada ──
+function _rptERMensual() {
+  const emp = document.getElementById('sel-emp')?.value;
+  if (!emp) return '<html><body style="font-family:Arial;padding:40px">Seleccioná una empresa primero.</body></html>';
+  const erM = DATA.er_mensual?.[emp] || {};
+  const anios = Object.keys(erM).sort();
+  if (anios.length === 0) return '<html><body style="font-family:Arial;padding:40px">'+emp+' no tiene estado de resultados mensual cargado.</body></html>';
+
+  const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmt = v => {
+    if (v == null || v === '') return '—';
+    const a = Math.abs(v), s = v<0?'−':'';
+    if (a >= 1e9) return s+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+'MM';
+    if (a >= 1e6) return s+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';
+    if (a >= 1e3) return s+(a/1e3).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';
+    return s+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+  };
+
+  const ESTRUCTURA = [
+    ['ventas','Ventas Netas'], ['costo','(−) Costo de Ventas'], ['utilBruta','= Utilidad Bruta'],
+    ['gastoAdm','(−) Gastos de Administración'], ['gastoCom','(−) Gastos de Comercialización'],
+    ['resOperativo','= Resultado Operativo'], ['resFinanciero','(+/−) Resultado Financiero'],
+    ['resAntesImp','= Resultado antes de Imp.'], ['resEjercicio','= Resultado del Ejercicio'],
+  ];
+
+  const bloques = anios.map(yr=>{
+    const erData = erM[yr];
+    const esTrim = erData.esTrimestral;
+    const lblP = m => esTrim ? ({3:'T1',6:'T2',9:'T3',12:'T4'}[m]||('M'+m)) : (NM[m]||m);
+    const mesesSet = new Set();
+    erData.filas.forEach(f=>Object.keys(f.valores).forEach(m=>mesesSet.add(Number(m))));
+    const meses = [...mesesSet].sort((a,b)=>a-b);
+    const getF = cpt => erData.filas.find(f=>f.conceptoStd===cpt);
+
+    const ths = meses.map(m=>`<th style="text-align:right">${lblP(m)}</th>`).join('');
+    const filas = ESTRUCTURA.map(([cpt,lbl])=>{
+      const f = getF(cpt);
+      const bold = ['utilBruta','resOperativo','resAntesImp','resEjercicio'].includes(cpt);
+      const celdas = meses.map(m=>{
+        const v = f ? f.valores[m] : null;
+        return `<td style="text-align:right;${v<0?'color:#c0392b':''}">${fmt(v)}</td>`;
+      }).join('');
+      const tot = f ? meses.reduce((s,m)=>s+(f.valores[m]||0),0) : null;
+      return `<tr style="${bold?'font-weight:700':''}"><td style="text-align:left">${lbl}</td>${celdas}<td style="text-align:right;font-weight:700;border-left:1px solid #ccc">${fmt(tot)}</td></tr>`;
+    }).join('');
+
+    return `<div class="st">${yr} — ${esTrim?'trimestral':'mensual'}</div><div class="tw">
+      <table style="width:100%;border-collapse:collapse;font-size:8.5pt">
+        <thead><tr><th style="text-align:left">Concepto</th>${ths}<th style="text-align:right;border-left:1px solid #ccc">TOTAL</th></tr></thead>
+        <tbody>${filas}</tbody></table></div></div>`;
+  }).join('');
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+    + _rptHeader('Estado de Resultados', emp)
+    + bloques
+    + _rptFooter()
+    + '</div></body></html>';
 }
 
 function _rptPersonal(autoPrint) {
@@ -9853,6 +10010,18 @@ function _erMensualToggleEdit(emp) {
   buildEvolucionMensual(emp);
 }
 
+// Crear un concepto estándar que no existía (para cargar datos)
+function _erMensualCrearConcepto(emp, anio, concepto, label) {
+  const erData = DATA.er_mensual?.[emp]?.[anio];
+  if (!erData) return;
+  // Evitar duplicar
+  if (erData.filas.some(f => f.conceptoStd === concepto)) return;
+  erData.filas.push({ lbl: label || concepto, valores: {}, conceptoStd: concepto });
+  _erMensualRecalcular(emp, anio);
+  _erMensualSync(emp, anio);
+  buildEvolucionMensual(emp);
+}
+
 // Editar una celda (concepto × mes)
 function _erMensualEditarCelda(emp, anio, filaIdx, mes, inputEl) {
   const erData = DATA.er_mensual?.[emp]?.[anio];
@@ -10066,7 +10235,7 @@ function buildEvolucionMensual(emp) {
       ];
       filasHTML = estructura.map(e => {
         const fila = getFila(e.concepto);
-        if (!fila && !edit) return '';
+        // Mostrar SIEMPRE todos los conceptos del ER estándar, aunque no tengan datos
         const fi = fila ? erData.filas.indexOf(fila) : -1;
         const calc = ['utilBruta','resOperativo','resAntesImp'].includes(e.concepto); // subtotales calculados
         const celdas = mesesMostrar.map(m=>{
@@ -10077,7 +10246,7 @@ function buildEvolucionMensual(emp) {
         const totFila = fila ? mesesMostrar.reduce((s,m)=>s+(fila.valores[m]||0),0) : null;
         const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${fmt(totFila)}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
-        const nota = (edit && !fila && !calc) ? ' <span style="color:var(--dim);font-size:8px">(sin datos)</span>' : '';
+        const nota = (edit && !fila && !calc) ? ` <button onclick="_erMensualCrearConcepto('${empJS}','${yr}','${e.concepto}','${e.lbl.replace(/'/g,"")}')" style="padding:1px 6px;font-size:8px;background:transparent;border:1px solid var(--bd);border-radius:3px;color:var(--acc,#47e8ff);cursor:pointer;margin-left:4px">+ cargar</button>` : '';
         return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}${nota}</td>${celdas}${totCell}${edit?'<td></td>':''}</tr>`;
       }).join('');
     }
