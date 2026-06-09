@@ -10,6 +10,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+console.log('%c[LR Dashboard] Versión con ER mensual editable — ' + new Date().toISOString(), 'color:#47e8ff;font-weight:bold');
+
 // ── Archivo modelo — generado con SheetJS en tiempo real ─────────────────────
 function descargarModelo() {
   const wb = XLSX.utils.book_new();
@@ -10017,7 +10019,13 @@ function buildEvolucionMensual(emp) {
     // En edición, si no hay meses, ofrecer los 12
     const mesesMostrar = (edit && meses.length === 0) ? [1,2,3,4,5,6,7,8,9,10,11,12] : meses;
 
-    const thMeses = mesesMostrar.map(m=>`<th style="padding:5px 6px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">${NM[m]||m}</th>`).join('');
+    const esTrim = erData && erData.esTrimestral;
+    const lblPeriodo = m => {
+      if (esTrim) { const t = {3:'T1',6:'T2',9:'T3',12:'T4'}[m]; return t || ('M'+m); }
+      return NM[m] || m;
+    };
+    const thMeses = mesesMostrar.map(m=>`<th style="padding:5px 6px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">${lblPeriodo(m)}</th>`).join('');
+    const thTotal = `<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--acc,#47e8ff);border-bottom:2px solid var(--bd);border-left:1px solid var(--bd)">TOTAL</th>`;
     const thEdit = edit ? '<th style="border-bottom:2px solid var(--bd)"></th>' : '';
 
     let filasHTML;
@@ -10030,6 +10038,8 @@ function buildEvolucionMensual(emp) {
           if (edit) return `<td style="padding:2px 4px;text-align:right">${inputCelda(yr,fi,m,v)}</td>`;
           return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}">${fmt(v)}</td>`;
         }).join('');
+        const totFila = mesesMostrar.reduce((s,m)=>s+(f.valores[m]||0),0);
+        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${fmt(totFila)}</td>`;
         const lblCell = edit
           ? `<td style="padding:4px 8px;font-size:9px;white-space:nowrap;min-width:200px">
                <input value="${f.lbl}" onblur="DATA.er_mensual['${empJS}']['${yr}'].filas[${fi}].lbl=this.value;_erMensualSync('${empJS}','${yr}')"
@@ -10039,7 +10049,7 @@ function buildEvolucionMensual(emp) {
                </select></td>`
           : `<td style="padding:4px 8px;font-size:9px;white-space:nowrap">${f.lbl}</td>`;
         const delCell = edit ? `<td style="padding:2px"><button onclick="_erMensualQuitarFila('${empJS}','${yr}',${fi})" style="padding:1px 6px;font-size:10px;background:var(--neg);border:none;border-radius:3px;color:#fff;cursor:pointer">×</button></td>` : '';
-        return `<tr style="${peso}">${lblCell}${celdas}${delCell}</tr>`;
+        return `<tr style="${peso}">${lblCell}${celdas}${totCell}${delCell}</tr>`;
       }).join('');
     } else {
       const getFila = (concepto) => erData.filas.find(f => f.conceptoStd === concepto);
@@ -10064,18 +10074,20 @@ function buildEvolucionMensual(emp) {
           if (edit && !calc && fi>=0) return `<td style="padding:2px 4px;text-align:right">${inputCelda(yr,fi,m,v)}</td>`;
           return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}${calc?';color:var(--acc,#47e8ff)':''}">${fmt(v)}</td>`;
         }).join('');
+        const totFila = fila ? mesesMostrar.reduce((s,m)=>s+(fila.valores[m]||0),0) : null;
+        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${fmt(totFila)}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
         const nota = (edit && !fila && !calc) ? ' <span style="color:var(--dim);font-size:8px">(sin datos)</span>' : '';
-        return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}${nota}</td>${celdas}${edit?'<td></td>':''}</tr>`;
+        return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}${nota}</td>${celdas}${totCell}${edit?'<td></td>':''}</tr>`;
       }).join('');
     }
 
     const btnAgregar = edit ? `<div style="margin-top:8px"><button onclick="_erMensualAgregarFila('${empJS}','${yr}')" style="padding:4px 10px;font-size:10px;background:transparent;border:1px dashed var(--bd);border-radius:4px;color:var(--dim);cursor:pointer">+ Agregar concepto</button></div>` : '';
 
     return `<div style="margin-bottom:20px">
-      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--acc,#47e8ff)">${yr} — ${meses.length} meses${edit?' · modo edición':''}</div>
+      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--acc,#47e8ff)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${edit?' · modo edición':''}</div>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
-        <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${thMeses}${thEdit}</tr></thead>
+        <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${thMeses}${thTotal}${thEdit}</tr></thead>
         <tbody>${filasHTML}</tbody>
       </table></div>
       ${btnAgregar}
@@ -14687,6 +14699,15 @@ function tryParseERMatricial(wb, fname) {
 function _parsearPestanasMensuales(wb, anioDefault) {
   const hojasResumen = new Set(['RESUMEN','FACTURACION ANUAL','HOJA2','PERSONAL','SITUACION FINANCIERA']);
   const resultado = [];
+  // Convierte número o string numérico a Number (o null)
+  const _numVal = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
 
   wb.SheetNames.forEach(sn => {
     if (hojasResumen.has(sn.toUpperCase().trim())) return;
@@ -14695,26 +14716,67 @@ function _parsearPestanasMensuales(wb, anioDefault) {
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
     if (rows.length < 3) return;
 
-    // 1. Buscar fila con fechas mensuales (>=3 fechas consecutivas)
-    let filaMeses = -1, colMeses = [];
-    for (let i = 0; i < Math.min(6, rows.length); i++) {
+    // 1. Buscar fila con meses (fechas O nombres de mes en texto)
+    const MESES_TXT = {'ENERO':1,'FEBRERO':2,'MARZO':3,'ABRIL':4,'MAYO':5,'JUNIO':6,
+                       'JULIO':7,'AGOSTO':8,'SEPTIEMBRE':9,'SETIEMBRE':9,'OCTUBRE':10,
+                       'NOVIEMBRE':11,'DICIEMBRE':12,
+                       'ENE':1,'FEB':2,'MAR':3,'ABR':4,'MAY':5,'JUN':6,'JUL':7,'AGO':8,
+                       'SEP':9,'SET':9,'OCT':10,'NOV':11,'DIC':12};
+    // Trimestres → mes representativo (fin de trimestre)
+    const TRIM_TXT = {'PRIMER TRIMESTRE':3,'SEGUNDO TRIMESTRE':6,'TERCER TRIMESTRE':9,'CUARTO TRIMESTRE':12,
+                      '1ER TRIMESTRE':3,'2DO TRIMESTRE':6,'3ER TRIMESTRE':9,'4TO TRIMESTRE':12,
+                      '1° TRIMESTRE':3,'2° TRIMESTRE':6,'3° TRIMESTRE':9,'4° TRIMESTRE':12,
+                      'TRIMESTRE 1':3,'TRIMESTRE 2':6,'TRIMESTRE 3':9,'TRIMESTRE 4':12};
+    let filaMeses = -1, colMeses = [], esTrimestral = false;
+    for (let i = 0; i < Math.min(8, rows.length); i++) {
       const fechas = [];
+      let trimEstaFila = false;
       for (let c = 1; c < (rows[i]||[]).length; c++) {
         const v = rows[i][c];
-        // SheetJS con cellDates devuelve Date; también aceptar números de serie
         let mes = null;
         if (v instanceof Date) mes = v.getMonth() + 1;
         else if (typeof v === 'number' && v > 30000 && v < 80000) {
           try { const d = XLSX.SSF.parse_date_code(v); if (d) mes = d.m; } catch(e) {}
         }
+        else if (typeof v === 'string' && v.trim()) {
+          const vu = v.trim().toUpperCase();
+          // Trimestre (excluir TOTALES)
+          if (TRIM_TXT[vu]) { mes = TRIM_TXT[vu]; trimEstaFila = true; }
+          else if (MESES_TXT[vu]) mes = MESES_TXT[vu];
+          else {
+            const mFecha = vu.match(/^(\d{1,2})[/\-](\d{2,4})$/);
+            if (mFecha) {
+              const mm = parseInt(mFecha[1]);
+              if (mm >= 1 && mm <= 12) mes = mm;
+            } else {
+              for (const m in MESES_TXT) {
+                if (vu === m || vu.startsWith(m + ' ') || vu.startsWith(m + '-')) { mes = MESES_TXT[m]; break; }
+              }
+            }
+          }
+        }
         if (mes) fechas.push({ col: c, mes });
       }
-      if (fechas.length >= 3) { filaMeses = i; colMeses = fechas; break; }
+      // Trimestres: aceptar con >=2 (algunas empresas solo tienen 1-2 trimestres cargados)
+      const minCols = trimEstaFila ? 1 : 3;
+      if (fechas.length >= minCols) { filaMeses = i; colMeses = fechas; esTrimestral = trimEstaFila; break; }
     }
-    if (filaMeses < 0) return; // esta pestaña no tiene formato mensual
+    if (filaMeses < 0) return; // esta pestaña no tiene formato mensual ni trimestral
 
     // 2. Identificar conceptos para el ER estándar (mapeo por patrón)
-    const colA = rows.map(r => String(r[0] || '').trim());
+    // Detectar columna de labels: la que tiene más texto descriptivo antes de la primera col de datos
+    const primeraColDatos = colMeses.length ? Math.min(...colMeses.map(c=>c.col)) : 1;
+    let colLabel = 0;
+    let maxTextos = 0;
+    for (let cl = 0; cl < primeraColDatos; cl++) {
+      let nTextos = 0;
+      for (let ri = filaMeses + 1; ri < Math.min(rows.length, filaMeses + 25); ri++) {
+        const v = rows[ri] ? rows[ri][cl] : null;
+        if (typeof v === 'string' && v.trim().length > 3) nTextos++;
+      }
+      if (nTextos > maxTextos) { maxTextos = nTextos; colLabel = cl; }
+    }
+    const colA = rows.map(r => String(r[colLabel] || '').trim());
     const colAU = colA.map(t => t.toUpperCase());
 
     const esVenta = t => (t.includes('VENTA') || t.includes('INGRESO POR VENTA') || t === 'INGRESOS' || t.includes('VENTAS NETA') || t === 'INGRESO')
@@ -14753,8 +14815,8 @@ function _parsearPestanasMensuales(wb, anioDefault) {
     colMeses.forEach(({col, mes}) => {
       const fact = filaVenta >= 0 ? rows[filaVenta][col] : null;
       const res  = filaRes  >= 0 ? rows[filaRes][col]  : null;
-      const fNum = typeof fact === 'number' ? fact : null;
-      const rNum = typeof res  === 'number' ? res  : null;
+      const fNum = _numVal(fact);
+      const rNum = _numVal(res);
       if (fNum !== null || rNum !== null) {
         meses[mes] = { fact: fNum, res: rNum };
       }
@@ -14768,8 +14830,8 @@ function _parsearPestanasMensuales(wb, anioDefault) {
       const valores = {};
       let tieneValor = false;
       colMeses.forEach(({col, mes}) => {
-        const v = rows[ri][col];
-        if (typeof v === 'number') { valores[mes] = v; tieneValor = true; }
+        const nv = _numVal(rows[ri][col]);
+        if (nv !== null) { valores[mes] = nv; tieneValor = true; }
       });
       if (tieneValor) {
         // Determinar a qué concepto estándar corresponde esta fila
@@ -14788,6 +14850,7 @@ function _parsearPestanasMensuales(wb, anioDefault) {
         meses,
         erFilas,                  // ER completo original (todas las filas)
         conceptos,                // índices de conceptos estándar
+        esTrimestral,             // true si el período son trimestres (no meses)
         ventaLbl: filaVenta >= 0 ? colA[filaVenta] : null,
         resLbl:   filaRes  >= 0 ? colA[filaRes]  : null,
       });
@@ -14884,7 +14947,7 @@ function _aplicarERMatricial() {
       // Guardar ER completo (todas las filas)
       if (Array.isArray(m.erFilas) && m.erFilas.length > 0) {
         if (!DATA.er_mensual[m.empresa]) DATA.er_mensual[m.empresa] = {};
-        DATA.er_mensual[m.empresa][yS] = { filas: m.erFilas, conceptos: m.conceptos || {} };
+        DATA.er_mensual[m.empresa][yS] = { filas: m.erFilas, conceptos: m.conceptos || {}, esTrimestral: !!m.esTrimestral };
       }
       nMens++;
     });
@@ -14912,7 +14975,9 @@ function _cancelarERMatricial() {
 
 function handleImportWorkbook(wb, fname) {
   // ── Intentar parser de ER matricial (Estados de Resultados por sector) ──
+  console.log('[LR] handleImportWorkbook:', fname, '— hojas:', wb.SheetNames.join(', '));
   const erMatResult = tryParseERMatricial(wb, fname);
+  console.log('[LR] tryParseERMatricial resultado:', erMatResult ? erMatResult.empresas.length + ' empresas' : 'null (no es ER matricial)');
   if (erMatResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERMatricial(erMatResult, fname);
@@ -23078,7 +23143,7 @@ function applyCloudData(cloud, opts) {
         const conceptos = r.conceptos_json ? JSON.parse(r.conceptos_json) : {};
         if (Array.isArray(filas) && filas.length > 0) {
           if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
-          DATA.er_mensual[emp][yS] = { filas, conceptos };
+          DATA.er_mensual[emp][yS] = { filas, conceptos, esTrimestral: r.es_trimestral === 'SI' };
         }
       } catch(e) {}
     });
@@ -23348,6 +23413,7 @@ function buildCloudPayload() {
         anio,
         filas_json: JSON.stringify(data.filas || []),
         conceptos_json: JSON.stringify(data.conceptos || {}),
+        es_trimestral: data.esTrimestral ? 'SI' : 'NO',
       });
     });
   });
