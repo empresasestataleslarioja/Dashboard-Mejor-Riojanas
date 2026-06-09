@@ -14830,6 +14830,183 @@ function confirmarSIDIF(modo, fname, _unused) {
   _aplicarSIDIF(pending.sidifResult, pending.fname, modo);
 }
 
+// ── Parser de formato Ventas/Gastos mensual (acumulado por empresa) ──
+// Detecta hoja con bloque VENTAS (con TOTALES) y bloque GASTOS (con TOTALES),
+// meses en columnas. Construye ER mensual: Ventas → ingreso, Gastos → egreso,
+// Resultado = Ventas − Gastos.
+function tryParseVentasGastos(wb, fname) {
+  const MESES_TXT = {'ENERO':1,'FEBRERO':2,'MARZO':3,'ABRIL':4,'MAYO':5,'JUNIO':6,
+                     'JULIO':7,'AGOSTO':8,'SEPTIEMBRE':9,'SETIEMBRE':9,'OCTUBRE':10,'NOVIEMBRE':11,'DICIEMBRE':12};
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) { const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.')); return isNaN(n)?null:n; }
+    return null;
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+    if (rows.length < 6) continue;
+
+    // Buscar fila de meses (ENERO, FEBRERO...) y fila "DETALLE DE VENTAS"
+    let filaMesesVentas = -1, colMeses = [];
+    let filaVentasTotales = -1, filaGastosTotales = -1;
+    let tieneVentas = false, tieneGastos = false;
+
+    for (let i = 0; i < rows.length; i++) {
+      const c0 = String(rows[i][0] || '').trim().toUpperCase();
+      // Detectar fila de meses
+      if (filaMesesVentas < 0) {
+        const cols = [];
+        for (let c = 1; c < rows[i].length; c++) {
+          const vu = String(rows[i][c] || '').trim().toUpperCase();
+          if (MESES_TXT[vu]) cols.push({ col: c, mes: MESES_TXT[vu] });
+        }
+        if (cols.length >= 3) { filaMesesVentas = i; colMeses = cols; }
+      }
+      if (c0.includes('DETALLE DE VENTAS') || c0.startsWith('VENTAS ')) tieneVentas = true;
+      if (c0.includes('DETALLE DE GASTOS') || c0.startsWith('GASTOS ')) tieneGastos = true;
+      // Filas TOTALES: primera = ventas, segunda = gastos
+      if (c0 === 'TOTALES') {
+        if (filaVentasTotales < 0) filaVentasTotales = i;
+        else if (filaGastosTotales < 0) filaGastosTotales = i;
+      }
+    }
+
+    // Requiere bloques de ventas y gastos con sus totales
+    if (!tieneVentas || !tieneGastos || filaVentasTotales < 0 || filaGastosTotales < 0 || colMeses.length === 0) continue;
+
+    // Año del título
+    let anio = null;
+    for (let i = 0; i < Math.min(4, rows.length); i++) {
+      for (const v of rows[i]) {
+        if (typeof v === 'string') { const m = v.match(/(20\d{2})/); if (m) { anio = m[1]; break; } }
+      }
+      if (anio) break;
+    }
+    // Del nombre de archivo si no se halló
+    if (!anio) { const mf = fname.match(/(20\d{2})/); if (mf) anio = mf[1]; }
+
+    // Extraer ventas, gastos y resultado por mes
+    const meses = {};
+    colMeses.forEach(({col, mes}) => {
+      const ventas = _num(rows[filaVentasTotales][col]);
+      const gastos = _num(rows[filaGastosTotales][col]);
+      if ((ventas != null && ventas !== 0) || (gastos != null && gastos !== 0)) {
+        const v = ventas || 0, g = gastos || 0;
+        meses[mes] = { ventas: v, gastos: g, resultado: v - g };
+      }
+    });
+    if (Object.keys(meses).length === 0) continue;
+
+    // Nombre de empresa: del nombre de archivo (antes del primer _ con fecha) o del título
+    let empresa = fname.replace(/\.xlsx?$/i,'').replace(/_/g,' ').toUpperCase();
+    empresa = empresa.split(/\s+ACUMULADO|\s+AL\s+\d|\s+VENTAS/i)[0].trim();
+
+    return { empresa, anio, meses, hoja: sn };
+  }
+  return null;
+}
+
+function _mostrarPreviewVentasGastos(result, fname) {
+  window._vgPendiente = result;
+  const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmt = v => v==null ? '—' : (v<0?'−':'')+'$'+Math.abs(v).toLocaleString('es-AR',{maximumFractionDigits:0});
+  const meses = Object.keys(result.meses).map(Number).sort((a,b)=>a-b);
+
+  const ths = meses.map(m=>`<th style="padding:5px 6px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">${NM[m]}</th>`).join('');
+  const filaV = meses.map(m=>`<td style="padding:4px 6px;text-align:right;font-size:9px">${fmt(result.meses[m].ventas)}</td>`).join('');
+  const filaG = meses.map(m=>`<td style="padding:4px 6px;text-align:right;font-size:9px;color:var(--neg)">${fmt(result.meses[m].gastos)}</td>`).join('');
+  const filaR = meses.map(m=>`<td style="padding:4px 6px;text-align:right;font-size:9px;font-weight:600;color:${result.meses[m].resultado>=0?'var(--pos)':'var(--neg)'}">${fmt(result.meses[m].resultado)}</td>`).join('');
+
+  const totV = meses.reduce((s,m)=>s+result.meses[m].ventas,0);
+  const totR = meses.reduce((s,m)=>s+result.meses[m].resultado,0);
+
+  const html = `<div style="padding:16px;background:var(--s1);border:1px solid var(--bd2);border-radius:6px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:4px">Ventas/Gastos detectado — ${fname}</div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
+      <b>${result.empresa}</b> · Año ${result.anio||'?'} · ${meses.length} meses · Facturación total ${fmt(totV)} · Resultado ${fmt(totR)}<br>
+      Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo) e impactará en Facturación y Resultado anuales.
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${ths}</tr></thead>
+      <tbody>
+        <tr><td style="padding:4px 8px;font-size:9px;font-weight:600">Ventas (facturación)</td>${filaV}</tr>
+        <tr><td style="padding:4px 8px;font-size:9px;color:var(--neg)">(−) Gastos</td>${filaG}</tr>
+        <tr style="border-top:1px solid var(--bd)"><td style="padding:4px 8px;font-size:9px;font-weight:700">= Resultado</td>${filaR}</tr>
+      </tbody>
+    </table></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="_aplicarVentasGastos()" style="flex:1;padding:9px;background:var(--pos);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:600;cursor:pointer">✓ Aplicar a Facturación y Resultado</button>
+      <button onclick="document.getElementById('imp-vg-preview').innerHTML=''" style="padding:9px 16px;background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:5px;color:var(--dim);font-size:11px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>`;
+
+  let target = document.getElementById('imp-vg-preview');
+  if (!target) {
+    target = document.createElement('div');
+    target.id = 'imp-vg-preview';
+    const panel = document.getElementById('panel-importar');
+    if (panel) panel.insertBefore(target, panel.firstChild);
+  }
+  target.innerHTML = html;
+  target.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function _aplicarVentasGastos() {
+  const r = window._vgPendiente;
+  if (!r || !r.empresa || !r.anio) return;
+  const emp = r.empresa, yS = String(r.anio);
+  const meses = Object.keys(r.meses).map(Number).sort((a,b)=>a-b);
+
+  // Construir filas de ER mensual (Ventas, Gastos, Resultado)
+  const fVentas = { lbl:'Ventas Netas', conceptoStd:'ventas', valores:{} };
+  const fGastos = { lbl:'Gastos totales', conceptoStd:'costo', valores:{} };
+  const fResult = { lbl:'Resultado Operativo', conceptoStd:'resOperativo', valores:{} };
+  meses.forEach(m => {
+    fVentas.valores[m] = r.meses[m].ventas;
+    fGastos.valores[m] = -Math.abs(r.meses[m].gastos); // egreso negativo
+    fResult.valores[m] = r.meses[m].resultado;
+  });
+
+  if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
+  DATA.er_mensual[emp][yS] = {
+    filas: [fVentas, fGastos, fResult],
+    conceptos: { ventas:0, costo:1, resOperativo:2 },
+    esTrimestral: false,
+  };
+
+  // Mensual de facturación y resultado
+  if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
+  if (!DATA.res_mensual[emp]) DATA.res_mensual[emp] = {};
+  DATA.fact_mensual[emp][yS] = {};
+  DATA.res_mensual[emp][yS] = {};
+  meses.forEach(m => {
+    DATA.fact_mensual[emp][yS][m] = r.meses[m].ventas;
+    DATA.res_mensual[emp][yS][m] = r.meses[m].resultado;
+  });
+
+  // Anual: suma de los meses
+  const totV = meses.reduce((s,m)=>s+r.meses[m].ventas,0);
+  const totR = meses.reduce((s,m)=>s+r.meses[m].resultado,0);
+  if (!DATA.fact[emp]) DATA.fact[emp] = {};
+  if (!DATA.sit[emp]) DATA.sit[emp] = {};
+  DATA.fact[emp][yS] = totV;
+  DATA.sit[emp][yS] = totR;
+  if (!DATA.years.includes(parseInt(yS))) { DATA.years.push(parseInt(yS)); DATA.years.sort(); }
+
+  try { computeTotals(); } catch(e) {}
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
+
+  const t = document.getElementById('imp-vg-preview');
+  if (t) t.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
+    ✓ Aplicado: ${emp} año ${yS} — ${meses.length} meses. Facturación ${(totV/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})}M, Resultado ${(totR/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})}M. Revisá en "Por empresa" y publicá a Sheets.</div>`;
+  window._vgPendiente = null;
+  try { buildFacturacion(); buildResultado(); rebuildActive(); } catch(e) {}
+}
+
 // ── Parser de Estados de Resultados matriciales (formato origen del dashboard) ──
 // Detecta hoja RESUMEN con empresas en columnas y conceptos en filas.
 // Extrae Ventas Netas (facturación) y Resultado Operativo por empresa.
@@ -15177,8 +15354,17 @@ function _cancelarERMatricial() {
 }
 
 function handleImportWorkbook(wb, fname) {
-  // ── Intentar parser de ER matricial (Estados de Resultados por sector) ──
+  // ── Intentar parser de Ventas/Gastos mensual (formato acumulado por empresa) ──
   console.log('[LR] handleImportWorkbook:', fname, '— hojas:', wb.SheetNames.join(', '));
+  const vgResult = tryParseVentasGastos(wb, fname);
+  console.log('[LR] tryParseVentasGastos:', vgResult ? vgResult.empresa+' '+Object.keys(vgResult.meses).length+' meses' : 'null');
+  if (vgResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewVentasGastos(vgResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER matricial (Estados de Resultados por sector) ──
   const erMatResult = tryParseERMatricial(wb, fname);
   console.log('[LR] tryParseERMatricial resultado:', erMatResult ? erMatResult.empresas.length + ' empresas' : 'null (no es ER matricial)');
   if (erMatResult) {
@@ -17203,32 +17389,34 @@ async function loadBalanceExcel(file) {
     const wsAny = wb.Sheets[snAny];
     const getCellText = (r, c) => String(wsAny[XLSX.utils.encode_cell({r, c})]?.v || '').trim();
     const empresa = getCellText(0, 0) || file.name.replace(/\.xlsx?$/i, '');
-    // Buscar período PRIORIZANDO el header de la columna de datos usada (colDatos)
-    // En balances comparativos hay varias columnas (ej: 31/12/2024 | 31/12/2023);
-    // el período correcto es el de la columna de datos que efectivamente se lee.
-    let periodo = '?';
-    // 1. Leer del header de la columna de datos (filas 0-6 de esa columna)
-    for (let r = 0; r <= 6 && periodo === '?'; r++) {
-      const cell = ws[XLSX.utils.encode_cell({ r, c: colDatos })];
-      if (!cell) continue;
-      let txtH = '';
-      if (cell.w) txtH = String(cell.w);
-      else if (typeof cell.v === 'string') txtH = cell.v;
-      else if (cell.v instanceof Date) txtH = Utilities ? '' : cell.v.getFullYear() + '';
-      // Buscar fecha DD/MM/YYYY o solo el año
-      let mh = txtH.match(/\d{1,2}[/\-]\d{1,2}[/\-]([12]\d{3})/);
-      if (mh) { periodo = mh[1]; break; }
-      mh = txtH.match(/([12]\d{3})/);
-      if (mh) { periodo = mh[1]; break; }
-      // Si la celda es una fecha real (número de serie con formato fecha)
-      if (typeof cell.v === 'number' && cell.v > 30000 && cell.v < 80000) {
-        try {
-          const d = XLSX.SSF.parse_date_code(cell.v);
-          if (d && d.y >= 2000 && d.y <= 2100) { periodo = String(d.y); break; }
-        } catch(eD) {}
+    // Buscar período escaneando las primeras filas/columnas en busca de fechas.
+    // Usa wsAny (primera hoja) que está disponible en este scope.
+    // Recolecta las columnas con fecha para detectar período principal y comparativo.
+    let periodo = '?', periodoComp = '?';
+    const _aniosCols = []; // {col, anio}
+    const rngAny = XLSX.utils.decode_range(wsAny['!ref'] || 'A1:H50');
+    for (let r = 0; r <= Math.min(8, rngAny.e.r); r++) {
+      for (let cc = 1; cc <= Math.min(8, rngAny.e.c); cc++) {
+        const cell = wsAny[XLSX.utils.encode_cell({ r, c: cc })];
+        if (!cell) continue;
+        let txtH = '';
+        if (cell.w) txtH = String(cell.w);
+        else if (typeof cell.v === 'string') txtH = cell.v;
+        let anioCol = null;
+        let mh = txtH.match(/\d{1,2}[/\-]\d{1,2}[/\-]([12]\d{3})/);
+        if (mh) anioCol = mh[1];
+        else { mh = txtH.match(/([12]\d{3})/); if (mh) anioCol = mh[1]; }
+        if (!anioCol && typeof cell.v === 'number' && cell.v > 30000 && cell.v < 80000) {
+          try { const d = XLSX.SSF.parse_date_code(cell.v); if (d && d.y >= 2000 && d.y <= 2100) anioCol = String(d.y); } catch(eD) {}
+        }
+        if (anioCol && !_aniosCols.some(x => x.col === cc)) _aniosCols.push({ col: cc, anio: anioCol });
       }
+      if (_aniosCols.length >= 2) break;
     }
-    // 2. Fallback: buscar año en col A (formato viejo)
+    _aniosCols.sort((a,b) => a.col - b.col);
+    if (_aniosCols.length >= 1) periodo = _aniosCols[0].anio;
+    if (_aniosCols.length >= 2) periodoComp = _aniosCols[1].anio;
+    // Fallback: año en col A
     if (periodo === '?') {
       for (let r = 0; r <= 5; r++) {
         const txt = getCellText(r, 0);
@@ -17236,28 +17424,7 @@ async function loadBalanceExcel(file) {
         if (m) { periodo = m[1]; break; }
       }
     }
-
-    // Detectar período COMPARATIVO (año anterior reexpresado) del header de colDatos+1
-    let periodoComp = '?';
-    for (let r = 0; r <= 6 && periodoComp === '?'; r++) {
-      const cell = ws[XLSX.utils.encode_cell({ r, c: colDatos + 1 })];
-      if (!cell) continue;
-      let txtH = cell.w ? String(cell.w) : (typeof cell.v === 'string' ? cell.v : '');
-      let mh = txtH.match(/\d{1,2}[/\-]\d{1,2}[/\-]([12]\d{3})/);
-      if (mh) { periodoComp = mh[1]; break; }
-      mh = txtH.match(/([12]\d{3})/);
-      if (mh) { periodoComp = mh[1]; break; }
-      if (typeof cell.v === 'number' && cell.v > 30000 && cell.v < 80000) {
-        try {
-          const d = XLSX.SSF.parse_date_code(cell.v);
-          if (d && d.y >= 2000 && d.y <= 2100) { periodoComp = String(d.y); break; }
-        } catch(eD) {}
-      }
-    }
-    // Si no se detectó, asumir año anterior al principal
-    if (periodoComp === '?' && periodo !== '?') {
-      periodoComp = String(parseInt(periodo) - 1);
-    }
+    if (periodoComp === '?' && periodo !== '?') periodoComp = String(parseInt(periodo) - 1);
 
     // Determinar tipo_empresa desde estructura_er
     const keys = new Set(estructura_er.map(r => r.key));
