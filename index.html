@@ -18996,9 +18996,11 @@ function _buildERDesdeEstructura(b, fmtM) {
     const arrow = esNeg ? '▼ ' : nivel > 0 ? '▲ ' : '';
     const arrowCol = esNeg ? colorNeg : colorPos;
 
-    // Porcentaje sobre ingresos base
-    const pct = baseIngr && !isUltimo && Math.abs(val) > 0
-      ? ` <span style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-left:6px">${(val/baseIngr*100).toFixed(1)}%</span>` : '';
+    // Porcentaje sobre ingresos base — en span de ancho fijo para alinear
+    const pctVal = baseIngr && !isUltimo && Math.abs(val) > 0 ? (val/baseIngr*100) : null;
+    const pct = pctVal != null
+      ? `<span style="display:inline-block;width:64px;text-align:right;font-size:8px;color:var(--dim);font-family:var(--mono)">${Math.round(pctVal)}%</span>`
+      : `<span style="display:inline-block;width:64px"></span>`;
 
     // Tag de nivel
     const tag = nivel === 3
@@ -19014,9 +19016,8 @@ function _buildERDesdeEstructura(b, fmtM) {
         font-family:var(--mono);border-bottom:1px solid var(--bd2)">
         ${nivel > 0 ? `<span style="color:${arrowCol};font-size:8px">${arrow}</span>` : ''}${r.lbl}${tag}
       </td>
-      <td style="padding:${pad};text-align:right;font-family:var(--mono);font-size:${fs};
-        font-weight:${fw};color:${color};border-bottom:1px solid var(--bd2)">
-        ${(esNeg?'(':'') + '$ ' + fmt.format(Math.abs(val)) + (esNeg?')':'')}${pct}
+      <td style="padding:${pad};text-align:right;border-bottom:1px solid var(--bd2);white-space:nowrap">
+        <span style="display:inline-block;text-align:right;font-family:var(--mono);font-size:${fs};font-weight:${fw};color:${color};font-variant-numeric:tabular-nums;min-width:130px">${(esNeg?'(':'') + '$ ' + fmt.format(Math.abs(val)) + (esNeg?')':'')}</span>${pct}
       </td>
     </tr>`;
   };
@@ -19026,7 +19027,7 @@ function _buildERDesdeEstructura(b, fmtM) {
       <th style="padding:8px 14px;text-align:left;font-size:9px;color:var(--dim);
         font-family:var(--mono);border-bottom:1px solid var(--bd)">Concepto</th>
       <th style="padding:8px 14px;text-align:right;font-size:9px;color:var(--dim);
-        font-family:var(--mono);border-bottom:1px solid var(--bd)">Importe</th>
+        font-family:var(--mono);border-bottom:1px solid var(--bd)"><span style="display:inline-block;min-width:130px;text-align:right">Importe</span><span style="display:inline-block;width:64px;text-align:right">% s/ventas</span></th>
     </tr></thead>
     <tbody>${er.map(r => filaHTML(r)).join('')}</tbody>
   </table>`;
