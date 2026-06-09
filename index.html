@@ -19017,7 +19017,7 @@ function _buildERDesdeEstructura(b, fmtM) {
         ${nivel > 0 ? `<span style="color:${arrowCol};font-size:8px">${arrow}</span>` : ''}${r.lbl}${tag}
       </td>
       <td style="padding:${pad};text-align:right;border-bottom:1px solid var(--bd2);white-space:nowrap">
-        <span style="display:inline-block;text-align:right;font-family:var(--mono);font-size:${fs};font-weight:${fw};color:${color};font-variant-numeric:tabular-nums;min-width:130px">${(esNeg?'(':'') + '$ ' + fmt.format(Math.abs(val)) + (esNeg?')':'')}</span>${pct}
+        <span style="display:inline-block;text-align:right;font-family:var(--mono);font-size:10px;font-weight:${nivel>=2?'700':'500'};color:${color};font-variant-numeric:tabular-nums;min-width:130px">${(esNeg?'(':'') + '$ ' + fmt.format(Math.abs(val)) + (esNeg?')':'')}</span>${pct}
       </td>
     </tr>`;
   };
