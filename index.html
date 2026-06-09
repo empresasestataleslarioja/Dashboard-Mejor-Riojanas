@@ -5036,6 +5036,9 @@ function imprimirPanelActivo() {
           if      (pid3==='personal')       html3 = _rptPersonal();
           else if (pid3==='balances')       html3 = _rptBalance();
           else if (pid3==='transferencias') html3 = _rptTransferencias();
+          else if (pid3==='resumen')        html3 = _rptResumen();
+          else if (pid3==='resultado')      html3 = _rptResultado();
+          else if (pid3==='empresa')        html3 = _rptERMensual();
           if (html3) html3 = html3.replace('</head>', autoprintScript+'</head>');
         } catch(e3) { html3 = '<html><body><pre>'+String(e3)+'</pre></body></html>'; }
         if (!html3) return;
@@ -5396,26 +5399,37 @@ function _rptResultado() {
 // ── Reporte: ER mensual de la empresa seleccionada ──
 function _rptERMensual() {
   const emp = document.getElementById('sel-emp')?.value;
-  if (!emp) return '<html><body style="font-family:Arial;padding:40px">Seleccioná una empresa primero.</body></html>';
+  if (!emp) return '<html><body style="font-family:Arial;padding:40px">Seleccion\u00e1 una empresa primero.</body></html>';
   const erM = DATA.er_mensual?.[emp] || {};
-  const anios = Object.keys(erM).sort();
+  let anios = Object.keys(erM).sort();
   if (anios.length === 0) return '<html><body style="font-family:Arial;padding:40px">'+emp+' no tiene estado de resultados mensual cargado.</body></html>';
+
+  // Filtro por año (si hay uno seleccionado)
+  const anioFiltro = window._erRptAnio;
+  if (anioFiltro && erM[anioFiltro]) anios = [anioFiltro];
 
   const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const fmt = v => {
-    if (v == null || v === '') return '—';
-    const a = Math.abs(v), s = v<0?'−':'';
+    if (v == null || v === '') return '\u2014';
+    const a = Math.abs(v), s = v<0?'\u2212':'';
     if (a >= 1e9) return s+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+'MM';
     if (a >= 1e6) return s+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';
     if (a >= 1e3) return s+(a/1e3).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';
     return s+a.toLocaleString('es-AR',{maximumFractionDigits:0});
   };
 
+  // Estructura con secciones: INGRESOS, COSTOS, subtotales, RESULTADOS
+  // tipo: 'ingreso','egreso','subtotal','resultado'
   const ESTRUCTURA = [
-    ['ventas','Ventas Netas'], ['costo','(−) Costo de Ventas'], ['utilBruta','= Utilidad Bruta'],
-    ['gastoAdm','(−) Gastos de Administración'], ['gastoCom','(−) Gastos de Comercialización'],
-    ['resOperativo','= Resultado Operativo'], ['resFinanciero','(+/−) Resultado Financiero'],
-    ['resAntesImp','= Resultado antes de Imp.'], ['resEjercicio','= Resultado del Ejercicio'],
+    {cpt:'ventas',        lbl:'Ventas Netas',                  tipo:'ingreso'},
+    {cpt:'costo',         lbl:'Costo de Ventas',               tipo:'egreso'},
+    {cpt:'utilBruta',     lbl:'UTILIDAD BRUTA',                tipo:'subtotal'},
+    {cpt:'gastoAdm',      lbl:'Gastos de Administraci\u00f3n',     tipo:'egreso'},
+    {cpt:'gastoCom',      lbl:'Gastos de Comercializaci\u00f3n',   tipo:'egreso'},
+    {cpt:'resOperativo',  lbl:'RESULTADO OPERATIVO',           tipo:'subtotal'},
+    {cpt:'resFinanciero', lbl:'Resultado Financiero',          tipo:'ingreso'},
+    {cpt:'resAntesImp',   lbl:'RESULTADO ANTES DE IMP.',       tipo:'subtotal'},
+    {cpt:'resEjercicio',  lbl:'RESULTADO DEL EJERCICIO',       tipo:'resultado'},
   ];
 
   const bloques = anios.map(yr=>{
@@ -5427,26 +5441,35 @@ function _rptERMensual() {
     const meses = [...mesesSet].sort((a,b)=>a-b);
     const getF = cpt => erData.filas.find(f=>f.conceptoStd===cpt);
 
-    const ths = meses.map(m=>`<th style="text-align:right">${lblP(m)}</th>`).join('');
-    const filas = ESTRUCTURA.map(([cpt,lbl])=>{
-      const f = getF(cpt);
-      const bold = ['utilBruta','resOperativo','resAntesImp','resEjercicio'].includes(cpt);
+    const ths = meses.map(m=>`<th style="text-align:right;padding:4px 6px">${lblP(m)}</th>`).join('');
+    const filas = ESTRUCTURA.map(row=>{
+      const f = getF(row.cpt);
+      let estilo = 'padding:3px 6px;';
+      let lblEstilo = 'text-align:left;padding:3px 6px;';
+      if (row.tipo === 'subtotal') { estilo += 'font-weight:700;border-top:1.5px solid #888;background:#f0f4f8;'; lblEstilo += 'font-weight:700;border-top:1.5px solid #888;background:#f0f4f8;'; }
+      else if (row.tipo === 'resultado') { estilo += 'font-weight:700;border-top:2px solid #333;border-bottom:2px solid #333;background:#e8eef5;'; lblEstilo += 'font-weight:700;border-top:2px solid #333;border-bottom:2px solid #333;background:#e8eef5;'; }
+      else if (row.tipo === 'egreso') { lblEstilo += 'padding-left:16px;color:#555;'; }
+      else { lblEstilo += 'padding-left:16px;'; }
+
       const celdas = meses.map(m=>{
         const v = f ? f.valores[m] : null;
-        return `<td style="text-align:right;${v<0?'color:#c0392b':''}">${fmt(v)}</td>`;
+        return `<td style="text-align:right;${estilo}${v<0?'color:#c0392b;':''}">${fmt(v)}</td>`;
       }).join('');
       const tot = f ? meses.reduce((s,m)=>s+(f.valores[m]||0),0) : null;
-      return `<tr style="${bold?'font-weight:700':''}"><td style="text-align:left">${lbl}</td>${celdas}<td style="text-align:right;font-weight:700;border-left:1px solid #ccc">${fmt(tot)}</td></tr>`;
+      const totCol = `<td style="text-align:right;font-weight:700;border-left:1.5px solid #888;${estilo}${tot<0?'color:#c0392b;':''}">${fmt(tot)}</td>`;
+      const prefijo = row.tipo === 'egreso' ? '(\u2212) ' : (row.tipo==='subtotal'||row.tipo==='resultado' ? '= ' : '');
+      return `<tr><td style="${lblEstilo}">${prefijo}${row.lbl}</td>${celdas}${totCol}</tr>`;
     }).join('');
 
-    return `<div class="st">${yr} — ${esTrim?'trimestral':'mensual'}</div><div class="tw">
+    return `<div class="st">Ejercicio ${yr} \u2014 ${esTrim?'trimestral':'mensual'}</div><div class="tw">
       <table style="width:100%;border-collapse:collapse;font-size:8.5pt">
-        <thead><tr><th style="text-align:left">Concepto</th>${ths}<th style="text-align:right;border-left:1px solid #ccc">TOTAL</th></tr></thead>
-        <tbody>${filas}</tbody></table></div></div>`;
+        <thead><tr><th style="text-align:left;padding:4px 6px">Concepto</th>${ths}<th style="text-align:right;padding:4px 6px;border-left:1.5px solid #888">TOTAL</th></tr></thead>
+        <tbody>${filas}</tbody></table></div>`;
   }).join('');
 
+  const subt = emp + (anioFiltro ? ' \u00b7 Ejercicio '+anioFiltro : '');
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
-    + _rptHeader('Estado de Resultados', emp)
+    + _rptHeader('Estado de Resultados', subt)
     + bloques
     + _rptFooter()
     + '</div></body></html>';
@@ -10156,6 +10179,12 @@ function buildEvolucionMensual(emp) {
     <button onclick="window._erMensualVista='original';buildEvolucionMensual('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
       background:${vista==='original'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='original'?'#001':'var(--dim)'}">ER Original (completo)</button>
+    <span style="font-size:9px;color:var(--dim);margin-left:8px">Año reporte:</span>
+    <select id="er-rpt-anio" onchange="window._erRptAnio=this.value||null"
+      style="font-size:10px;padding:3px 6px;background:var(--s2,#1a1f2e);border:1px solid var(--bd);border-radius:4px;color:var(--text)">
+      <option value="">Todos</option>
+      ${anios.map(a=>`<option value="${a}" ${window._erRptAnio===a?'selected':''}>${a}</option>`).join('')}
+    </select>
     <div style="flex:1"></div>
     <button onclick="_erMensualToggleEdit('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid ${edit?'var(--pos)':'var(--bd)'};
@@ -10200,8 +10229,13 @@ function buildEvolucionMensual(emp) {
     let filasHTML;
     if (vista === 'original') {
       filasHTML = erData.filas.map((f, fi) => {
-        const esConcepto = f.conceptoStd && ['utilBruta','resOperativo','resAntesImp','resEjercicio'].includes(f.conceptoStd);
-        const peso = esConcepto ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
+        const esSubtotal = f.conceptoStd && ['utilBruta','resOperativo','resAntesImp'].includes(f.conceptoStd);
+        const esResultado = f.conceptoStd === 'resEjercicio';
+        const esIngreso = f.conceptoStd === 'ventas';
+        let peso = '';
+        if (esResultado) peso = 'font-weight:700;border-top:2px solid var(--acc,#47e8ff);border-bottom:2px solid var(--acc,#47e8ff);background:rgba(71,232,255,.08)';
+        else if (esSubtotal) peso = 'font-weight:600;border-top:1.5px solid var(--bd);background:rgba(255,255,255,.03)';
+        else if (esIngreso) peso = 'font-weight:600';
         const celdas = mesesMostrar.map(m=>{
           const v = f.valores[m];
           if (edit) return `<td style="padding:2px 4px;text-align:right">${inputCelda(yr,fi,m,v)}</td>`;
