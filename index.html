@@ -18624,10 +18624,8 @@ function buildComparativoReexpresado() {
 
   const fM = function(v) {
     if (v == null) return '—';
-    const abs = Math.abs(v), sign = v < 0 ? '−' : '';
-    if (abs >= 1e9) return sign + '$ ' + (abs/1e9).toLocaleString('es-AR',{maximumFractionDigits:2}) + ' MM';
-    if (abs >= 1e6) return sign + '$ ' + (abs/1e6).toLocaleString('es-AR',{maximumFractionDigits:1}) + ' M';
-    return sign + '$ ' + abs.toLocaleString('es-AR',{maximumFractionDigits:0});
+    const sign = v < 0 ? '−' : '';
+    return sign + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
   const fVar = function(act, comp) {
     if (act == null || comp == null || comp === 0) return '—';
@@ -18643,20 +18641,20 @@ function buildComparativoReexpresado() {
       const esTotal = /total|utilidad|resultado|patrimonio/i.test(r.lbl);
       const peso = esTotal ? 'font-weight:600' : '';
       return `<tr style="${peso}">
-        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px">${r.lbl}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right">${fM(r.val)}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;color:var(--dim)">${fM(r.valComp)}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right">${fVar(r.val, r.valComp)}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px">${r.lbl}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-variant-numeric:tabular-nums;font-family:'Courier New',monospace;white-space:nowrap">${fM(r.val)}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums;font-family:'Courier New',monospace;white-space:nowrap">${fM(r.valComp)}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${fVar(r.val, r.valComp)}</td>
       </tr>`;
     }).join('');
 
   cont.innerHTML = `
   <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     <thead><tr>
-      <th style="padding:6px 8px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">Rubro</th>
-      <th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">${pAct}</th>
-      <th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">${pComp} (reexp.)</th>
-      <th style="padding:6px 8px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">Var.</th>
+      <th style="padding:6px 10px;text-align:left;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">Rubro</th>
+      <th style="padding:6px 10px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">${pAct}</th>
+      <th style="padding:6px 10px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">${pComp} (reexp.)</th>
+      <th style="padding:6px 10px;text-align:right;font-size:9px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--bd)">Var.</th>
     </tr></thead>
     <tbody>${filas}</tbody>
   </table></div>
