@@ -2521,6 +2521,29 @@ self.onmessage = async (e) => {
             <div id="gest-merge-msg" style="margin-top:6px;font-size:9px;font-family:var(--mono);min-height:14px"></div>
           </div>
 
+          <!-- Eliminar empresa -->
+          <div style="border:1px solid #ff476630;border-radius:4px;padding:14px 16px;margin-bottom:12px">
+            <div style="font-size:11px;font-weight:600;margin-bottom:10px;color:#ff4766">Eliminar empresa</div>
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+              <div style="flex:1;min-width:200px">
+                <div style="font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);margin-bottom:4px">Empresa a eliminar (borra todos sus datos)</div>
+                <select id="gest-del-emp"
+                  style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid var(--bd2);
+                  color:var(--text);font-family:var(--mono);font-size:10.5px;border-radius:3px;cursor:pointer;outline:none"
+                  onfocus="this.style.borderColor='#ff4766'" onblur="this.style.borderColor='var(--bd2)'">
+                  <option value="">— Seleccioná empresa —</option>
+                </select>
+              </div>
+              <button onclick="gestionEliminar()"
+                style="padding:8px 16px;background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.5);
+                color:#ff4766;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+                white-space:nowrap;flex-shrink:0">
+                Eliminar ✕
+              </button>
+            </div>
+            <div id="gest-del-msg" style="margin-top:6px;font-size:9px;font-family:var(--mono);min-height:14px"></div>
+          </div>
+
           <!-- Nueva empresa -->
           <div style="border:1px solid var(--bd);border-radius:4px;padding:14px 16px;margin-bottom:10px">
             <div style="font-size:10px;font-weight:600;color:var(--text);margin-bottom:4px">
@@ -2580,6 +2603,7 @@ self.onmessage = async (e) => {
             <div style="font-size:10px;font-weight:600;color:var(--text);margin-bottom:8px">
               📋 Empresas registradas (<span id="gest-count">0</span>)
             </div>
+            <div id="gest-similares" style="margin-bottom:10px"></div>
             <div id="gest-lista" style="display:flex;flex-wrap:wrap;gap:5px;max-height:200px;overflow-y:auto"></div>
           </div>
         </div>
@@ -5201,21 +5225,22 @@ function imprimirPanelActivo() {
 function _rptCSS() {
   return `<style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Arial,sans-serif;font-size:10pt;color:#111;background:#fff}
+  body{font-family:'Courier New',monospace;font-size:10pt;color:#111;background:#fff}
   .pg{padding:14px 18px 20px}
-  .hdr{display:flex;justify-content:flex-end;border-bottom:1.5px solid #111;padding-bottom:6px;margin-bottom:12px}
-  .ht{font-size:14pt;font-weight:700;color:#111;text-align:right}
+  .hdr{display:flex;justify-content:flex-end;border-bottom:1.5px solid #185fa5;padding-bottom:6px;margin-bottom:12px}
+  .ht{font-size:14pt;font-weight:700;color:#185fa5;text-align:right}
   .hs{font-size:9pt;color:#555;margin-top:3px;text-align:right}
   .kg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px}
   .kg3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px}
-  .kp{padding:12px 14px;border:.5px solid #ccc;border-radius:6px;background:#f7f7f7;page-break-inside:avoid}
+  .kp{padding:12px 14px;border:.5px solid #ccc;border-radius:6px;background:#f7f9fc;page-break-inside:avoid}
   .ka{height:3px;margin-bottom:6px}
-  .kl{font-size:7.5pt;color:#555;font-family:monospace;text-transform:uppercase;letter-spacing:.04em}
-  .kv{font-size:26pt;font-weight:700;color:#111;line-height:1;margin:4px 0}
-  .kv2{font-size:16pt;font-weight:700;color:#111;line-height:1.2;margin:3px 0}
+  .kl{font-size:7.5pt;color:#555;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.04em}
+  .kv{font-size:22pt;font-weight:700;color:#111;line-height:1;margin:4px 0;font-variant-numeric:tabular-nums}
+  .kv2{font-size:16pt;font-weight:700;color:#111;line-height:1.2;margin:3px 0;font-variant-numeric:tabular-nums}
   .ks{font-size:8pt;color:#555}
-  .up{color:#065030}.dn{color:#7a1a1a}
-  .st{font-size:7.5pt;font-weight:600;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;font-family:monospace}
+  .up{color:#0f6e56}.dn{color:#c0392b}
+  table td,table th{font-variant-numeric:tabular-nums}
+  .st{font-size:7.5pt;font-weight:600;color:#185fa5;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;font-family:monospace}
   .r2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   .r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
   .cc{border:.5px solid #ddd;border-radius:6px;padding:10px 12px;background:#fff;page-break-inside:avoid}
@@ -5306,10 +5331,8 @@ function _rptResumen() {
   const years = ys().map(String);
   const fmt = v => {
     if (v == null) return '—';
-    const a = Math.abs(v), s = v<0?'−':'';
-    if (a >= 1e9) return s+'$'+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+' MM';
-    if (a >= 1e6) return s+'$'+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';
-    return s+'$'+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+    const s = v<0?'−':'';
+    return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
   const lastY = years[years.length-1];
   const totFact = DATA.totals_fact[lastY] || 0;
@@ -5361,10 +5384,8 @@ function _rptResultado() {
   const lastY = years[years.length-1];
   const fmt = v => {
     if (v == null) return '—';
-    const a = Math.abs(v), s = v<0?'−':'';
-    if (a >= 1e9) return s+'$'+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+' MM';
-    if (a >= 1e6) return s+'$'+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+' M';
-    return s+'$'+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+    const s = v<0?'−':'';
+    return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
 
   // Empresas ordenadas por resultado del último año
@@ -5411,11 +5432,8 @@ function _rptERMensual() {
   const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const fmt = v => {
     if (v == null || v === '') return '\u2014';
-    const a = Math.abs(v), s = v<0?'\u2212':'';
-    if (a >= 1e9) return s+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+'MM';
-    if (a >= 1e6) return s+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';
-    if (a >= 1e3) return s+(a/1e3).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';
-    return s+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+    const s = v<0?'\u2212':'';
+    return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
 
   // Estructura con secciones: INGRESOS, COSTOS, subtotales, RESULTADOS
@@ -6419,7 +6437,12 @@ function toggleGestionEmpresas() {
 }
 
 function _poblarGestionSelects() {
-  const emps = [...new Set([...Object.keys(DATA.fact||{}), ...Object.keys(DATA.sit||{})])].sort();
+  const emps = [...new Set([
+    ...Object.keys(DATA.fact||{}), ...Object.keys(DATA.sit||{}),
+    ...Object.keys(DATA.fact_mensual||{}), ...Object.keys(DATA.res_mensual||{}),
+    ...Object.keys(DATA.er_mensual||{}),
+    ...(DATA.personal||[]).map(d=>d.e),
+  ].filter(Boolean))].sort();
 
   const selFrom = document.getElementById('gest-rename-from');
   const selMF   = document.getElementById('gest-merge-from');
@@ -6427,6 +6450,8 @@ function _poblarGestionSelects() {
   if (selFrom) selFrom.innerHTML = '<option value="">— Seleccioná empresa —</option>'   + emps.map(e=>`<option value="${e}">${e}</option>`).join('');
   if (selMF)   selMF.innerHTML   = '<option value="">— Empresa a eliminar —</option>'   + emps.map(e=>`<option value="${e}">${e}</option>`).join('');
   if (selMT)   selMT.innerHTML   = '<option value="">— Empresa que recibe —</option>'   + emps.map(e=>`<option value="${e}">${e}</option>`).join('');
+  const selDel = document.getElementById('gest-del-emp');
+  if (selDel)  selDel.innerHTML  = '<option value="">— Seleccioná empresa —</option>'   + emps.map(e=>`<option value="${e}">${e}</option>`).join('');
 
   // Inputs de datos por año para nueva empresa
   const datosWrap = document.getElementById('gest-nueva-datos');
@@ -6464,6 +6489,38 @@ function _poblarGestionSelects() {
         onmouseover="this.style.color='var(--y21)'"
         onmouseout="this.style.color='var(--dim)'">✎</span>
     </span>`).join('');
+  // Detección de nombres similares (posible doble registro)
+  const simWrap = document.getElementById('gest-similares');
+  if (simWrap) {
+    const norm = s => s.toUpperCase()
+      .replace(/[ÁÀÄ]/g,'A').replace(/[ÉÈË]/g,'E').replace(/[ÍÌÏ]/g,'I')
+      .replace(/[ÓÒÖ]/g,'O').replace(/[ÚÙÜ]/g,'U')
+      .replace(/\b(S\.?A\.?U?\.?|S\.?R\.?L\.?|SAPEM|SE|S\.?E\.?)\b/g,'')
+      .replace(/[^A-Z0-9]/g,'').trim();
+    const pares = [];
+    for (let i = 0; i < emps.length; i++) {
+      for (let j = i+1; j < emps.length; j++) {
+        const a = norm(emps[i]), b = norm(emps[j]);
+        if (!a || !b) continue;
+        // Similar si uno contiene al otro o comparten prefijo largo
+        const sim = a === b || a.includes(b) || b.includes(a) ||
+          (a.length >= 5 && b.length >= 5 && a.substring(0,6) === b.substring(0,6));
+        if (sim) pares.push([emps[i], emps[j]]);
+      }
+    }
+    if (pares.length > 0) {
+      simWrap.innerHTML = `<div style="padding:10px 12px;background:rgba(255,140,71,.08);border:1px solid rgba(255,140,71,.3);border-radius:4px">
+        <div style="font-size:9.5px;font-weight:600;color:#ff8c47;margin-bottom:6px">⚠ Posibles duplicados (nombres similares)</div>
+        ${pares.map(([a,b])=>`<div style="font-size:9px;font-family:var(--mono);color:var(--dim);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="color:var(--text)">${a}</span> ≈ <span style="color:var(--text)">${b}</span>
+          <button onclick="document.getElementById('gest-merge-from').value='${a.replace(/'/g,"")}';document.getElementById('gest-merge-to').value='${b.replace(/'/g,"")}';document.getElementById('gest-merge-from').scrollIntoView({behavior:'smooth',block:'center'})"
+            style="padding:1px 8px;font-size:8px;background:transparent;border:1px solid rgba(71,232,255,.4);color:#47e8ff;border-radius:3px;cursor:pointer;font-family:var(--mono)">fusionar</button>
+        </div>`).join('')}
+      </div>`;
+    } else {
+      simWrap.innerHTML = '';
+    }
+  }
 }
 
 // ── Crear nueva empresa manualmente ──────────────────────────────
@@ -6596,6 +6653,10 @@ function _renombrarEmpresa(from, to) {
     if (b.empresa === from)   b.empresa   = to;
     if (b.vinculada === from) b.vinculada = to;
   });
+  // datos mensuales (fact_mensual, res_mensual, er_mensual)
+  ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
+    if (DATA[k] && DATA[k][from]) { DATA[k][to] = DATA[k][from]; delete DATA[k][from]; }
+  });
 }
 
 // Fusionar: suma datos de `from` en `to`, luego elimina `from`
@@ -6637,6 +6698,47 @@ function _fusionarEmpresas(from, to) {
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
     if (b.vinculada === from) b.vinculada = to;
+  });
+  // datos mensuales: el destino conserva sus años; toma del origen los años que no tenga
+  ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
+    if (DATA[k] && DATA[k][from]) {
+      if (!DATA[k][to]) DATA[k][to] = {};
+      Object.entries(DATA[k][from]).forEach(([yr, v]) => {
+        if (!DATA[k][to][yr]) DATA[k][to][yr] = v;
+      });
+      delete DATA[k][from];
+    }
+  });
+}
+
+// Eliminar empresa completamente
+function gestionEliminar() {
+  const emp = document.getElementById('gest-del-emp')?.value?.trim();
+  const msg = document.getElementById('gest-del-msg');
+  if (!emp) { if (msg) { msg.textContent = 'Seleccioná una empresa.'; msg.style.color = 'var(--neg)'; } return; }
+  if (!confirm('¿Eliminar "'+emp+'" y TODOS sus datos (facturación, resultado, personal, balances, mensuales)?\n\nEsta acción no se puede deshacer. Recordá publicar a Sheets para que el borrado quede guardado.')) return;
+  _eliminarEmpresa(emp);
+  try { computeTotals(); } catch(e) {}
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
+  _poblarGestionSelects();
+  try { rebuildActive(); } catch(e) {}
+  if (msg) { msg.textContent = '✓ "'+emp+'" eliminada. Publicá a Sheets para guardar.'; msg.style.color = 'var(--pos)'; }
+}
+
+function _eliminarEmpresa(emp) {
+  if (DATA.fact[emp]) delete DATA.fact[emp];
+  if (DATA.sit[emp])  delete DATA.sit[emp];
+  DATA.personal = (DATA.personal || []).filter(d => d.e !== emp);
+  if (DATA.notas?.[emp])       delete DATA.notas[emp];
+  if (DATA.presupuesto?.[emp]) delete DATA.presupuesto[emp];
+  if (typeof rubros !== 'undefined' && rubros?.[emp]) delete rubros[emp];
+  ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
+    if (DATA[k] && DATA[k][emp]) delete DATA[k][emp];
+  });
+  // balances de esa empresa
+  Object.keys(_balances || {}).forEach(key => {
+    if (_balances[key] && _balances[key].empresa === emp) delete _balances[key];
   });
 }
 
@@ -12184,12 +12286,12 @@ function openGapModal() {
     const nPers = gaps.filter(g=>g.missingPers.length>0).length;
 
     // Construir encabezados agrupados por dimensión
-    const thStyle = 'padding:5px 9px;text-align:center;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);white-space:nowrap;border-bottom:1px solid var(--bd)';
+    const thStyle = 'padding:5px 9px;text-align:center;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);white-space:nowrap;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:2';
     const thGroup = (label,color,span) =>
       `<th colspan="${span}" style="${thStyle};color:${color};border-left:2px solid ${color}44">${label}</th>`;
 
     const thRow1 = `<tr>
-      <th style="${thStyle};text-align:left" rowspan="2">Empresa</th>
+      <th style="${thStyle};text-align:left;left:0;z-index:3" rowspan="2">Empresa</th>
       ${thGroup('Facturación','#c4d600',years.length)}
       ${thGroup('Resultado','#ff4766',years.length)}
       ${thGroup('Personal','#47e8ff',years.length)}
@@ -12237,7 +12339,7 @@ function openGapModal() {
         }
       </td>`;
       return `<tr style="border-bottom:1px solid var(--bd);${rowBg}">
-        <td style="padding:5px 9px;font-size:10px;color:var(--text);white-space:nowrap">${emp}</td>
+        <td style="padding:5px 9px;font-size:10px;color:var(--text);white-space:nowrap;position:sticky;left:0;z-index:1;background:${(missingFact.length||missingSit.length) ? 'var(--s1)' : 'var(--s2)'}">${emp}</td>
         ${factCells}${sitCells}${persCells}${balCell}
       </tr>`;
     }).join('');
@@ -12266,7 +12368,7 @@ function openGapModal() {
       <div style="margin-bottom:10px;font-size:10px;color:var(--dim)">${gaps.length} empresa${gaps.length!==1?'s':''} con datos incompletos — años activos: ${years.join(', ')}</div>
       ${summary}
       <div style="overflow:auto;max-height:380px;border:1px solid var(--bd);border-radius:3px">
-        <table style="width:100%;border-collapse:collapse">
+        <table style="width:100%;border-collapse:separate;border-spacing:0">
           <thead>${thRow1}${thRow2}</thead>
           <tbody>${rows}</tbody>
         </table>
