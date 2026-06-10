@@ -5025,6 +5025,8 @@ function imprimirPanelActivo() {
     // Botones en JS puro — sin comillas anidadas en innerHTML
     bar.innerHTML = '<span style="color:#aaa;font-size:9pt;font-family:monospace">Vista previa del reporte</span>'
       + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap" id="_rpt_bar_right">'
+      + '<span style="color:#555;font-size:8pt;font-family:monospace">Año:</span>'
+      + '<select id="_rpt_anio_filtro" style="padding:3px 8px;font-size:8pt;font-family:monospace;background:#222;color:#ddd;border:1px solid #444;border-radius:3px;cursor:pointer"></select>'
       + '<span style="color:#555;font-size:8pt;font-family:monospace">Secciones:</span>'
       + '<div id="_rpt_chk_wrap" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'
       + '<div style="display:flex;gap:8px" id="_rpt_bar_btns"></div>'
@@ -5168,6 +5170,22 @@ function imprimirPanelActivo() {
   iframe._rptSecciones = rptSecs;
 
   iframe.onload = function() {
+    var selAnio = document.getElementById('_rpt_anio_filtro');
+    if (selAnio && !selAnio._poblado) {
+      selAnio._poblado = true;
+      var aniosDisp = (typeof ys === 'function' ? ys() : (DATA.years||[])).map(String);
+      selAnio.innerHTML = '<option value="">Todos</option>' +
+        aniosDisp.map(function(a){ return '<option value="'+a+'"'+(String(window._rptAnioFiltro)===a?' selected':'')+'>'+a+'</option>'; }).join('');
+      selAnio.onchange = function() {
+        window._rptAnioFiltro = this.value || null;
+        window._erRptAnio = this.value || null;
+        if (typeof imprimirPanelActivo === 'function') {
+          var ov = document.getElementById('_rpt_overlay');
+          if (ov) ov.style.display = 'none';
+          imprimirPanelActivo();
+        }
+      };
+    }
     var wrap = document.getElementById('_rpt_chk_wrap');
     if (!wrap) return;
     wrap.innerHTML = '';
@@ -5334,7 +5352,7 @@ function _rptResumen() {
     const s = v<0?'−':'';
     return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
-  const lastY = years[years.length-1];
+  const lastY = (window._rptAnioFiltro && years.includes(String(window._rptAnioFiltro))) ? String(window._rptAnioFiltro) : years[years.length-1];
   const totFact = DATA.totals_fact[lastY] || 0;
   const totSup  = DATA.totals_sup[lastY] || 0;
   const totDef  = DATA.totals_def[lastY] || 0;
@@ -5381,7 +5399,7 @@ function _rptResumen() {
 // ── Reporte: Resultado (superávit / déficit) ──
 function _rptResultado() {
   const years = ys().map(String);
-  const lastY = years[years.length-1];
+  const lastY = (window._rptAnioFiltro && years.includes(String(window._rptAnioFiltro))) ? String(window._rptAnioFiltro) : years[years.length-1];
   const fmt = v => {
     if (v == null) return '—';
     const s = v<0?'−':'';
@@ -6848,26 +6866,7 @@ function buildRubros() {
         color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
         title="Renombrar empresa">✎</button>
     </div>`;
-  }).join('') +
-  // Fila de nueva empresa integrada al final del editor
-  `<div class="rub-row" style="border-top:2px solid var(--bd);margin-top:4px;padding-top:8px">
-    <span style="font-size:9px;color:var(--dim);font-family:var(--mono);flex-shrink:0;width:28px">+</span>
-    <input id="rub-inline-nombre" type="text" placeholder="Nombre empresa…"
-      style="flex:1;padding:3px 8px;background:var(--s2);border:1px solid var(--bd2);
-      color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none"
-      onkeydown="if(event.key==='Enter')agregarEmpresaRubroInline()">
-    <select id="rub-inline-rubro"
-      style="padding:3px 8px;background:var(--s2);border:1px solid var(--bd2);
-      color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
-      <option value="">— Rubro —</option>
-      ${RUBRO_LIST.map(r=>`<option value="${r}">${r}</option>`).join('')}
-    </select>
-    <button onclick="agregarEmpresaRubroInline()"
-      style="padding:3px 10px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.3);
-      color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
-      + Agregar
-    </button>
-  </div>`;
+  }).join('');
 }
 
 // ── Poblar el select de rubros en el formulario de nueva empresa ──
@@ -6984,24 +6983,7 @@ function _confirmarRenombre(empViejo, empNuevo) {
 }
 
 // ── Agregar empresa directamente desde el editor ──────────────────
-function agregarEmpresaRubroInline() {
-  const nombre = (document.getElementById('rub-inline-nombre')?.value || '').trim().toUpperCase();
-  const rubro  = document.getElementById('rub-inline-rubro')?.value || '';
-  if (!nombre) return;
-  if (!rubro)  { alert('Seleccioná un rubro para la empresa.'); return; }
-  if (rubros[nombre]) { alert('"' + nombre + '" ya existe.'); return; }
-
-  rubros[nombre] = rubro;
-  if (!DATA.fact[nombre])  DATA.fact[nombre]  = {};
-  if (!DATA.sit[nombre])   DATA.sit[nombre]   = {};
-  if (!DATA.notas[nombre]) DATA.notas[nombre] = '';
-
-  saveRubros();
-  saveDataToLocalCache();
-  marcarPendienteGuardar();
-  populateSelects();
-  buildRubros();
-}
+/* agregarEmpresaRubroInline eliminada */
 
 // ── Agregar rubro nuevo a la lista ────────────────────────────────
 function agregarRubroNuevo() {
@@ -12288,20 +12270,22 @@ function openGapModal() {
     // Construir encabezados agrupados por dimensión
     const thStyle = 'padding:5px 9px;text-align:center;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);white-space:nowrap;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:2';
     const thGroup = (label,color,span) =>
-      `<th colspan="${span}" style="${thStyle};color:${color};border-left:2px solid ${color}44">${label}</th>`;
+      `<th colspan="${span}" style="${thStyle};color:${color};border-left:2px solid ${color}44;top:0">${label}</th>`;
 
+    const thStyle2 = thStyle.replace('top:0', 'top:25px');
     const thRow1 = `<tr>
-      <th style="${thStyle};text-align:left;left:0;z-index:3" rowspan="2">Empresa</th>
+      <th style="${thStyle};text-align:left;left:0;z-index:4;top:0" rowspan="2">Empresa</th>
       ${thGroup('Facturación','#c4d600',years.length)}
       ${thGroup('Resultado','#ff4766',years.length)}
       ${thGroup('Personal','#47e8ff',years.length)}
-      ${thGroup('Balance','#47ffb4',1)}
+      ${thGroup('Balance','#47ffb4',2)}
     </tr>`;
     const thRow2 = `<tr>
-      ${years.map(y=>`<th style="${thStyle};border-left:2px solid #c4d60044">${y}</th>`).join('')}
-      ${years.map(y=>`<th style="${thStyle};border-left:2px solid #ff476644">${y}</th>`).join('')}
-      ${years.map(y=>`<th style="${thStyle};border-left:2px solid #47e8ff44">${y}</th>`).join('')}
-      <th style="${thStyle};border-left:2px solid #2ecc8a44">Cargado</th>
+      ${years.map(y=>`<th style="${thStyle2};border-left:2px solid #c4d60044">${y}</th>`).join('')}
+      ${years.map(y=>`<th style="${thStyle2};border-left:2px solid #ff476644">${y}</th>`).join('')}
+      ${years.map(y=>`<th style="${thStyle2};border-left:2px solid #47e8ff44">${y}</th>`).join('')}
+      <th style="${thStyle2};border-left:2px solid #2ecc8a44">Presentado</th>
+      <th style="${thStyle2}">No present.</th>
     </tr>`;
 
     const mkCell = (missing) =>
@@ -12327,17 +12311,19 @@ function openGapModal() {
         var metodo = b.metodo === 'excel' ? 'XLS' : b.metodo === 'pdf' ? 'PDF' : '';
         return per + (metodo ? ' ('+metodo+')' : '');
       }).join(' · ');
-      var balColor  = sinBalance ? '#ff4766' : '#2ecc8a';
-      var balBorder = sinBalance ? '#ff476622' : '#2ecc8a22';
-      const balCell = `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2);border-left:2px solid ${balBorder}">
-        <b style="font-size:13px;color:${balColor}">${sinBalance?'✕':'✓'}</b>
-        ${nBal > 0
-          ? '<div style="font-size:7.5px;color:var(--dim);margin-top:2px;line-height:1.5;white-space:nowrap">'
-            + nBal + ' cargado' + (nBal>1?'s':'') + '<br>'
-            + '<span style="color:var(--text);font-size:7px">' + perBal + '</span></div>'
-          : '<div style="font-size:7.5px;color:#ff4766aa;margin-top:1px">sin balance</div>'
-        }
+      const aniosConBalU = [...new Set(balEmp.map(function(b){ return String(b.periodo || b.cierre || b.año || ''); }).filter(Boolean))].sort();
+      const aniosSinBal = years.filter(y => !aniosConBalU.includes(String(y)));
+      const colPresentado = `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2);border-left:2px solid #2ecc8a22">
+        ${aniosConBalU.length > 0
+          ? '<b style="font-size:11px;color:#2ecc8a">✓</b><div style="font-size:7.5px;color:#2ecc8a;margin-top:2px;line-height:1.4;white-space:nowrap">'+aniosConBalU.join(', ')+'</div>'
+          : '<span style="font-size:11px;color:var(--dim)">—</span>'}
       </td>`;
+      const colNoPresentado = `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2)">
+        ${aniosSinBal.length > 0
+          ? '<b style="font-size:11px;color:#ff4766">✕</b><div style="font-size:7.5px;color:#ff4766aa;margin-top:2px;line-height:1.4;white-space:nowrap">'+aniosSinBal.join(', ')+'</div>'
+          : '<span style="font-size:10px;color:#2ecc8a">completo</span>'}
+      </td>`;
+      const balCell = colPresentado + colNoPresentado;
       return `<tr style="border-bottom:1px solid var(--bd);${rowBg}">
         <td style="padding:5px 9px;font-size:10px;color:var(--text);white-space:nowrap;position:sticky;left:0;z-index:1;background:${(missingFact.length||missingSit.length) ? 'var(--s1)' : 'var(--s2)'}">${emp}</td>
         ${factCells}${sitCells}${persCells}${balCell}
