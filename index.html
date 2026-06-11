@@ -1981,7 +1981,11 @@ self.onmessage = async (e) => {
     <div class="panel" id="panel-resultado">
       <div class="kpi-strip" id="kpi-res2"></div>
       <div class="sel-row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
-        <span class="sel-label">Empresa</span>
+        <span class="sel-label">Año</span>
+        <select class="sel" id="sel-res-anio" onchange="_resSetAnio(this.value)" style="min-width:90px">
+          <option value="">Todos</option>
+        </select>
+        <span class="sel-label" style="margin-left:8px">Empresa</span>
         <select class="sel" id="sel-res-emp" onchange="buildResultado()">
           <option value="">— Consolidado (todas) —</option>
         </select>
@@ -1989,6 +1993,7 @@ self.onmessage = async (e) => {
         <div style="display:flex;gap:4px">
           <button id="btn-res-resumen"  onclick="setResVista('resumen')"  class="chip on-23" style="font-size:10px;padding:3px 10px;border-radius:3px">📊 Resumen</button>
           <button id="btn-res-desglose" onclick="setResVista('desglose')" class="chip"       style="font-size:10px;padding:3px 10px;border-radius:3px">📋 Desglose ER</button>
+          <button id="btn-res-auditoria" onclick="setResVista('auditoria')" class="chip"      style="font-size:10px;padding:3px 10px;border-radius:3px">🔍 Auditoría</button>
         </div>
       </div>
 
@@ -2013,6 +2018,11 @@ self.onmessage = async (e) => {
       <!-- VISTA DESGLOSE Estado de Resultados -->
       <div id="res-vista-desglose" style="display:none">
         <div id="res-desglose-content"></div>
+      </div>
+
+      <!-- VISTA AUDITORÍA -->
+      <div id="res-vista-auditoria" style="display:none">
+        <div id="res-auditoria-content"></div>
       </div>
     </div>
 
@@ -8594,13 +8604,112 @@ function buildFacturacion() {
 // ─── Vista toggle para Resultado Operativo ───────────────────────
 let _resVista = 'resumen';
 
+// Filtro de año del módulo Resultado
+var _resAnioSel = '';
+function _resSetAnio(v) {
+  _resAnioSel = v || '';
+  // Reconstruir la vista activa
+  if (_resVista === 'desglose') buildResDesglose();
+  else if (_resVista === 'auditoria') buildResAuditoria();
+  else buildResultado();
+}
+
+// Auditoría: empresas con/sin estado de resultados, por año
+function buildResAuditoria() {
+  const cont = document.getElementById('res-auditoria-content');
+  if (!cont) return;
+  const years = ys();
+
+  // Universo de empresas: todas las que aparecen en cualquier fuente
+  const todasEmp = [...new Set([
+    ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+    ...Object.keys(DATA.er || {}), ...Object.keys(DATA.er_mensual || {}),
+  ].filter(Boolean))].sort();
+
+  // ¿Tiene resultado para ese año? (sit con valor, o er, o er_mensual)
+  const tieneResultado = (emp, y) => {
+    const yS = String(y);
+    if (DATA.sit?.[emp]?.[yS] != null && DATA.sit[emp][yS] !== 0) return true;
+    if (DATA.er?.[emp]?.[yS]?.resultado_operativo) return true;
+    const erM = DATA.er_mensual?.[emp]?.[yS];
+    if (erM && Array.isArray(erM.filas) && erM.filas.some(f => f.conceptoStd === 'resOperativo' && Object.keys(f.valores||{}).length)) return true;
+    return false;
+  };
+
+  // Año(s) a auditar: el filtrado o todos
+  const yearsAud = _resAnioSel ? [parseInt(_resAnioSel)] : years;
+
+  // Métricas de cobertura
+  let conDato = 0, sinDato = 0;
+  const filas = todasEmp.map(emp => {
+    const celdas = yearsAud.map(y => {
+      const ok = tieneResultado(emp, y);
+      if (ok) conDato++; else sinDato++;
+      return `<td style="text-align:center;padding:5px 8px;border-bottom:1px solid var(--bd)">
+        <span style="color:${ok?'#2ecc8a':'#ff4766'};font-size:13px">${ok?'✓':'✕'}</span></td>`;
+    }).join('');
+    const faltantes = yearsAud.filter(y => !tieneResultado(emp, y));
+    const estado = faltantes.length === 0
+      ? '<span style="color:#2ecc8a;font-size:9px">completo</span>'
+      : `<span style="color:#ff8c47;font-size:9px">faltan ${faltantes.length}</span>`;
+    return `<tr>
+      <td style="padding:5px 8px;font-size:10px;color:var(--text);white-space:nowrap;position:sticky;left:0;background:var(--s1);border-bottom:1px solid var(--bd)">${emp}</td>
+      ${celdas}
+      <td style="padding:5px 8px;text-align:center;border-bottom:1px solid var(--bd)">${estado}</td>
+    </tr>`;
+  }).join('');
+
+  const totalCeldas = conDato + sinDato;
+  const cobertura = totalCeldas > 0 ? Math.round(conDato / totalCeldas * 100) : 0;
+
+  const ths = yearsAud.map(y => `<th style="padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:2px solid var(--bd);position:sticky;top:0;background:var(--s3)">${y}</th>`).join('');
+
+  // Empresas totalmente sin datos (en el período auditado)
+  const sinNada = todasEmp.filter(emp => yearsAud.every(y => !tieneResultado(emp, y)));
+
+  cont.innerHTML = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="flex:1;min-width:130px;padding:10px 12px;background:rgba(46,204,138,.08);border:1px solid #2ecc8a40;border-radius:4px">
+        <div style="font-size:9px;color:#2ecc8a;text-transform:uppercase;letter-spacing:.08em">Con resultado</div>
+        <div style="font-size:20px;font-weight:700;color:#2ecc8a;font-family:var(--mono)">${conDato}</div>
+        <div style="font-size:8px;color:var(--dim)">celdas empresa·año</div>
+      </div>
+      <div style="flex:1;min-width:130px;padding:10px 12px;background:rgba(255,71,102,.08);border:1px solid #ff476640;border-radius:4px">
+        <div style="font-size:9px;color:#ff4766;text-transform:uppercase;letter-spacing:.08em">Sin dato</div>
+        <div style="font-size:20px;font-weight:700;color:#ff4766;font-family:var(--mono)">${sinDato}</div>
+        <div style="font-size:8px;color:var(--dim)">celdas empresa·año</div>
+      </div>
+      <div style="flex:1;min-width:130px;padding:10px 12px;background:rgba(74,82,104,.12);border:1px solid var(--bd2);border-radius:4px">
+        <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em">Cobertura</div>
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:${cobertura>=80?'#2ecc8a':cobertura>=50?'#ff8c47':'#ff4766'}">${cobertura}%</div>
+        <div style="font-size:8px;color:var(--dim)">${_resAnioSel?'año '+_resAnioSel:'todos los años'}</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:8px">Estado de resultados cargado por empresa y año. ✓ tiene resultado operativo · ✕ falta.</div>
+    <div style="overflow:auto;max-height:440px;border:1px solid var(--bd);border-radius:3px">
+      <table style="width:100%;border-collapse:separate;border-spacing:0">
+        <thead><tr>
+          <th style="padding:6px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:2px solid var(--bd);position:sticky;top:0;left:0;z-index:3;background:var(--s3)">Empresa</th>
+          ${ths}
+          <th style="padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:2px solid var(--bd);position:sticky;top:0;background:var(--s3)">Estado</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+    ${sinNada.length > 0 ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,71,102,.08);border:1px solid #ff476640;border-radius:4px;font-size:9.5px;color:#ff4766">
+      ⚠ ${sinNada.length} empresa${sinNada.length>1?'s':''} sin ningún resultado cargado${_resAnioSel?' en '+_resAnioSel:''}: ${sinNada.join(', ')}</div>` : ''}`;
+}
+
 function setResVista(v) {
   _resVista = v;
   document.getElementById('res-vista-resumen').style.display  = v === 'resumen'  ? '' : 'none';
   document.getElementById('res-vista-desglose').style.display = v === 'desglose' ? '' : 'none';
+  document.getElementById('res-vista-auditoria').style.display = v === 'auditoria' ? '' : 'none';
   document.getElementById('btn-res-resumen').classList.toggle('on-23',  v === 'resumen');
   document.getElementById('btn-res-desglose').classList.toggle('on-23', v === 'desglose');
+  document.getElementById('btn-res-auditoria').classList.toggle('on-23', v === 'auditoria');
   if (v === 'desglose') buildResDesglose();
+  else if (v === 'auditoria') buildResAuditoria();
   else buildResultado();
 }
 
@@ -8847,8 +8956,17 @@ function buildErWaterfallSection(emp, years, empEr) {
 }
 
 function buildResultado() {
-  const years = ys(), ts = DATA.totals_sup, td = DATA.totals_def;
+  const allYears = ys(), ts = DATA.totals_sup, td = DATA.totals_def;
   const selEmp = document.getElementById('sel-res-emp')?.value || '';
+
+  // Poblar selector de año (una vez / si cambió)
+  const selAnio = document.getElementById('sel-res-anio');
+  if (selAnio && selAnio.options.length <= 1) {
+    selAnio.innerHTML = '<option value="">Todos</option>' +
+      allYears.map(y => `<option value="${y}"${String(_resAnioSel)===String(y)?' selected':''}>${y}</option>`).join('');
+  }
+  // Si hay año filtrado, restringir los años a ese
+  const years = _resAnioSel ? allYears.filter(y => String(y) === String(_resAnioSel)) : allYears;
 
   if (selEmp) {
     // ── MODO EMPRESA ─────────────────────────────────────
@@ -23861,6 +23979,22 @@ function applyCloudData(cloud, opts) {
     });
   }
 
+  // ── ER matricial detallado (DATA.er) — desglose Excel ER 20XX (Sheets manda) ──
+  if (Array.isArray(cloud.er_detalle)) {
+    DATA.er = {};
+    cloud.er_detalle.forEach(r => {
+      if (!r.empresa || !r.anio) return;
+      const emp = String(r.empresa), yS = String(r.anio);
+      try {
+        const partidas = r.partidas_json ? JSON.parse(r.partidas_json) : null;
+        if (partidas && typeof partidas === 'object') {
+          if (!DATA.er[emp]) DATA.er[emp] = {};
+          DATA.er[emp][yS] = partidas;
+        }
+      } catch(e) {}
+    });
+  }
+
   // Actualizar años disponibles desde datos reales
   const allYears = new Set();
   Object.values(DATA.fact || {}).forEach(yObj => Object.keys(yObj).forEach(y => allYears.add(parseInt(y))));
@@ -24130,10 +24264,24 @@ function buildCloudPayload() {
     });
   });
 
+  // ER matricial detallado (DATA.er) — desglose de partidas del Excel ER 20XX
+  const erDetalleRows = [];
+  Object.entries(DATA.er || {}).forEach(([emp, anios]) => {
+    Object.entries(anios).forEach(([anio, partidas]) => {
+      if (!partidas || typeof partidas !== 'object') return;
+      erDetalleRows.push({
+        empresa: emp,
+        anio,
+        partidas_json: JSON.stringify(partidas),
+      });
+    });
+  });
+
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
            notas: notasRows, presupuesto: presRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
            flujos: flujosRows, mensual: mensualRows, er_mensual: erMensualRows,
+           er_detalle: erDetalleRows,
            lr_users_extra: usersExtra, lr_readonly: readonlyExtra };
 }
 
