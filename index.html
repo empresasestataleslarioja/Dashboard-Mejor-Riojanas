@@ -6728,8 +6728,11 @@ function gestionRenombrar() {
   document.getElementById('gest-rename-to').value = '';
   _poblarGestionSelects();
   computeTotals();
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
   rebuildActive();
   populateSelects();
+  if (msg) { msg.textContent += ' Publicá a Sheets para guardar el cambio.'; }
 }
 
 function gestionRenombrarRapido(emp) {
@@ -6756,9 +6759,11 @@ function gestionFusionar() {
   if (from === to)  { if (msg) { msg.style.color='#ff8c47'; msg.textContent='No podés fusionar una empresa consigo misma.'; } return; }
   if (!confirm(`¿Fusionar "${from}" → "${to}"?\n\nLos datos de "${from}" se sumarán a "${to}" y "${from}" se eliminará.\nEsta operación no se puede deshacer.`)) return;
   _fusionarEmpresas(from, to);
-  if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ "${from}" fusionada en "${to}" y eliminada del portafolio.`; }
+  if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ "${from}" fusionada en "${to}" y eliminada del portafolio. Publicá a Sheets para guardar.`; }
   _poblarGestionSelects();
   computeTotals();
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
   rebuildActive();
   populateSelects();
 }
@@ -8737,7 +8742,19 @@ const ER_ORDER = Object.keys(ER_LABELS);
 // Construye el desglose anual de ER (estructura DATA.er) desde los datos mensuales
 // de una empresa, sumando los meses. Devuelve {año: {clave_er: valor}} o null.
 function _erDesdeMonthly(emp) {
-  const erM = DATA.er_mensual?.[emp];
+  // Normalizar nombre para matching flexible (ignora S.A./SAPEM/acentos/espacios)
+  const _normEmp = s => String(s||'').toUpperCase()
+    .replace(/[ÁÀÄ]/g,'A').replace(/[ÉÈË]/g,'E').replace(/[ÍÌÏ]/g,'I')
+    .replace(/[ÓÒÖ]/g,'O').replace(/[ÚÙÜ]/g,'U')
+    .replace(/\b(S\.?A\.?U?\.?|S\.?R\.?L\.?|SAPEM|S\.?E\.?)\b/g,'')
+    .replace(/[^A-Z0-9]/g,'').trim();
+  const empN = _normEmp(emp);
+  // Buscar la clave de er_mensual que coincide exacto o normalizado
+  let erM = DATA.er_mensual?.[emp];
+  if (!erM && DATA.er_mensual) {
+    const k = Object.keys(DATA.er_mensual).find(x => _normEmp(x) === empN);
+    if (k) erM = DATA.er_mensual[k];
+  }
   const out = {};
   let hayAlgo = false;
 
@@ -8758,11 +8775,9 @@ function _erDesdeMonthly(emp) {
         if (suma !== 0) { acc[clave] = (acc[clave] || 0) + suma; }
       });
       // Calcular subtotales faltantes desde las partidas disponibles
-      // Utilidad Bruta = Ventas + Costo (costo viene negativo)
       if (acc.utilidad_bruta == null && acc.ventas_netas != null) {
         acc.utilidad_bruta = (acc.ventas_netas || 0) + (acc.costo_ventas || 0);
       }
-      // Resultado Operativo = Utilidad Bruta + Gastos Adm + Gastos Com
       if (acc.resultado_operativo == null && acc.utilidad_bruta != null) {
         acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0);
       }
@@ -8771,11 +8786,10 @@ function _erDesdeMonthly(emp) {
   }
 
   // Fallback final: si no hay desglose mensual, derivar de fact/sit
-  // (RESUMEN usa estos datos, así que el Desglose debe ser consistente)
   const fact = DATA.fact?.[emp] || {};
   const sit  = DATA.sit?.[emp]  || {};
   [...new Set([...Object.keys(fact), ...Object.keys(sit)])].forEach(yr => {
-    if (out[yr]) return; // ya hay desglose para ese año
+    if (out[yr]) return;
     const v = fact[yr], r = sit[yr];
     if (v == null && r == null) return;
     const acc = {};
@@ -8863,8 +8877,16 @@ function buildResDesglose() {
     `;
   } else {
     // ── Vista empresa: tabla partida × año para esa empresa + gráfico cascada ──
-    const empEr = DATA.er[selEmp] || _erDesdeMonthly(selEmp);
-    const yearsWithEr = years.filter(y => empEr?.[y]);
+    // Combinar DATA.er (matricial) con el desglose mensual/derivado.
+    // Si DATA.er existe pero está vacío o incompleto, completar con el fallback.
+    const erMatricial = DATA.er[selEmp] || {};
+    const erFallback = _erDesdeMonthly(selEmp) || {};
+    const empEr = {};
+    [...new Set([...Object.keys(erMatricial), ...Object.keys(erFallback)])].forEach(yr => {
+      // Preferir el matricial (más detallado); completar con fallback lo que falte
+      empEr[yr] = Object.assign({}, erFallback[yr] || {}, erMatricial[yr] || {});
+    });
+    const yearsWithEr = years.filter(y => empEr?.[y] && Object.keys(empEr[y]).length);
     const hasEr = yearsWithEr.length > 0;
 
     if (!hasEr) {
@@ -10251,6 +10273,8 @@ function saveEmpNota(value) {
   if (lbl) lbl.textContent = value.trim() ? `${value.trim().length} chars — guardado` : '';
   // Guardar en cache local inmediatamente
   saveDataToLocalCache();
+  // Las notas también deben impactar Sheets (fuente de verdad)
+  try { marcarPendienteGuardar(); } catch(e) {}
 }
 
 // Mostrar indicador de nota en tabla portafolio (tooltip)
@@ -14217,6 +14241,9 @@ function rebuildFromHistory() {
   populateTransSelects();
   updateGapBadge();
   rebuildActive();
+  // Deshacer/restaurar también debe impactar Sheets (fuente de verdad)
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
 }
 
 function updateImportUI() {
@@ -14780,6 +14807,11 @@ function tryParseERNativo(wb, fname) {
   computeTotals();
   populateSelects();
   rebuildActive();
+  // Persistir a Sheets: el ER 20XX modifica DATA.er/fact/sit
+  if (imported > 0) {
+    try { saveDataToLocalCache(); } catch(e) {}
+    try { marcarPendienteGuardar(); } catch(e) {}
+  }
 
   return { year: detectedYear, imported, skipped, sheetName, syncLog, discrepancias };
 }
