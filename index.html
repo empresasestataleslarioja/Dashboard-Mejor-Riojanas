@@ -3567,6 +3567,19 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
+        <!-- Clasificación superávit/déficit según balances vs carga manual -->
+        <div class="rowfull card" id="bal-clasif-card" style="margin-top:12px;display:none">
+          <div class="card-hd">
+            <span class="card-hd-title">Clasificación según balances</span>
+            <span class="card-hd-unit">resultado de balances vs carga manual</span>
+            <select id="bal-clasif-tipo" onchange="buildClasificacionBalances()" style="margin-left:auto;background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:2px;cursor:pointer">
+              <option value="neto">Resultado neto</option>
+              <option value="operativo">Resultado operativo</option>
+            </select>
+          </div>
+          <div id="bal-clasif-cont"></div>
+        </div>
+
       </div><!-- /bal-content -->
     </div>
 
@@ -8612,6 +8625,33 @@ const ER_LABELS = {
 const ER_SEPARATORS = ['utilidad_bruta','resultado_operativo']; // filas resaltadas
 const ER_ORDER = Object.keys(ER_LABELS);
 
+// Construye el desglose anual de ER (estructura DATA.er) desde los datos mensuales
+// de una empresa, sumando los meses. Devuelve {año: {clave_er: valor}} o null.
+function _erDesdeMonthly(emp) {
+  const erM = DATA.er_mensual?.[emp];
+  if (!erM) return null;
+  // Mapeo conceptoStd (mensual) → clave de DATA.er
+  const MAP = {
+    ventas: 'ventas_netas', costo: 'costo_ventas', utilBruta: 'utilidad_bruta',
+    gastoAdm: 'gastos_admin', gastoCom: 'gastos_comercializacion',
+    resOperativo: 'resultado_operativo',
+  };
+  const out = {};
+  let hayAlgo = false;
+  Object.entries(erM).forEach(([yr, data]) => {
+    if (!data || !Array.isArray(data.filas)) return;
+    const acc = {};
+    data.filas.forEach(f => {
+      const clave = MAP[f.conceptoStd];
+      if (!clave) return;
+      const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
+      if (suma !== 0) { acc[clave] = (acc[clave] || 0) + suma; hayAlgo = true; }
+    });
+    if (Object.keys(acc).length) out[yr] = acc;
+  });
+  return hayAlgo ? out : null;
+}
+
 function buildResDesglose() {
   const years   = ys();
   const selEmp  = document.getElementById('sel-res-emp')?.value || '';
@@ -8624,8 +8664,19 @@ function buildResDesglose() {
 
   if (!selEmp) {
     // ── Consolidado: tabla por partida × año, sumando todas las empresas con ER ──
-    const erEmps = Object.keys(DATA.er);
-    if (!erEmps.length) {
+    // Incluye empresas con DATA.er (Excel matricial) y con er_mensual (fallback)
+    const erEmps = [...new Set([
+      ...Object.keys(DATA.er),
+      ...Object.keys(DATA.er_mensual || {}),
+    ])];
+    // Resolver el ER de cada empresa (matricial o derivado de mensual)
+    const erResuelto = {};
+    erEmps.forEach(e => {
+      const er = DATA.er[e] || _erDesdeMonthly(e);
+      if (er) erResuelto[e] = er;
+    });
+    const erEmpsConDatos = Object.keys(erResuelto);
+    if (!erEmpsConDatos.length) {
       cont.innerHTML = `<div style="padding:32px;text-align:center;color:var(--dim)">
         <div style="font-size:32px;margin-bottom:12px">📂</div>
         <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">Sin datos de desglose</div>
@@ -8640,14 +8691,14 @@ function buildResDesglose() {
     ER_ORDER.forEach(k => {
       totals[k] = {};
       years.forEach(y => {
-        totals[k][y] = erEmps.reduce((s,e) => s + (DATA.er[e]?.[y]?.[k] || 0), 0);
+        totals[k][y] = erEmpsConDatos.reduce((s,e) => s + (erResuelto[e]?.[y]?.[k] || 0), 0);
       });
     });
 
     // Contar cuántas empresas tienen ER por año
     const coverageByYear = {};
     years.forEach(y => {
-      coverageByYear[y] = erEmps.filter(e => DATA.er[e]?.[y] && DATA.er[e][y].resultado_operativo !== 0).length;
+      coverageByYear[y] = erEmpsConDatos.filter(e => erResuelto[e]?.[y] && erResuelto[e][y].resultado_operativo !== 0).length;
     });
 
     cont.innerHTML = `
@@ -8677,7 +8728,7 @@ function buildResDesglose() {
     `;
   } else {
     // ── Vista empresa: tabla partida × año para esa empresa + gráfico cascada ──
-    const empEr = DATA.er[selEmp];
+    const empEr = DATA.er[selEmp] || _erDesdeMonthly(selEmp);
     const yearsWithEr = years.filter(y => empEr?.[y]);
     const hasEr = yearsWithEr.length > 0;
 
@@ -8685,7 +8736,7 @@ function buildResDesglose() {
       cont.innerHTML = `<div style="padding:24px;text-align:center;color:var(--dim)">
         <div style="font-size:24px;margin-bottom:8px">📭</div>
         <div style="font-size:12px">No hay datos de desglose ER para <strong style="color:var(--text)">${selEmp}</strong>.<br>
-        Importá el ER_20XX.xlsx para cargar el detalle.</div>
+        Importá el ER_20XX.xlsx o cargá el ER mensual para ver el detalle.</div>
       </div>`;
       return;
     }
@@ -19517,6 +19568,113 @@ function renderBalanceUI() {
 function buildBalances() {
   renderBalanceUI();
   if (_balActivo) showBalanceResult();
+  buildClasificacionBalances();
+}
+
+// ── Clasificación superávit/déficit según balances vs carga manual ──
+function buildClasificacionBalances() {
+  const card = document.getElementById('bal-clasif-card');
+  const cont = document.getElementById('bal-clasif-cont');
+  if (!cont) return;
+
+  const tipoSel = document.getElementById('bal-clasif-tipo')?.value || 'neto';
+  const campoBal = tipoSel === 'operativo' ? 'resultado_operativo' : 'resultado_neto';
+
+  // Recolectar resultado de cada balance: {empresa, periodo, resBal}
+  const items = [];
+  Object.values(_balances || {}).forEach(b => {
+    if (!b || !b.empresa) return;
+    const ren = b.indicadores?.rentabilidad || {};
+    const resBal = ren[campoBal];
+    if (resBal == null) return;
+    const periodo = String(b.periodo || b.cierre || b.año || '?');
+    // Carga manual correspondiente (DATA.sit[empresa][año])
+    const resManual = DATA.sit?.[b.empresa]?.[periodo] ?? null;
+    items.push({ empresa: b.empresa, periodo, resBal, resManual });
+  });
+
+  if (items.length === 0) {
+    if (card) card.style.display = 'none';
+    cont.innerHTML = '';
+    return;
+  }
+  if (card) card.style.display = '';
+
+  // Ordenar por resultado de balance (descendente)
+  items.sort((a, b) => (b.resBal || 0) - (a.resBal || 0));
+
+  const superavit = items.filter(x => x.resBal > 0);
+  const defic = items.filter(x => x.resBal < 0);
+  const equil = items.filter(x => x.resBal === 0);
+
+  const fmt = v => {
+    if (v == null) return '—';
+    const s = v < 0 ? '−' : '';
+    return s + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR');
+  };
+
+  // Resumen
+  const resumen = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="flex:1;min-width:120px;padding:10px 12px;background:rgba(46,204,138,.08);border:1px solid #2ecc8a40;border-radius:4px">
+      <div style="font-size:9px;color:#2ecc8a;text-transform:uppercase;letter-spacing:.08em">Superavitarias</div>
+      <div style="font-size:18px;font-weight:700;color:#2ecc8a;font-family:var(--mono)">${superavit.length}</div>
+    </div>
+    <div style="flex:1;min-width:120px;padding:10px 12px;background:rgba(255,71,102,.08);border:1px solid #ff476640;border-radius:4px">
+      <div style="font-size:9px;color:#ff4766;text-transform:uppercase;letter-spacing:.08em">Deficitarias</div>
+      <div style="font-size:18px;font-weight:700;color:#ff4766;font-family:var(--mono)">${defic.length}</div>
+    </div>
+    <div style="flex:1;min-width:120px;padding:10px 12px;background:rgba(74,82,104,.12);border:1px solid var(--bd2);border-radius:4px">
+      <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em">Equilibrio</div>
+      <div style="font-size:18px;font-weight:700;color:var(--dim);font-family:var(--mono)">${equil.length}</div>
+    </div>
+  </div>`;
+
+  // Tabla comparativa
+  const TOL = 0.02; // 2% de tolerancia para considerar "coincide"
+  const filas = items.map(x => {
+    const clasifBal = x.resBal > 0 ? 'Superávit' : x.resBal < 0 ? 'Déficit' : 'Equilibrio';
+    const colorBal = x.resBal > 0 ? '#2ecc8a' : x.resBal < 0 ? '#ff4766' : 'var(--dim)';
+    // Comparación con carga manual
+    let comp = '<span style="color:var(--dim)">sin carga manual</span>';
+    if (x.resManual != null) {
+      const difAbs = Math.abs(x.resBal - x.resManual);
+      const base = Math.max(Math.abs(x.resBal), Math.abs(x.resManual), 1);
+      const coincide = (difAbs / base) <= TOL;
+      const mismoSigno = Math.sign(x.resBal) === Math.sign(x.resManual);
+      if (coincide) comp = '<span style="color:#2ecc8a">✓ coincide</span>';
+      else if (mismoSigno) comp = '<span style="color:#ff8c47">≈ mismo signo, difiere monto</span>';
+      else comp = '<span style="color:#ff4766">⚠ discrepa (signo distinto)</span>';
+    }
+    return `<tr style="border-bottom:1px solid var(--bd)">
+      <td style="padding:5px 8px;font-size:10px;color:var(--text)">${x.empresa}</td>
+      <td style="padding:5px 8px;font-size:9px;text-align:center;color:var(--dim)">${x.periodo}</td>
+      <td style="padding:5px 8px;font-size:10px;text-align:right;font-family:var(--mono);color:${colorBal};font-variant-numeric:tabular-nums">${fmt(x.resBal)}</td>
+      <td style="padding:5px 8px;font-size:9px;text-align:center;color:${colorBal}">${clasifBal}</td>
+      <td style="padding:5px 8px;font-size:10px;text-align:right;font-family:var(--mono);color:var(--dim);font-variant-numeric:tabular-nums">${fmt(x.resManual)}</td>
+      <td style="padding:5px 8px;font-size:9px">${comp}</td>
+    </tr>`;
+  }).join('');
+
+  const tabla = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <thead><tr style="border-bottom:2px solid var(--bd)">
+      <th style="padding:6px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)">Empresa</th>
+      <th style="padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)">Período</th>
+      <th style="padding:6px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)">Resultado (balance)</th>
+      <th style="padding:6px 8px;text-align:center;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)">Clasif.</th>
+      <th style="padding:6px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)">Carga manual</th>
+      <th style="padding:6px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)">Comparación</th>
+    </tr></thead>
+    <tbody>${filas}</tbody>
+  </table></div>`;
+
+  // Aviso de discrepancias
+  const discrepan = items.filter(x => x.resManual != null && Math.sign(x.resBal) !== Math.sign(x.resManual) && x.resBal !== 0 && x.resManual !== 0);
+  const aviso = discrepan.length > 0
+    ? `<div style="margin-top:10px;padding:8px 12px;background:rgba(255,71,102,.08);border:1px solid #ff476640;border-radius:4px;font-size:9.5px;color:#ff4766">
+        ⚠ ${discrepan.length} empresa${discrepan.length>1?'s':''} con discrepancia de signo entre balance y carga manual: ${discrepan.map(x=>x.empresa+' ('+x.periodo+')').join(', ')}. Revisá cuál fuente es correcta.</div>`
+    : '';
+
+  cont.innerHTML = resumen + tabla + aviso;
 }
 
 // ── Mostrar resultado del balance seleccionado ─────────────
