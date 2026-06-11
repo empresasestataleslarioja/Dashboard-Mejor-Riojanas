@@ -8738,26 +8738,52 @@ const ER_ORDER = Object.keys(ER_LABELS);
 // de una empresa, sumando los meses. Devuelve {año: {clave_er: valor}} o null.
 function _erDesdeMonthly(emp) {
   const erM = DATA.er_mensual?.[emp];
-  if (!erM) return null;
-  // Mapeo conceptoStd (mensual) → clave de DATA.er
-  const MAP = {
-    ventas: 'ventas_netas', costo: 'costo_ventas', utilBruta: 'utilidad_bruta',
-    gastoAdm: 'gastos_admin', gastoCom: 'gastos_comercializacion',
-    resOperativo: 'resultado_operativo',
-  };
   const out = {};
   let hayAlgo = false;
-  Object.entries(erM).forEach(([yr, data]) => {
-    if (!data || !Array.isArray(data.filas)) return;
-    const acc = {};
-    data.filas.forEach(f => {
-      const clave = MAP[f.conceptoStd];
-      if (!clave) return;
-      const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
-      if (suma !== 0) { acc[clave] = (acc[clave] || 0) + suma; hayAlgo = true; }
+
+  if (erM) {
+    // Mapeo conceptoStd (mensual) → clave de DATA.er
+    const MAP = {
+      ventas: 'ventas_netas', costo: 'costo_ventas', utilBruta: 'utilidad_bruta',
+      gastoAdm: 'gastos_admin', gastoCom: 'gastos_comercializacion',
+      resOperativo: 'resultado_operativo',
+    };
+    Object.entries(erM).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const acc = {};
+      data.filas.forEach(f => {
+        const clave = MAP[f.conceptoStd];
+        if (!clave) return;
+        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
+        if (suma !== 0) { acc[clave] = (acc[clave] || 0) + suma; }
+      });
+      // Calcular subtotales faltantes desde las partidas disponibles
+      // Utilidad Bruta = Ventas + Costo (costo viene negativo)
+      if (acc.utilidad_bruta == null && acc.ventas_netas != null) {
+        acc.utilidad_bruta = (acc.ventas_netas || 0) + (acc.costo_ventas || 0);
+      }
+      // Resultado Operativo = Utilidad Bruta + Gastos Adm + Gastos Com
+      if (acc.resultado_operativo == null && acc.utilidad_bruta != null) {
+        acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0);
+      }
+      if (Object.keys(acc).length) { out[yr] = acc; hayAlgo = true; }
     });
-    if (Object.keys(acc).length) out[yr] = acc;
+  }
+
+  // Fallback final: si no hay desglose mensual, derivar de fact/sit
+  // (RESUMEN usa estos datos, así que el Desglose debe ser consistente)
+  const fact = DATA.fact?.[emp] || {};
+  const sit  = DATA.sit?.[emp]  || {};
+  [...new Set([...Object.keys(fact), ...Object.keys(sit)])].forEach(yr => {
+    if (out[yr]) return; // ya hay desglose para ese año
+    const v = fact[yr], r = sit[yr];
+    if (v == null && r == null) return;
+    const acc = {};
+    if (v != null) acc.ventas_netas = v;
+    if (r != null) acc.resultado_operativo = r;
+    if (Object.keys(acc).length) { out[yr] = acc; hayAlgo = true; }
   });
+
   return hayAlgo ? out : null;
 }
 
@@ -8824,10 +8850,10 @@ function buildResDesglose() {
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
-              const rowStyle = isSep ? 'background:var(--card2,#1a1a2e);font-weight:700;border-top:1px solid var(--bd)' : '';
-              return `<tr style="${rowStyle}">
-                <td style="color:var(--text)">${ER_LABELS[k]}</td>
-                ${years.map(y=>`<td style="text-align:right">${fmtCell(totals[k][y]/1e6, k)}</td>`).join('')}
+              const tdBg = isSep ? 'background:rgba(71,232,255,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              return `<tr>
+                <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
+                ${years.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(totals[k][y], k)}</td>`).join('')}
               </tr>`;
             }).join('')}
           </tbody>
@@ -8854,7 +8880,7 @@ function buildResDesglose() {
       <div class="rowfull card" style="overflow-x:auto">
         <div class="card-hd">
           <span class="card-hd-title">Estado de Resultados — ${selEmp}</span>
-          <span class="card-hd-unit">$ millones</span>
+          <span class="card-hd-unit">$ completos</span>
         </div>
         <table class="tbl" style="min-width:520px;font-size:11px">
           <thead><tr>
@@ -8864,10 +8890,10 @@ function buildResDesglose() {
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
-              const rowStyle = isSep ? 'background:var(--card2,#1a1a2e);font-weight:700;border-top:1px solid var(--bd)' : '';
-              return `<tr style="${rowStyle}">
-                <td style="color:var(--text)">${ER_LABELS[k]}</td>
-                ${yearsWithEr.map(y=>`<td style="text-align:right">${fmtCell(empEr[y]?.[k]/1e6??null, k)}</td>`).join('')}
+              const tdBg = isSep ? 'background:rgba(71,232,255,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              return `<tr>
+                <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
+                ${yearsWithEr.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(empEr[y]?.[k]??null, k)}</td>`).join('')}
               </tr>`;
             }).join('')}
           </tbody>
