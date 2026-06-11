@@ -3010,8 +3010,8 @@ self.onmessage = async (e) => {
           <canvas id="ch-trans-ben" style="max-height:220px"></canvas>
         </div>
 
-        <!-- fila: desglose por categoría -->
-        <div class="rowfull card" style="margin-top:12px">
+        <!-- fila: evolución mensual (solo visible al elegir año) -->
+        <div class="rowfull card" id="card-trans-mensual" style="margin-top:12px">
           <div class="card-hd">
             <span class="card-hd-title">Evolución mensual de transferencias</span>
             <span class="card-hd-unit">$ millones — por mes y año</span>
@@ -22176,6 +22176,14 @@ function buildTransMensual() {
   const canvas = document.getElementById('ch-trans-mensual');
   if (!canvas) return;
 
+  // El card de evolución mensual solo se muestra cuando hay UN año elegido
+  // en el filtro superior (_transFiltros.año). Con "Todos" se oculta.
+  const card = document.getElementById('card-trans-mensual');
+  const añoFiltrado = (_transFiltros.año && _transFiltros.año.size === 1)
+    ? [..._transFiltros.año][0] : null;
+  if (card) card.style.display = añoFiltrado ? '' : 'none';
+  if (!añoFiltrado) return; // no dibujar si no hay año específico
+
   const sel = document.getElementById('trans-yr-mes');
 
   // Normalizar todos los años a entero antes de cualquier operación
@@ -22185,14 +22193,14 @@ function buildTransMensual() {
 
   if (!yrs.length) return;
 
-  // Repoblar selector siempre
+  // Repoblar selector (oculto, ya no se usa para elegir; el año viene del filtro superior)
   if (sel) {
-    const prev = parseInt(sel.value);
     sel.innerHTML = yrs.map(y => `<option value="${y}">${y}</option>`).join('');
-    sel.value = yrs.includes(prev) ? prev : yrs[yrs.length - 1];
+    sel.value = String(añoFiltrado);
+    sel.style.display = 'none';
   }
 
-  const yr = sel ? parseInt(sel.value) : yrs[yrs.length - 1];
+  const yr = parseInt(añoFiltrado);
 
   // Filtrar usando transFiltered() para respetar todos los filtros activos
   // (empresa, SAF, beneficiario, categoría, búsqueda libre, etc.)
