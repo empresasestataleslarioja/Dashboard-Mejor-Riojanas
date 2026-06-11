@@ -5281,6 +5281,11 @@ function _rptCSS() {
   tr:last-child td{border-bottom:none}
   .ft{border-top:.5px solid #ccc;padding-top:5px;margin-top:8px;display:flex;justify-content:space-between}
   .fx{font-size:7.5pt;color:#777;font-family:monospace}
+  .img-chart{width:100%;display:block;border-radius:4px}
+  .chart-card{border:.5px solid #ddd;border-radius:6px;padding:10px 12px;background:#fff;margin-bottom:12px;page-break-inside:avoid}
+  .chart-title{font-size:7pt;font-weight:600;color:#185fa5;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;font-family:'Courier New',monospace}
+  .chart-unit{font-size:7pt;color:#999;font-family:'Courier New',monospace;float:right}
+  .r2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @page{margin:.7cm .7cm 1.2cm .7cm;size:A4 portrait}
   </style>`;
 }
@@ -5310,6 +5315,20 @@ function _rptKpi(label, value, sub, color, subClass) {
     <div class="kv">${value}</div>
     <div class="ks ${subClass||''}">${sub}</div>
   </div>`;
+}
+
+// Captura un canvas del panel como imagen PNG (para incluir gráficos en reportes)
+function _rptCanvasPng(id) {
+  var el = document.getElementById(id);
+  if (!el || !el.getContext) return '';
+  try { return el.toDataURL('image/png'); } catch(e) { return ''; }
+}
+
+// Tarjeta con un gráfico capturado
+function _rptChartCard(titulo, unidad, pngData) {
+  if (!pngData) return '';
+  return `<div class="chart-card"><div class="chart-title">${titulo}${unidad?'<span class="chart-unit">'+unidad+'</span>':''}</div>
+    <img class="img-chart" src="${pngData}"></div>`;
 }
 
 function _rptKpi2(label, value, sub, color, subClass) {
@@ -5387,9 +5406,19 @@ function _rptResumen() {
     .filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,10);
   const topBars = _rptBarH(topEmp.map(x=>({label:x.e, value:x.v})), ()=>'#185fa5');
 
+  const chartsResumen = '<div class="r2">'
+    + _rptChartCard('Facturación por año', '$ millones', _rptCanvasPng('ch-r-fact'))
+    + _rptChartCard('Superávit / Déficit', '$ millones', _rptCanvasPng('ch-r-supdef'))
+    + '</div>'
+    + '<div class="r2">'
+    + _rptChartCard('Top 8 empresas', '$ millones', _rptCanvasPng('ch-r-top8'))
+    + _rptChartCard('Personal por año', 'empleados', _rptCanvasPng('ch-r-pers'))
+    + '</div>';
+
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Resumen Ejecutivo', 'Empresas estatales de La Rioja · '+lastY)
     + kpis
+    + chartsResumen
     + '<div class="st">Evolución consolidada</div><div class="tw">'+tabla+'</div></div>'
     + '<div class="st">Top 10 empresas por facturación '+lastY+'</div><div class="tw">'+topBars+'</div></div>'
     + _rptFooter()
@@ -5426,8 +5455,14 @@ function _rptResultado() {
   const mejores = emps.slice(0,8).map(x=>({label:x.e, value:x.v}));
   const peores  = emps.slice(-8).reverse().map(x=>({label:x.e, value:x.v}));
 
+  const chartsResult = '<div class="r2">'
+    + _rptChartCard('Evolución resultado', '$ millones', _rptCanvasPng('ch-rs-multi'))
+    + _rptChartCard('Superávit acumulado', '$ millones', _rptCanvasPng('ch-rs-sup'))
+    + '</div>';
+
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Resultado por Empresa', 'Superávit / Déficit · '+lastY)
+    + chartsResult
     + '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(mejores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
     + '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(peores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
     + '<div class="st">Detalle por año</div><div class="tw">'+tabla+'</div></div>'
@@ -5516,7 +5551,8 @@ function _rptPersonal(autoPrint) {
                     DATA.personal.some(d => _persGetTotal(d,y) > 0));
   const selBase = document.getElementById('sel-pers-base');
   const baseYear= selBase?.value || pYrs[0] || '2020';
-  const lastY   = pYrs[pYrs.length-1] || '';
+  const lastY   = (window._rptAnioFiltro && pYrs.includes(String(window._rptAnioFiltro)))
+    ? String(window._rptAnioFiltro) : (pYrs[pYrs.length-1] || '');
   const selEmp  = document.getElementById('sel-pers-emp')?.value || '';
 
   if (selEmp) {
@@ -5682,6 +5718,8 @@ function _rptPersonal(autoPrint) {
     _h2.push('</div>');
     _h2.push('<div class="st" id="sec_evol">Evolución nómina total del portafolio</div>');
     _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
+    var _pngPersMulti = _rptCanvasPng('ch-p-multi');
+    if (_pngPersMulti) _h2.push(_rptChartCard('Personal por empresa (multi-año)', 'empleados', _pngPersMulti));
     _h2.push('<div class="r2" id="sec_top">');
     _h2.push('<div><div class="st">Top crecimiento '+baseYear+'→'+lastY+'</div><div class="cc">'+_rptBarH(topGrow,'#1d9e75')+'</div></div>');
     _h2.push('<div><div class="st">Top empleadores '+lastY+'</div><div class="cc">'+_rptBarH(topSize,'#185fa5')+'</div></div>');
@@ -5709,11 +5747,8 @@ function _rptBalance(autoPrint) {
 
   const fM = function(v) {
     if (v==null) return '—';
-    var abs=Math.abs(v), sign=v<0?'−':'';
-    if (abs>=1e9) return sign+'$ '+Math.round(abs/1e6).toLocaleString('es-AR')+' M';
-    if (abs>=1e6) return sign+'$ '+(abs/1e6).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+' M';
-    if (abs>=1e3) return sign+'$ '+Math.round(abs).toLocaleString('es-AR');
-    return sign+'$ '+abs.toFixed(0);
+    var sign=v<0?'−':'';
+    return sign+'$ '+Math.round(Math.abs(v)).toLocaleString('es-AR');
   };
   const fP = v => v==null?'—':v.toFixed(1)+'%';
   const fR = v => v==null?'—':v.toFixed(2);
@@ -5835,6 +5870,14 @@ function _rptBalance(autoPrint) {
 //   REPORTE: TRANSFERENCIAS
 // ══════════════════════════════════════════════════
 function _rptTransferencias(autoPrint) {
+  // Aplicar filtro de año de la barra de reportes al panel antes de capturar
+  var _filtroAñoPrevio = _transFiltros.año;
+  var _rptAño = window._rptAnioFiltro;
+  if (_rptAño) {
+    _transFiltros.año = new Set([String(_rptAño)]);
+    try { if (typeof buildTransferencias === 'function') buildTransferencias(); } catch(e) {}
+  }
+
   // Capturar canvas como imágenes PNG desde el dashboard
   function canvasPng(id) {
     var el = document.getElementById(id);
@@ -5870,10 +5913,8 @@ function _rptTransferencias(autoPrint) {
   var nPagos= rows.length;
   function fM2(v){
     if(!v) return '—';
-    var abs=Math.abs(v),sign=v<0?'-':'';
-    if(abs>=1e9) return sign+'$ '+Math.round(abs/1e9).toLocaleString('es-AR')+' B';
-    if(abs>=1e6) return sign+'$ '+(abs/1e6).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+' M';
-    return sign+'$ '+Math.round(abs).toLocaleString('es-AR');
+    var sign=v<0?'-':'';
+    return sign+'$ '+Math.round(Math.abs(v)).toLocaleString('es-AR');
   }
   var fechaStr = new Date().toLocaleDateString('es-AR',
     {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -5939,6 +5980,13 @@ function _rptTransferencias(autoPrint) {
 
   h.push(_rptFooter());
   h.push('</div></body></html>');
+
+  // Restaurar el filtro de año previo del panel
+  if (_rptAño) {
+    _transFiltros.año = _filtroAñoPrevio;
+    try { if (typeof buildTransferencias === 'function') buildTransferencias(); } catch(e) {}
+  }
+
   return h.join('');
 }
 
