@@ -5435,7 +5435,41 @@ function _rptResultado() {
     return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
 
-  // Empresas ordenadas por resultado del último año
+  // Detectar si el panel está en modo empresa (coincide con lo que ve el usuario)
+  const selEmp = document.getElementById('sel-res-emp')?.value || '';
+  const charts = '<div class="r2">'
+    + _rptChartCard('Resultado operativo anual', '$ millones', _rptCanvasPng('ch-rs-multi'))
+    + _rptChartCard(selEmp ? 'Facturación vs Resultado' : 'Superávit acumulado', '$ millones', _rptCanvasPng('ch-rs-sup'))
+    + '</div>'
+    + _rptChartCard(selEmp ? 'Gastos estimados (fact − resultado)' : 'Cantidad sup./déficit', selEmp?'$ millones':'empresas', _rptCanvasPng('ch-rs-cnt'));
+
+  if (selEmp) {
+    // ── MODO EMPRESA: refleja el panel por empresa ──
+    const fact = DATA.fact[selEmp] || {};
+    const sit  = DATA.sit[selEmp]  || {};
+    const kpis = '<div class="kg">' + years.map(y => {
+      const f = fact[y]||0, s = sit[y];
+      const m = f>0 && s!=null ? (s/f*100).toFixed(1) : null;
+      return _rptKpi(selEmp+' · '+y, (s!=null&&s!==0?fmt(s):'N/D'), (m!==null?'Margen: '+m+'%':''), (s>0?'#0f6e56':s<0?'#c0392b':'#888'));
+    }).join('') + '</div>';
+
+    const thsE = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+    const filaFact = years.map(y=>`<td style="text-align:right">${fmt(fact[y]||0)}</td>`).join('');
+    const filaRes  = years.map(y=>`<td style="text-align:right;${(sit[y]||0)<0?'color:#c0392b':'color:#0f6e56'}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
+    const tablaE = `<table style="width:100%;border-collapse:collapse;font-size:9pt">
+      <thead><tr><th style="text-align:left">Concepto</th>${thsE}</tr></thead>
+      <tbody><tr><td>Facturación</td>${filaFact}</tr><tr style="font-weight:700"><td>Resultado operativo</td>${filaRes}</tr></tbody></table>`;
+
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+      + _rptHeader('Resultado Operativo', selEmp+' · '+years[0]+'–'+years[years.length-1])
+      + kpis
+      + charts
+      + '<div class="st">Detalle por año</div><div class="tw">'+tablaE+'</div></div>'
+      + _rptFooter()
+      + '</div></body></html>';
+  }
+
+  // ── MODO CONSOLIDADO ──
   const emps = Object.keys(DATA.sit)
     .map(e=>({e, v: DATA.sit[e]?.[lastY] ?? null, serie: years.map(y=>DATA.sit[e]?.[y])}))
     .filter(x=>x.v!=null)
@@ -5451,18 +5485,12 @@ function _rptResultado() {
     <thead><tr><th style="text-align:left">Empresa</th>${ths}</tr></thead>
     <tbody>${filas}</tbody></table>`;
 
-  // Barras de las mejores y peores
   const mejores = emps.slice(0,8).map(x=>({label:x.e, value:x.v}));
   const peores  = emps.slice(-8).reverse().map(x=>({label:x.e, value:x.v}));
 
-  const chartsResult = '<div class="r2">'
-    + _rptChartCard('Evolución resultado', '$ millones', _rptCanvasPng('ch-rs-multi'))
-    + _rptChartCard('Superávit acumulado', '$ millones', _rptCanvasPng('ch-rs-sup'))
-    + '</div>';
-
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
-    + _rptHeader('Resultado por Empresa', 'Superávit / Déficit · '+lastY)
-    + chartsResult
+    + _rptHeader('Resultado Operativo', 'Superávit / Déficit · '+lastY)
+    + charts
     + '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(mejores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
     + '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(peores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
     + '<div class="st">Detalle por año</div><div class="tw">'+tabla+'</div></div>'
@@ -5943,14 +5971,24 @@ function _rptTransferencias(autoPrint) {
   // KPIs
   h.push('<div class="kpi-row" id="sec_kpis">');
   h.push('<div class="kp"><div class="kl">Total transferido</div><div class="kv">'+fM2(total)+'</div><div class="ks">'+nPagos.toLocaleString('es-AR')+' pagos · '+nBen+' beneficiarias</div></div>');
-  // Desglose por categorías principales
+  // Desglose por categorías — TODAS, no solo top 3
   var byCat = {};
   rows.forEach(function(r){ var k=r.categoria||'Otros'; byCat[k]=(byCat[k]||0)+(r.importe||0); });
-  var cats = Object.entries(byCat).sort(function(a,b){return b[1]-a[1];}).slice(0,3);
-  cats.forEach(function(kv) {
-    h.push('<div class="kp"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:12pt">'+fM2(kv[1])+'</div><div class="ks">'+(kv[1]/total*100).toFixed(1)+'% del total</div></div>');
+  var cats = Object.entries(byCat).sort(function(a,b){return b[1]-a[1];});
+  // Las primeras 3 completan la fila superior junto al total
+  cats.slice(0,3).forEach(function(kv) {
+    h.push('<div class="kp"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:12pt">'+fM2(kv[1])+'</div><div class="ks">'+(total?(kv[1]/total*100).toFixed(1):'0')+'% del total</div></div>');
   });
   h.push('</div>');
+  // Si hay más de 3 categorías, mostrar el resto en una grilla adicional
+  if (cats.length > 3) {
+    h.push('<div class="st">Todas las categorías</div>');
+    h.push('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px">');
+    cats.slice(3).forEach(function(kv) {
+      h.push('<div class="kp" style="padding:8px 10px"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:11pt">'+fM2(kv[1])+'</div><div class="ks">'+(total?(kv[1]/total*100).toFixed(1):'0')+'% del total</div></div>');
+    });
+    h.push('</div>');
+  }
 
   // Fila 1: Composición + SAF
   h.push('<div class="r2" id="sec_composicion">');
@@ -5963,9 +6001,12 @@ function _rptTransferencias(autoPrint) {
     h.push('<div class="chart-card" id="sec_beneficiario"><div class="chart-title">Transferencias por beneficiario <span class="chart-unit">$ millones · top 12</span></div><img class="img-chart" src="'+imgs.ben+'"></div>');
   }
 
-  // Evolución mensual (solo si hay imagen)
-  if (imgs.mensual) {
-    h.push('<div class="chart-card" id="sec_mensual"><div class="chart-title">Evolución mensual de transferencias <span class="chart-unit">$ millones — por mes y año</span></div><img class="img-chart" src="'+imgs.mensual+'"></div>');
+  // Evolución mensual: SOLO cuando hay un año específico elegido
+  // (con todos los años mezclados, el gráfico mensual no es informativo)
+  var hayAñoEspecifico = !!(_rptAño || (_transFiltros.año && _transFiltros.año.size === 1));
+  if (imgs.mensual && hayAñoEspecifico) {
+    var añoMostrar = _rptAño || [..._transFiltros.año][0];
+    h.push('<div class="chart-card" id="sec_mensual"><div class="chart-title">Evolución mensual de transferencias <span class="chart-unit">año '+añoMostrar+' — $ por mes</span></div><img class="img-chart" src="'+imgs.mensual+'"></div>');
   }
 
   // Desglose por categoría
