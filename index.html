@@ -10659,18 +10659,56 @@ function buildEvolucionMensual(emp) {
         { lbl:'= Resultado antes de Imp.',   concepto:'resAntesImp',   bold:true  },
         { lbl:'= Resultado del Ejercicio',   concepto:'resEjercicio',  bold:true  },
       ];
+      const calcConceptos = ['utilBruta','resOperativo','resAntesImp'];
+
+      // Calcular valores por concepto y mes (cascada). Para los conceptos base
+      // toma el dato de su fila; para los subtotales los calcula sobre la marcha.
+      const valConcMes = {};   // valConcMes[concepto][mes] = número
+      const getVal = (concepto, m) => {
+        const f = getFila(concepto);
+        return f && f.valores[m] != null ? f.valores[m] : null;
+      };
+      mesesMostrar.forEach(m => {
+        const base = {
+          ventas:        getVal('ventas', m),
+          costo:         getVal('costo', m),
+          gastoAdm:      getVal('gastoAdm', m),
+          gastoCom:      getVal('gastoCom', m),
+          resFinanciero: getVal('resFinanciero', m),
+          resEjercicio:  getVal('resEjercicio', m),
+        };
+        // Subtotales calculados
+        let utilBruta = getVal('utilBruta', m);
+        if (utilBruta == null && (base.ventas != null || base.costo != null))
+          utilBruta = (base.ventas || 0) + (base.costo || 0);
+        let resOperativo = getVal('resOperativo', m);
+        if (resOperativo == null && (utilBruta != null || base.gastoAdm != null || base.gastoCom != null))
+          resOperativo = (utilBruta || 0) + (base.gastoAdm || 0) + (base.gastoCom || 0);
+        let resAntesImp = getVal('resAntesImp', m);
+        if (resAntesImp == null && (resOperativo != null || base.resFinanciero != null))
+          resAntesImp = (resOperativo || 0) + (base.resFinanciero || 0);
+
+        const all = { ...base, utilBruta, resOperativo, resAntesImp };
+        Object.entries(all).forEach(([k, v]) => {
+          if (!valConcMes[k]) valConcMes[k] = {};
+          valConcMes[k][m] = v;
+        });
+      });
+
       filasHTML = estructura.map(e => {
         const fila = getFila(e.concepto);
-        // Mostrar SIEMPRE todos los conceptos del ER estándar, aunque no tengan datos
         const fi = fila ? erData.filas.indexOf(fila) : -1;
-        const calc = ['utilBruta','resOperativo','resAntesImp'].includes(e.concepto); // subtotales calculados
+        const calc = calcConceptos.includes(e.concepto);
         const celdas = mesesMostrar.map(m=>{
-          const v = fila ? fila.valores[m] : null;
-          if (edit && !calc && fi>=0) return `<td style="padding:2px 4px;text-align:right">${inputCelda(yr,fi,m,v)}</td>`;
+          const v = valConcMes[e.concepto]?.[m] ?? null;
+          // En edición, las celdas base (no calculadas) con fila existente son editables
+          if (edit && !calc && fi>=0) return `<td style="padding:2px 4px;text-align:right">${inputCelda(yr,fi,m,fila.valores[m])}</td>`;
           return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}${calc?';color:var(--acc,#47e8ff)':''}">${fmt(v)}</td>`;
         }).join('');
-        const totFila = fila ? mesesMostrar.reduce((s,m)=>s+(fila.valores[m]||0),0) : null;
-        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${fmt(totFila)}</td>`;
+        // Total = suma de los valores calculados por mes
+        const totFila = mesesMostrar.reduce((s,m)=> s + (valConcMes[e.concepto]?.[m] || 0), 0);
+        const hayDato = mesesMostrar.some(m => valConcMes[e.concepto]?.[m] != null);
+        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${hayDato?fmt(totFila):'—'}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
         const nota = (edit && !fila && !calc) ? ` <button onclick="_erMensualCrearConcepto('${empJS}','${yr}','${e.concepto}','${e.lbl.replace(/'/g,"")}')" style="padding:1px 6px;font-size:8px;background:transparent;border:1px solid var(--bd);border-radius:3px;color:var(--acc,#47e8ff);cursor:pointer;margin-left:4px">+ cargar</button>` : '';
         return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}${nota}</td>${celdas}${totCell}${edit?'<td></td>':''}</tr>`;
