@@ -6402,7 +6402,7 @@ function empresasFiltradas() {
 // Formatter principal: importe completo con separador de miles (es-AR)
 // Ej: 163.217.362 → $ 163.217.362
 const _fvFmt0 = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
-const _fvFmt2 = new Intl.NumberFormat('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+const _fvFmt2 = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
 function fv(v, _short=false) {
   if (v == null) return '—';
   return (v < 0 ? '-' : '') + '$ ' + _fvFmt0.format(Math.abs(v));
@@ -10542,11 +10542,8 @@ function buildEvolucionMensual(emp) {
   const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const fmt = v => {
     if (v == null || v === '') return '—';
-    const a = Math.abs(v), s = v<0?'−':'';
-    if (a >= 1e9) return s+(a/1e9).toLocaleString('es-AR',{maximumFractionDigits:2})+'MM';
-    if (a >= 1e6) return s+(a/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})+'M';
-    if (a >= 1e3) return s+(a/1e3).toLocaleString('es-AR',{maximumFractionDigits:0})+'k';
-    return s+a.toLocaleString('es-AR',{maximumFractionDigits:0});
+    const s = v<0?'−':'';
+    return s+Math.abs(Math.round(v)).toLocaleString('es-AR');
   };
   const empJS = emp.replace(/'/g, "\\'");
 
@@ -10647,7 +10644,32 @@ function buildEvolucionMensual(emp) {
         return `<tr style="${peso}">${lblCell}${celdas}${totCell}${delCell}</tr>`;
       }).join('');
     } else {
-      const getFila = (concepto) => erData.filas.find(f => f.conceptoStd === concepto);
+      // Patrones de texto para reconocer un concepto por el label (fallback
+      // cuando la fila no tiene conceptoStd asignado al importar).
+      const PAT = {
+        ventas:        t => (t.includes('VENTA') || t === 'INGRESOS' || t === 'INGRESO' || t.includes('INGRESO POR VENTA')) && !t.includes('COSTO') && !t.includes('FINANCIER') && !t.includes('BRUTA') && !t.includes('BRUTO') && !t.includes('GASTO'),
+        costo:         t => t.includes('COSTO') && (t.includes('VENTA') || t.includes('SERVICIO') || t.includes('MERCAD') || t.includes('PRODUC')),
+        utilBruta:     t => t.includes('UTILIDAD BRUTA') || t.includes('RESULTADO BRUTO') || t.includes('GANANCIA BRUTA'),
+        gastoAdm:      t => t.includes('ADMINISTRAC'),
+        gastoCom:      t => t.includes('COMERCIALIZAC') || t.includes('COMERCIALES') || t.includes('GASTOS DE VENTA') || t.includes('GASTO DE VENTA'),
+        resOperativo:  t => t.includes('RESULTADO OPERATIVO') || t.includes('GANANCIA OPERATIVA') || (t.includes('OPERATIV') && t.includes('RESULTADO')),
+        resFinanciero: t => t.includes('FINANCIER'),
+        resAntesImp:   t => t.includes('ANTES DE IMP') || t.includes('ANTES DEL IMP'),
+        resEjercicio:  t => t.includes('RESULTADO DEL EJERCICIO') || t.includes('RESULTADO NETO') || t.includes('RESULTADO FINAL'),
+      };
+      // Busca la fila: primero por conceptoStd, si no por texto del label
+      const getFila = (concepto) => {
+        let f = erData.filas.find(x => x.conceptoStd === concepto);
+        if (f) return f;
+        const pat = PAT[concepto];
+        if (!pat) return null;
+        // Candidatas: filas sin conceptoStd cuyo label matchea el patrón
+        const cands = erData.filas.filter(x => !x.conceptoStd && pat(String(x.lbl||'').toUpperCase()));
+        if (cands.length === 0) return null;
+        // Preferir la que tenga valores cargados (evita tomar encabezados vacíos como "INGRESOS")
+        const conValores = cands.find(x => Object.values(x.valores||{}).some(v => v != null && v !== 0));
+        return conValores || cands[0];
+      };
       const estructura = [
         { lbl:'Ventas Netas',                concepto:'ventas',        bold:false },
         { lbl:'(−) Costo de Ventas',         concepto:'costo',         bold:false },
