@@ -2369,6 +2369,42 @@ self.onmessage = async (e) => {
         <div class="card-hd"><span class="card-hd-title">Variación nominal vs real por empresa 2021→2024</span></div>
         <div style="overflow-x:auto"><table class="tbl" id="tbl-real"></table></div>
       </div>
+      <!-- ── Actualización mensual IPC ───────────────────────── -->
+      <div class="rowfull card" id="card-infl-update">
+        <div class="card-hd">
+          <span class="card-hd-title">📅 Actualización mensual IPC 2026 — INDEC</span>
+          <span class="card-hd-unit" id="infl-update-estado"></span>
+        </div>
+        <div style="padding:12px 16px">
+          <div style="font-size:9px;color:var(--dim);margin-bottom:10px;line-height:1.6">
+            INDEC publica el IPC mensual los días 10-15 de cada mes. Fuente oficial:
+            <a href="https://www.indec.gob.ar/indec/web/Nivel4-Tema-3-5-31" target="_blank"
+               style="color:#47e8ff;text-decoration:none">indec.gob.ar → Precios → IPC</a>
+          </div>
+          <div id="infl-meses-estado" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
+          <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:8px;color:var(--dim);margin-bottom:3px;font-family:var(--mono)">MES</div>
+              <select id="infl-nuevo-mes" style="background:var(--s3);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9.5px;padding:4px 8px;border-radius:3px;outline:none">
+                <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+                <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+                <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+                <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:8px;color:var(--dim);margin-bottom:3px;font-family:var(--mono)">VARIACIÓN %</div>
+              <input id="infl-nuevo-val" type="number" step="0.1" min="0" max="100" placeholder="ej: 2.4"
+                style="width:80px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9.5px;padding:4px 8px;border-radius:3px;outline:none">
+            </div>
+            <button onclick="actualizarInflacionMensual()"
+              style="background:rgba(71,232,255,.1);border:1px solid #47e8ff44;color:#47e8ff;font-size:9px;padding:5px 12px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+              ✓ Guardar dato
+            </button>
+            <span id="infl-update-msg" style="font-size:9px;font-family:var(--mono)"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ RUBROS ══════════════════════════════════════════ -->
@@ -12509,7 +12545,7 @@ const INFL = {
     // 2025: datos publicados INDEC (año completo)
     2025:[2.3,2.4,3.7,3.0,3.3,3.0,3.0,4.1,5.8,3.5,3.2,2.7],
     // ── 2026: ACTUALIZAR MES A MES — agregar valor al array cuando INDEC publique ──
-    2026:[2.4,2.3,3.7],  // ene 2.4 · feb 2.3 · mar 3.7 (INDEC 11/04/2026)
+    2026:[2.4,2.3,3.7,2.6,2.1],  // ene 2.4 · feb 2.3 · mar 3.7 · abr 2.6 · may 2.1 (INDEC jun/2026)
   },
 };
 
@@ -12653,6 +12689,76 @@ function buildInflacion() {
     tb.appendChild(tr);
   });
   tbl.appendChild(tb);
+
+  // Renderizar widget de actualización mensual
+  _renderInflMesesEstado();
+}
+
+// ── Estado visual de meses IPC 2026 ──────────────────────────
+const MESES_LABELS_IPC = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function _renderInflMesesEstado() {
+  const el = document.getElementById('infl-meses-estado');
+  const est = document.getElementById('infl-update-estado');
+  if (!el) return;
+  const datos = INFL.mensual[2026] || [];
+  const publicados = datos.filter(v => v != null).length;
+  if (est) est.textContent = `${publicados}/12 meses publicados`;
+  el.innerHTML = MESES_LABELS_IPC.map((m, i) => {
+    const v = datos[i];
+    const tiene = v != null;
+    return `<div title="${m} 2026: ${tiene ? v+'%' : 'sin dato'}"
+      style="padding:3px 8px;border-radius:3px;font-size:9px;font-family:var(--mono);font-weight:600;cursor:default;
+             background:${tiene ? 'rgba(71,232,255,.12)' : 'rgba(148,163,184,.08)'};
+             border:1px solid ${tiene ? '#47e8ff44' : '#94a3b822'};
+             color:${tiene ? '#47e8ff' : 'var(--dim)'}">
+      ${m}${tiene ? ' '+v+'%' : ''}
+    </div>`;
+  }).join('');
+  // Pre-seleccionar el próximo mes sin dato
+  const sel = document.getElementById('infl-nuevo-mes');
+  if (sel) sel.value = String(Math.min(publicados, 11));
+}
+
+function actualizarInflacionMensual() {
+  const mes = parseInt(document.getElementById('infl-nuevo-mes')?.value ?? '');
+  const val = parseFloat(document.getElementById('infl-nuevo-val')?.value ?? '');
+  const msg = document.getElementById('infl-update-msg');
+
+  if (isNaN(mes) || mes < 0 || mes > 11) {
+    if (msg) { msg.textContent = '⚠ Mes inválido'; msg.style.color = '#ff8c47'; } return;
+  }
+  if (isNaN(val) || val <= 0 || val > 100) {
+    if (msg) { msg.textContent = '⚠ Valor inválido (0.1 - 100)'; msg.style.color = '#ff8c47'; } return;
+  }
+
+  if (!INFL.mensual[2026]) INFL.mensual[2026] = [];
+  // Extender el array hasta el índice necesario
+  while (INFL.mensual[2026].length <= mes) INFL.mensual[2026].push(null);
+  INFL.mensual[2026][mes] = val;
+
+  // Recalcular inflación anual 2026 acumulada (producto de variaciones mensuales publicadas)
+  const meses = INFL.mensual[2026].filter(v => v != null);
+  if (meses.length > 0) {
+    const acum = meses.reduce((acc, m) => acc * (1 + m / 100), 1);
+    INFL.anual[2026] = parseFloat(((acum - 1) * 100).toFixed(1));
+  }
+
+  // Persistir en localStorage
+  try {
+    localStorage.setItem('lr_infl_2026', JSON.stringify({
+      mensual: INFL.mensual[2026], anual: INFL.anual[2026]
+    }));
+  } catch(e) {}
+
+  marcarPendienteGuardar();
+  _renderInflMesesEstado();
+  buildInflacion();
+
+  const label = MESES_LABELS_IPC[mes];
+  if (msg) { msg.textContent = `✓ ${label} 2026: ${val}% guardado`; msg.style.color = '#47ffb4'; }
+  setTimeout(() => { if (msg) msg.textContent = ''; }, 4000);
+  if (document.getElementById('infl-nuevo-val')) document.getElementById('infl-nuevo-val').value = '';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -25115,6 +25221,16 @@ function loadDataFromLocalCache() {
       console.log('[LR] Flujos desde localStorage:', Object.keys(cached._flujos).length);
     }
     if (cached._flujos_config) DATA.flujos_config = cached._flujos_config;
+
+    // Restaurar datos de inflación 2026 actualizados manualmente
+    try {
+      const inflRaw = localStorage.getItem('lr_infl_2026');
+      if (inflRaw) {
+        const inflData = JSON.parse(inflRaw);
+        if (Array.isArray(inflData.mensual)) INFL.mensual[2026] = inflData.mensual;
+        if (inflData.anual != null) INFL.anual[2026] = inflData.anual;
+      }
+    } catch(e) {}
 
     // Restaurar overrides de tipo de gráfico
     if (cached._chartTypeOverrides && typeof cached._chartTypeOverrides === 'object') {
