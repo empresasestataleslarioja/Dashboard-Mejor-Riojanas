@@ -15951,11 +15951,11 @@ function _aplicarVentasGastos() {
 
   try { computeTotals(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { _dispararAutoSync(); } catch(e) {}
 
   const t = document.getElementById('imp-vg-preview');
   if (t) t.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
-    ✓ Aplicado: ${emp} año ${yS} — ${meses.length} meses. Facturación ${(totV/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})}M, Resultado ${(totR/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})}M. Revisá en "Por empresa" y publicá a Sheets.</div>`;
+    ✓ Aplicado: ${emp} año ${yS} — ${meses.length} meses. Facturación ${(totV/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})}M, Resultado ${(totR/1e6).toLocaleString('es-AR',{maximumFractionDigits:1})}M — guardando en Sheets automáticamente…</div>`;
   window._vgPendiente = null;
   try { buildFacturacion(); buildResultado(); rebuildActive(); } catch(e) {}
 }
@@ -16175,11 +16175,11 @@ function _aplicarERColumnas() {
 
   try { computeTotals(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { _dispararAutoSync(); } catch(e) {}
 
   const target = document.getElementById('imp-vg-preview');
   if (target) target.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
-    ✓ Aplicado: ${emp} · ${yS} · ${r.filas.length} conceptos en ${meses.length} meses. Revisá en "Por empresa" y publicá a Sheets.</div>`;
+    ✓ Aplicado: ${emp} · ${yS} · ${r.filas.length} conceptos en ${meses.length} meses — guardando en Sheets automáticamente…</div>`;
   window._erColPendiente = null;
   try { rebuildActive(); } catch(e) {}
 }
@@ -16706,6 +16706,8 @@ function handleImportWorkbook(wb, fname) {
     _importHistory.push({ id: erTs, fname, added: erResult.imported, updated: 0,
       ts: erTs, reverted: false, diff:[], erImport: true, snapAfter: deepCopyData() });
     updateImportUI();
+    saveDataToLocalCache();
+    _dispararAutoSync();
     return;
   }
 
@@ -16919,6 +16921,8 @@ function applyImport() {
   populateSelects();
   updateGapBadge();
   rebuildActive();
+  saveDataToLocalCache();
+  _dispararAutoSync();
 }
 
 function cancelImport() {
@@ -18817,6 +18821,8 @@ function guardarBalance(filename, texto, metodo) {
       selEmp.value = empresaFinal;
     }
     actualizarPeriodos();
+    try { saveDataToLocalCache(); } catch(e) {}
+    try { _dispararAutoSync(); } catch(e) {}
   };
 
   if (empresaYaElegida && empresasPortafolio.includes(empresaYaElegida)) {
@@ -25157,13 +25163,15 @@ function saveDataToLocalCache() {
       _flujos:       DATA.flujos || {},
       _flujos_config: DATA.flujos_config || {},
       _chartTypeOverrides: chartTypeOverrides || {},
+      _er_mensual:   DATA.er_mensual || {},
+      _er_detalle:   DATA.er || {},
       savedAt: nowAR()
     };
     localStorage.setItem(LS_KEY, JSON.stringify(snap));
     actualizarIndicadorGuardado(snap.savedAt);
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
-      showStorageStatus('⚠ Sin espacio en el navegador', '#ff8c47');
+      showStorageStatus('⚠ Sin espacio en el navegador — ER mensual no guardado localmente', '#ff8c47');
     }
   }
 }
@@ -25704,6 +25712,18 @@ function loadDataFromLocalCache() {
       cached._rubroList.forEach(r => {
         if (r && !RUBRO_LIST.includes(r)) { RUBRO_LIST.push(r); RUBRO_CSS[r] = 'rb-custom'; }
       });
+    }
+
+    // Restaurar ER mensual completo y ER detalle desde localStorage
+    if (cached._er_mensual && typeof cached._er_mensual === 'object' &&
+        Object.keys(cached._er_mensual).length > 0) {
+      DATA.er_mensual = cached._er_mensual;
+      console.log('[LR] ER mensual desde localStorage:', Object.keys(cached._er_mensual).length, 'empresas');
+    }
+    if (cached._er_detalle && typeof cached._er_detalle === 'object' &&
+        Object.keys(cached._er_detalle).length > 0) {
+      DATA.er = cached._er_detalle;
+      console.log('[LR] ER detalle (balance) desde localStorage:', Object.keys(cached._er_detalle).length, 'empresas');
     }
 
     if (cached.savedAt) actualizarIndicadorGuardado(cached.savedAt, '📦 cache local');
