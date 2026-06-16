@@ -15800,6 +15800,223 @@ function _aplicarVentasGastos() {
 // ── Parser de Estados de Resultados matriciales (formato origen del dashboard) ──
 // Detecta hoja RESUMEN con empresas en columnas y conceptos en filas.
 // Extrae Ventas Netas (facturación) y Resultado Operativo por empresa.
+// ── Parser: ER mensual con meses como columnas (ENERO…DICIEMBRE en fila 2) ──
+// Detecta archivos tipo "EMPRESA_Estado_Resultados_YYYY_ANUAL.xlsx" donde:
+//   Fila 1: título con año | Fila 2: CONCEPTO | ENERO | … | DICIEMBRE
+//   Columna A: etiquetas de conceptos | Columnas B-M: valores mensuales
+function tryParseERColumnasMeses(wb, fname) {
+  const MESES_TXT = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,
+                    JULIO:7,AGOSTO:8,SEPTIEMBRE:9,SETIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+
+  // Mapeo de etiqueta → conceptoStd
+  const _clasif = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
+    if (!t) return null;
+    if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS/.test(t)) return 'ventas';
+    if (/VENTAS\s+BRUTAS?/.test(t)) return 'IGNORAR';
+    if (/DEVOLUCION|^DESCUENTO/.test(t)) return 'IGNORAR';
+    if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+    if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
+    if (/COSTO\s+DE\s+VENTAS?|COSTO\s+DE\s+MERCANCIAS?/.test(t)) return 'costo';
+    if (/TOTAL\s+GASTOS?\s+(DE\s+)?VENTA|TOTAL\s+GASTOS?\s+OPERATIV/.test(t)) return 'IGNORAR';
+    if (/TOTAL\s+GASTOS?\s+ADMIN/.test(t)) return 'IGNORAR';
+    if (/TOTAL\s+GASTOS?\s+FINANC/.test(t)) return 'IGNORAR';
+    if (/TOTAL\s+IMPUESTO/.test(t)) return 'IGNORAR';
+    if (/UTILIDAD\s+OPERATIVA|RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA/.test(t)) return 'resOperativo';
+    if (/UTILIDAD\s+ANTES\s+DE\s+IMP|RESULTADO\s+ANTES/.test(t)) return 'resAntesImp';
+    if (/UTILIDAD\s+NETA|RESULTADO\s+(DEL\s+)?EJERCICIO|RESULTADO\s+NETO|GANANCIA\s+NETA/.test(t)) return 'resEjercicio';
+    if (/IMPUESTO\s+(A\s+(LAS?\s+)?GANANCIAS?|DIFERIDO|SOBRE\s+RENTA)/.test(t)) return 'impuesto';
+    if (/GASTOS?\s+FINANC|PRODUCTOS?\s+FINANC/.test(t)) return 'resFinanciero';
+    if (/COMERCIALIZAC|MERCADOTECNIA|PUBLICIDAD/.test(t)) return 'gastoCom';
+    if (/GASTOS?\s+(DE\s+)?VENTA|GASTOS?\s+OPERATIV/.test(t)) return 'gastoCom';
+    if (/GASTOS?\s+ADMIN/.test(t)) return 'gastoAdm';
+    if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA\s+SOCIAL|APORTE|CONTRIBUC|BENEFICIO.*PERSONAL|CARGAS\s+SOC/.test(t)) return 'gastoAdm';
+    if (/HONORARIO/.test(t)) return 'gastoAdm';
+    if (/AMORTIZAC|DEPRECIAC/.test(t)) return 'gastoAdm';
+    if (/SEGURO/.test(t)) return 'gastoAdm';
+    if (/ALQUILER/.test(t)) return 'gastoAdm';
+    if (/ELECTRICID|LUZ\b|GAS\b|AGUA\b|TELEFON|INTERNET|CELULAR/.test(t)) return 'gastoAdm';
+    if (/PAPELERIA|ARTICU.*LIMPIEZA|INSUMO/.test(t)) return 'gastoAdm';
+    if (/MANTENIMIENTO|REPARACION/.test(t)) return 'gastoAdm';
+    if (/COMBUSTIBLE|LUBRICANTE|VEHICULO|RODADO/.test(t)) return 'gastoAdm';
+    if (/IMPUESTO|TASA|CONTRIBUC/.test(t)) return 'gastoAdm';
+    if (/VIATICO|VIAJE|MOVILIDAD/.test(t)) return 'gastoCom';
+    if (/FLETE|ENCOMIENDA|ENTREGA/.test(t)) return 'gastoCom';
+    if (/GASTO.*VENTA|OPERATIV|OBRA/.test(t)) return 'gastoCom';
+    if (/OTROS\s+GASTO|VARIOS/.test(t)) return 'gastoAdm';
+    return null;
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 5) continue;
+
+    // Detectar fila de cabecera de meses (buscar fila con ≥8 meses en columnas)
+    let filaMeses = -1, colMeses = []; // [{col, mes}]
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const cols = [];
+      for (let c = 1; c < rows[i].length; c++) {
+        const vu = String(rows[i][c] || '').trim().toUpperCase();
+        if (MESES_TXT[vu]) cols.push({ col:c, mes:MESES_TXT[vu] });
+      }
+      if (cols.length >= 8) { filaMeses = i; colMeses = cols; break; }
+    }
+    if (filaMeses < 0 || colMeses.length < 8) continue;
+
+    // Primer columna debe tener etiquetas de texto ("CONCEPTO" o similar)
+    const lblCol0 = String(rows[filaMeses][0] || '').toUpperCase();
+    if (lblCol0 && !['CONCEPTO','','CUENTA','DESCRIPCION','RUBRO'].some(k => lblCol0.includes(k))) continue;
+
+    // Año: en fila 0 o nombre de archivo
+    let anio = null;
+    const titulo = String(rows[0][0] || rows[0][1] || '');
+    const mAnio = titulo.match(/(20\d{2})/) || fname.match(/(20\d{2})/);
+    if (mAnio) anio = mAnio[1];
+    if (!anio) continue;
+
+    // Empresa: del nombre del archivo
+    let empresa = fname.replace(/\.xlsx?$/i,'')
+      .replace(/_/g,' ')
+      .replace(/\b(ESTADO\s+DE\s+RESULTADOS?|ER|ANUAL|MENSUAL|\d{4})\b/gi,'')
+      .trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    // Leer filas de datos (desde filaMeses+1 en adelante)
+    const filas = [];
+    for (let i = filaMeses + 1; i < rows.length; i++) {
+      const lbl = String(rows[i][0] || '').trim();
+      if (!lbl) continue;
+      const cpt = _clasif(lbl);
+      if (!cpt || cpt === 'IGNORAR') continue;
+      const valores = {};
+      colMeses.forEach(({col, mes}) => {
+        const v = _num(rows[i][col]);
+        if (v != null && v !== 0) valores[mes] = v;
+      });
+      if (Object.keys(valores).length === 0) continue;
+      filas.push({ lbl, conceptoStd: cpt, valores });
+    }
+
+    if (filas.length < 2) continue;
+
+    return { empresa, anio, filas, hoja: sn, mesesCount: colMeses.length };
+  }
+  return null;
+}
+
+function _mostrarPreviewERColumnas(result, fname) {
+  const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmt = v => v == null ? '—' : (v < 0 ? '−' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
+  const meses = [...new Set(result.filas.flatMap(f => Object.keys(f.valores).map(Number)))].sort((a,b)=>a-b);
+
+  const ths = meses.map(m => `<th style="padding:4px 6px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">${NM[m]}</th>`).join('');
+  const filasHTML = result.filas.map(f => {
+    const isTotal = ['utilBruta','resOperativo','resAntesImp','resEjercicio'].includes(f.conceptoStd);
+    const cols = meses.map(m => {
+      const v = f.valores[m];
+      return `<td style="padding:3px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}">${fmt(v)}</td>`;
+    }).join('');
+    return `<tr style="${isTotal?'font-weight:700;border-top:1px solid var(--bd)':''}">
+      <td style="padding:3px 8px;font-size:9px;white-space:nowrap;${isTotal?'font-weight:700':''}">${f.lbl}</td>${cols}
+    </tr>`;
+  }).join('');
+
+  const html = `<div style="padding:16px;background:var(--s1);border:1px solid var(--bd2);border-radius:6px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:600;margin-bottom:4px">ER Mensual detectado — ${fname}</div>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
+      <b id="er-col-emp-lbl">${result.empresa}</b> · Año ${result.anio} · ${result.filas.length} conceptos · ${meses.length} meses<br>
+      <span style="color:#47ffb4">Verificá el nombre de empresa antes de aplicar.</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+      <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Empresa:</label>
+      <input id="er-col-emp-inp" value="${result.empresa}"
+        style="flex:1;max-width:300px;padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none">
+    </div>
+    <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd);position:sticky;top:0;background:var(--s1)">Concepto</th>
+          ${ths}
+        </tr></thead>
+        <tbody>${filasHTML}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="_aplicarERColumnas()" style="flex:1;padding:9px;background:var(--pos);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:600;cursor:pointer">✓ Aplicar ER Mensual</button>
+      <button onclick="document.getElementById('imp-vg-preview').innerHTML=''" style="padding:9px 16px;background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:5px;color:var(--dim);font-size:11px;cursor:pointer">Cancelar</button>
+    </div>
+  </div>`;
+
+  window._erColPendiente = result;
+  let target = document.getElementById('imp-vg-preview');
+  if (!target) {
+    target = document.createElement('div');
+    target.id = 'imp-vg-preview';
+    const panel = document.getElementById('panel-importar');
+    if (panel) panel.insertBefore(target, panel.firstChild);
+  }
+  target.innerHTML = html;
+  target.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function _aplicarERColumnas() {
+  const r = window._erColPendiente;
+  if (!r) return;
+  const empInp = document.getElementById('er-col-emp-inp');
+  const emp = (empInp ? empInp.value.trim().toUpperCase() : r.empresa) || r.empresa;
+  const yS = String(r.anio);
+
+  if (!DATA.er_mensual) DATA.er_mensual = {};
+  if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
+  DATA.er_mensual[emp][yS] = { filas: r.filas, esTrimestral: false };
+
+  // Derivar facturación y resultado de las filas
+  const fVentas = r.filas.find(f => f.conceptoStd === 'ventas');
+  const fRes    = r.filas.find(f => ['resEjercicio','resOperativo'].includes(f.conceptoStd));
+  const meses   = [...new Set(r.filas.flatMap(f => Object.keys(f.valores).map(Number)))].sort((a,b)=>a-b);
+
+  if (fVentas) {
+    if (!DATA.fact_mensual) DATA.fact_mensual = {};
+    if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
+    DATA.fact_mensual[emp][yS] = {};
+    meses.forEach(m => { if (fVentas.valores[m] != null) DATA.fact_mensual[emp][yS][m] = fVentas.valores[m]; });
+    const totV = meses.reduce((s,m) => s + (fVentas.valores[m] || 0), 0);
+    if (!DATA.fact[emp]) DATA.fact[emp] = {};
+    DATA.fact[emp][yS] = totV;
+  }
+  if (fRes) {
+    if (!DATA.res_mensual) DATA.res_mensual = {};
+    if (!DATA.res_mensual[emp]) DATA.res_mensual[emp] = {};
+    DATA.res_mensual[emp][yS] = {};
+    meses.forEach(m => { if (fRes.valores[m] != null) DATA.res_mensual[emp][yS][m] = fRes.valores[m]; });
+    const totR = meses.reduce((s,m) => s + (fRes.valores[m] || 0), 0);
+    if (!DATA.sit[emp]) DATA.sit[emp] = {};
+    DATA.sit[emp][yS] = totR;
+  }
+  if (!DATA.years.includes(parseInt(yS))) { DATA.years.push(parseInt(yS)); DATA.years.sort((a,b)=>a-b); }
+
+  try { computeTotals(); } catch(e) {}
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
+
+  const target = document.getElementById('imp-vg-preview');
+  if (target) target.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
+    ✓ Aplicado: ${emp} · ${yS} · ${r.filas.length} conceptos en ${meses.length} meses. Revisá en "Por empresa" y publicá a Sheets.</div>`;
+  window._erColPendiente = null;
+  try { rebuildActive(); } catch(e) {}
+}
+
 function tryParseERMatricial(wb, fname) {
   // Buscar hoja RESUMEN
   const nombreHoja = wb.SheetNames.find(n => n.toUpperCase().trim() === 'RESUMEN');
@@ -16151,6 +16368,15 @@ function handleImportWorkbook(wb, fname) {
   if (vgResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewVentasGastos(vgResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER mensual con columnas de meses (ENERO…DICIEMBRE) ──
+  const erColResult = tryParseERColumnasMeses(wb, fname);
+  console.log('[LR] tryParseERColumnasMeses:', erColResult ? erColResult.empresa+' '+erColResult.filas.length+' conceptos' : 'null');
+  if (erColResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erColResult, fname);
     return;
   }
 
