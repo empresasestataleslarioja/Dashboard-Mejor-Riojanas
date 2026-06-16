@@ -7828,7 +7828,7 @@ function _guardarFlujoData(data) {
   };
 
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  try { _dispararAutoSync(); } catch(e) {}
   _poblarSelectoresFlujos();
   buildFlujos();
 
@@ -7976,7 +7976,7 @@ function _eliminarFlujo(clave) {
   if (!confirm('¿Eliminar este flujo?')) return;
   delete DATA.flujos[clave];
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  try { _dispararAutoSync(); } catch(e) {}
   buildFlujos();
 }
 
@@ -24157,13 +24157,6 @@ async function syncFromCloud(silent, opts) {
       throw new Error('Respuesta inesperada del servidor: ' + JSON.stringify(data).slice(0, 100));
     }
 
-    // Log diagnóstico: ver exactamente qué keys devuelve el bridge
-    console.log('[SYNC] Keys en respuesta del bridge:', Object.keys(data || {}).join(', '));
-    console.log('[SYNC] data.flujos:', data.flujos === undefined ? 'UNDEFINED' : Array.isArray(data.flujos) ? data.flujos.length + ' filas' : typeof data.flujos);
-    if (Array.isArray(data.flujos) && data.flujos.length > 0) {
-      console.log('[SYNC] Primer flujo:', JSON.stringify(data.flujos[0]).slice(0, 150));
-    }
-
     // Convertir formato flat (rows) → formato DATA del dashboard
     applyCloudData(data, opts || {});
     saveDataToLocalCache();
@@ -24558,7 +24551,6 @@ function applyCloudData(cloud, opts) {
       if (a && !DATA.years.includes(a)) DATA.years.push(a);
     });
     DATA.years.sort();
-    console.log('[SYNC] Transferencias desde Sheets:', DATA.transferencias.length);
   }
 
   // notas
@@ -24574,7 +24566,6 @@ function applyCloudData(cloud, opts) {
   if (Array.isArray(cloud.balances)) {
     // SHEETS MANDA: siempre reemplazar balances locales con los de Sheets
     _balances = {};
-    console.log('[SYNC] Balances desde Sheets:', cloud.balances.length);
     if (true) {
       // Sin datos locales → restaurar desde Sheets
       const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
@@ -24676,15 +24667,46 @@ function applyCloudData(cloud, opts) {
     } // fin else (restaurar desde Sheets)
   }
 
-  // balances_rubros: solo aplicar cuando no hay balances locales
-  // (si hay locales, sus estructura_er ya están en memoria — no sobreescribir)
+  // balances_rubros: solo aplicar cuando hay balances sin estructura_er (reconstrucción desde Sheets)
   if (Array.isArray(cloud.balances_rubros) && cloud.balances_rubros.length &&
-      Object.keys(_balances).length === 0) {
-    // Forzar reconstrucción si venimos de restauración desde Sheets
-    }
+      Object.values(_balances).some(b => !b.estructura_er?.length)) {
+    const rubrosPorBalance = {};
+    cloud.balances_rubros.forEach(r => {
+      if (!r.empresa || !r.periodo) return;
+      const key = r.empresa + '_' + r.periodo;
+      if (!rubrosPorBalance[key]) rubrosPorBalance[key] = [];
+      rubrosPorBalance[key].push({
+        key: r.key || '', lbl: r.lbl || '',
+        val: r.val !== '' && r.val != null ? parseFloat(r.val) : null,
+        negativo: r.negativo === 'SI', libre: r.libre === 'SI',
+        libreDefaultNeg: r.libre_default_neg === 'SI', calc: r.calc === 'SI',
+        formula: r.formula || null,
+        depFilas: (() => {
+          const d = r.dep_filas;
+          if (!d || d === '') return [];
+          return typeof d === 'string' ? d.split(',').map(Number).filter(Boolean) : [];
+        })(),
+        fila: r.fila !== '' ? parseInt(r.fila) : null,
+        orden: parseInt(r.orden) || 0,
+      });
+    });
+    Object.entries(rubrosPorBalance).forEach(([key, rubros]) => {
+      if (_balances[key] && !_balances[key].estructura_er?.length) {
+        _balances[key].estructura_er = rubros.sort((a, b) => a.orden - b.orden);
+      }
+    });
+  }
+
+  // Restaurar flujos_config desde Sheets
+  if (Array.isArray(cloud.flujos_config) && cloud.flujos_config.length) {
+    DATA.flujos_config = {};
+    cloud.flujos_config.forEach(r => {
+      if (!r.clave) return;
+      try { DATA.flujos_config[r.clave] = r.config_json ? JSON.parse(r.config_json) : {}; } catch(e) {}
+    });
+  }
+
   // Restaurar flujos de fondos desde Sheets
-  // Log diagnóstico de flujos recibidos desde Sheets
-  console.log('[SYNC] cloud.flujos recibido:', Array.isArray(cloud.flujos) ? cloud.flujos.length + ' registros' : 'NO ES ARRAY / undefined', cloud.flujos ? JSON.stringify(cloud.flujos).slice(0,200) : 'null');
 
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
     // SHEETS MANDA: reemplazar todos los flujos con los de Sheets
@@ -24714,7 +24736,6 @@ function applyCloudData(cloud, opts) {
     // Actualizar snapshot con los flujos restaurados desde Sheets
     // Usar saveDataToLocalCache para mantener todo consistente
     try { saveDataToLocalCache(); } catch(e) {}
-    console.log('[SYNC] Flujos restaurados desde Sheets:', Object.keys(DATA.flujos).length);
   }
 
   // Restaurar rubros desde Sheets
@@ -24729,7 +24750,6 @@ function applyCloudData(cloud, opts) {
           rubros[r.empresa] = r.rubro;
         }
       });
-      console.log('[SYNC] Rubros: merge Sheets+local, total:', Object.keys(rubros).length);
     } else {
       // Sin locales → restaurar completo desde Sheets
       cloud.rubros.forEach(r => {
@@ -24737,7 +24757,6 @@ function applyCloudData(cloud, opts) {
           rubros[r.empresa] = r.rubro;
         }
       });
-      console.log('[SYNC] Rubros restaurados desde Sheets:', Object.keys(rubros).length);
     }
     try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
   }
@@ -25137,10 +25156,16 @@ function buildCloudPayload() {
     });
   });
 
+  // flujos_config (configuración de IPC por período)
+  const flujosConfigRows = Object.entries(DATA.flujos_config || {}).map(([k, v]) => ({
+    clave: k, config_json: JSON.stringify(v)
+  }));
+
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
            notas: notasRows, presupuesto: presRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
-           flujos: flujosRows, mensual: mensualRows, er_mensual: erMensualRows,
+           flujos: flujosRows, flujos_config: flujosConfigRows,
+           mensual: mensualRows, er_mensual: erMensualRows,
            er_detalle: erDetalleRows,
            lr_users_extra: usersExtra, lr_readonly: readonlyExtra };
 }
@@ -25528,15 +25553,6 @@ function reAnalizarBalancesRestaurados() {
 }
 
 function loadDataFromLocalCache() {
-  // ── Diagnóstico ───────────────────────────────────────────
-  console.log('[LR] loadDataFromLocalCache iniciando...');
-  console.log('[LR] window._embeddedSnap existe:', !!window._embeddedSnap);
-  if (window._embeddedSnap) {
-    console.log('[LR] _embeddedSnap.fact keys:', Object.keys(window._embeddedSnap.fact||{}).length);
-    console.log('[LR] _embeddedSnap.transferencias:', (window._embeddedSnap.transferencias||[]).length, 'registros');
-    console.log('[LR] _embeddedSnap.savedAt:', window._embeddedSnap.savedAt);
-  }
-
   // Prioridad 1: datos embebidos en el HTML (guardado como archivo)
   const snap = window._embeddedSnap;
   if (snap && snap.fact && Object.keys(snap.fact).length > 0) {
@@ -25555,7 +25571,6 @@ function loadDataFromLocalCache() {
             // localStorage es más nuevo — usar sus transferencias y balances
             if (Array.isArray(lsSnap.transferencias) && lsSnap.transferencias.length > 0) {
               DATA.transferencias = lsSnap.transferencias;
-              console.log('[LR] Transferencias desde localStorage (' + DATA.transferencias.length + ') más reciente que snap');
             }
           }
         }
@@ -25598,7 +25613,6 @@ function loadDataFromLocalCache() {
           // (refleja eliminaciones hechas después de la última exportación)
           if (lsDate > snapDate && Array.isArray(lsCached._balances)) {
             balancesDesdeSnap = lsCached._balances;
-            console.log('[LR] _balances: usando localStorage más reciente que snapshot', {snapDate, lsDate});
           }
         }
       } catch(e) {}
@@ -25632,12 +25646,10 @@ function loadDataFromLocalCache() {
         // Guardar también en localStorage para que persista en esta sesión
         try { localStorage.setItem(LS_CFG_KEY, JSON.stringify(snap._cloudCfg)); } catch(e) {}
         updateCloudStatusBar('configured');
-        console.log('[LR] Config Sheets restaurada desde snapshot');
       }
 
       if (snap.savedAt) actualizarIndicadorGuardado(snap.savedAt, '📄 datos del archivo guardado');
       showStorageStatus('📄 Datos del archivo guardado cargados', '#47ffb4');
-      console.log('[LR] ✓ Datos cargados desde _embeddedSnap');
       return true;
     } catch(e) {
       console.error('[LR] Error aplicando _embeddedSnap:', e);
@@ -25646,7 +25658,6 @@ function loadDataFromLocalCache() {
   // Prioridad 2: localStorage (misma sesión del navegador)
   try {
     const raw = localStorage.getItem(LS_KEY);
-    console.log('[LR] localStorage tiene datos:', !!raw, raw ? raw.length + ' chars' : '');
     if (!raw) return false;
     const cached = JSON.parse(raw);
     if (!cached.fact) return false;
@@ -25655,9 +25666,7 @@ function loadDataFromLocalCache() {
     // Prioridad: keys específicas de     // Restaurar transferencias desde localStorage
     if (Array.isArray(cached.transferencias) && cached.transferencias.length > 0) {
       DATA.transferencias = cached.transferencias;
-      console.log('[LR] Transferencias restauradas desde localStorage:', DATA.transferencias.length);
     } else {
-      console.log('[LR] Sin transferencias en localStorage');
     }
     // Restaurar balances desde localStorage
 
@@ -25685,7 +25694,6 @@ function loadDataFromLocalCache() {
     if (cached._flujos && typeof cached._flujos === 'object' &&
         Object.keys(cached._flujos).length > 0) {
       DATA.flujos = cached._flujos;
-      console.log('[LR] Flujos desde localStorage:', Object.keys(cached._flujos).length);
     }
     if (cached._flujos_config) DATA.flujos_config = cached._flujos_config;
 
@@ -25718,17 +25726,14 @@ function loadDataFromLocalCache() {
     if (cached._er_mensual && typeof cached._er_mensual === 'object' &&
         Object.keys(cached._er_mensual).length > 0) {
       DATA.er_mensual = cached._er_mensual;
-      console.log('[LR] ER mensual desde localStorage:', Object.keys(cached._er_mensual).length, 'empresas');
     }
     if (cached._er_detalle && typeof cached._er_detalle === 'object' &&
         Object.keys(cached._er_detalle).length > 0) {
       DATA.er = cached._er_detalle;
-      console.log('[LR] ER detalle (balance) desde localStorage:', Object.keys(cached._er_detalle).length, 'empresas');
     }
 
     if (cached.savedAt) actualizarIndicadorGuardado(cached.savedAt, '📦 cache local');
     showStorageStatus('📦 Datos de cache local', '#47e8ff');
-    console.log('[LR] ✓ Datos cargados desde localStorage');
     return true;
   } catch(e) {
     console.error('[LR] Error leyendo localStorage:', e);
