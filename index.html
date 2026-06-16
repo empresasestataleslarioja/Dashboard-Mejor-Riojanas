@@ -990,8 +990,6 @@ table.diff-tbl .d-emp { color:var(--dim); }
 .diff-legend { display:flex; gap:14px; padding:8px 14px; font-size:9px; border-top:1px solid var(--bd); }
 .dl-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; vertical-align:middle; }
 </style>
-  <!-- Netlify Identity Widget — autenticación de usuarios -->
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <!-- DATOS GUARDADOS — este bloque es reemplazado al hacer Guardar -->
   <script id="lr-snap">/* sin datos */</script>
 <script id="pdf-worker-src" type="text/plain">
@@ -6523,6 +6521,14 @@ function toggleYear(el) {
   updateGapBadge();
   rebuildActive();
   updateVizSummary();
+  // Avisar si algún año activo no tiene datos cargados
+  const sinDatos = activeYears.filter(y => {
+    const total = DATA.totals_fact ? DATA.totals_fact[y] : 0;
+    return !total || total === 0;
+  });
+  if (sinDatos.length > 0) {
+    showStorageStatus(`⚠ Sin datos para: ${sinDatos.join(', ')} — importá o cargá información para esos años`, '#ff8c47');
+  }
 }
 
 function _refreshYearChips() {
@@ -23326,7 +23332,14 @@ function showStorageStatus(msg, color) {
   el.style.color  = color;
   el.style.display = 'block';
   clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.display = 'none'; }, 5000);
+  // Errores y advertencias permanecen hasta que el usuario los cierra
+  const esError = color === 'var(--neg)' || color === '#ff8c47';
+  if (!esError) {
+    el._t = setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
+  el.title = 'Clic para cerrar';
+  el.style.cursor = 'pointer';
+  el.onclick = () => { el.style.display = 'none'; clearTimeout(el._t); };
 }
 
 // ── LEER desde el Sheet (GET) ────────────────────────────────────
