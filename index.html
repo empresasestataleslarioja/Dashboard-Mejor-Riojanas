@@ -24485,6 +24485,7 @@ function saveDataToLocalCache() {
       _rubroList:    RUBRO_LIST ? [...RUBRO_LIST] : [],
       _flujos:       DATA.flujos || {},
       _flujos_config: DATA.flujos_config || {},
+      _chartTypeOverrides: chartTypeOverrides || {},
       savedAt: nowAR()
     };
     localStorage.setItem(LS_KEY, JSON.stringify(snap));
@@ -25009,6 +25010,11 @@ function loadDataFromLocalCache() {
     }
     if (cached._flujos_config) DATA.flujos_config = cached._flujos_config;
 
+    // Restaurar overrides de tipo de gráfico
+    if (cached._chartTypeOverrides && typeof cached._chartTypeOverrides === 'object') {
+      Object.assign(chartTypeOverrides, cached._chartTypeOverrides);
+    }
+
     // Restaurar rubros desde localStorage
     if (cached._rubros && typeof cached._rubros === 'object') {
       Object.assign(rubros, cached._rubros);
@@ -25117,6 +25123,15 @@ setTimeout(() => {
   // Siempre cargar datos locales primero para mostrar algo de inmediato
   loadDataFromLocalCache();
   arrancar();
+
+  // Advertir al usuario si cierra/recarga con cambios sin guardar
+  window.addEventListener('beforeunload', function(e) {
+    const ind = document.getElementById('save-indicator');
+    if (ind && ind.textContent && ind.textContent.includes('sin guardar')) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
 
   // SHEETS MANDA: al abrir, traer TODO desde Sheets (fuente de verdad)
   if (_cloudUrl) {
