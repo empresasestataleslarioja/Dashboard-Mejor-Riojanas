@@ -10644,96 +10644,161 @@ function buildEvolucionMensual(emp) {
         return `<tr style="${peso}">${lblCell}${celdas}${totCell}${delCell}</tr>`;
       }).join('');
     } else {
-      // Patrones de texto para reconocer un concepto por el label (fallback
-      // cuando la fila no tiene conceptoStd asignado al importar).
-      const PAT = {
-        ventas:        t => (t.includes('VENTA') || t === 'INGRESOS' || t === 'INGRESO' || t.includes('INGRESO POR VENTA')) && !t.includes('COSTO') && !t.includes('FINANCIER') && !t.includes('BRUTA') && !t.includes('BRUTO') && !t.includes('GASTO'),
-        costo:         t => t.includes('COSTO') && (t.includes('VENTA') || t.includes('SERVICIO') || t.includes('MERCAD') || t.includes('PRODUC')),
-        utilBruta:     t => t.includes('UTILIDAD BRUTA') || t.includes('RESULTADO BRUTO') || t.includes('GANANCIA BRUTA'),
-        gastoAdm:      t => t.includes('ADMINISTRAC'),
-        gastoCom:      t => t.includes('COMERCIALIZAC') || t.includes('COMERCIALES') || t.includes('GASTOS DE VENTA') || t.includes('GASTO DE VENTA'),
-        resOperativo:  t => t.includes('RESULTADO OPERATIVO') || t.includes('GANANCIA OPERATIVA') || (t.includes('OPERATIV') && t.includes('RESULTADO')),
-        resFinanciero: t => t.includes('FINANCIER'),
-        resAntesImp:   t => t.includes('ANTES DE IMP') || t.includes('ANTES DEL IMP'),
-        resEjercicio:  t => t.includes('RESULTADO DEL EJERCICIO') || t.includes('RESULTADO NETO') || t.includes('RESULTADO FINAL'),
+      // ── Clasificador exhaustivo: asigna CADA fila del ER Original a un rubro
+      // estándar. Nada queda afuera: lo que no encaja en un rubro específico
+      // de gasto cae en "Otros Gastos Operativos". ──
+      const clasificar = (lblRaw) => {
+        const t = String(lblRaw || '').toUpperCase().trim();
+        if (!t) return null;
+        // Encabezados de sección puros — se ignoran
+        if (['INGRESOS','GASTOS','CUADRO DE RESULTADOS','CUENTA'].includes(t)) return null;
+        // Subtotales / resultados calculados
+        if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
+        if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA|RESULTADO\s+DE\s+OPERACI/.test(t)) return 'resOperativo';
+        if (/ANTES\s+(DE|DEL)\s+IMP/.test(t)) return 'resAntesImp';
+        if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO|RESULTADO\s+FINAL/.test(t)) return 'resEjercicio';
+        // Totales de gasto (subtotales) — no sumar para no duplicar
+        if (/TOTAL\s+(DE\s+)?GASTOS/.test(t)) return 'IGNORAR';
+        // Gastos que mencionan "venta" pero son gastos (comisiones, gastos de venta, descuentos otorgados)
+        if (/COMISION|GASTO.*VENTA|GASTOS\s+DE\s+VENTA/.test(t)) return 'gastoCom';
+        if (/DESCUENTO.*OTORGAD/.test(t)) return 'gastoCom';
+        // Componentes de ventas netas (Bruta/Devoluciones/Descuentos) — si hay VENTAS NETAS no se suman
+        if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
+        // VENTAS / INGRESOS por venta
+        if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) {
+          if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+          return 'ventas';
+        }
+        // Ingresos varios
+        if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
+        // COSTO
+        if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
+        // Financiero
+        if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
+        // Impuesto a las ganancias
+        if (/IMPUEST.*GANANCIA|IMPUESTO\s+DIFERIDO|A\s+LAS\s+GANANCIAS/.test(t)) return 'impuesto';
+        // Comercialización
+        if (/COMERCIALIZAC|COMERCIALES|MERCADOTECNIA|PUBLICIDAD|FLETE|ENCOMIENDA/.test(t)) return 'gastoCom';
+        // Administración
+        if (/ADMINISTRAC|ADMINISTRATIV/.test(t)) return 'gastoAdm';
+        // Otros ingresos/egresos
+        if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+        if (/OTROS\s+EGRESO/.test(t)) return 'otrosGastos';
+        // CAPTURA-TODO de gastos: sueldos, cargas, honorarios, servicios, etc. → gastoOper
+        if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA|SOCIAL|APORTE|CONTRIBUC|HONORARIO|AMORTIZAC|DEPRECIAC|SEGURO|ART\b|ALQUILER|COMBUSTIBLE|LUBRICANTE|MANTENIMIENTO|REPARACION|REPUESTO|HERRAMIENTA|SERVICIO|IMPUESTO|TASA|VIATICO|MOVILIDAD|PREVISION|ENERGIA|ELECTRICID|TELEFON|INTERNET|PAPELERIA|ROPA|VEHICULO|RODADO|ASIGNACION|FAMILIAR|INDEMNIZAC|INDEMINIZAC|CESE|FONDO|UOYEP|IERIC|RENATRE|GASTO|EGRESO|VARIOS|GENERAL|PERSONAL|SUMAS|REMUNERAT|PASAJE|VIGILANCIA|LIMPIEZA|GAS\b|AGUA\b|INSUMOS|PROVISION|ESCRIBAN|AUDITORIA|PUBLICACION|CONSUMO|DIETA|REFRIGERIO|CAPACITAC|OFICINA/.test(t)) {
+          return 'gastoOper';
+        }
+        return null; // no clasificable
       };
-      // Busca la fila: primero por conceptoStd, si no por texto del label
-      const getFila = (concepto) => {
-        let f = erData.filas.find(x => x.conceptoStd === concepto);
-        if (f) return f;
-        const pat = PAT[concepto];
-        if (!pat) return null;
-        // Candidatas: filas sin conceptoStd cuyo label matchea el patrón
-        const cands = erData.filas.filter(x => !x.conceptoStd && pat(String(x.lbl||'').toUpperCase()));
-        if (cands.length === 0) return null;
-        // Preferir la que tenga valores cargados (evita tomar encabezados vacíos como "INGRESOS")
-        const conValores = cands.find(x => Object.values(x.valores||{}).some(v => v != null && v !== 0));
-        return conValores || cands[0];
-      };
-      const estructura = [
-        { lbl:'Ventas Netas',                concepto:'ventas',        bold:false },
-        { lbl:'(−) Costo de Ventas',         concepto:'costo',         bold:false },
-        { lbl:'= Utilidad Bruta',            concepto:'utilBruta',     bold:true  },
-        { lbl:'(−) Gastos de Administración',concepto:'gastoAdm',      bold:false },
-        { lbl:'(−) Gastos de Comercialización',concepto:'gastoCom',    bold:false },
-        { lbl:'= Resultado Operativo',       concepto:'resOperativo',  bold:true  },
-        { lbl:'(+/−) Resultado Financiero',  concepto:'resFinanciero', bold:false },
-        { lbl:'= Resultado antes de Imp.',   concepto:'resAntesImp',   bold:true  },
-        { lbl:'= Resultado del Ejercicio',   concepto:'resEjercicio',  bold:true  },
-      ];
-      const calcConceptos = ['utilBruta','resOperativo','resAntesImp'];
 
-      // Calcular valores por concepto y mes (cascada). Para los conceptos base
-      // toma el dato de su fila; para los subtotales los calcula sobre la marcha.
-      const valConcMes = {};   // valConcMes[concepto][mes] = número
-      const getVal = (concepto, m) => {
-        const f = getFila(concepto);
-        return f && f.valores[m] != null ? f.valores[m] : null;
+      // Agrupar todas las filas por rubro, sumando valores mes a mes
+      const rubroVals = {}; // rubroVals[rubro][mes] = suma
+      const addVal = (rubro, m, v) => {
+        if (v == null) return;
+        if (!rubroVals[rubro]) rubroVals[rubro] = {};
+        rubroVals[rubro][m] = (rubroVals[rubro][m] || 0) + v;
       };
-      mesesMostrar.forEach(m => {
-        const base = {
-          ventas:        getVal('ventas', m),
-          costo:         getVal('costo', m),
-          gastoAdm:      getVal('gastoAdm', m),
-          gastoCom:      getVal('gastoCom', m),
-          resFinanciero: getVal('resFinanciero', m),
-          resEjercicio:  getVal('resEjercicio', m),
-        };
-        // Subtotales calculados
-        let utilBruta = getVal('utilBruta', m);
-        if (utilBruta == null && (base.ventas != null || base.costo != null))
-          utilBruta = (base.ventas || 0) + (base.costo || 0);
-        let resOperativo = getVal('resOperativo', m);
-        if (resOperativo == null && (utilBruta != null || base.gastoAdm != null || base.gastoCom != null))
-          resOperativo = (utilBruta || 0) + (base.gastoAdm || 0) + (base.gastoCom || 0);
-        let resAntesImp = getVal('resAntesImp', m);
-        if (resAntesImp == null && (resOperativo != null || base.resFinanciero != null))
-          resAntesImp = (resOperativo || 0) + (base.resFinanciero || 0);
-
-        const all = { ...base, utilBruta, resOperativo, resAntesImp };
-        Object.entries(all).forEach(([k, v]) => {
-          if (!valConcMes[k]) valConcMes[k] = {};
-          valConcMes[k][m] = v;
-        });
+      // Rubros que son subtotales/resultados (vienen como total, no se suman partidas)
+      const RUBROS_RESULTADO = ['utilBruta','resOperativo','resAntesImp','resEjercicio'];
+      erData.filas.forEach(f => {
+        // Preferir conceptoStd si existe; si no, clasificar por label
+        let rubro = null;
+        const cs = f.conceptoStd;
+        if (cs === 'ventas') rubro = 'ventas';
+        else if (cs === 'costo') rubro = 'costo';
+        else if (cs === 'utilBruta') rubro = 'utilBruta';
+        else if (cs === 'gastoAdm') rubro = 'gastoAdm';
+        else if (cs === 'gastoCom') rubro = 'gastoCom';
+        else if (cs === 'resOperativo') rubro = 'resOperativo';
+        else if (cs === 'resFinanciero') rubro = 'resFinanciero';
+        else if (cs === 'resAntesImp') rubro = 'resAntesImp';
+        else if (cs === 'resEjercicio') rubro = 'resEjercicio';
+        else rubro = clasificar(f.lbl);
+        if (!rubro || rubro === 'IGNORAR' || rubro === 'COMPONENTE_VENTA') return;
+        mesesMostrar.forEach(m => addVal(rubro, m, f.valores[m]));
       });
 
+      // Salvaguarda: si NO hay "Ventas Netas" pero sí "Ventas Brutas",
+      // usar las brutas (con devoluciones/descuentos) para no dejar ventas vacío.
+      const _hayVentas = mesesMostrar.some(m => rubroVals.ventas?.[m] != null);
+      if (!_hayVentas) {
+        erData.filas.forEach(f => {
+          const t = String(f.lbl||'').toUpperCase();
+          if (/VENTAS\s+BRUTAS/.test(t)) mesesMostrar.forEach(m => addVal('ventas', m, f.valores[m]));
+          // Devoluciones y descuentos restan (vienen positivos en el original)
+          else if (/DEVOLUCION|^DESCUENTO/.test(t) && !/OTORGAD/.test(t))
+            mesesMostrar.forEach(m => addVal('ventas', m, f.valores[m] != null ? -Math.abs(f.valores[m]) : null));
+        });
+      }
+
+      // Calcular valores finales por concepto y mes (cascada + agregación)
+      const valConcMes = {};
+      const setVCM = (k, m, v) => { if (!valConcMes[k]) valConcMes[k] = {}; valConcMes[k][m] = v; };
+      const gv = (rubro, m) => rubroVals[rubro]?.[m];
+      mesesMostrar.forEach(m => {
+        const ventas = gv('ventas', m);
+        const costo = gv('costo', m);
+        const gastoAdm = gv('gastoAdm', m);
+        const gastoCom = gv('gastoCom', m);
+        const gastoOper = gv('gastoOper', m);
+        const otrosIng = gv('otrosIngresos', m);
+        const otrosGas = gv('otrosGastos', m);
+        const resFin = gv('resFinanciero', m);
+        const impuesto = gv('impuesto', m);
+        // Utilidad Bruta: usar el total si vino, sino calcular
+        let utilBruta = gv('utilBruta', m);
+        if (utilBruta == null && (ventas != null || costo != null))
+          utilBruta = (ventas || 0) + (costo || 0);
+        // Resultado Operativo: total si vino, sino calcular con TODOS los gastos
+        let resOperativo = gv('resOperativo', m);
+        if (resOperativo == null && (utilBruta != null || gastoAdm != null || gastoCom != null || gastoOper != null))
+          resOperativo = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (otrosIng || 0) + (otrosGas || 0);
+        // Resultado antes de Imp.
+        let resAntesImp = gv('resAntesImp', m);
+        if (resAntesImp == null && (resOperativo != null || resFin != null))
+          resAntesImp = (resOperativo || 0) + (resFin || 0);
+        // Resultado del Ejercicio
+        let resEjercicio = gv('resEjercicio', m);
+        if (resEjercicio == null && (resAntesImp != null || impuesto != null))
+          resEjercicio = (resAntesImp || 0) + (impuesto || 0);
+
+        setVCM('ventas', m, ventas);
+        setVCM('costo', m, costo);
+        setVCM('utilBruta', m, utilBruta);
+        setVCM('gastoAdm', m, gastoAdm);
+        setVCM('gastoCom', m, gastoCom);
+        setVCM('gastoOper', m, gastoOper);
+        setVCM('resOperativo', m, resOperativo);
+        setVCM('resFinanciero', m, resFin);
+        setVCM('resAntesImp', m, resAntesImp);
+        setVCM('resEjercicio', m, resEjercicio);
+      });
+
+      const estructura = [
+        { lbl:'Ventas Netas',                  concepto:'ventas',        bold:false },
+        { lbl:'(−) Costo de Ventas',           concepto:'costo',         bold:false },
+        { lbl:'= Utilidad Bruta',              concepto:'utilBruta',     bold:true  },
+        { lbl:'(−) Gastos de Administración',  concepto:'gastoAdm',      bold:false },
+        { lbl:'(−) Gastos de Comercialización',concepto:'gastoCom',      bold:false },
+        { lbl:'(−) Otros Gastos Operativos',   concepto:'gastoOper',     bold:false },
+        { lbl:'= Resultado Operativo',         concepto:'resOperativo',  bold:true  },
+        { lbl:'(+/−) Resultado Financiero',    concepto:'resFinanciero', bold:false },
+        { lbl:'= Resultado antes de Imp.',     concepto:'resAntesImp',   bold:true  },
+        { lbl:'= Resultado del Ejercicio',     concepto:'resEjercicio',  bold:true  },
+      ];
+      const calcConceptos = ['utilBruta','resOperativo','resAntesImp','resEjercicio'];
+
       filasHTML = estructura.map(e => {
-        const fila = getFila(e.concepto);
-        const fi = fila ? erData.filas.indexOf(fila) : -1;
         const calc = calcConceptos.includes(e.concepto);
         const celdas = mesesMostrar.map(m=>{
           const v = valConcMes[e.concepto]?.[m] ?? null;
-          // En edición, las celdas base (no calculadas) con fila existente son editables
-          if (edit && !calc && fi>=0) return `<td style="padding:2px 4px;text-align:right">${inputCelda(yr,fi,m,fila.valores[m])}</td>`;
           return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}${calc?';color:var(--acc,#47e8ff)':''}">${fmt(v)}</td>`;
         }).join('');
-        // Total = suma de los valores calculados por mes
         const totFila = mesesMostrar.reduce((s,m)=> s + (valConcMes[e.concepto]?.[m] || 0), 0);
         const hayDato = mesesMostrar.some(m => valConcMes[e.concepto]?.[m] != null);
         const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${hayDato?fmt(totFila):'—'}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
-        const nota = (edit && !fila && !calc) ? ` <button onclick="_erMensualCrearConcepto('${empJS}','${yr}','${e.concepto}','${e.lbl.replace(/'/g,"")}')" style="padding:1px 6px;font-size:8px;background:transparent;border:1px solid var(--bd);border-radius:3px;color:var(--acc,#47e8ff);cursor:pointer;margin-left:4px">+ cargar</button>` : '';
-        return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}${nota}</td>${celdas}${totCell}${edit?'<td></td>':''}</tr>`;
+        return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}</td>${celdas}${totCell}${edit?'<td></td>':''}</tr>`;
       }).join('');
     }
 
