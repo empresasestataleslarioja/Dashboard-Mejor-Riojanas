@@ -15820,7 +15820,7 @@ function tryParseERColumnasMeses(wb, fname) {
   const _clasif = (lbl) => {
     const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
     if (!t) return null;
-    if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS/.test(t)) return 'ventas';
+    if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS?|INGRESOS\s+TOTALES?/.test(t)) return 'ventas';
     if (/VENTAS\s+BRUTAS?/.test(t)) return 'IGNORAR';
     if (/DEVOLUCION|^DESCUENTO/.test(t)) return 'IGNORAR';
     if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
@@ -15830,6 +15830,7 @@ function tryParseERColumnasMeses(wb, fname) {
     if (/TOTAL\s+GASTOS?\s+ADMIN/.test(t)) return 'IGNORAR';
     if (/TOTAL\s+GASTOS?\s+FINANC/.test(t)) return 'IGNORAR';
     if (/TOTAL\s+IMPUESTO/.test(t)) return 'IGNORAR';
+    if (/GASTOS?\s+TOTALES?/.test(t)) return 'resEjercicio'; // subtotal global de gastos → usar como gasto neto
     if (/UTILIDAD\s+OPERATIVA|RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA/.test(t)) return 'resOperativo';
     if (/UTILIDAD\s+ANTES\s+DE\s+IMP|RESULTADO\s+ANTES/.test(t)) return 'resAntesImp';
     if (/UTILIDAD\s+NETA|RESULTADO\s+(DEL\s+)?EJERCICIO|RESULTADO\s+NETO|GANANCIA\s+NETA/.test(t)) return 'resEjercicio';
@@ -15893,10 +15894,12 @@ function tryParseERColumnasMeses(wb, fname) {
 
     // Leer filas de datos (desde filaMeses+1 en adelante)
     const filas = [];
+    const _dbgRows = [];
     for (let i = filaMeses + 1; i < rows.length; i++) {
       const lbl = String(rows[i][0] || '').trim();
       if (!lbl) continue;
       const cpt = _clasif(lbl);
+      _dbgRows.push({ lbl, cpt });
       if (!cpt || cpt === 'IGNORAR') continue;
       const valores = {};
       colMeses.forEach(({col, mes}) => {
@@ -15906,8 +15909,9 @@ function tryParseERColumnasMeses(wb, fname) {
       if (Object.keys(valores).length === 0) continue;
       filas.push({ lbl, conceptoStd: cpt, valores });
     }
+    console.log('[LR] ERColumnas hoja='+sn+' filas clasificadas:', _dbgRows.slice(0,20));
 
-    if (filas.length < 2) continue;
+    if (filas.length < 1) continue;
 
     return { empresa, anio, filas, hoja: sn, mesesCount: colMeses.length };
   }
