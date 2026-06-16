@@ -220,10 +220,377 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --chart-grid: #d8e4ef;
   --radius-card: 3px;
 }
+/* ══════════════════════════════════════════════════════════
+   TEMA 6 — BLOOMBERG TERMINAL
+   Estética: Trading terminal — amber sobre negro puro,
+   monospace extremo, cards como secciones de terminal,
+   información máxima sin decoración
+══════════════════════════════════════════════════════════ */
+[data-theme="bloomberg"] {
+  --bg:   #030303;
+  --s1:   #060606;
+  --s2:   #0a0a0a;
+  --s3:   #101010;
+  --bd:   #2a2400;
+  --bd2:  #443c00;
+  --y21:  #ff8c00;  /* amber */
+  --y22:  #e0c000;  /* gold */
+  --y23:  #00d4aa;  /* teal info */
+  --y24:  #ff4040;  /* red alert */
+  --pos:  #00c040;
+  --neg:  #ff4040;
+  --text: #e8c060;  /* warm amber text */
+  --dim:  #664c00;
+  --dim2: #1a1400;
+  --serif:  'Azeret Mono','Courier New',monospace;
+  --mono:   'Azeret Mono','Courier New',monospace;
+  --ui:     'Azeret Mono','Courier New',monospace;
+  --chart-tick: #664c00;
+  --chart-grid: #0a0a0a;
+  --radius-card: 0px;
+}
+[data-theme="bloomberg"] body {
+  background-image: none;
+  font-size: 11px;
+  letter-spacing: .02em;
+}
+/* Cards sin fondo — solo separadores horizontales */
+[data-theme="bloomberg"] .card {
+  background: transparent !important;
+  border: none !important;
+  border-top: 1px solid #2a2400 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 12px 16px !important;
+}
+[data-theme="bloomberg"] .card-hd {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #2a2400;
+}
+[data-theme="bloomberg"] .card-hd-title {
+  font-size: 9px; letter-spacing: .18em; text-transform: uppercase;
+  color: #ff8c00; font-weight: 400;
+}
+[data-theme="bloomberg"] .card-hd-unit { color: #443c00; font-size: 8px; }
+[data-theme="bloomberg"] .kpi {
+  background: transparent !important;
+  border: none !important;
+  border-left: 2px solid #ff8c00 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 8px 12px !important;
+}
+[data-theme="bloomberg"] .kpi-value {
+  font-size: 20px; letter-spacing: -.01em; color: #ff8c00;
+}
+[data-theme="bloomberg"] .kpi-label {
+  font-size: 8px; letter-spacing: .2em; text-transform: uppercase; color: #664c00;
+}
+[data-theme="bloomberg"] .brand-title {
+  font-size: 13px; text-transform: uppercase; letter-spacing: .15em;
+  color: #ff8c00; font-style: normal;
+}
+[data-theme="bloomberg"] .brand-title em { color: #e0c000; font-style: normal; }
+[data-theme="bloomberg"] .brand-sub { letter-spacing: .25em; color: #443c00; }
+[data-theme="bloomberg"] .sidebar {
+  border-right: 1px solid #2a2400;
+  background: #020202;
+}
+[data-theme="bloomberg"] .nav-item {
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  padding: 7px 20px; color: #664c00;
+}
+[data-theme="bloomberg"] .nav-item.active { color: #ff8c00; background: #0a0800; }
+[data-theme="bloomberg"] .nav-item.active::before { background: #ff8c00; }
+[data-theme="bloomberg"] .nav-item:hover { color: #e8c060; background: #050400; }
+[data-theme="bloomberg"] .nav-dot { background: #ff8c00; }
+[data-theme="bloomberg"] .topbar {
+  background: #020202; border-bottom: 1px solid #2a2400;
+  padding: 8px 16px;
+}
+[data-theme="bloomberg"] .panel-wrap {
+  background: #030303;
+}
+/* Chips */
+[data-theme="bloomberg"] .chip {
+  border-radius: 0; border-color: #2a2400; color: #664c00;
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  background: transparent;
+}
+/* Tablas */
+[data-theme="bloomberg"] table { font-size: 10px; }
+[data-theme="bloomberg"] th   { letter-spacing: .12em; text-transform: uppercase; }
+/* Row stripes */
+[data-theme="bloomberg"] tr:nth-child(even) td { background: rgba(255,140,0,.03); }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA 7 — FINANCIAL TIMES / PAPEL
+   Estética: Periódico financiero — fondo salmón/crema como
+   el FT, serif en body, estilo informe impreso corporativo
+══════════════════════════════════════════════════════════ */
+[data-theme="ft"] {
+  --bg:   #FFF1E0;
+  --s1:   #FFF8F0;
+  --s2:   #F8EDE0;
+  --s3:   #EFE0CC;
+  --bd:   #D8C8B0;
+  --bd2:  #B8A080;
+  --y21:  #990F3D;  /* FT dark red */
+  --y22:  #0D7680;  /* FT teal */
+  --y23:  #593380;  /* purple */
+  --y24:  #CC0000;
+  --pos:  #006400;
+  --neg:  #990F3D;
+  --text: #1A1007;
+  --dim:  #8C6A40;
+  --dim2: #E5D4C0;
+  --serif:  'Libre Baskerville','Georgia',serif;
+  --mono:   'IBM Plex Mono','Courier New',monospace;
+  --ui:     'Source Sans 3','Georgia',serif;
+  --chart-tick: #8C6A40;
+  --chart-grid: #EFE0CC;
+  --radius-card: 2px;
+}
+[data-theme="ft"] body {
+  background-image: none;
+  font-size: 13px;
+  line-height: 1.6;
+}
+[data-theme="ft"] .card {
+  background: var(--s1) !important;
+  border: 1px solid var(--bd) !important;
+  border-top: 3px solid var(--y21) !important;
+  box-shadow: 1px 1px 0 #D8C8B0 !important;
+  border-radius: 0 !important;
+}
+[data-theme="ft"] .card-hd-title {
+  font-family: var(--serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #1A1007;
+}
+[data-theme="ft"] .card-hd-unit { font-style: italic; color: #8C6A40; }
+[data-theme="ft"] .kpi {
+  background: var(--s1) !important;
+  border: 1px solid var(--bd) !important;
+  border-top: 3px solid var(--y21) !important;
+  border-radius: 0 !important;
+  box-shadow: 1px 1px 0 #D8C8B0 !important;
+}
+[data-theme="ft"] .kpi-value {
+  font-family: var(--serif);
+  font-size: 28px;
+  color: #1A1007;
+  font-weight: 700;
+}
+[data-theme="ft"] .kpi-label {
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #990F3D;
+  font-weight: 600;
+  font-family: var(--mono);
+}
+[data-theme="ft"] .brand-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: #1A1007;
+}
+[data-theme="ft"] .brand-title em { color: #990F3D; font-style: italic; }
+[data-theme="ft"] .brand-sub { color: #8C6A40; letter-spacing: .15em; }
+[data-theme="ft"] .sidebar {
+  background: #F5E8D4;
+  border-right: 2px solid #D8C8B0;
+}
+[data-theme="ft"] .nav-item {
+  font-family: var(--ui);
+  font-size: 12px;
+  color: #5C3A1A;
+  letter-spacing: 0;
+  text-transform: none;
+}
+[data-theme="ft"] .nav-item.active { color: #990F3D; background: rgba(153,15,61,.06); }
+[data-theme="ft"] .nav-item.active::before { background: #990F3D; }
+[data-theme="ft"] .nav-item:hover { background: rgba(153,15,61,.04); color: #990F3D; }
+[data-theme="ft"] .topbar {
+  background: #FFF8F0;
+  border-bottom: 2px solid #D8C8B0;
+}
+[data-theme="ft"] .chip {
+  border-radius: 0;
+  border-color: #D8C8B0;
+  color: #5C3A1A;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  background: transparent;
+}
+[data-theme="ft"] table { font-size: 12px; line-height: 1.5; }
+[data-theme="ft"] th { font-family: var(--mono); }
+/* Separador de sección al estilo FT */
+[data-theme="ft"] .rowfull > .card-hd::after {
+  content: '';
+  display: block;
+  height: 1px;
+  background: linear-gradient(90deg, #990F3D 0%, #D8C8B0 60%, transparent 100%);
+  margin-top: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TEMA 8 — NEON / WIREFRAME
+   Estética: Cyberpunk — fondo negro, bordes brillantes con
+   glow, sin rellenos sólidos, texto con halo luminoso
+══════════════════════════════════════════════════════════ */
+[data-theme="neon"] {
+  --bg:   #000000;
+  --s1:   #030308;
+  --s2:   #060610;
+  --s3:   #090918;
+  --bd:   #00ff9020;
+  --bd2:  #00ff9040;
+  --y21:  #00ff90;  /* neon green */
+  --y22:  #ff00c8;  /* hot pink */
+  --y23:  #00c8ff;  /* electric cyan */
+  --y24:  #ffcc00;  /* yellow */
+  --pos:  #00ff90;
+  --neg:  #ff00c8;
+  --text: #d0f0e0;
+  --dim:  #00804830;
+  --dim2: #003020;
+  --serif:  'Azeret Mono','Courier New',monospace;
+  --mono:   'Azeret Mono','Courier New',monospace;
+  --ui:     'Azeret Mono','Courier New',monospace;
+  --chart-tick: #008048;
+  --chart-grid: #001808;
+  --radius-card: 0px;
+}
+[data-theme="neon"] body {
+  background-image: none;
+  font-size: 11px;
+}
+/* Cards como wireframes con glow */
+[data-theme="neon"] .card {
+  background: rgba(0,255,144,.02) !important;
+  border: 1px solid #00ff9030 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 12px rgba(0,255,144,.08), inset 0 0 24px rgba(0,255,144,.02) !important;
+}
+[data-theme="neon"] .card:hover {
+  border-color: #00ff9060 !important;
+  box-shadow: 0 0 20px rgba(0,255,144,.14), inset 0 0 30px rgba(0,255,144,.03) !important;
+}
+[data-theme="neon"] .card-hd-title {
+  color: #00ff90;
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0,255,144,.5);
+}
+[data-theme="neon"] .kpi {
+  background: rgba(0,255,144,.02) !important;
+  border: 1px solid #00ff9040 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 10px rgba(0,255,144,.1) !important;
+}
+[data-theme="neon"] .kpi-value {
+  font-size: 22px;
+  color: #00ff90;
+  text-shadow: 0 0 12px rgba(0,255,144,.6);
+}
+[data-theme="neon"] .kpi-label {
+  font-size: 8px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #008040;
+}
+[data-theme="neon"] .brand-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  color: #00ff90;
+  text-shadow: 0 0 10px rgba(0,255,144,.5);
+}
+[data-theme="neon"] .brand-title em {
+  color: #ff00c8;
+  font-style: normal;
+  text-shadow: 0 0 10px rgba(255,0,200,.5);
+}
+[data-theme="neon"] .sidebar {
+  background: #010108;
+  border-right: 1px solid #00ff9025;
+}
+[data-theme="neon"] .nav-item {
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #008040;
+}
+[data-theme="neon"] .nav-item.active {
+  color: #00ff90;
+  background: rgba(0,255,144,.05);
+  text-shadow: 0 0 8px rgba(0,255,144,.4);
+}
+[data-theme="neon"] .nav-item.active::before {
+  background: #00ff90;
+  box-shadow: 0 0 6px #00ff90;
+}
+[data-theme="neon"] .nav-item:hover { color: #00cc70; background: rgba(0,255,144,.03); }
+[data-theme="neon"] .topbar {
+  background: #010108;
+  border-bottom: 1px solid #00ff9025;
+  box-shadow: 0 1px 8px rgba(0,255,144,.06);
+}
+[data-theme="neon"] .chip {
+  border-radius: 0;
+  border-color: #00ff9030;
+  color: #008040;
+  background: transparent;
+  font-size: 9px;
+  letter-spacing: .1em;
+}
+/* Chip activo con glow */
+[data-theme="neon"] .chip.on-lay,
+[data-theme="neon"] .chip.on-21,
+[data-theme="neon"] .chip.on-22,
+[data-theme="neon"] .chip.on-23,
+[data-theme="neon"] .chip.on-24 {
+  border-color: #00ff90;
+  color: #00ff90;
+  box-shadow: 0 0 6px rgba(0,255,144,.3);
+}
+/* Tablas con glow en hover */
+[data-theme="neon"] tr:hover td { background: rgba(0,255,144,.04) !important; }
+[data-theme="neon"] th { color: #00ff90; letter-spacing: .12em; text-transform: uppercase; }
+/* Scanlines overlay via body::after */
+[data-theme="neon"] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,.08) 2px,
+    rgba(0,0,0,.08) 4px
+  );
+}
+/* Números positivos/negativos con glow */
+[data-theme="neon"] .pos, [data-theme="neon"] [style*="var(--pos)"] {
+  text-shadow: 0 0 8px rgba(0,255,144,.5);
+}
+[data-theme="neon"] .neg, [data-theme="neon"] [style*="var(--neg)"] {
+  text-shadow: 0 0 8px rgba(255,0,200,.5);
+}
+
 /* Per-theme body gradient overrides */
 [data-theme="tableau"] body,
 [data-theme="powerbi"] body,
-[data-theme="gobierno"] body { background-image: none; }
+[data-theme="gobierno"] body,
+[data-theme="ft"] body { background-image: none; }
 [data-theme="density"] body {
   background-image:
     radial-gradient(ellipse 60% 40% at 80% 20%, rgba(0,201,177,.05) 0%, transparent 70%),
@@ -1786,6 +2153,15 @@ self.onmessage = async (e) => {
           </div>
           <div class="chip" data-tema="gobierno" onclick="setTheme('gobierno',this)" title="Gobierno institucional">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#003087;margin-right:4px;vertical-align:middle"></span>Gobierno
+          </div>
+          <div class="chip" data-tema="bloomberg" onclick="setTheme('bloomberg',this)" title="Bloomberg Terminal — amber sobre negro, estilo trading">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#ff8c00;margin-right:4px;vertical-align:middle"></span>Bloomberg
+          </div>
+          <div class="chip" data-tema="ft" onclick="setTheme('ft',this)" title="Financial Times — papel salmón, serif, estilo informe impreso">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#990F3D;margin-right:4px;vertical-align:middle"></span>FT Papel
+          </div>
+          <div class="chip" data-tema="neon" onclick="setTheme('neon',this)" title="Neon Wireframe — bordes luminosos, scanlines, cyberpunk">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#00ff90;margin-right:4px;vertical-align:middle;box-shadow:0 0 4px #00ff90"></span>Neon
           </div>
           <button class="imp-ctrl-btn" id="btn-fix-tema" onclick="fixDefaultTheme()" title="Fijar tema predeterminado" style="margin-left:4px;font-size:9px;padding:3px 8px">☆ Fijar</button>
         </div>
