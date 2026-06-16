@@ -3917,14 +3917,52 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 <script>
 // ═══════════════════════════════════════════════════════════
 //  AUTENTICACIÓN — pantalla de login
-//  Para cambiar usuarios: editá el objeto LOGIN_USERS abajo
-//  Formato: { 'usuario': 'contraseña', ... }
+//  Contraseñas almacenadas como SHA-256 (prefijo sha256:)
+//  Para cambiar contraseñas usá el panel de administración
 // ═══════════════════════════════════════════════════════════
-const LOGIN_USERS = {
+
+// Hashea una contraseña con SHA-256 y devuelve "sha256:<hex>"
+async function hashPass(pass) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  return 'sha256:' + hex;
+}
+
+// Compara contraseña ingresada contra valor almacenado (hashed o plain para migración)
+async function verificarPass(ingresada, almacenada) {
+  if (!almacenada) return false;
+  if (almacenada.startsWith('sha256:')) {
+    return (await hashPass(ingresada)) === almacenada;
+  }
+  return ingresada === almacenada; // migración: plain text
+}
+
+const LOGIN_USERS_PLAIN = {
   'admin':    'LR2025#admin',
   'analista': 'LR2025#analista',
   'consulta': 'LR2025#consulta',
 };
+let LOGIN_USERS = { ...LOGIN_USERS_PLAIN };
+// Hashea los usuarios por defecto y migra localStorage al arrancar
+async function initHashedUsers() {
+  const hashed = {};
+  for (const [u, p] of Object.entries(LOGIN_USERS_PLAIN)) {
+    hashed[u] = await hashPass(p);
+  }
+  LOGIN_USERS = hashed;
+  try {
+    const raw = localStorage.getItem('lr_users_v1');
+    if (raw) {
+      const stored = JSON.parse(raw);
+      let migrado = false;
+      for (const [u, p] of Object.entries(stored)) {
+        if (!p.startsWith('sha256:')) { stored[u] = await hashPass(p); migrado = true; }
+      }
+      if (migrado) localStorage.setItem('lr_users_v1', JSON.stringify(stored));
+    }
+  } catch(e) {}
+}
+initHashedUsers();
 // Sesión activa por 8 horas — no necesitan volver a loguearse durante el día
 const LOGIN_SESSION_HORAS = 8;
 const LOGIN_KEY = 'lr_auth_v1';
@@ -4164,7 +4202,7 @@ function renderUserList() {
   }).join('');
 }
 
-function editarPassUsuario(user, passId) {
+async function editarPassUsuario(user, passId) {
   const inp = document.getElementById(passId);
   const nueva = inp?.value?.trim();
   const msg = document.getElementById('msg-admin');
@@ -4173,13 +4211,14 @@ function editarPassUsuario(user, passId) {
     return;
   }
   const users = getUsuarios();
-  users[user] = nueva;
+  users[user] = await hashPass(nueva);
   saveUsuarios(users);
+  if (inp) inp.value = '';
   if (msg) { msg.textContent = `✓ Contraseña de "${user}" actualizada`; msg.style.color='#2ecc8a'; }
   setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
 }
 
-function cambiarPassPropia() {
+async function cambiarPassPropia() {
   const lbl   = document.getElementById('login-user-lbl');
   const user  = lbl?.textContent?.trim() || '';
   const pass1 = document.getElementById('inp-pass-nueva')?.value || '';
@@ -4191,7 +4230,7 @@ function cambiarPassPropia() {
   if (pass1 !== pass2) { if (msg) { msg.textContent = 'Las contraseñas no coinciden'; msg.style.color='var(--neg)'; } return; }
 
   const users = getUsuarios();
-  users[user] = pass1;
+  users[user] = await hashPass(pass1);
   saveUsuarios(users);
   document.getElementById('inp-pass-nueva').value = '';
   document.getElementById('inp-pass-rep').value   = '';
@@ -4199,7 +4238,7 @@ function cambiarPassPropia() {
   setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
 }
 
-function agregarUsuario() {
+async function agregarUsuario() {
   const newUser = (document.getElementById('inp-new-user')?.value || '').trim().toLowerCase();
   const newPass = (document.getElementById('inp-new-pass')?.value || '').trim();
   const msg     = document.getElementById('msg-admin');
@@ -4209,7 +4248,7 @@ function agregarUsuario() {
   if (!/^[a-z0-9_]+$/.test(newUser)) { if (msg) { msg.textContent = 'Solo letras, números y _'; msg.style.color='var(--neg)'; } return; }
 
   const users = getUsuarios();
-  users[newUser] = newPass;
+  users[newUser] = await hashPass(newPass);
   saveUsuarios(users);
   document.getElementById('inp-new-user').value = '';
   document.getElementById('inp-new-pass').value = '';
@@ -4226,9 +4265,8 @@ function eliminarUsuario(user) {
   renderUserList();
 }
 
-// Actualizar doLogin para usar usuarios dinámicos
-const _origDoLogin = doLogin;
-window.doLogin = function() {
+// doLogin con verificación de hash SHA-256 y migración automática
+window.doLogin = async function() {
   const user = (document.getElementById('login-user')?.value || '').trim().toLowerCase();
   const pass = (document.getElementById('login-pass')?.value || '').trim();
   const msg  = document.getElementById('login-msg');
@@ -4238,15 +4276,21 @@ window.doLogin = function() {
     return;
   }
 
-  // Verificar contra usuarios dinámicos (localStorage) + defaults
   const users = getUsuarios();
-  if (!users[user] || users[user] !== pass) {
+  const ok = await verificarPass(pass, users[user]);
+  if (!ok) {
     if (msg) { msg.textContent = 'Usuario o contraseña incorrectos'; msg.style.color = 'var(--neg)'; }
     const p = document.getElementById('login-pass');
     if (p) { p.value = ''; p.focus(); }
     const box = document.querySelector('#login-overlay > div:nth-child(2)');
     if (box) { box.style.animation = 'shake .3s ease'; setTimeout(() => { box.style.animation = ''; }, 350); }
     return;
+  }
+
+  // Migrar contraseña plain text a hash en el primer login exitoso
+  if (users[user] && !users[user].startsWith('sha256:')) {
+    users[user] = await hashPass(pass);
+    saveUsuarios(users);
   }
 
   const expMs = LOGIN_SESSION_HORAS > 0
