@@ -10658,10 +10658,14 @@ function buildEvolucionMensual(emp) {
 
   const erM = (DATA.er_mensual && DATA.er_mensual[emp]) || {};
   const factM = (DATA.fact_mensual && DATA.fact_mensual[emp]) || {};
-  const anios = [...new Set([...Object.keys(erM), ...Object.keys(factM)])].sort();
+  const todosAnios = [...new Set([...Object.keys(erM), ...Object.keys(factM)])].sort();
 
-  if (anios.length === 0) { wrap.style.display = 'none'; return; }
+  if (todosAnios.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
+
+  // Aplicar filtro de año si está seleccionado
+  const anioFiltro = window._erRptAnio || null;
+  const anios = (anioFiltro && todosAnios.includes(anioFiltro)) ? [anioFiltro] : todosAnios;
 
   const edit = _erMensualEdit && _erMensualEmp === emp;
   const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -10672,7 +10676,7 @@ function buildEvolucionMensual(emp) {
   };
   const empJS = emp.replace(/'/g, "\\'");
 
-  if (lbl) lbl.textContent = emp + ' \u00b7 ' + anios.join(', ');
+  if (lbl) lbl.textContent = emp + ' \u00b7 ' + (anioFiltro ? anioFiltro : todosAnios.join(', '));
 
   if (typeof window._erMensualVista === 'undefined') window._erMensualVista = 'estandar';
   const vista = window._erMensualVista;
@@ -10694,7 +10698,7 @@ function buildEvolucionMensual(emp) {
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
       background:${vista==='original'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='original'?'#001':'var(--dim)'}">ER Original (completo)</button>
     <span style="font-size:9px;color:var(--dim);margin-left:8px">Año reporte:</span>
-    <select id="er-rpt-anio" onchange="window._erRptAnio=this.value||null"
+    <select id="er-rpt-anio" onchange="window._erRptAnio=this.value||null;buildEvolucionMensual('${empJS}')"
       style="font-size:10px;padding:3px 6px;background:var(--s2,#1a1f2e);border:1px solid var(--bd);border-radius:4px;color:var(--text)">
       <option value="">Todos</option>
       ${anios.map(a=>`<option value="${a}" ${window._erRptAnio===a?'selected':''}>${a}</option>`).join('')}
@@ -15609,10 +15613,9 @@ function tryParseVentasGastos(wb, fname) {
       }
       if (anio) break;
     }
-    // Del nombre de archivo si no se halló
     if (!anio) { const mf = fname.match(/(20\d{2})/); if (mf) anio = mf[1]; }
 
-    // Extraer ventas, gastos y resultado por mes
+    // Extraer ventas, gastos y resultado por mes (totales)
     const meses = {};
     colMeses.forEach(({col, mes}) => {
       const ventas = _num(rows[filaVentasTotales][col]);
@@ -15624,11 +15627,57 @@ function tryParseVentasGastos(wb, fname) {
     });
     if (Object.keys(meses).length === 0) continue;
 
+    // ── Extraer ítems de detalle entre las secciones ──────────────
+    // Clasificador: mismo criterio que el viewer estándar
+    const _clasif = (lbl) => {
+      const t = String(lbl || '').toUpperCase().trim();
+      if (!t || ['TOTALES','DETALLE DE VENTAS','DETALLE DE GASTOS','VENTAS','GASTOS','INGRESOS'].includes(t)) return null;
+      if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
+      if (/TOTAL\s+(DE\s+)?GASTOS/.test(t)) return 'IGNORAR';
+      if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO/.test(t)) return 'utilBruta';
+      if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA/.test(t)) return 'resOperativo';
+      if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO/.test(t)) return 'resEjercicio';
+      if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) return 'ventas';
+      if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
+      if (/FINANCIER|INTERES.*PAGAD/.test(t)) return 'resFinanciero';
+      if (/IMPUEST.*GANANCIA/.test(t)) return 'impuesto';
+      if (/COMERCIALIZAC|COMERCIALES|PUBLICIDAD|FLETE/.test(t)) return 'gastoCom';
+      if (/ADMINISTRAC|ADMINISTRATIV/.test(t)) return 'gastoAdm';
+      if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA\s+SOCIAL|APORTE|CONTRIBUC|HONORARIO|AMORTIZAC|DEPRECIAC|SEGURO|ART\b|ALQUILER|COMBUSTIBLE|MANTENIMIENTO|REPARACION|SERVICIO|IMPUESTO|TASA|VIATICO|ENERGIA|ELECTRICID|TELEFON|GASTO|EGRESO|VARIOS|PERSONAL/.test(t)) return 'gastoOper';
+      return null;
+    };
+
+    // Recorrer filas entre header de sección y TOTALES
+    const _extractRange = (filaStart, filaEnd) => {
+      const items = [];
+      for (let i = filaStart + 1; i < filaEnd; i++) {
+        const lbl = String(rows[i][0] || '').trim();
+        if (!lbl) continue;
+        const rubro = _clasif(lbl);
+        if (!rubro || rubro === 'IGNORAR' || rubro === 'COMPONENTE_VENTA') continue;
+        const vals = {};
+        colMeses.forEach(({col, mes}) => { const v = _num(rows[i][col]); if (v != null && v !== 0) vals[mes] = v; });
+        if (Object.keys(vals).length > 0) items.push({ lbl, conceptoStd: rubro, valores: vals });
+      }
+      return items;
+    };
+
+    // Encontrar inicio de cada sección (fila del header)
+    let filaIniVentas = -1, filaIniGastos = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const c0 = String(rows[i][0] || '').trim().toUpperCase();
+      if (c0.includes('DETALLE DE VENTAS') || c0.startsWith('VENTAS ')) { if (filaIniVentas < 0) filaIniVentas = i; }
+      if (c0.includes('DETALLE DE GASTOS') || c0.startsWith('GASTOS ')) { if (filaIniGastos < 0) filaIniGastos = i; }
+    }
+
+    const itemsVentas = filaIniVentas >= 0 ? _extractRange(filaIniVentas, filaVentasTotales) : [];
+    const itemsGastos = filaIniGastos >= 0 ? _extractRange(filaIniGastos, filaGastosTotales) : [];
+
     // Nombre de empresa: del nombre de archivo (antes del primer _ con fecha) o del título
     let empresa = fname.replace(/\.xlsx?$/i,'').replace(/_/g,' ').toUpperCase();
     empresa = empresa.split(/\s+ACUMULADO|\s+AL\s+\d|\s+VENTAS/i)[0].trim();
 
-    return { empresa, anio, meses, hoja: sn };
+    return { empresa, anio, meses, hoja: sn, itemsVentas, itemsGastos };
   }
   return null;
 }
@@ -15651,7 +15700,9 @@ function _mostrarPreviewVentasGastos(result, fname) {
     <div style="font-size:12px;font-weight:600;margin-bottom:4px">Ventas/Gastos detectado — ${fname}</div>
     <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
       <b>${result.empresa}</b> · Año ${result.anio||'?'} · ${meses.length} meses · Facturación total ${fmt(totV)} · Resultado ${fmt(totR)}<br>
-      Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo) e impactará en Facturación y Resultado anuales.
+      ${(result.itemsVentas?.length||0)+(result.itemsGastos?.length||0) > 0
+        ? `<span style="color:#47ffb4">✓ Detalle detectado: ${result.itemsVentas?.length||0} ítems de ventas, ${result.itemsGastos?.length||0} ítems de gastos clasificados.</span>`
+        : 'Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo).'}
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
       <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${ths}</tr></thead>
@@ -15684,20 +15735,35 @@ function _aplicarVentasGastos() {
   const emp = r.empresa, yS = String(r.anio);
   const meses = Object.keys(r.meses).map(Number).sort((a,b)=>a-b);
 
-  // Construir filas de ER mensual (Ventas, Gastos, Resultado)
-  const fVentas = { lbl:'Ventas Netas', conceptoStd:'ventas', valores:{} };
-  const fGastos = { lbl:'Gastos totales', conceptoStd:'costo', valores:{} };
+  // Construir filas de ER mensual
+  // Usar ítems de detalle si el parser los extrajo; si no, usar totales agregados
   const fResult = { lbl:'Resultado Operativo', conceptoStd:'resOperativo', valores:{} };
-  meses.forEach(m => {
-    fVentas.valores[m] = r.meses[m].ventas;
-    fGastos.valores[m] = -Math.abs(r.meses[m].gastos); // egreso negativo
-    fResult.valores[m] = r.meses[m].resultado;
-  });
+  meses.forEach(m => { fResult.valores[m] = r.meses[m].resultado; });
+
+  let filasER;
+  if ((r.itemsVentas && r.itemsVentas.length > 0) || (r.itemsGastos && r.itemsGastos.length > 0)) {
+    // Detalle disponible: usar ítems clasificados + resultado calculado
+    // Gastos: asegurar que sean negativos (egresos)
+    const gastosNeg = (r.itemsGastos || []).map(f => ({
+      ...f,
+      valores: Object.fromEntries(Object.entries(f.valores).map(([m,v]) => [m, v > 0 ? -v : v]))
+    }));
+    filasER = [...(r.itemsVentas || []), ...gastosNeg, fResult];
+  } else {
+    // Sin detalle: usar totales como antes
+    const fVentas = { lbl:'Ventas Netas', conceptoStd:'ventas', valores:{} };
+    const fGastos = { lbl:'Gastos totales', conceptoStd:'costo', valores:{} };
+    meses.forEach(m => {
+      fVentas.valores[m] = r.meses[m].ventas;
+      fGastos.valores[m] = -Math.abs(r.meses[m].gastos);
+    });
+    filasER = [fVentas, fGastos, fResult];
+  }
 
   if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
   DATA.er_mensual[emp][yS] = {
-    filas: [fVentas, fGastos, fResult],
-    conceptos: { ventas:0, costo:1, resOperativo:2 },
+    filas: filasER,
+    conceptos: { ventas:0, costo:filasER.findIndex(f=>f.conceptoStd==='costo'), resOperativo:filasER.length-1 },
     esTrimestral: false,
   };
 
