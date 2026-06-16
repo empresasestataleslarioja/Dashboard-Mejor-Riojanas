@@ -8444,7 +8444,24 @@ function _generarInformeHTML(fA, fB, ipcInput) {
 // ═══════════════════════════════════════════════════════════
 //  PANEL: RESUMEN
 // ═══════════════════════════════════════════════════════════
+// Inyecta un banner de aviso en un panel si los años activos no tienen datos de facturación
+function _inyectarBannerAñosSinDatos(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const bannerId = panelId + '-banner-sin-datos';
+  const existing = document.getElementById(bannerId);
+  const sinDatos = activeYears.filter(y => !(DATA.totals_fact && DATA.totals_fact[y]));
+  if (!sinDatos.length) { if (existing) existing.remove(); return; }
+  if (existing) { existing.querySelector('span').textContent = `⚠ Sin datos para ${sinDatos.join(', ')} — los gráficos pueden aparecer vacíos`; return; }
+  const banner = document.createElement('div');
+  banner.id = bannerId;
+  banner.style.cssText = 'margin:8px 16px 0;padding:7px 12px;background:rgba(255,140,71,.08);border:1px solid rgba(255,140,71,.3);border-radius:3px;display:flex;align-items:center;justify-content:space-between;gap:8px';
+  banner.innerHTML = `<span style="font-size:9.5px;color:#ff8c47;font-family:var(--mono)">⚠ Sin datos para ${sinDatos.join(', ')} — los gráficos pueden aparecer vacíos</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#ff8c47;cursor:pointer;font-size:12px;padding:0 2px;opacity:.7" title="Cerrar">✕</button>`;
+  panel.insertBefore(banner, panel.firstChild);
+}
+
 function buildResumen() {
+  _inyectarBannerAñosSinDatos('panel-resumen');
   // Sin datos — mostrar pantalla de bienvenida con instrucciones
   const tieneData = Object.keys(DATA.fact || {}).length > 0;
   const resPanel  = document.getElementById('panel-resumen');
@@ -8572,6 +8589,7 @@ function buildResumen() {
 //  PANEL: FACTURACIÓN
 // ═══════════════════════════════════════════════════════════
 function buildFacturacion() {
+  _inyectarBannerAñosSinDatos('panel-facturacion');
   const years = ys(), tf = DATA.totals_fact;
   const selEmp = document.getElementById('sel-fact-emp')?.value || '';
 
@@ -10064,6 +10082,7 @@ function buildRanking() {
 //  PANEL: PORTAFOLIO CONSOLIDADO (Mejora 1)
 // ═══════════════════════════════════════════════════════════
 function buildPortafolio() {
+  _inyectarBannerAñosSinDatos('panel-portafolio');
   const years   = ys();
   const lastY   = years[years.length - 1];
   const emps    = new Set(empresasFiltradas());
@@ -23542,12 +23561,22 @@ async function syncFromCloud(silent, opts) {
     try {
       data = await fetchWithTimeout(url, 55000);
     } catch(fetchErr) {
-      // Fallback JSONP — funciona desde file://
-      try {
-        data = await fetchJSONP(url);
-      } catch(jsonpErr) {
-        throw new Error('Sin conexión con Sheets. Verificá internet y que el bridge esté publicado correctamente.');
+      // Cuando la app se abre como archivo local (file://), fetch falla por CORS.
+      // En ese caso informar claramente en lugar de ejecutar JSONP dinámico.
+      const esCORS = fetchErr.name === 'TypeError' || fetchErr.message.includes('CORS') ||
+                     fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError');
+      const esLocal = location.protocol === 'file:';
+      if (esCORS || esLocal) {
+        if (!silent) showStorageStatus(
+          '⚠ Sin acceso al servidor: abrí el dashboard desde un servidor web (no desde archivo local) para sincronizar con Sheets.',
+          '#ff8c47'
+        );
+      } else {
+        if (!silent) showStorageStatus('✗ No se pudo conectar con el servidor: ' + fetchErr.message, 'var(--neg)');
       }
+      if (btn) { btn.disabled = false; btn.textContent = '↓ Sincronizar'; }
+      updateCloudStatusBar('error');
+      return;
     }
     // El bridge devuelve {meta:{...}, fact:[...], balances:[...]} — sin campo "ok"
     // Solo rechazar si explícitamente viene ok:false con error
