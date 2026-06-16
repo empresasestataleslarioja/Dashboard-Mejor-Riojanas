@@ -7636,6 +7636,16 @@ function guardarFlujoManual() {
     if (msg) { msg.textContent = '⚠ Empresa y período son obligatorios.'; msg.style.color='var(--neg)'; }
     return;
   }
+  // Validar formato de período: año de 4 dígitos, opcionalmente seguido de -QN o -MM
+  if (!/^\d{4}(-Q[1-4]|-\d{2})?$/.test(periodo)) {
+    if (msg) { msg.textContent = '⚠ Período inválido. Usá formato: 2024, 2024-Q1, o 2024-06.'; msg.style.color='var(--neg)'; }
+    return;
+  }
+  const anio = parseInt(periodo.slice(0,4));
+  if (anio < 2010 || anio > 2050) {
+    if (msg) { msg.textContent = '⚠ Año fuera de rango (2010-2050).'; msg.style.color='var(--neg)'; }
+    return;
+  }
   const rubros = FLUJO_RUBROS_STD.map(r => {
     const actual   = parseFloat(document.getElementById(`fm-r-${r.key}`)?.value || '') || null;
     const anterior = parseFloat(document.getElementById(`fm-r-${r.key}-ant`)?.value || '') || null;
@@ -9492,13 +9502,19 @@ function _persActualizarTotalMes(y) {
 
 function guardarPersonalManual() {
   const empInput = document.getElementById('pers-manual-emp');
-  const empresa  = (empInput?.value || '').trim();
+  const empresa  = (empInput?.value || '').trim().replace(/<[^>]*>/g, '');
   const msg      = document.getElementById('pers-manual-msg');
 
   if (!empresa || empresa.length < 2) {
     if (msg) { msg.textContent = '⚠ Ingresá el nombre de la empresa.'; msg.style.color = '#ff8c47'; }
     return;
   }
+  if (empresa.length > 100) {
+    if (msg) { msg.textContent = '⚠ Nombre demasiado largo (máx. 100 caracteres).'; msg.style.color = '#ff8c47'; }
+    return;
+  }
+  // Actualizar el input con el valor sanitizado
+  if (empInput) empInput.value = empresa;
 
   const pYrs = ys().map(String);
   const baseAños = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
@@ -9519,7 +9535,11 @@ function guardarPersonalManual() {
       // El Object.assign posterior solo pisa los años presentes en yData
     } else {
       const v = parseInt(raw);
-      if (!isNaN(v) && v >= 0) { yData[y] = v; algunoIngresado = true; }
+      if (!isNaN(v) && v >= 0 && v <= 1000000) { yData[y] = v; algunoIngresado = true; }
+      else if (!isNaN(v) && v > 1000000) {
+        if (msg) { msg.textContent = `⚠ Valor para ${y} fuera de rango (máx. 1.000.000 empleados).`; msg.style.color = '#ff8c47'; }
+        return;
+      }
     }
   });
 
