@@ -2277,6 +2277,9 @@ self.onmessage = async (e) => {
         </div>
       </div>
 
+      <!-- Auditoría ER provisorio vs balance formal -->
+      <div id="emp-audit-er-wrap" style="display:none;margin-bottom:12px"></div>
+
       <!-- Gráficos de Estado de Resultados (balance cargado) -->
       <div id="emp-er-wrap" style="display:none">
         <div class="row2" style="margin-top:0">
@@ -10535,6 +10538,9 @@ function buildEmpresa() {
   // Evolución mensual (si hay datos cargados)
   buildEvolucionMensual(emp);
 
+  // Auditoría ER provisorio vs balance formal
+  buildAuditERProvisorio(emp);
+
   // URL hash
   saveStateToHash();
 }
@@ -10648,6 +10654,163 @@ function _erMensualSync(emp, anio) {
   try { saveDataToLocalCache(); } catch(e) {}
   try { marcarPendienteGuardar(); } catch(e) {}
   try { computeTotals(); } catch(e) {}
+}
+
+// ── Auditoría ER provisorio vs ER formal del balance ──────────────────────────
+function buildAuditERProvisorio(emp) {
+  const wrap = document.getElementById('emp-audit-er-wrap');
+  if (!wrap) return;
+  wrap.style.display = 'none';
+  wrap.innerHTML = '';
+
+  const erM = DATA.er_mensual?.[emp] || {};
+  const erB = DATA.er?.[emp] || {};
+
+  // Concepto: mapeo monthly conceptoStd → clave en DATA.er (balance formal)
+  const MAP_M2B = {
+    ventas:       'ventas_netas',
+    costo:        'costo_ventas',
+    utilBruta:    'utilidad_bruta',
+    gastoAdm:     'gastos_admin',
+    gastoCom:     'gastos_comercializacion',
+    resOperativo: 'resultado_operativo',
+    resEjercicio: 'resultado_neto',
+    resFinanciero:'gastos_financieros',
+    impuesto:     'gastos_fiscales',
+    otrosIngresos:'otros_ingresos',
+  };
+  const LABELS = {
+    ventas_netas:'Ventas / Ingresos netos', costo_ventas:'Costo de ventas',
+    utilidad_bruta:'Utilidad bruta', gastos_admin:'Gastos administración',
+    gastos_comercializacion:'Gastos comercialización', resultado_operativo:'Resultado operativo',
+    gastos_financieros:'Resultado financiero', gastos_fiscales:'Impuesto a las ganancias',
+    otros_ingresos:'Otros ingresos', resultado_neto:'Resultado del ejercicio',
+  };
+  const ORDER = ['ventas_netas','costo_ventas','utilidad_bruta','gastos_admin',
+    'gastos_comercializacion','resultado_operativo','gastos_financieros',
+    'gastos_fiscales','otros_ingresos','resultado_neto'];
+  const IS_SUBTOTAL = new Set(['utilidad_bruta','resultado_operativo','resultado_neto']);
+
+  // Años con datos en ambas fuentes
+  const aniosCruce = Object.keys(erM).filter(yr => {
+    const bal = erB[yr];
+    return bal && Object.keys(bal).length > 0;
+  }).sort();
+
+  if (aniosCruce.length === 0) return;
+
+  const fmt = v => {
+    if (v == null) return '<span style="color:var(--dim)">—</span>';
+    const abs = Math.abs(v);
+    const s = abs >= 1e6 ? (abs/1e6).toFixed(1)+'M' : abs >= 1e3 ? (abs/1e3).toFixed(0)+'k' : abs.toFixed(0);
+    return `<span style="color:${v<0?'var(--neg)':'inherit'}">${v<0?'−':''}$${s}</span>`;
+  };
+  const fmtPct = p => p == null ? '<span style="color:var(--dim)">—</span>' : `${p>=0?'+':''}${p.toFixed(1)}%`;
+  const diffColor = d => {
+    if (d == null) return 'var(--dim)';
+    const a = Math.abs(d);
+    if (a < 2) return 'var(--pos)';
+    if (a < 8) return '#ff8c47';
+    return 'var(--neg)';
+  };
+
+  let html = `<div class="card" style="padding:0;overflow:hidden">
+    <div class="card-hd" style="padding:10px 16px;border-bottom:1px solid var(--bd)">
+      <span class="card-hd-title">🔎 Auditoría ER provisorio vs balance formal</span>
+      <span class="card-hd-unit" style="color:var(--dim)">composición % sobre ventas</span>
+    </div>
+    <div style="padding:10px 16px;font-size:9px;color:var(--dim);line-height:1.5;border-bottom:1px solid var(--bd)">
+      Compara la composición porcentual del ER provisorio (datos mensuales acumulados) contra el estado de resultados del balance formal cargado en el módulo BALANCE para los mismos años. Una diferencia &gt;8 pp indica posible inconsistencia contable.
+    </div>`;
+
+  for (const yr of aniosCruce) {
+    // Sumar datos mensuales del ER provisorio
+    const erData = erM[yr];
+    const provAcc = {};
+    if (erData && Array.isArray(erData.filas)) {
+      erData.filas.forEach(f => {
+        const clave = MAP_M2B[f.conceptoStd];
+        if (!clave) return;
+        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
+        if (suma !== 0) provAcc[clave] = (provAcc[clave] || 0) + suma;
+      });
+      // Derivar subtotales si faltan
+      if (provAcc.utilidad_bruta == null && provAcc.ventas_netas != null)
+        provAcc.utilidad_bruta = (provAcc.ventas_netas||0) + (provAcc.costo_ventas||0);
+      if (provAcc.resultado_operativo == null && provAcc.utilidad_bruta != null)
+        provAcc.resultado_operativo = (provAcc.utilidad_bruta||0) + (provAcc.gastos_admin||0) + (provAcc.gastos_comercializacion||0);
+    }
+
+    const balAcc = erB[yr] || {};
+    const baseP = provAcc.ventas_netas || 0;
+    const baseB = balAcc.ventas_netas || 0;
+
+    html += `<div style="margin:0;border-bottom:1px solid var(--bd)">
+      <div style="padding:8px 16px;background:var(--s3);font-size:10px;font-weight:600;
+        letter-spacing:.08em;color:var(--y21);border-bottom:1px solid var(--bd)">
+        Año ${yr}
+      </div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:9.5px;font-family:var(--mono)">
+        <thead>
+          <tr style="background:var(--s2)">
+            <th style="text-align:left;padding:5px 12px;color:var(--dim);font-weight:400;width:40%">Concepto</th>
+            <th style="text-align:right;padding:5px 10px;color:var(--dim);font-weight:400">Provisorio $</th>
+            <th style="text-align:right;padding:5px 10px;color:#47e8ff88;font-weight:400">Prov. %</th>
+            <th style="text-align:right;padding:5px 10px;color:var(--dim);font-weight:400">Balance $</th>
+            <th style="text-align:right;padding:5px 10px;color:#e8ff4788;font-weight:400">Bal. %</th>
+            <th style="text-align:right;padding:5px 12px;color:var(--dim);font-weight:400">Δ pp</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    for (const clave of ORDER) {
+      const vP = provAcc[clave];
+      const vB = balAcc[clave];
+      if (vP == null && vB == null) continue;
+
+      const pctP = baseP ? (vP != null ? vP / baseP * 100 : null) : null;
+      const pctB = baseB ? (vB != null ? vB / baseB * 100 : null) : null;
+      const delta = pctP != null && pctB != null ? pctP - pctB : null;
+      const isSub = IS_SUBTOTAL.has(clave);
+
+      const rowStyle = isSub
+        ? 'background:var(--s2);font-weight:600;border-top:1px solid var(--bd)'
+        : '';
+      const lblStyle = isSub ? 'color:var(--text)' : 'color:var(--dim)';
+
+      html += `<tr style="${rowStyle}">
+        <td style="padding:4px 12px;${lblStyle}">${LABELS[clave]||clave}</td>
+        <td style="text-align:right;padding:4px 10px">${fmt(vP)}</td>
+        <td style="text-align:right;padding:4px 10px;color:#47e8ff">${fmtPct(pctP)}</td>
+        <td style="text-align:right;padding:4px 10px">${fmt(vB)}</td>
+        <td style="text-align:right;padding:4px 10px;color:#e8ff47">${fmtPct(pctB)}</td>
+        <td style="text-align:right;padding:4px 12px;color:${diffColor(delta)};font-weight:${delta!=null&&Math.abs(delta)>=8?'700':'400'}">
+          ${delta != null ? (Math.abs(delta)<0.1?'≈0':fmtPct(delta)) : '—'}
+        </td>
+      </tr>`;
+    }
+
+    // Resumen de consistencia
+    const resP = provAcc.resultado_operativo, resB = balAcc.resultado_operativo;
+    const consistencia = (resP != null && resB != null && baseP && baseB)
+      ? Math.abs((resP/baseP*100) - (resB/baseB*100))
+      : null;
+    const semaforo = consistencia == null ? '' :
+      consistencia < 2 ? '🟢 Composición consistente (<2 pp)' :
+      consistencia < 8 ? '🟡 Diferencia moderada ('+consistencia.toFixed(1)+' pp en margen operativo)' :
+      '🔴 Diferencia significativa ('+consistencia.toFixed(1)+' pp en margen operativo) — revisar';
+
+    html += `</tbody></table></div>`;
+    if (semaforo) {
+      html += `<div style="padding:6px 16px 8px;font-size:9px;color:var(--dim)">${semaforo}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  wrap.innerHTML = html;
+  wrap.style.display = '';
 }
 
 function buildEvolucionMensual(emp) {
