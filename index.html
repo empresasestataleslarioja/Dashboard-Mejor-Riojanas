@@ -10891,7 +10891,7 @@ function buildAuditERProvisorio(emp) {
 
   const erM = DATA.er_mensual?.[emp] || {};
 
-  // Buscar datos de balance ER con matching flexible (por si el nombre difiere en mayúsculas/espacios)
+  // Fuente 1: DATA.er (viene de importación matricial ER_20XX.xlsx)
   let erB = DATA.er?.[emp] || {};
   if (!Object.keys(erB).length && DATA.er) {
     const empNorm = emp.toUpperCase().trim().replace(/\s+/g,' ');
@@ -10903,12 +10903,52 @@ function buildAuditERProvisorio(emp) {
     if (match) erB = DATA.er[match];
   }
 
+  // Fuente 2: _balances individuales (Análisis de Balances)
+  // Si DATA.er no tiene datos, construir erB desde ind.rentabilidad de _balances
+  if (!Object.keys(erB).length && typeof _balances !== 'undefined') {
+    const empNorm = emp.toUpperCase().trim();
+    // Mapeo de keys de ind.rentabilidad → keys de DATA.er
+    const REN2ER = {
+      ventas_ingresos: 'ventas_netas',
+      costo_ventas: 'costo_ventas',
+      utilidad_bruta: 'utilidad_bruta',
+      gastos_administracion: 'gastos_admin',
+      gastos_comercializacion: 'gastos_comercializacion',
+      resultado_operativo: 'resultado_operativo',
+      resultado_neto: 'resultado_neto',
+      resultado_financiero: 'gastos_financieros',
+      impuesto_ganancias: 'gastos_fiscales',
+      otros_ingresos: 'otros_ingresos',
+    };
+    Object.values(_balances || {}).forEach(b => {
+      const bEmpNorm = (b.empresa || '').toUpperCase().trim();
+      if (!bEmpNorm) return;
+      if (bEmpNorm !== empNorm &&
+          !bEmpNorm.includes(empNorm.substring(0,8)) &&
+          !empNorm.includes(bEmpNorm.substring(0,8))) return;
+      // Detectar año del período (ej "2023", "EJERCICIO 2024", etc.)
+      const mYr = (b.periodo || '').match(/20\d\d/);
+      if (!mYr) return;
+      const yr = mYr[0];
+      const ren = b.ind?.rentabilidad || {};
+      const row = {};
+      Object.entries(REN2ER).forEach(([rk, dk]) => {
+        if (ren[rk] != null) row[dk] = ren[rk];
+      });
+      if (Object.keys(row).length > 0) {
+        if (!erB[yr]) erB[yr] = {};
+        Object.assign(erB[yr], row);
+      }
+    });
+  }
+
   // Debug: mostrar qué datos hay disponibles si no hay cruce
   const _dbgInfo = {
     erMKeys: Object.keys(erM),
     erBKeys: Object.keys(erB),
     allErKeys: Object.keys(DATA.er || {}),
     allErMKeys: Object.keys(DATA.er_mensual || {}),
+    allBalEmps: Object.values(_balances || {}).map(b => `${b.empresa} (${b.periodo})`),
   };
 
   // Concepto: mapeo monthly conceptoStd → clave en DATA.er (balance formal)
@@ -10955,7 +10995,8 @@ function buildAuditERProvisorio(emp) {
       <div style="font-size:9px;color:var(--dim);line-height:1.7;font-family:var(--mono)">
         <b>ER mensual (provisorio) para "${emp}":</b> años ${hayErM ? _dbgInfo.erMKeys.join(', ') : '— no hay datos'}<br>
         <b>Balance formal para "${emp}":</b> años ${hayErB ? _dbgInfo.erBKeys.join(', ') : '— no hay datos'}<br>
-        ${!hayErB && _dbgInfo.allErKeys.length ? `<span style="color:#ff8c47">Empresas con balance cargado: ${todasErKeys}</span><br>` : ''}
+        ${!hayErB && _dbgInfo.allErKeys.length ? `<span style="color:#ff8c47">DATA.er keys: ${todasErKeys}</span><br>` : ''}
+        ${!hayErB && _dbgInfo.allBalEmps?.length ? `<span style="color:#ff8c47">Balances individuales cargados: ${_dbgInfo.allBalEmps.join(' | ')}</span><br>` : ''}
         ${!hayErM && _dbgInfo.allErMKeys.length ? `<span style="color:#ff8c47">Empresas con ER mensual cargado: ${todasErMKeys}</span><br>` : ''}
         <span style="margin-top:4px;display:inline-block">Para ver la auditoría, ambas fuentes deben tener datos del mismo año.</span>
       </div>
