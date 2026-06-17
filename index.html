@@ -404,140 +404,6 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 [data-theme="atlas"] .sidebar-logo svg path { fill: #60A5FA; }
 
 /* ══════════════════════════════════════════════════════════
-   TEMA — GRAFITO
-   Estética: Sidebar negro mate + contenido blanco, acento cyan
-══════════════════════════════════════════════════════════ */
-[data-theme="grafito"] {
-  --bg:   #F9FAFB;
-  --s1:   #FFFFFF;
-  --s2:   #F3F4F6;
-  --s3:   #E5E7EB;
-  --bd:   #D1D5DB;
-  --bd2:  #9CA3AF;
-  --y21:  #06B6D4;
-  --y22:  #6366F1;
-  --y23:  #F59E0B;
-  --y24:  #10B981;
-  --pos:  #10B981;
-  --neg:  #EF4444;
-  --text: #111827;
-  --dim:  #6B7280;
-  --dim2: #E5E7EB;
-  --serif:  'Inter', 'Segoe UI', sans-serif;
-  --mono:   'IBM Plex Mono', 'Courier New', monospace;
-  --ui:     'Inter', 'Segoe UI', sans-serif;
-  --chart-tick: #6B7280;
-  --chart-grid: #E5E7EB;
-  --radius-card: 6px;
-}
-[data-theme="grafito"] body { background-image: none; }
-[data-theme="grafito"] .sidebar {
-  background: #111827;
-  border-right: 1px solid #1F2937;
-}
-[data-theme="grafito"] .topbar {
-  background: #FFFFFF;
-  border-bottom: 1px solid #E5E7EB;
-}
-[data-theme="grafito"] .nav-item { color: #6B7280; }
-[data-theme="grafito"] .nav-item.active { color: #F9FAFB; background: rgba(249,250,251,.08); }
-[data-theme="grafito"] .nav-item.active::before { background: #06B6D4; }
-[data-theme="grafito"] .nav-item:hover { color: #F9FAFB; background: rgba(249,250,251,.05); }
-[data-theme="grafito"] .brand-title { color: #F9FAFB; }
-[data-theme="grafito"] .brand-title em { color: #06B6D4; }
-[data-theme="grafito"] .brand-sub { color: #6B7280; }
-[data-theme="grafito"] .card {
-  background: #FFFFFF !important;
-  border: 1px solid #E5E7EB !important;
-  border-radius: 6px !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06) !important;
-}
-[data-theme="grafito"] .card-hd-title { color: #111827; font-weight: 600; }
-[data-theme="grafito"] .kpi {
-  background: #FFFFFF !important;
-  border: 1px solid #E5E7EB !important;
-  border-top: 3px solid #06B6D4 !important;
-  border-radius: 6px !important;
-}
-[data-theme="grafito"] .kpi-value { color: #111827; font-size: 26px; font-weight: 700; }
-[data-theme="grafito"] .kpi-label { color: #6B7280; font-weight: 500; }
-[data-theme="grafito"] .chip { border-color: #E5E7EB; color: #374151; background: #F9FAFB; }
-[data-theme="grafito"] .chip.on-lay,
-[data-theme="grafito"] .chip.on-ali,
-[data-theme="grafito"] .chip.on-ser,
-[data-theme="grafito"] .chip.on-ind,
-[data-theme="grafito"] .chip.on-pro,
-[data-theme="grafito"] .chip.on-sin { background: #06B6D4; color: #FFFFFF; border-color: #06B6D4; }
-[data-theme="grafito"] .nav-section { color: #4B5563; }
-
-/* ══════════════════════════════════════════════════════════
-   TEMA — COBRE
-   Estética: Sidebar chocolate oscuro + contenido crema, acento ámbar
-══════════════════════════════════════════════════════════ */
-[data-theme="cobre"] {
-  --bg:   #FBF8F3;
-  --s1:   #FFFFFF;
-  --s2:   #F5F0E8;
-  --s3:   #EDE5D8;
-  --bd:   #DDD0BC;
-  --bd2:  #BBA888;
-  --y21:  #D97706;
-  --y22:  #0891B2;
-  --y23:  #7C3AED;
-  --y24:  #059669;
-  --pos:  #059669;
-  --neg:  #DC2626;
-  --text: #1C1008;
-  --dim:  #92745A;
-  --dim2: #EDE5D8;
-  --serif:  'Libre Baskerville', 'Georgia', serif;
-  --mono:   'IBM Plex Mono', 'Courier New', monospace;
-  --ui:     'Inter', 'Segoe UI', sans-serif;
-  --chart-tick: #92745A;
-  --chart-grid: #EDE5D8;
-  --radius-card: 6px;
-}
-[data-theme="cobre"] body { background-image: none; }
-[data-theme="cobre"] .sidebar {
-  background: #2C1708;
-  border-right: 1px solid #3D2410;
-}
-[data-theme="cobre"] .topbar {
-  background: #FFFFFF;
-  border-bottom: 1px solid #DDD0BC;
-}
-[data-theme="cobre"] .nav-item { color: #8C6A50; }
-[data-theme="cobre"] .nav-item.active { color: #FFD580; background: rgba(255,213,128,.1); }
-[data-theme="cobre"] .nav-item.active::before { background: #D97706; }
-[data-theme="cobre"] .nav-item:hover { color: #FFD580; background: rgba(255,213,128,.07); }
-[data-theme="cobre"] .brand-title { color: #FFE8CC; font-family: var(--serif); }
-[data-theme="cobre"] .brand-title em { color: #D97706; }
-[data-theme="cobre"] .brand-sub { color: #8C6A50; }
-[data-theme="cobre"] .card {
-  background: #FFFFFF !important;
-  border: 1px solid #DDD0BC !important;
-  border-radius: 6px !important;
-  box-shadow: 0 1px 4px rgba(120,70,20,.08) !important;
-}
-[data-theme="cobre"] .card-hd-title { color: #1C1008; font-weight: 600; }
-[data-theme="cobre"] .kpi {
-  background: #FFFFFF !important;
-  border: 1px solid #DDD0BC !important;
-  border-left: 3px solid #D97706 !important;
-  border-radius: 6px !important;
-}
-[data-theme="cobre"] .kpi-value { color: #1C1008; font-size: 26px; font-weight: 700; }
-[data-theme="cobre"] .kpi-label { color: #D97706; font-weight: 600; }
-[data-theme="cobre"] .chip { border-color: #DDD0BC; color: #7A5A3A; background: #FBF8F3; }
-[data-theme="cobre"] .chip.on-lay,
-[data-theme="cobre"] .chip.on-ali,
-[data-theme="cobre"] .chip.on-ser,
-[data-theme="cobre"] .chip.on-ind,
-[data-theme="cobre"] .chip.on-pro,
-[data-theme="cobre"] .chip.on-sin { background: #D97706; color: #FFFFFF; border-color: #D97706; }
-[data-theme="cobre"] .nav-section { color: #5A3A20; }
-
-/* ══════════════════════════════════════════════════════════
    TEMA — MINERAL
    Estética: Sidebar azul-pizarra + contenido gris frío, acento teal
 ══════════════════════════════════════════════════════════ */
@@ -2124,13 +1990,7 @@ self.onmessage = async (e) => {
           <div class="chip" data-tema="atlas" onclick="setTheme('atlas',this)" title="Atlas — navy sidebar, contenido blanco">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2563EB;margin-right:4px;vertical-align:middle"></span>Atlas
           </div>
-          <div class="chip" data-tema="grafito" onclick="setTheme('grafito',this)" title="Grafito — sidebar negro, acento cyan">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#06B6D4;margin-right:4px;vertical-align:middle"></span>Grafito
-          </div>
-          <div class="chip" data-tema="cobre" onclick="setTheme('cobre',this)" title="Cobre — sidebar chocolate, acento ámbar">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#D97706;margin-right:4px;vertical-align:middle"></span>Cobre
-          </div>
-          <div class="chip" data-tema="mineral" onclick="setTheme('mineral',this)" title="Mineral — slate azul, acento teal">
+<div class="chip" data-tema="mineral" onclick="setTheme('mineral',this)" title="Mineral — slate azul, acento teal">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0891B2;margin-right:4px;vertical-align:middle"></span>Mineral
           </div>
           <div class="chip" data-tema="powerbi" onclick="setTheme('powerbi',this)" title="Power BI claro">
@@ -4169,9 +4029,9 @@ self.onmessage = async (e) => {
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)">IPC %</label>
+          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="Inflación acumulada entre ambos períodos. Se usa fórmula Fisher para calcular la variación real de cada rubro. También muestra el equivalente del período anterior a precios actuales.">Inflación acum. % <span style="color:var(--y21)">ℹ</span></label>
           <input id="comp-flujo-ipc" type="number" step="0.1" placeholder="auto"
-            style="width:72px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
+            style="width:80px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:4px;outline:none">
         </div>
       </div>
@@ -8573,7 +8433,8 @@ function buildComparacionFlujos() {
   const necA = _flujoNecesidad(fA);
   const necB = _flujoNecesidad(fB);
   const varNom  = (necA!=null && necB && necB!==0) ? (necA - necB) / necB * 100 : null;
-  const varReal = (varNom!=null && ipc) ? varNom - ipc : null;
+  // Fisher: var real = (1+varNom/100)/(1+ipc/100) - 1
+  const varReal = (varNom!=null && ipc) ? ((1 + varNom/100) / (1 + ipc/100) - 1) * 100 : null;
 
   const ingA = _flujoIngTotal(fA);
   const ingB = _flujoIngTotal(fB);
@@ -8597,6 +8458,7 @@ function buildComparacionFlujos() {
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
     { l:'Cob. costo laboral',  v:labCovA ? labCovA.toFixed(1)+'%' : '—',                        c:'var(--text)' },
+    ...(ipc&&necB ? [{ l:`Necesidad ant. + IPC`, v:fmtM(necB*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del período anterior en pesos actuales' }] : []),
   ].map(k => `<div style="padding:${k.big?'10px 18px':'8px 14px'};background:var(--s2);
     border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':'110px'};
     ${k.big?'border-left:3px solid var(--neg)':''}">
@@ -8615,12 +8477,17 @@ function buildComparacionFlujos() {
     if (lUP.includes('TOTAL')) return {bg:'rgba(71,232,255,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff'};
     return {bg:'',bt:'',fw:'400',c:'var(--text)'};
   };
+  // Equivalente real: valor del período B ajustado por inflación (en pesos actuales)
+  // Muestra cuánto habría costado si la inflación lo hubiera incrementado
+  const fmtMEq = v => v==null ? '—' : '<span style="color:var(--dim)">≈ ' + fmtM(v) + '</span>';
+
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Rubro</th>
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:#47e8ff;font-family:var(--mono);border-bottom:1px solid var(--bd)">${fA.periodo}</th>
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">${fB.periodo}</th>
+    ${ipc?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Valor de ${fB.periodo} actualizado por IPC ${ipc}%">${fB.periodo} + IPC</th>`:''}
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Var. nominal</th>
-    <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Var. real</th>
+    <th style="padding:8px 10px;text-align:right;font-size:9px;color:#e8c84a;font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Variación real usando fórmula Fisher: (1+nom)/(1+ipc)−1">Var. real</th>
   </tr></thead><tbody>` +
   allKeys.map(k => {
     const rA = labelsA.get(k);
@@ -8630,7 +8497,10 @@ function buildComparacionFlujos() {
     const lbl = rA?.label || rB?.label || k;
     const tipo = rA?.tipo || rB?.tipo || 'egreso';
     const vn = (vA!=null&&vB!=null&&vB!==0) ? (vA-vB)/Math.abs(vB)*100 : null;
-    const vr = (vn!=null&&ipc) ? vn-ipc : null;
+    // Fisher formula for real variation
+    const vr = (vn!=null&&ipc) ? ((1 + vn/100) / (1 + ipc/100) - 1) * 100 : null;
+    // Equivalent: vB adjusted by inflation (what vB would be at current prices)
+    const vBEq = (vB!=null&&ipc) ? vB * (1 + ipc/100) : null;
     const st = _estComp(lbl, tipo);
     const cv = vn==null?'var(--dim)':vn>0?'var(--neg)':'var(--pos)';
     const cr = vr==null?'var(--dim)':vr>0?'var(--neg)':'var(--pos)';
@@ -8638,6 +8508,7 @@ function buildComparacionFlujos() {
       <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};border-bottom:1px solid var(--bd2)">${fmtM(vA)}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtM(vB)}</td>
+      ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtMEq(vBEq)}</td>`:''}
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${fmtP(vn)}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${fmtP(vr)}</td>
     </tr>`;
@@ -11069,14 +10940,61 @@ function buildAuditERProvisorio(emp) {
     return 'var(--neg)';
   };
 
+  // KPI resumen global: último año con ambas fuentes
+  const lastYr = aniosCruce[aniosCruce.length - 1];
+  const _kpiSumHtml = (() => {
+    const erData = erM[lastYr];
+    const balAcc = erB[lastYr] || {};
+    const provAcc2 = {};
+    if (erData && Array.isArray(erData.filas)) {
+      erData.filas.forEach(f => {
+        const clave = MAP_M2B[f.conceptoStd];
+        if (!clave) return;
+        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
+        if (suma !== 0) provAcc2[clave] = (provAcc2[clave] || 0) + suma;
+      });
+      if (provAcc2.utilidad_bruta == null && provAcc2.ventas_netas != null)
+        provAcc2.utilidad_bruta = (provAcc2.ventas_netas||0) + (provAcc2.costo_ventas||0);
+      if (provAcc2.resultado_operativo == null && provAcc2.utilidad_bruta != null)
+        provAcc2.resultado_operativo = (provAcc2.utilidad_bruta||0) + (provAcc2.gastos_admin||0) + (provAcc2.gastos_comercializacion||0);
+    }
+    const vpV = provAcc2.ventas_netas, vbV = balAcc.ventas_netas;
+    const kpis = [
+      { lbl:'Margen bruto', p: vpV?provAcc2.utilidad_bruta/vpV*100:null, b: vbV?balAcc.utilidad_bruta/vbV*100:null },
+      { lbl:'Margen operativo', p: vpV?provAcc2.resultado_operativo/vpV*100:null, b: vbV?balAcc.resultado_operativo/vbV*100:null },
+      { lbl:'Margen neto', p: vpV?provAcc2.resultado_neto/vpV*100:null, b: vbV?balAcc.resultado_neto/vbV*100:null },
+    ].filter(k => k.p != null || k.b != null);
+    if (!kpis.length) return '';
+    const fP = v => v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%';
+    const cP = v => v==null?'var(--dim)':v>=0?'var(--pos)':'var(--neg)';
+    return `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--bd);background:var(--s2)">
+      ${kpis.map(k=>`<div style="padding:6px 12px;background:var(--s1);border:1px solid var(--bd);border-radius:4px;min-width:130px">
+        <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono);margin-bottom:4px;letter-spacing:.06em">${k.lbl.toUpperCase()} ${lastYr}</div>
+        <div style="display:flex;gap:12px;align-items:baseline">
+          <div>
+            <div style="font-size:7px;color:var(--dim)">Provisorio</div>
+            <div style="font-size:14px;font-weight:700;color:${cP(k.p)};font-family:var(--mono)">${fP(k.p)}</div>
+          </div>
+          <div style="color:var(--dim);font-size:10px">→</div>
+          <div>
+            <div style="font-size:7px;color:var(--dim)">Balance</div>
+            <div style="font-size:14px;font-weight:700;color:${cP(k.b)};font-family:var(--mono)">${fP(k.b)}</div>
+          </div>
+          ${k.p!=null&&k.b!=null?`<div style="font-size:8px;color:${diffColor(k.p-k.b)};font-family:var(--mono);margin-left:4px">${k.p-k.b>0?'+':''}${(k.p-k.b).toFixed(1)}pp</div>`:''}
+        </div>
+      </div>`).join('')}
+    </div>`;
+  })();
+
   let html = `<div class="card" style="padding:0;overflow:hidden">
     <div class="card-hd" style="padding:10px 16px;border-bottom:1px solid var(--bd)">
       <span class="card-hd-title">🔎 Auditoría ER provisorio vs balance formal</span>
       <span class="card-hd-unit" style="color:var(--dim)">composición % sobre ventas</span>
     </div>
-    <div style="padding:10px 16px;font-size:9px;color:var(--dim);line-height:1.5;border-bottom:1px solid var(--bd)">
-      Compara la composición porcentual del ER provisorio (datos mensuales acumulados) contra el estado de resultados del balance formal cargado en el módulo BALANCE para los mismos años. Una diferencia &gt;8 pp indica posible inconsistencia contable.
-    </div>`;
+    <div style="padding:8px 16px;font-size:9px;color:var(--dim);line-height:1.5;border-bottom:1px solid var(--bd)">
+      Compara la composición % del ER provisorio (datos mensuales acumulados) contra el balance formal. Diferencia &gt;8 pp indica posible inconsistencia contable.
+    </div>
+    ${_kpiSumHtml}`;
 
   for (const yr of aniosCruce) {
     // Sumar datos mensuales del ER provisorio
@@ -11140,8 +11058,9 @@ function buildAuditERProvisorio(emp) {
         <td style="text-align:right;padding:4px 10px;color:#47e8ff">${fmtPct(pctP)}</td>
         <td style="text-align:right;padding:4px 10px">${fmt(vB)}</td>
         <td style="text-align:right;padding:4px 10px;color:#e8ff47">${fmtPct(pctB)}</td>
-        <td style="text-align:right;padding:4px 12px;color:${diffColor(delta)};font-weight:${delta!=null&&Math.abs(delta)>=8?'700':'400'}">
-          ${delta != null ? (Math.abs(delta)<0.1?'≈0':fmtPct(delta)) : '—'}
+        <td style="text-align:right;padding:4px 12px;font-weight:${delta!=null&&Math.abs(delta)>=8?'700':'400'}">
+          <span style="color:${diffColor(delta)}">${delta != null ? (Math.abs(delta)<0.1?'≈0':fmtPct(delta)) : '—'}</span>
+          ${delta!=null&&Math.abs(delta)>=0.5?`<div style="margin-top:2px;height:2px;border-radius:1px;background:var(--bd2);width:48px;display:inline-block;vertical-align:middle;position:relative;overflow:hidden"><div style="position:absolute;top:0;height:100%;background:${diffColor(delta)};width:${Math.min(Math.abs(delta)/20*100,100)}%"></div></div>`:''}
         </td>
       </tr>`;
     }
@@ -11215,6 +11134,9 @@ function buildEvolucionMensual(emp) {
     <button onclick="window._erMensualVista='original';buildEvolucionMensual('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
       background:${vista==='original'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='original'?'#001':'var(--dim)'}">ER Original (completo)</button>
+    <button onclick="window._erMensualVista='tendencia';buildEvolucionMensual('${empJS}')"
+      style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
+      background:${vista==='tendencia'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='tendencia'?'#001':'var(--dim)'}">📈 Tendencia</button>
     <span style="font-size:9px;color:var(--dim);margin-left:8px">Año reporte:</span>
     <select id="er-rpt-anio" onchange="window._erRptAnio=this.value||null;buildEvolucionMensual('${empJS}')"
       style="font-size:10px;padding:3px 6px;background:var(--s2,#1a1f2e);border:1px solid var(--bd);border-radius:4px;color:var(--text)">
@@ -11234,6 +11156,7 @@ function buildEvolucionMensual(emp) {
       border:1px solid var(--bd);border-radius:3px;color:var(--text)" />`;
   };
 
+  const _tendCfgs = []; // collect chart configs for tendencia view
   const bloques = anios.map(yr => {
     const erData = erM[yr];
     if (!erData || !Array.isArray(erData.filas) || erData.filas.length === 0) {
@@ -11260,6 +11183,7 @@ function buildEvolucionMensual(emp) {
     };
     const thMeses = mesesMostrar.map(m=>`<th style="padding:5px 6px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">${lblPeriodo(m)}</th>`).join('');
     const thTotal = `<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--acc,#47e8ff);border-bottom:2px solid var(--bd);border-left:1px solid var(--bd)">TOTAL</th>`;
+    const thPct = (vista==='estandar') ? `<th style="padding:5px 8px;text-align:right;font-size:8.5px;color:var(--dim);border-bottom:2px solid var(--bd);border-left:1px dashed var(--bd)">% v.</th>` : '';
     const thEdit = edit ? '<th style="border-bottom:2px solid var(--bd)"></th>' : '';
 
     let filasHTML;
@@ -11435,6 +11359,61 @@ function buildEvolucionMensual(emp) {
       ];
       const calcConceptos = ['utilBruta','resOperativo','resAntesImp','resEjercicio'];
 
+      // ── Vista Tendencia: line chart ──────────────────────────
+      if (vista === 'tendencia') {
+        const chId = 'ch-er-tend-' + yr;
+        const chLabels = mesesMostrar.map(m => lblPeriodo(m));
+        const chDs = [
+          { lbl:'Ventas', clave:'ventas',       color:'#47e8ff' },
+          { lbl:'Util. Bruta', clave:'utilBruta',    color:'#2ecc8a' },
+          { lbl:'Res. Operativo', clave:'resOperativo', color:'#e8c84a' },
+          { lbl:'Res. Ejercicio', clave:'resEjercicio', color:'#ff8c47' },
+        ].map(s => ({
+          label: s.lbl,
+          data: mesesMostrar.map(m => valConcMes[s.clave]?.[m] ?? null),
+          borderColor: s.color,
+          backgroundColor: s.color + '18',
+          fill: false,
+          tension: .3,
+          pointRadius: 3,
+          spanGaps: true,
+        })).filter(d => d.data.some(v => v != null));
+
+        // KPI resumen anual
+        const vt = mesesMostrar.reduce((s,m)=>(s)+(valConcMes.ventas?.[m]||0),0);
+        const ro = mesesMostrar.reduce((s,m)=>(s)+(valConcMes.resOperativo?.[m]||0),0);
+        const re = mesesMostrar.reduce((s,m)=>(s)+(valConcMes.resEjercicio?.[m]||0),0);
+        const fmtK = v => { const abs=Math.abs(v); return (v<0?'−':'')+(abs>=1e6?(abs/1e6).toFixed(1)+'M':abs>=1e3?(abs/1e3).toFixed(0)+'k':abs.toFixed(0)); };
+        const kpiHtml = vt || ro ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          ${vt?`<div style="padding:6px 12px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #47e8ff;border-radius:4px">
+            <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">VENTAS ${yr}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text);font-family:var(--mono)">$${fmtK(vt)}</div></div>`:''}
+          ${ro?`<div style="padding:6px 12px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #e8c84a;border-radius:4px">
+            <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">RES. OPERATIVO</div>
+            <div style="font-size:15px;font-weight:700;color:${ro<0?'var(--neg)':'#e8c84a'};font-family:var(--mono)">$${fmtK(ro)}</div>
+            ${vt?`<div style="font-size:8px;color:var(--dim)">${(ro/vt*100).toFixed(1)}% margen</div>`:''}
+          </div>`:''}
+          ${re?`<div style="padding:6px 12px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #ff8c47;border-radius:4px">
+            <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">RES. EJERCICIO</div>
+            <div style="font-size:15px;font-weight:700;color:${re<0?'var(--neg)':'#ff8c47'};font-family:var(--mono)">$${fmtK(re)}</div>
+            ${vt?`<div style="font-size:8px;color:var(--dim)">${(re/vt*100).toFixed(1)}% margen</div>`:''}
+          </div>`:''}
+        </div>` : '';
+
+        _tendCfgs.push({ id: chId, type:'line',
+          data:{ labels: chLabels, datasets: chDs },
+          opts:{ scales:{ y:{ ticks:{ callback: v => { const a=Math.abs(v); return (v<0?'-':'')+(a>=1e6?(a/1e6).toFixed(1)+'M':a>=1e3?(a/1e3).toFixed(0)+'k':a); } } } },
+            plugins:{ legend:{ display:true, labels:{ font:{size:10}, boxWidth:14 } } } }
+        });
+        return `<div style="margin-bottom:20px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--acc,#47e8ff)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}</div>
+          ${kpiHtml}
+          <div class="card" style="padding:10px 10px 6px;position:relative">
+            <canvas id="${chId}" style="width:100%;height:220px"></canvas>
+          </div>
+        </div>`;
+      }
+
       filasHTML = estructura.map(e => {
         const calc = calcConceptos.includes(e.concepto);
         const celdas = mesesMostrar.map(m=>{
@@ -11443,9 +11422,12 @@ function buildEvolucionMensual(emp) {
         }).join('');
         const totFila = mesesMostrar.reduce((s,m)=> s + (valConcMes[e.concepto]?.[m] || 0), 0);
         const hayDato = mesesMostrar.some(m => valConcMes[e.concepto]?.[m] != null);
+        const ventasTot = mesesMostrar.reduce((s,m)=> s + (valConcMes.ventas?.[m] || 0), 0);
+        const pct = (hayDato && ventasTot && e.concepto !== 'ventas') ? (totFila / ventasTot * 100) : null;
         const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${hayDato?fmt(totFila):'—'}</td>`;
+        const pctCell = `<td style="padding:4px 8px;text-align:right;font-size:8.5px;color:${pct==null?'var(--dim)':pct<0?'var(--neg)':'var(--dim)'};border-left:1px dashed var(--bd)">${pct!=null?(pct>=0?'+':'')+pct.toFixed(1)+'%':'—'}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
-        return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}</td>${celdas}${totCell}${edit?'<td></td>':''}</tr>`;
+        return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}</td>${celdas}${totCell}${pctCell}${edit?'<td></td>':''}</tr>`;
       }).join('');
     }
 
@@ -11454,7 +11436,7 @@ function buildEvolucionMensual(emp) {
     return `<div style="margin-bottom:20px">
       <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--acc,#47e8ff)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${edit?' · modo edición':''}</div>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
-        <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${thMeses}${thTotal}${thEdit}</tr></thead>
+        <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${thMeses}${thTotal}${thPct}${thEdit}</tr></thead>
         <tbody>${filasHTML}</tbody>
       </table></div>
       ${btnAgregar}
@@ -11465,6 +11447,11 @@ function buildEvolucionMensual(emp) {
     En modo edición: los valores en celdas se editan directamente. Los subtotales marcados "auto" (Utilidad Bruta, Resultado Operativo, Resultado antes Imp.) se recalculan solos. Asigná el concepto estándar a cada fila en la vista Original para que el recálculo funcione. No olvides publicar a Sheets al terminar.</div>` : '';
 
   cont.innerHTML = toggle + ayuda + (bloques || '<div style="color:var(--dim);font-size:10px;padding:8px">Sin datos mensuales.</div>');
+  if (_tendCfgs.length) {
+    setTimeout(() => {
+      _tendCfgs.forEach(cfg => mkChart(cfg.id, cfg.type, cfg.data, cfg.opts));
+    }, 50);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
