@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-console.log('%c[LR Dashboard] Versión con ER mensual editable — ' + new Date().toISOString(), 'color:#47e8ff;font-weight:bold');
+console.log('%c[LR Dashboard] Versión con ER mensual editable — ' + new Date().toISOString(), 'color:var(--acc);font-weight:bold');
 
 // ── Archivo modelo — generado con SheetJS en tiempo real ─────────────────────
 function descargarModelo() {
@@ -100,6 +100,8 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --chart-tick: #4a5268;
   --chart-grid: #10121a;
   --radius-card: 6px;
+  --acc:    var(--y21);  /* accent alias — nunca usar #47e8ff hardcodeado en números */
+  --num:    var(--text); /* color base para valores numéricos */
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -484,7 +486,7 @@ body {
   transition: background .3s, color .3s;
   background-image:
     radial-gradient(ellipse 60% 40% at 80% 20%, rgba(196,71,255,.04) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 50% at 10% 80%, rgba(71,232,255,.03) 0%, transparent 70%);
+    radial-gradient(ellipse 40% 50% at 10% 80%, rgba(100,100,80,.03) 0%, transparent 70%);
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────── */
@@ -555,14 +557,14 @@ body {
 .chip.on-21, .chip.on-22, .chip.on-23, .chip.on-24 { font-weight: 600; }
 /* Rubro chips */
 .chip.on-ali { border-color:#ff8c47; color:#ff8c47; background:rgba(255,140,71,.07); }
-.chip.on-ser { border-color:#47e8ff; color:#47e8ff; background:rgba(71,232,255,.07); }
+.chip.on-ser { border-color:var(--acc); color:var(--acc); background:rgba(100,100,80,.07); }
 .chip.on-ind { border-color:#c447ff; color:#c447ff; background:rgba(196,71,255,.07); }
 .chip.on-pro { border-color:#1a9e68; color:#1a9e68; background:rgba(71,255,180,.07); }
 .chip.on-sin { border-color:var(--dim); color:var(--text); background:rgba(74,82,104,.07); }
 /* Rubro badge inline */
 .rb { display:inline-block; padding:2px 6px; border-radius:2px; font-size:8.5px; font-family:var(--mono); }
 .rb-ali { background:rgba(255,140,71,.12); color:#ff8c47; border:1px solid rgba(255,140,71,.25); }
-.rb-ser { background:rgba(71,232,255,.12); color:#47e8ff; border:1px solid rgba(71,232,255,.25); }
+.rb-ser { background:rgba(100,100,80,.12); color:var(--acc); border:1px solid rgba(100,100,80,.25); }
 .rb-ind { background:rgba(196,71,255,.12); color:#c447ff; border:1px solid rgba(196,71,255,.25); }
 .rb-pro { background:rgba(71,255,180,.12); color:#1a9e68; border:1px solid rgba(71,255,180,.25); }
 .rb-sin { background:rgba(74,82,104,.12);  color:var(--dim); border:1px solid var(--bd); }
@@ -1634,7 +1636,7 @@ self.onmessage = async (e) => {
             title="Exportar / Sheets">⬇ Exportar ▾</button>
           <button class="tba-btn" onclick="imprimirPanelActivo()"
             title="Generar reporte PDF del panel activo"
-            style="color:#47e8ff;border-color:#47e8ff66;background:rgba(71,232,255,.08);
+            style="color:var(--acc);border-color:#47e8ff66;background:rgba(100,100,80,.08);
             font-weight:500;padding:4px 10px;display:flex;align-items:center;gap:5px">
             🖨 <span style="font-size:9px">Reporte</span>
           </button>
@@ -1761,7 +1763,7 @@ self.onmessage = async (e) => {
           onfocus="this.style.borderColor='#47e8ff'" onblur="this.style.borderColor='var(--bd2)'"
           onkeydown="if(event.key==='Enter')cambiarPassPropia()">
         <button onclick="cambiarPassPropia()" style="width:100%;padding:6px;
-          background:rgba(71,232,255,.08);border:1px solid #47e8ff44;color:#47e8ff;
+          background:rgba(100,100,80,.08);border:1px solid #47e8ff44;color:var(--acc);
           font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
           Actualizar contraseña
         </button>
@@ -1838,7 +1840,7 @@ self.onmessage = async (e) => {
                 ↑ Publicar ahora
               </button>
               <button onclick="syncFromCloud(false,{forceReplace:true});toggleSavePanel()" style="padding:7px 10px;
-                background:rgba(71,232,255,.08);border:1px solid #47e8ff44;color:#47e8ff;
+                background:rgba(100,100,80,.08);border:1px solid #47e8ff44;color:var(--acc);
                 font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
                 ↓ Actualizar
               </button>
@@ -1907,8 +1909,8 @@ self.onmessage = async (e) => {
 
       <!-- Botones sync -->
       <div style="display:flex;gap:8px;margin-bottom:6px">
-        <button onclick="syncFromCloud(false,{forceReplace:true})" style="flex:1;padding:7px;background:rgba(71,232,255,.1);
-          border:1px solid #47e8ff55;color:#47e8ff;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+        <button onclick="syncFromCloud(false,{forceReplace:true})" style="flex:1;padding:7px;background:rgba(100,100,80,.1);
+          border:1px solid #47e8ff55;color:var(--acc);font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
           ↓ Actualizar desde Sheets
         </button>
         <button onclick="syncToCloud()" style="flex:1;padding:7px;background:rgba(71,255,180,.1);
@@ -1964,8 +1966,8 @@ self.onmessage = async (e) => {
             </ol>
           </div>
           <button onclick="descargarBridge()"
-            style="width:100%;padding:7px;background:rgba(71,232,255,.08);border:1px solid #47e8ff44;
-            color:#47e8ff;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+            style="width:100%;padding:7px;background:rgba(100,100,80,.08);border:1px solid #47e8ff44;
+            color:var(--acc);font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
             ⬇ Descargar lr_bridge_v3.gs
           </button>
         </div>
@@ -2259,8 +2261,8 @@ self.onmessage = async (e) => {
             onchange="importarNomina(this.files[0]);this.value=''">
         </label>
         <button onclick="exportarNomina()"
-          style="padding:3px 9px;background:rgba(71,232,255,.07);border:1px solid rgba(71,232,255,.25);
-          color:#47e8ff;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;height:26px"
+          style="padding:3px 9px;background:rgba(100,100,80,.07);border:1px solid rgba(100,100,80,.25);
+          color:var(--acc);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;height:26px"
           title="Exportar nómina actual a Excel">⬇ Exportar nómina</button>
         <button onclick="toggleCargaManualPersonal()"
           style="padding:3px 9px;background:rgba(255,140,71,.07);border:1px solid rgba(255,140,71,.25);
@@ -2597,7 +2599,7 @@ self.onmessage = async (e) => {
           <div style="font-size:9px;color:var(--dim);margin-bottom:10px;line-height:1.6">
             INDEC publica el IPC mensual los días 10-15 de cada mes. Fuente oficial:
             <a href="https://www.indec.gob.ar/indec/web/Nivel4-Tema-3-5-31" target="_blank"
-               style="color:#47e8ff;text-decoration:none">indec.gob.ar → Precios → IPC</a>
+               style="color:var(--acc);text-decoration:none">indec.gob.ar → Precios → IPC</a>
           </div>
           <div id="infl-meses-estado" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
           <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
@@ -2616,7 +2618,7 @@ self.onmessage = async (e) => {
                 style="width:80px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9.5px;padding:4px 8px;border-radius:3px;outline:none">
             </div>
             <button onclick="actualizarInflacionMensual()"
-              style="background:rgba(71,232,255,.1);border:1px solid #47e8ff44;color:#47e8ff;font-size:9px;padding:5px 12px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
+              style="background:rgba(100,100,80,.1);border:1px solid #47e8ff44;color:var(--acc);font-size:9px;padding:5px 12px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
               ✓ Guardar dato
             </button>
             <span id="infl-update-msg" style="font-size:9px;font-family:var(--mono)"></span>
@@ -2667,15 +2669,15 @@ self.onmessage = async (e) => {
           background:var(--s2);border-radius:0 0 5px 5px">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
             <span style="font-size:8.5px;text-transform:uppercase;letter-spacing:.1em;
-              color:#47e8ff;font-family:var(--mono);white-space:nowrap">+ Nuevo rubro</span>
+              color:var(--acc);font-family:var(--mono);white-space:nowrap">+ Nuevo rubro</span>
             <input id="rub-nuevo-nombre" type="text" placeholder="Nombre del rubro…"
               style="flex:1;min-width:140px;padding:4px 8px;background:var(--s3);
               border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
               font-size:9.5px;border-radius:3px;outline:none"
               onkeydown="if(event.key==='Enter')agregarRubroNuevo()">
             <button onclick="agregarRubroNuevo()"
-              style="padding:4px 12px;background:rgba(71,232,255,.1);border:1px solid #47e8ff44;
-              color:#47e8ff;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              style="padding:4px 12px;background:rgba(100,100,80,.1);border:1px solid #47e8ff44;
+              color:var(--acc);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
               + Agregar rubro</button>
           </div>
           <div style="height:1px;background:var(--bd);margin:8px 0"></div>
@@ -2774,8 +2776,8 @@ self.onmessage = async (e) => {
                 </select>
               </div>
               <button onclick="gestionFusionar()"
-                style="padding:8px 16px;background:rgba(71,232,255,.08);border:1px solid rgba(71,232,255,.4);
-                color:#47e8ff;font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono);
+                style="padding:8px 16px;background:rgba(100,100,80,.08);border:1px solid rgba(100,100,80,.4);
+                color:var(--acc);font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono);
                 white-space:nowrap;flex-shrink:0">
                 Fusionar →
               </button>
@@ -2975,8 +2977,8 @@ self.onmessage = async (e) => {
           flex:1;min-height:14px"></div>
         <button onclick="toggleAuditoriaPanel()"
           id="btn-auditoria-trans"
-          style="padding:3px 9px;background:rgba(71,232,255,.07);border:1px solid rgba(71,232,255,.25);
-          color:#47e8ff;font-family:var(--mono);font-size:8px;border-radius:3px;
+          style="padding:3px 9px;background:rgba(100,100,80,.07);border:1px solid rgba(100,100,80,.25);
+          color:var(--acc);font-family:var(--mono);font-size:8px;border-radius:3px;
           cursor:pointer;white-space:nowrap">🔍 Auditoría</button>
         <button onclick="toggleClasifPanel()"
           id="btn-clasif-trans"
@@ -3018,9 +3020,9 @@ self.onmessage = async (e) => {
       </div>
 
       <div id="panel-auditoria-trans" style="display:none;margin-bottom:12px;padding:12px 14px;
-        background:rgba(71,232,255,.04);border:1px solid rgba(71,232,255,.2);border-radius:5px">
+        background:rgba(100,100,80,.04);border:1px solid rgba(100,100,80,.2);border-radius:5px">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
-          color:#47e8ff;margin-bottom:10px;font-family:var(--mono)">🔍 Auditoría de registros cargados</div>
+          color:var(--acc);margin-bottom:10px;font-family:var(--mono)">🔍 Auditoría de registros cargados</div>
         <div id="auditoria-content"></div>
       </div>
 
@@ -3064,8 +3066,8 @@ self.onmessage = async (e) => {
               Reasigna las categorías automáticamente por beneficiario.
             </div>
             <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;
-              background:rgba(71,232,255,.1);border:1px solid #47e8ff40;
-              color:#47e8ff;font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer;position:relative">
+              background:rgba(100,100,80,.1);border:1px solid #47e8ff40;
+              color:var(--acc);font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer;position:relative">
               📥 Importar clasificaciones
               <input type="file" accept=".xlsx,.xls" style="position:absolute;opacity:0;inset:0;cursor:pointer"
                 onchange="importarClasificaciones(this.files[0]);this.value=''">
@@ -3112,8 +3114,8 @@ self.onmessage = async (e) => {
               <option value="">Todos los años</option>
             </select>
             <button onclick="corregirMesDesdeObservacion()"
-              style="padding:5px 12px;background:rgba(71,232,255,.1);border:1px solid #47e8ff40;
-              color:#47e8ff;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
+              style="padding:5px 12px;background:rgba(100,100,80,.1);border:1px solid #47e8ff40;
+              color:var(--acc);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">
               ▶ Ejecutar extracción
             </button>
             <span id="corr-obs-resultado" style="font-size:9px;color:var(--dim);font-family:var(--mono)"></span>
@@ -3334,7 +3336,7 @@ self.onmessage = async (e) => {
         <button class="imp-ctrl-btn" onclick="descargarModelo()" title="Descargar Excel modelo ER" style="border-color:var(--y22);color:var(--y22);margin-left:auto">
           ⬇ Modelo ER
         </button>
-        <button class="imp-ctrl-btn" onclick="descargarModeloTransferencias()" title="Descargar Excel modelo para transferencias SIDIF" style="border-color:#47e8ff;color:#47e8ff">
+        <button class="imp-ctrl-btn" onclick="descargarModeloTransferencias()" title="Descargar Excel modelo para transferencias SIDIF" style="border-color:var(--acc);color:var(--acc)">
           ⬇ Modelo transferencias
         </button>
         <span id="imp-ctrl-msg" style="font-size:9px;color:var(--dim);margin-left:4px"></span>
@@ -3525,8 +3527,8 @@ self.onmessage = async (e) => {
               onchange="loadBalanceArchivo(this.files[0])">
           </label>
           <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;
-            background:rgba(71,232,255,.08);border:1px solid #47e8ff55;border-radius:3px;
-            cursor:pointer;font-size:11px;color:#47e8ff;font-family:var(--mono)">
+            background:rgba(100,100,80,.08);border:1px solid #47e8ff55;border-radius:3px;
+            cursor:pointer;font-size:11px;color:var(--acc);font-family:var(--mono)">
             📊 Cargar balance Excel
             <input type="file" id="file-bal-xlsx" accept=".xlsx,.xls" style="display:none"
               onchange="loadBalanceArchivo(this.files[0])">
@@ -3647,12 +3649,12 @@ self.onmessage = async (e) => {
             </div>
             <!-- Comparación entre períodos -->
             <div id="bal-comp-selector-row" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
-              <span style="font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:#47e8ff;white-space:nowrap">
+              <span style="font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);white-space:nowrap">
                 ⟺ Comparar:
               </span>
               <div id="bal-comp-checks" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
               <button onclick="buildComparacionBalances()" style="padding:4px 10px;
-                background:rgba(71,232,255,.1);border:1px solid #47e8ff55;color:#47e8ff;
+                background:rgba(100,100,80,.1);border:1px solid #47e8ff55;color:var(--acc);
                 font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);white-space:nowrap">
                 Ver →
               </button>
@@ -3775,7 +3777,7 @@ self.onmessage = async (e) => {
             <!-- Estado Patrimonial -->
             <div style="margin-bottom:14px">
               <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
-                color:#47e8ff;margin-bottom:8px;font-weight:600">Estado de Situación Patrimonial</div>
+                color:var(--acc);margin-bottom:8px;font-weight:600">Estado de Situación Patrimonial</div>
               <div style="display:flex;flex-direction:column;gap:6px"
                 id="bal-editor-patrimonial"></div>
             </div>
@@ -3873,8 +3875,8 @@ self.onmessage = async (e) => {
       </label>
 
       <button onclick="toggleFlujoManual()"
-        style="padding:5px 14px;background:rgba(71,232,255,.1);
-        border:1.5px solid #47e8ff;color:#47e8ff;border-radius:4px;
+        style="padding:5px 14px;background:rgba(100,100,80,.1);
+        border:1.5px solid #47e8ff;color:var(--acc);border-radius:4px;
         cursor:pointer;font-family:var(--mono);font-size:10px">
         ✏ Carga manual
       </button>
@@ -3924,7 +3926,7 @@ self.onmessage = async (e) => {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">
-            IPC acum. % <span style="color:#47e8ff;font-weight:400">(auto)</span>
+            IPC acum. % <span style="color:var(--acc);font-weight:400">(auto)</span>
           </label>
           <input id="fc-ipc" type="number" step="0.1" placeholder="0.0" value="0"
             style="width:80px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
@@ -3949,10 +3951,10 @@ self.onmessage = async (e) => {
 
     <!-- ── Carga manual ────────────────────────────────────────── -->
     <div id="panel-flujo-manual" style="display:none;margin-bottom:14px;
-      padding:16px 18px;background:rgba(71,232,255,.03);
-      border:1px solid rgba(71,232,255,.2);border-radius:6px">
+      padding:16px 18px;background:rgba(100,100,80,.03);
+      border:1px solid rgba(100,100,80,.2);border-radius:6px">
       <div style="font-size:9px;text-transform:uppercase;letter-spacing:.12em;
-        color:#47e8ff;font-family:var(--mono);margin-bottom:14px;font-weight:600">
+        color:var(--acc);font-family:var(--mono);margin-bottom:14px;font-weight:600">
         ✏ Registrar flujo manualmente
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px">
@@ -4038,8 +4040,8 @@ self.onmessage = async (e) => {
       <!-- Botones siempre visibles -->
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="buildVistaIndividualFlujo()"
-          style="padding:6px 16px;background:rgba(71,232,255,.1);border:1.5px solid #47e8ff;
-          color:#47e8ff;font-family:var(--mono);font-size:10px;font-weight:600;
+          style="padding:6px 16px;background:rgba(100,100,80,.1);border:1.5px solid #47e8ff;
+          color:var(--acc);font-family:var(--mono);font-size:10px;font-weight:600;
           border-radius:4px;cursor:pointer">
           📋 Ver flujo individual
         </button>
@@ -4445,7 +4447,7 @@ function renderUserList() {
           style="background:none;border:none;color:var(--dim);cursor:pointer;
           font-size:11px;padding:1px 3px" title="Ver/ocultar">👁</button>
         <button onclick="editarPassUsuario('${u}','${passId}')"
-          style="background:rgba(71,232,255,.1);border:1px solid #47e8ff30;color:#47e8ff;
+          style="background:rgba(100,100,80,.1);border:1px solid #47e8ff30;color:var(--acc);
           font-size:8.5px;padding:2px 6px;border-radius:3px;cursor:pointer;
           font-family:var(--mono)" title="Guardar nueva contraseña">✓</button>
       </div>
@@ -4714,7 +4716,7 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   td[style*="color:var(--neg)"], td[style*="color: var(--neg)"] { color: #a00 !important; }
   td[style*="color:#1a9e68"], td[style*="color:#1a9e68"] { color: #070 !important; }
   td[style*="color:#b8a000"], td[style*="color:#b8a000"] { color: #7a6000 !important; }
-  td[style*="color:#47e8ff"]  { color: #006080 !important; }
+  td[style*="color:var(--acc)"]  { color: #006080 !important; }
 
   /* ── Grillas ─────────────────────────────────────────────────────── */
   .rowfull { width: 100% !important; display: block !important; }
@@ -4743,7 +4745,7 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   [style*="color:var(--dim)"] { color: #666 !important; }
   [style*="color:var(--text)"]{ color: #111 !important; }
   [style*="color:#1a9e68"]    { color: #087848 !important; }
-  [style*="color:#47e8ff"]    { color: #006080 !important; }
+  [style*="color:var(--acc)"]    { color: #006080 !important; }
   [style*="color:#b8a000"] { color: #7a6000 !important; }
 
   /* ── Página ──────────────────────────────────────────────────────── */
@@ -4807,7 +4809,7 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   /* ── Textos de color → versiones oscuras legibles en papel ─────── */
   [style*="color:#1a9e68"] { color:#065030 !important; }
   [style*="color:#b8a000"] { color:#5a4800 !important; }
-  [style*="color:#47e8ff"] { color:#004a5c !important; }
+  [style*="color:var(--acc)"] { color:#004a5c !important; }
   [style*="color:#ff8c47"] { color:#7a3800 !important; }
   [style*="color:var(--neg)"] { color:#8a0000 !important; }
 
@@ -6948,7 +6950,7 @@ function _poblarGestionSelects() {
         ${pares.map(([a,b])=>`<div style="font-size:9px;font-family:var(--mono);color:var(--dim);margin-bottom:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="color:var(--text)">${a}</span> ≈ <span style="color:var(--text)">${b}</span>
           <button onclick="document.getElementById('gest-merge-from').value='${a.replace(/'/g,"")}';document.getElementById('gest-merge-to').value='${b.replace(/'/g,"")}';document.getElementById('gest-merge-from').scrollIntoView({behavior:'smooth',block:'center'})"
-            style="padding:1px 8px;font-size:8px;background:transparent;border:1px solid rgba(71,232,255,.4);color:#47e8ff;border-radius:3px;cursor:pointer;font-family:var(--mono)">fusionar</button>
+            style="padding:1px 8px;font-size:8px;background:transparent;border:1px solid rgba(100,100,80,.4);color:var(--acc);border-radius:3px;cursor:pointer;font-family:var(--mono)">fusionar</button>
         </div>`).join('')}
       </div>`;
     } else {
@@ -8144,7 +8146,7 @@ function _renderListaFlujos() {
       <div style="font-size:11px;color:var(--dim);line-height:1.7;max-width:360px;margin:0 auto">
         Para comenzar, hacé clic en <strong style="color:#1a9e68">📥 Cargar Excel flujo</strong>
         y seleccioná el archivo Excel con la hoja <em>FLUJO X MES</em>.<br>
-        También podés usar <strong style="color:#47e8ff">✏ Carga manual</strong>
+        También podés usar <strong style="color:var(--acc)">✏ Carga manual</strong>
         para ingresar los valores directamente.
       </div>
     </td></tr>`;
@@ -8163,7 +8165,7 @@ function _renderListaFlujos() {
       : null;
     const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
     const tipoTag = f.tipo === 'proyectado'
-      ? `<span style="color:#47e8ff;font-size:8px">PROY</span>`
+      ? `<span style="color:var(--acc);font-size:8px">PROY</span>`
       : `<span style="color:#ff8c47;font-size:8px">REAL</span>`;
     return `<tr>
       <td style="font-weight:600">${f.empresa}</td>
@@ -8178,7 +8180,7 @@ function _renderListaFlujos() {
       <td>
         <button onclick="editarFlujo('${f.clave}')"
           style="padding:2px 6px;background:none;border:1px solid #47e8ff;
-          color:#47e8ff;font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">✏</button>
+          color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">✏</button>
         <button onclick="_eliminarFlujo('${f.clave}')"
           style="padding:2px 6px;background:none;border:1px solid var(--neg);
           color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
@@ -8324,15 +8326,15 @@ function buildVistaIndividualFlujo() {
     if (tipo === 'ingreso')                          return { bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#47ffb4',tag:'' };
     if (tipo === 'total')                            return { bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)',tag:'TOTAL EGR' };
     if (tipo === 'resultado')                        return { bg:'rgba(232,255,71,.07)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)',tag:'RESULTADO' };
-    if (lUP.includes('TOTAL'))                       return { bg:'rgba(71,232,255,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff',tag:'SUBTOTAL' };
+    if (lUP.includes('TOTAL'))                       return { bg:'rgba(100,100,80,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff',tag:'SUBTOTAL' };
     return { bg:'',bt:'',fw:'400',c:'var(--text)',tag:'' };
   };
 
   const tbl = document.getElementById('tbl-flujos');
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Rubro</th>
-    ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:#47e8ff;font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
-    <th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(71,232,255,.04)">TOTAL</th>
+    ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
+    <th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>
   </tr></thead><tbody>` +
   f.rubros.map(r => {
     const st = _est(r.label, r.tipo);
@@ -8341,7 +8343,7 @@ function buildVistaIndividualFlujo() {
     return `<tr style="background:${st.bg};${st.bt}">
       <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}${tag}</td>
       ${meses.map(m => `<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${r.porMes?.[m] != null ? fmt(r.porMes[m]) : '—'}</td>`).join('')}
-      <td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(71,232,255,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>
+      <td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>
     </tr>`;
   }).join('') + '</tbody>';
 }
@@ -8474,7 +8476,7 @@ function buildComparacionFlujos() {
     if (tipo==='ingreso') return {bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#47ffb4'};
     if (tipo==='total'||lUP.includes('TOTAL EGRES')) return {bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)'};
     if (tipo==='resultado'||lUP.includes('FONDOS')||lUP.includes('SUBTOTAL')||lUP.includes('DÉF')) return {bg:'rgba(232,255,71,.07)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)'};
-    if (lUP.includes('TOTAL')) return {bg:'rgba(71,232,255,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff'};
+    if (lUP.includes('TOTAL')) return {bg:'rgba(100,100,80,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff'};
     return {bg:'',bt:'',fw:'400',c:'var(--text)'};
   };
   // Equivalente real: valor del período B ajustado por inflación (en pesos actuales)
@@ -8483,7 +8485,7 @@ function buildComparacionFlujos() {
 
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Rubro</th>
-    <th style="padding:8px 10px;text-align:right;font-size:9px;color:#47e8ff;font-family:var(--mono);border-bottom:1px solid var(--bd)">${fA.periodo}</th>
+    <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${fA.periodo}</th>
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">${fB.periodo}</th>
     ${ipc?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Valor de ${fB.periodo} actualizado por IPC ${ipc}%">${fB.periodo} + IPC</th>`:''}
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Var. nominal</th>
@@ -8744,12 +8746,12 @@ function buildResumen() {
         </div>
         <div style="font-size:12px;color:var(--dim);line-height:1.8;max-width:400px">
           Para ver el dashboard necesitás sincronizar con Google Sheets.<br>
-          Hacé clic en <strong style="color:#47e8ff">↓ Sync</strong> en el topbar,<br>
+          Hacé clic en <strong style="color:var(--acc)">↓ Sync</strong> en el topbar,<br>
           o cargá un archivo Excel con <strong style="color:#b8a000">📥 Cargar</strong>.
         </div>
         <div style="display:flex;gap:10px;margin-top:8px">
-          <button onclick="syncFromCloud()" style="padding:10px 20px;background:rgba(71,232,255,.1);
-            border:1px solid #47e8ff55;color:#47e8ff;font-size:11px;border-radius:4px;
+          <button onclick="syncFromCloud()" style="padding:10px 20px;background:rgba(100,100,80,.1);
+            border:1px solid #47e8ff55;color:var(--acc);font-size:11px;border-radius:4px;
             cursor:pointer;font-family:var(--mono)">↓ Sync desde Sheets</button>
           <label style="padding:10px 20px;background:rgba(232,255,71,.1);
             border:1px solid var(--y21);color:#b8a000;font-size:11px;border-radius:4px;
@@ -9207,7 +9209,7 @@ function buildResDesglose() {
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
-              const tdBg = isSep ? 'background:rgba(71,232,255,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              const tdBg = isSep ? 'background:rgba(100,100,80,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
               return `<tr>
                 <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
                 ${years.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(totals[k][y], k)}</td>`).join('')}
@@ -9255,7 +9257,7 @@ function buildResDesglose() {
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
-              const tdBg = isSep ? 'background:rgba(71,232,255,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              const tdBg = isSep ? 'background:rgba(100,100,80,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
               return `<tr>
                 <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
                 ${yearsWithEr.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(empEr[y]?.[k]??null, k)}</td>`).join('')}
@@ -9781,7 +9783,7 @@ function _persRenderMesesGrid() {
     const mActual = pd ? _persGetMeses(pd, y) : Array(12).fill(null);
     const totalActual = pd ? _persGetTotal(pd, y) : '';
     html += `<div style="margin-bottom:12px">
-      <div style="font-size:8.5px;color:#47e8ff;font-family:var(--mono);
+      <div style="font-size:8.5px;color:var(--acc);font-family:var(--mono);
         margin-bottom:6px;font-weight:600">${y}</div>
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px">
         ${MESES_LABELS.map((m, i) => `
@@ -9798,7 +9800,7 @@ function _persRenderMesesGrid() {
           </div>`).join('')}
       </div>
       <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-top:4px">
-        Promedio anual calculado: <span id="pers-mes-total-${y}" style="color:#47ffb4;font-weight:600">
+        Promedio anual calculado: <span id="pers-mes-total-${y}" style="color:var(--pos);font-weight:600">
           ${totalActual || '—'}
         </span>
       </div>
@@ -10477,7 +10479,7 @@ function buildPortafolio() {
       <td style="${tdR};color:${resColor}">${resVal}</td>
       <td style="${tdR};color:${mrgColor}">${mrgVal}</td>
       <td style="${tdR}">${r.p>0?fn(r.p):'—'}</td>
-      <td style="${tdR};color:#47e8ff">${fxemp}</td>
+      <td style="${tdR};color:var(--acc)">${fxemp}</td>
       <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fvFull(r.t):'—'}</td>
       <td style="${tdR};color:${depColor}">${dep}</td>
       <td style="${tdR};color:${r.balResNeto==null?'var(--dim)':r.balResNeto>0?'var(--pos)':'var(--neg)'}">
@@ -10761,7 +10763,9 @@ function buildEmpresa() {
   // KPIs de flujos de fondos vinculados a esta empresa
   renderFlujosEmpresa(emp);
 
-  // Evolución mensual (si hay datos cargados)
+  // Evolución mensual — resetear vista a estándar al cambiar empresa
+  window._erMensualVista = 'estandar';
+  window._erRptAnio = null;
   buildEvolucionMensual(emp);
 
   // Auditoría ER provisorio vs balance formal
@@ -11111,9 +11115,9 @@ function buildAuditERProvisorio(emp) {
           <tr style="background:var(--s2)">
             <th style="text-align:left;padding:5px 12px;color:var(--dim);font-weight:400;width:40%">Concepto</th>
             <th style="text-align:right;padding:5px 10px;color:var(--dim);font-weight:400">Provisorio $</th>
-            <th style="text-align:right;padding:5px 10px;color:#47e8ff88;font-weight:400">Prov. %</th>
+            <th style="text-align:right;padding:5px 10px;color:var(--dim);font-weight:400">Prov. %</th>
             <th style="text-align:right;padding:5px 10px;color:var(--dim);font-weight:400">Balance $</th>
-            <th style="text-align:right;padding:5px 10px;color:#e8ff4788;font-weight:400">Bal. %</th>
+            <th style="text-align:right;padding:5px 10px;color:var(--dim);font-weight:400">Bal. %</th>
             <th style="text-align:right;padding:5px 12px;color:var(--dim);font-weight:400">Δ pp</th>
           </tr>
         </thead>
@@ -11137,9 +11141,9 @@ function buildAuditERProvisorio(emp) {
       html += `<tr style="${rowStyle}">
         <td style="padding:4px 12px;${lblStyle}">${LABELS[clave]||clave}</td>
         <td style="text-align:right;padding:4px 10px">${fmt(vP)}</td>
-        <td style="text-align:right;padding:4px 10px;color:#47e8ff">${fmtPct(pctP)}</td>
+        <td style="text-align:right;padding:4px 10px;color:var(--acc)">${fmtPct(pctP)}</td>
         <td style="text-align:right;padding:4px 10px">${fmt(vB)}</td>
-        <td style="text-align:right;padding:4px 10px;color:#e8ff47">${fmtPct(pctB)}</td>
+        <td style="text-align:right;padding:4px 10px;color:var(--y21)">${fmtPct(pctB)}</td>
         <td style="text-align:right;padding:4px 12px;font-weight:${delta!=null&&Math.abs(delta)>=8?'700':'400'}">
           <span style="color:${diffColor(delta)}">${delta != null ? (Math.abs(delta)<0.1?'≈0':fmtPct(delta)) : '—'}</span>
           ${delta!=null&&Math.abs(delta)>=0.5?`<div style="margin-top:2px;height:2px;border-radius:1px;background:var(--bd2);width:48px;display:inline-block;vertical-align:middle;position:relative;overflow:hidden"><div style="position:absolute;top:0;height:100%;background:${diffColor(delta)};width:${Math.min(Math.abs(delta)/20*100,100)}%"></div></div>`:''}
@@ -11264,7 +11268,7 @@ function buildEvolucionMensual(emp) {
       return NM[m] || m;
     };
     const thMeses = mesesMostrar.map(m=>`<th style="padding:5px 6px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">${lblPeriodo(m)}</th>`).join('');
-    const thTotal = `<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--acc,#47e8ff);border-bottom:2px solid var(--bd);border-left:1px solid var(--bd)">TOTAL</th>`;
+    const thTotal = `<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--acc);border-bottom:2px solid var(--bd);border-left:1px solid var(--bd)">TOTAL</th>`;
     const thPct = (vista==='estandar') ? `<th style="padding:5px 8px;text-align:right;font-size:8.5px;color:var(--dim);border-bottom:2px solid var(--bd);border-left:1px dashed var(--bd)">% v.</th>` : '';
     const thEdit = edit ? '<th style="border-bottom:2px solid var(--bd)"></th>' : '';
 
@@ -11275,7 +11279,7 @@ function buildEvolucionMensual(emp) {
         const esResultado = f.conceptoStd === 'resEjercicio';
         const esIngreso = f.conceptoStd === 'ventas';
         let peso = '';
-        if (esResultado) peso = 'font-weight:700;border-top:2px solid var(--acc,#47e8ff);border-bottom:2px solid var(--acc,#47e8ff);background:rgba(71,232,255,.08)';
+        if (esResultado) peso = 'font-weight:700;border-top:2px solid var(--bd2);border-bottom:2px solid var(--bd2);background:var(--s3)';
         else if (esSubtotal) peso = 'font-weight:600;border-top:1.5px solid var(--bd);background:rgba(255,255,255,.03)';
         else if (esIngreso) peso = 'font-weight:600';
         const celdas = mesesMostrar.map(m=>{
@@ -11284,7 +11288,7 @@ function buildEvolucionMensual(emp) {
           return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}">${fmt(v)}</td>`;
         }).join('');
         const totFila = mesesMostrar.reduce((s,m)=>s+(f.valores[m]||0),0);
-        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${fmt(totFila)}</td>`;
+        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--text)'}">${fmt(totFila)}</td>`;
         const lblCell = edit
           ? `<td style="padding:4px 8px;font-size:9px;white-space:nowrap;min-width:200px">
                <input value="${f.lbl}" onblur="DATA.er_mensual['${empJS}']['${yr}'].filas[${fi}].lbl=this.value;_erMensualSync('${empJS}','${yr}')"
@@ -11488,7 +11492,7 @@ function buildEvolucionMensual(emp) {
             plugins:{ legend:{ display:true, labels:{ font:{size:10}, boxWidth:14 } } } }
         });
         return `<div style="margin-bottom:20px">
-          <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--acc,#47e8ff)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}</div>
+          <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}</div>
           ${kpiHtml}
           <div class="card" style="padding:10px 10px 6px;position:relative">
             <canvas id="${chId}" style="width:100%;height:220px"></canvas>
@@ -11500,13 +11504,13 @@ function buildEvolucionMensual(emp) {
         const calc = calcConceptos.includes(e.concepto);
         const celdas = mesesMostrar.map(m=>{
           const v = valConcMes[e.concepto]?.[m] ?? null;
-          return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}${calc?';color:var(--acc,#47e8ff)':''}">${fmt(v)}</td>`;
+          return `<td style="padding:4px 6px;text-align:right;font-size:9px;${v<0?'color:var(--neg)':''}${calc?';font-weight:600':''}">${fmt(v)}</td>`;
         }).join('');
         const totFila = mesesMostrar.reduce((s,m)=> s + (valConcMes[e.concepto]?.[m] || 0), 0);
         const hayDato = mesesMostrar.some(m => valConcMes[e.concepto]?.[m] != null);
         const ventasTot = mesesMostrar.reduce((s,m)=> s + (valConcMes.ventas?.[m] || 0), 0);
         const pct = (hayDato && ventasTot && e.concepto !== 'ventas') ? (totFila / ventasTot * 100) : null;
-        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--acc,#47e8ff)'}">${hayDato?fmt(totFila):'—'}</td>`;
+        const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--text)'}">${hayDato?fmt(totFila):'—'}</td>`;
         const pctCell = `<td style="padding:4px 8px;text-align:right;font-size:8.5px;color:${pct==null?'var(--dim)':pct<0?'var(--neg)':'var(--dim)'};border-left:1px dashed var(--bd)">${pct!=null?(pct>=0?'+':'')+pct.toFixed(1)+'%':'—'}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
         return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}</td>${celdas}${totCell}${pctCell}${edit?'<td></td>':''}</tr>`;
@@ -11516,7 +11520,7 @@ function buildEvolucionMensual(emp) {
     const btnAgregar = edit ? `<div style="margin-top:8px"><button onclick="_erMensualAgregarFila('${empJS}','${yr}')" style="padding:4px 10px;font-size:10px;background:transparent;border:1px dashed var(--bd);border-radius:4px;color:var(--dim);cursor:pointer">+ Agregar concepto</button></div>` : '';
 
     return `<div style="margin-bottom:20px">
-      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--acc,#47e8ff)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${edit?' · modo edición':''}</div>
+      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${edit?' · modo edición':''}</div>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
         <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${thMeses}${thTotal}${thPct}${thEdit}</tr></thead>
         <tbody>${filasHTML}</tbody>
@@ -11525,7 +11529,7 @@ function buildEvolucionMensual(emp) {
     </div>`;
   }).join('');
 
-  const ayuda = edit ? `<div style="font-size:9px;color:var(--dim);margin-bottom:10px;padding:8px;background:rgba(71,232,255,.06);border-radius:4px">
+  const ayuda = edit ? `<div style="font-size:9px;color:var(--dim);margin-bottom:10px;padding:8px;background:rgba(100,100,80,.06);border-radius:4px">
     En modo edición: los valores en celdas se editan directamente. Los subtotales marcados "auto" (Utilidad Bruta, Resultado Operativo, Resultado antes Imp.) se recalculan solos. Asigná el concepto estándar a cada fila en la vista Original para que el recálculo funcione. No olvides publicar a Sheets al terminar.</div>` : '';
 
   cont.innerHTML = toggle + ayuda + (bloques || '<div style="color:var(--dim);font-size:10px;padding:8px">Sin datos mensuales.</div>');
@@ -11816,7 +11820,7 @@ function renderFlujosEmpresa(emp) {
     const cr  = varReal == null ? 'var(--dim)' : varReal > 0 ? 'var(--neg)' : 'var(--pos)';
     const fmtP = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
     const tipoTag = f.tipo === 'proyectado'
-      ? '<span style="font-size:8px;color:#47e8ff">PROY</span>'
+      ? '<span style="font-size:8px;color:var(--acc)">PROY</span>'
       : '<span style="font-size:8px;color:#ff8c47">REAL</span>';
     html += `<tr>
       <td style="font-family:var(--mono);font-weight:600">${f.periodo}</td>
@@ -12461,7 +12465,7 @@ function abrirFiltroTrans(campo, btnEl) {
     <div style="padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;
       align-items:center;justify-content:space-between">
       <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
-        color:#47e8ff;font-weight:600">${cfg.label}</span>
+        color:var(--acc);font-weight:600">${cfg.label}</span>
       <button onclick="cerrarPanelFiltroTrans()"
         style="background:none;border:none;color:var(--dim);cursor:pointer;
         font-size:13px;padding:0 2px;line-height:1">✕</button>
@@ -12681,7 +12685,7 @@ function abrirDropTrans(event, colIdx) {
   drop.innerHTML = `
     <div style="padding:8px 12px;border-bottom:1px solid var(--bd);
       display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#47e8ff">
+      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--acc)">
         Filtrar: ${['SAF','Organismo','Beneficiario','','CGto','Observación','Mes','Año','','Categoría','Archivo'][colIdx]||''}
       </span>
       <button onclick="cerrarDropsTrans()"
@@ -13300,7 +13304,7 @@ function _renderInflMesesEstado() {
     const tiene = v != null;
     return `<div title="${m} 2026: ${tiene ? v+'%' : 'sin dato'}"
       style="padding:3px 8px;border-radius:3px;font-size:9px;font-family:var(--mono);font-weight:600;cursor:default;
-             background:${tiene ? 'rgba(71,232,255,.12)' : 'rgba(148,163,184,.08)'};
+             background:${tiene ? 'rgba(100,100,80,.12)' : 'rgba(148,163,184,.08)'};
              border:1px solid ${tiene ? '#47e8ff44' : '#94a3b822'};
              color:${tiene ? '#47e8ff' : 'var(--dim)'}">
       ${m}${tiene ? ' '+v+'%' : ''}
@@ -13515,7 +13519,7 @@ function openGapModal() {
       const factCells = years.map(y => mkCell(missingFact.includes(y))).join('');
       const sitCells  = years.map(y => mkCell(missingSit.includes(y))).join('');
       const persCells = years.map(y => mkCell(missingPers.includes(y))).join('');
-      const rowBg = (missingFact.length||missingSit.length) ? '' : 'background:rgba(71,232,255,.04)';
+      const rowBg = (missingFact.length||missingSit.length) ? '' : 'background:rgba(100,100,80,.04)';
       const balEmp = Object.values(_balances || {}).filter(function(b) {
         var empU = (b.empresa||'').toUpperCase().trim();
         var gapU = emp.toUpperCase().trim();
@@ -13556,7 +13560,7 @@ function openGapModal() {
       <div style="padding:5px 12px;background:rgba(255,71,102,.08);border:1px solid #ff476640;border-radius:3px;font-size:9.5px;color:#ff4766;font-family:var(--mono)">
         Resultado faltante: <strong>${nRes}</strong>
       </div>
-      <div style="padding:5px 12px;background:rgba(71,232,255,.08);border:1px solid #47e8ff40;border-radius:3px;font-size:9.5px;color:#47e8ff;font-family:var(--mono)">
+      <div style="padding:5px 12px;background:rgba(100,100,80,.08);border:1px solid #47e8ff40;border-radius:3px;font-size:9.5px;color:var(--acc);font-family:var(--mono)">
         Personal faltante: <strong>${nPers}</strong>
       </div>
       <div style="padding:5px 12px;background:var(--s3);border:1px solid var(--bd);border-radius:3px;font-size:9.5px;color:var(--dim);font-family:var(--mono)">
@@ -15187,7 +15191,7 @@ function renderHistory() {
 
   const activeCount  = _importHistory.filter(h=>!h.reverted&&h.tipo!=='sync').length;
   const syncCount    = _importHistory.filter(h=>h.tipo==='sync').length;
-  const syncLabel    = syncCount > 0 ? ` · <span style="color:#47e8ff">${syncCount} sync</span>` : '';
+  const syncLabel    = syncCount > 0 ? ` · <span style="color:var(--acc)">${syncCount} sync</span>` : '';
   count.innerHTML = `${activeCount} importación${activeCount!==1?'es':''} · ${_importHistory.length} total${syncLabel}
     ${activeCount > 0 ? `<button onclick="selectAllHistory(true)"  style="margin-left:8px;font-size:9px;padding:1px 6px;border:1px solid var(--dim);border-radius:2px;background:none;color:var(--dim);cursor:pointer">Selec. todas</button>
     <button onclick="selectAllHistory(false)" style="margin-left:4px;font-size:9px;padding:1px 6px;border:1px solid var(--dim);border-radius:2px;background:none;color:var(--dim);cursor:pointer">Deselec.</button>
@@ -15239,7 +15243,7 @@ function renderHistory() {
     const badge = h.erImport
       ? `<span class="imp-hist-badge" style="background:#c4d60022;color:#8a9800">${tipo}</span>`
       : h.sidifImport
-      ? `<span class="imp-hist-badge" style="background:#47e8ff22;color:#47e8ff">${tipo}</span>`
+      ? `<span class="imp-hist-badge" style="background:#47e8ff22;color:var(--acc)">${tipo}</span>`
       : `<span class="imp-hist-badge ihb-new">${tipo}</span>`;
     return `<div class="imp-hist-row" data-idx="${idx}" id="hist-row-${idx}">
       <label style="display:flex;align-items:flex-start;gap:8px;width:100%;cursor:pointer">
@@ -16288,7 +16292,7 @@ function _mostrarPreviewVentasGastos(result, fname) {
     <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
       <b>${result.empresa}</b> · Año ${result.anio||'?'} · ${meses.length} meses · Facturación total ${fmt(totV)} · Resultado ${fmt(totR)}<br>
       ${(result.itemsVentas?.length||0)+(result.itemsGastos?.length||0) > 0
-        ? `<span style="color:#47ffb4">✓ Detalle detectado: ${result.itemsVentas?.length||0} ítems de ventas, ${result.itemsGastos?.length||0} ítems de gastos clasificados.</span>`
+        ? `<span style="color:var(--pos)">✓ Detalle detectado: ${result.itemsVentas?.length||0} ítems de ventas, ${result.itemsGastos?.length||0} ítems de gastos clasificados.</span>`
         : 'Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo).'}
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
@@ -16526,7 +16530,7 @@ function _mostrarPreviewERColumnas(result, fname) {
     <div style="font-size:12px;font-weight:600;margin-bottom:4px">ER Mensual detectado — ${fname}</div>
     <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
       <b id="er-col-emp-lbl">${result.empresa}</b> · Año ${result.anio} · ${result.filas.length} conceptos · ${meses.length} meses<br>
-      <span style="color:#47ffb4">Verificá el nombre de empresa antes de aplicar.</span>
+      <span style="color:var(--pos)">Verificá el nombre de empresa antes de aplicar.</span>
     </div>
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
       <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Empresa:</label>
@@ -17035,8 +17039,8 @@ function handleImportWorkbook(wb, fname) {
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button onclick="confirmarSIDIF('reemplazar','${fname.replace(/'/g,"\\'")}',${JSON.stringify(sidifResult).length > 50000 ? '{}' : ''})"
-              style="flex:1;padding:8px 12px;background:rgba(71,232,255,.1);border:1px solid #47e8ff40;
-              color:#47e8ff;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
+              style="flex:1;padding:8px 12px;background:rgba(100,100,80,.1);border:1px solid #47e8ff40;
+              color:var(--acc);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);
               text-align:center;line-height:1.5">
               🔄 <strong>Reemplazar</strong><br>
               <span style="font-size:8.5px;color:var(--dim)">Eliminar la carga anterior<br>y cargar este archivo completo</span>
@@ -17760,7 +17764,7 @@ function buildHeatmap() {
   const legEl = document.getElementById('hm-legend');
   if (legEl) {
     if (metric==='facturacion'||metric==='personal') {
-      legEl.innerHTML = '<span>Bajo</span><div style="width:120px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(71,232,255,.2),rgba(71,232,255,.9))"></div><span>Alto</span>';
+      legEl.innerHTML = '<span>Bajo</span><div style="width:120px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(100,100,80,.2),rgba(100,100,80,.9))"></div><span>Alto</span>';
     } else {
       legEl.innerHTML = '<span style="color:var(--neg)">Déficit</span><div style="width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(255,71,102,.8),var(--s3),rgba(71,255,180,.8))"></div><span style="color:#1a9e68">Superávit</span>';
     }
@@ -18373,8 +18377,8 @@ function loadBalanceArchivo(file) {
           </div>
           <div style="display:flex;gap:8px">
             <button onclick="_confirmarCargaBalance(true)"
-              style="flex:1;padding:7px;background:rgba(71,232,255,.1);
-              border:1px solid #47e8ff40;color:#47e8ff;font-family:var(--mono);
+              style="flex:1;padding:7px;background:rgba(100,100,80,.1);
+              border:1px solid #47e8ff40;color:var(--acc);font-family:var(--mono);
               font-size:9.5px;border-radius:3px;cursor:pointer;font-weight:600">
               🔄 Sí, reemplazar
             </button>
@@ -20192,7 +20196,7 @@ function buildComparacionBalances() {
   }).filter(Boolean).join('');
 
   const varHeader = showVar
-    ? `<th style="${thStyle};color:#47e8ff">Var. total</th>`
+    ? `<th style="${thStyle};color:var(--acc)">Var. total</th>`
     : '';
 
   cont.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
@@ -20440,13 +20444,13 @@ function renderListaArchivos() {
           <td style="padding:6px 10px;font-weight:${activo?'600':'400'}">${b.empresa}</td>
           <td style="padding:6px 10px;font-family:var(--mono);color:${nc?'#ff8c47':'var(--text)'}">${b.periodo}${nc?' ✦':''}</td>
           <td style="padding:6px 10px;color:${nc?'#ff8c47':'var(--dim)'}">${cierreLabel(b.cierreMes||12)}</td>
-          <td style="padding:6px 10px;color:#47e8ff">${b.vinculada||'—'}</td>
+          <td style="padding:6px 10px;color:var(--acc)">${b.vinculada||'—'}</td>
           <td style="padding:6px 10px;color:var(--dim);font-size:9px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.metodo||'—'}</td>
           <td style="padding:6px 10px;color:var(--dim);font-size:9px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${k}">${k}</td>
           <td style="padding:6px 10px;text-align:center;white-space:nowrap">
             <button onclick="seleccionarBalance('${k.replace(/'/g,"\\'")}')"
-              style="padding:2px 8px;background:rgba(71,232,255,.08);border:1px solid #47e8ff44;
-              color:#47e8ff;font-size:9px;border-radius:2px;cursor:pointer;font-family:var(--mono)">
+              style="padding:2px 8px;background:rgba(100,100,80,.08);border:1px solid #47e8ff44;
+              color:var(--acc);font-size:9px;border-radius:2px;cursor:pointer;font-family:var(--mono)">
               Ver
             </button>
             <button onclick="eliminarBalance('${k.replace(/'/g,"\\'")}')"
@@ -20597,7 +20601,7 @@ function _buildERDesdeEstructura(b, fmtM) {
 
     const bg = nivel === 3 ? 'rgba(232,255,71,.07)'
              : nivel === 2 ? (esNeg ? 'rgba(255,71,102,.07)' : 'rgba(71,255,180,.07)')
-             : nivel === 1 ? 'rgba(71,232,255,.04)'
+             : nivel === 1 ? 'rgba(100,100,80,.04)'
              : '';
     const bt = nivel === 3 ? 'border-top:2px solid var(--y21);border-bottom:2px solid var(--y21)'
              : nivel === 2 ? `border-top:2px solid ${esNeg?'var(--neg)':'#2ecc8a'}`
@@ -20621,7 +20625,7 @@ function _buildERDesdeEstructura(b, fmtM) {
       : nivel === 2
       ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:${esNeg?'rgba(255,71,102,.12)':'rgba(71,255,180,.12)'};color:${color};font-family:var(--mono);margin-left:6px">TOTAL</span>`
       : nivel === 1
-      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:rgba(71,232,255,.08);color:#47e8ff;font-family:var(--mono);margin-left:6px">SUBTOTAL</span>`
+      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:rgba(100,100,80,.08);color:var(--acc);font-family:var(--mono);margin-left:6px">SUBTOTAL</span>`
       : '';
 
     return `<tr style="background:${bg};${bt}">
@@ -21559,7 +21563,7 @@ function generarDiagnosticoFinanciero(liq, sol, ren, efi, b) {
 
   // Renderizar HTML
   return `
-    <div style="margin-bottom:14px;padding:10px 14px;background:rgba(71,232,255,.05);
+    <div style="margin-bottom:14px;padding:10px 14px;background:rgba(100,100,80,.05);
       border:1px solid #47e8ff30;border-radius:4px;font-size:10px;line-height:1.7;color:var(--text)">
       ${evalGlobal}
     </div>
@@ -26207,7 +26211,7 @@ async function loadAuditLog() {
           ${rows.map((r,i) => `<tr style="border-bottom:1px solid var(--bd2);${i%2===0?'background:var(--s2)':''}">
             <td style="padding:5px 10px;color:var(--dim);white-space:nowrap">${r.fecha||r.timestamp||'—'}</td>
             <td style="padding:5px 10px;color:#c447ff;font-weight:500">${r.usuario||'—'}</td>
-            <td style="padding:5px 10px;color:#47e8ff">${r.modulo||'—'}</td>
+            <td style="padding:5px 10px;color:var(--acc)">${r.modulo||'—'}</td>
             <td style="padding:5px 10px;color:var(--text)">${r.nota||''}</td>
           </tr>`).join('')}
         </tbody>
