@@ -10890,7 +10890,26 @@ function buildAuditERProvisorio(emp) {
   wrap.innerHTML = '';
 
   const erM = DATA.er_mensual?.[emp] || {};
-  const erB = DATA.er?.[emp] || {};
+
+  // Buscar datos de balance ER con matching flexible (por si el nombre difiere en mayúsculas/espacios)
+  let erB = DATA.er?.[emp] || {};
+  if (!Object.keys(erB).length && DATA.er) {
+    const empNorm = emp.toUpperCase().trim().replace(/\s+/g,' ');
+    const match = Object.keys(DATA.er).find(k =>
+      k.toUpperCase().trim().replace(/\s+/g,' ') === empNorm ||
+      k.toUpperCase().trim().replace(/\s+/g,' ').includes(empNorm.substring(0,8)) ||
+      empNorm.includes(k.toUpperCase().trim().replace(/\s+/g,' ').substring(0,8))
+    );
+    if (match) erB = DATA.er[match];
+  }
+
+  // Debug: mostrar qué datos hay disponibles si no hay cruce
+  const _dbgInfo = {
+    erMKeys: Object.keys(erM),
+    erBKeys: Object.keys(erB),
+    allErKeys: Object.keys(DATA.er || {}),
+    allErMKeys: Object.keys(DATA.er_mensual || {}),
+  };
 
   // Concepto: mapeo monthly conceptoStd → clave en DATA.er (balance formal)
   const MAP_M2B = {
@@ -10923,7 +10942,26 @@ function buildAuditERProvisorio(emp) {
     return bal && Object.keys(bal).length > 0;
   }).sort();
 
-  if (aniosCruce.length === 0) return;
+  if (aniosCruce.length === 0) {
+    // Mostrar diagnóstico si hay datos parciales (una fuente sí, la otra no)
+    const hayErM = _dbgInfo.erMKeys.length > 0;
+    const hayErB = _dbgInfo.erBKeys.length > 0;
+    if (!hayErM && !hayErB) return; // nada cargado para esta empresa, ocultar
+    wrap.style.display = '';
+    const todasErKeys = _dbgInfo.allErKeys.join(', ') || '(ninguna)';
+    const todasErMKeys = _dbgInfo.allErMKeys.join(', ') || '(ninguna)';
+    wrap.innerHTML = `<div class="card" style="padding:12px 16px;border-left:3px solid #ff8c47">
+      <div style="font-size:10px;font-weight:600;margin-bottom:6px;color:#ff8c47">⚠ Auditoría ER: sin años en común</div>
+      <div style="font-size:9px;color:var(--dim);line-height:1.7;font-family:var(--mono)">
+        <b>ER mensual (provisorio) para "${emp}":</b> años ${hayErM ? _dbgInfo.erMKeys.join(', ') : '— no hay datos'}<br>
+        <b>Balance formal para "${emp}":</b> años ${hayErB ? _dbgInfo.erBKeys.join(', ') : '— no hay datos'}<br>
+        ${!hayErB && _dbgInfo.allErKeys.length ? `<span style="color:#ff8c47">Empresas con balance cargado: ${todasErKeys}</span><br>` : ''}
+        ${!hayErM && _dbgInfo.allErMKeys.length ? `<span style="color:#ff8c47">Empresas con ER mensual cargado: ${todasErMKeys}</span><br>` : ''}
+        <span style="margin-top:4px;display:inline-block">Para ver la auditoría, ambas fuentes deben tener datos del mismo año.</span>
+      </div>
+    </div>`;
+    return;
+  }
 
   const fmt = v => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
