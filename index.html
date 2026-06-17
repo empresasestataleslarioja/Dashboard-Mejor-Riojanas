@@ -99,7 +99,7 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --sidebar: 210px;
   --chart-tick: #4a5268;
   --chart-grid: #10121a;
-  --radius-card: 4px;
+  --radius-card: 6px;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -130,36 +130,6 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --chart-tick: #767676;
   --chart-grid: #e8e8e8;
   --radius-card: 3px;
-}
-
-/* ══════════════════════════════════════════════════════════
-   TEMA 3 — ALTA DENSIDAD TEAL/SLATE
-   Tipografía: Inter + IBM Plex Mono
-   Estética: Analítica de datos — slate navy, teal vibrante,
-             tipografía pequeña, máxima información
-══════════════════════════════════════════════════════════ */
-[data-theme="density"] {
-  --bg:   #0f1923;
-  --s1:   #162030;
-  --s2:   #1d2d40;
-  --s3:   #243750;
-  --bd:   #2e4560;
-  --bd2:  #3d5c7a;
-  --y21:  #00c9b1;
-  --y22:  #3b9eff;
-  --y23:  #f7c948;
-  --y24:  #ff6b6b;
-  --pos:  #00c9b1;
-  --neg:  #ff6b6b;
-  --text: #d0dce8;
-  --dim:  #4a6a8a;
-  --dim2: #1a2d40;
-  --serif:  'Inter', 'Segoe UI', sans-serif;
-  --mono:   'IBM Plex Mono', 'Consolas', monospace;
-  --ui:     'Inter', sans-serif;
-  --chart-tick: #4a6a8a;
-  --chart-grid: #1d2d40;
-  --radius-card: 4px;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -220,110 +190,6 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   --chart-grid: #d8e4ef;
   --radius-card: 3px;
 }
-/* ══════════════════════════════════════════════════════════
-   TEMA 6 — BLOOMBERG TERMINAL
-   Estética: Trading terminal — amber sobre negro puro,
-   monospace extremo, cards como secciones de terminal,
-   información máxima sin decoración
-══════════════════════════════════════════════════════════ */
-[data-theme="bloomberg"] {
-  --bg:   #030303;
-  --s1:   #060606;
-  --s2:   #0a0a0a;
-  --s3:   #101010;
-  --bd:   #2a2400;
-  --bd2:  #443c00;
-  --y21:  #ff8c00;  /* amber */
-  --y22:  #e0c000;  /* gold */
-  --y23:  #00d4aa;  /* teal info */
-  --y24:  #ff4040;  /* red alert */
-  --pos:  #00c040;
-  --neg:  #ff4040;
-  --text: #e8c060;  /* warm amber text */
-  --dim:  #664c00;
-  --dim2: #1a1400;
-  --serif:  'Azeret Mono','Courier New',monospace;
-  --mono:   'Azeret Mono','Courier New',monospace;
-  --ui:     'Azeret Mono','Courier New',monospace;
-  --chart-tick: #664c00;
-  --chart-grid: #0a0a0a;
-  --radius-card: 0px;
-}
-[data-theme="bloomberg"] body {
-  background-image: none;
-  font-size: 11px;
-  letter-spacing: .02em;
-}
-/* Cards sin fondo — solo separadores horizontales */
-[data-theme="bloomberg"] .card {
-  background: transparent !important;
-  border: none !important;
-  border-top: 1px solid #2a2400 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  padding: 12px 16px !important;
-}
-[data-theme="bloomberg"] .card-hd {
-  padding-bottom: 6px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid #2a2400;
-}
-[data-theme="bloomberg"] .card-hd-title {
-  font-size: 9px; letter-spacing: .18em; text-transform: uppercase;
-  color: #ff8c00; font-weight: 400;
-}
-[data-theme="bloomberg"] .card-hd-unit { color: #443c00; font-size: 8px; }
-[data-theme="bloomberg"] .kpi {
-  background: transparent !important;
-  border: none !important;
-  border-left: 2px solid #ff8c00 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  padding: 8px 12px !important;
-}
-[data-theme="bloomberg"] .kpi-value {
-  font-size: 20px; letter-spacing: -.01em; color: #ff8c00;
-}
-[data-theme="bloomberg"] .kpi-label {
-  font-size: 8px; letter-spacing: .2em; text-transform: uppercase; color: #664c00;
-}
-[data-theme="bloomberg"] .brand-title {
-  font-size: 13px; text-transform: uppercase; letter-spacing: .15em;
-  color: #ff8c00; font-style: normal;
-}
-[data-theme="bloomberg"] .brand-title em { color: #e0c000; font-style: normal; }
-[data-theme="bloomberg"] .brand-sub { letter-spacing: .25em; color: #443c00; }
-[data-theme="bloomberg"] .sidebar {
-  border-right: 1px solid #2a2400;
-  background: #020202;
-}
-[data-theme="bloomberg"] .nav-item {
-  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-  padding: 7px 20px; color: #664c00;
-}
-[data-theme="bloomberg"] .nav-item.active { color: #ff8c00; background: #0a0800; }
-[data-theme="bloomberg"] .nav-item.active::before { background: #ff8c00; }
-[data-theme="bloomberg"] .nav-item:hover { color: #e8c060; background: #050400; }
-[data-theme="bloomberg"] .nav-dot { background: #ff8c00; }
-[data-theme="bloomberg"] .topbar {
-  background: #020202; border-bottom: 1px solid #2a2400;
-  padding: 8px 16px;
-}
-[data-theme="bloomberg"] .panel-wrap {
-  background: #030303;
-}
-/* Chips */
-[data-theme="bloomberg"] .chip {
-  border-radius: 0; border-color: #2a2400; color: #664c00;
-  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
-  background: transparent;
-}
-/* Tablas */
-[data-theme="bloomberg"] table { font-size: 10px; }
-[data-theme="bloomberg"] th   { letter-spacing: .12em; text-transform: uppercase; }
-/* Row stripes */
-[data-theme="bloomberg"] tr:nth-child(even) td { background: rgba(255,140,0,.03); }
-
 /* ══════════════════════════════════════════════════════════
    TEMA 7 — FINANCIAL TIMES / PAPEL
    Estética: Periódico financiero — fondo salmón/crema como
@@ -438,164 +304,11 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
   margin-top: 6px;
 }
 
-/* ══════════════════════════════════════════════════════════
-   TEMA 8 — NEON / WIREFRAME
-   Estética: Cyberpunk — fondo negro, bordes brillantes con
-   glow, sin rellenos sólidos, texto con halo luminoso
-══════════════════════════════════════════════════════════ */
-[data-theme="neon"] {
-  --bg:   #000000;
-  --s1:   #030308;
-  --s2:   #060610;
-  --s3:   #090918;
-  --bd:   #00ff9020;
-  --bd2:  #00ff9040;
-  --y21:  #00ff90;  /* neon green */
-  --y22:  #ff00c8;  /* hot pink */
-  --y23:  #00c8ff;  /* electric cyan */
-  --y24:  #ffcc00;  /* yellow */
-  --pos:  #00ff90;
-  --neg:  #ff00c8;
-  --text: #d0f0e0;
-  --dim:  #00804830;
-  --dim2: #003020;
-  --serif:  'Azeret Mono','Courier New',monospace;
-  --mono:   'Azeret Mono','Courier New',monospace;
-  --ui:     'Azeret Mono','Courier New',monospace;
-  --chart-tick: #008048;
-  --chart-grid: #001808;
-  --radius-card: 0px;
-}
-[data-theme="neon"] body {
-  background-image: none;
-  font-size: 11px;
-}
-/* Cards como wireframes con glow */
-[data-theme="neon"] .card {
-  background: rgba(0,255,144,.02) !important;
-  border: 1px solid #00ff9030 !important;
-  border-radius: 0 !important;
-  box-shadow: 0 0 12px rgba(0,255,144,.08), inset 0 0 24px rgba(0,255,144,.02) !important;
-}
-[data-theme="neon"] .card:hover {
-  border-color: #00ff9060 !important;
-  box-shadow: 0 0 20px rgba(0,255,144,.14), inset 0 0 30px rgba(0,255,144,.03) !important;
-}
-[data-theme="neon"] .card-hd-title {
-  color: #00ff90;
-  font-size: 9px;
-  letter-spacing: .2em;
-  text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(0,255,144,.5);
-}
-[data-theme="neon"] .kpi {
-  background: rgba(0,255,144,.02) !important;
-  border: 1px solid #00ff9040 !important;
-  border-radius: 0 !important;
-  box-shadow: 0 0 10px rgba(0,255,144,.1) !important;
-}
-[data-theme="neon"] .kpi-value {
-  font-size: 22px;
-  color: #00ff90;
-  text-shadow: 0 0 12px rgba(0,255,144,.6);
-}
-[data-theme="neon"] .kpi-label {
-  font-size: 8px;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #008040;
-}
-[data-theme="neon"] .brand-title {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .18em;
-  color: #00ff90;
-  text-shadow: 0 0 10px rgba(0,255,144,.5);
-}
-[data-theme="neon"] .brand-title em {
-  color: #ff00c8;
-  font-style: normal;
-  text-shadow: 0 0 10px rgba(255,0,200,.5);
-}
-[data-theme="neon"] .sidebar {
-  background: #010108;
-  border-right: 1px solid #00ff9025;
-}
-[data-theme="neon"] .nav-item {
-  font-size: 10px;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: #008040;
-}
-[data-theme="neon"] .nav-item.active {
-  color: #00ff90;
-  background: rgba(0,255,144,.05);
-  text-shadow: 0 0 8px rgba(0,255,144,.4);
-}
-[data-theme="neon"] .nav-item.active::before {
-  background: #00ff90;
-  box-shadow: 0 0 6px #00ff90;
-}
-[data-theme="neon"] .nav-item:hover { color: #00cc70; background: rgba(0,255,144,.03); }
-[data-theme="neon"] .topbar {
-  background: #010108;
-  border-bottom: 1px solid #00ff9025;
-  box-shadow: 0 1px 8px rgba(0,255,144,.06);
-}
-[data-theme="neon"] .chip {
-  border-radius: 0;
-  border-color: #00ff9030;
-  color: #008040;
-  background: transparent;
-  font-size: 9px;
-  letter-spacing: .1em;
-}
-/* Chip activo con glow */
-[data-theme="neon"] .chip.on-lay,
-[data-theme="neon"] .chip.on-21,
-[data-theme="neon"] .chip.on-22,
-[data-theme="neon"] .chip.on-23,
-[data-theme="neon"] .chip.on-24 {
-  border-color: #00ff90;
-  color: #00ff90;
-  box-shadow: 0 0 6px rgba(0,255,144,.3);
-}
-/* Tablas con glow en hover */
-[data-theme="neon"] tr:hover td { background: rgba(0,255,144,.04) !important; }
-[data-theme="neon"] th { color: #00ff90; letter-spacing: .12em; text-transform: uppercase; }
-/* Scanlines overlay via body::after */
-[data-theme="neon"] body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,.08) 2px,
-    rgba(0,0,0,.08) 4px
-  );
-}
-/* Números positivos/negativos con glow */
-[data-theme="neon"] .pos, [data-theme="neon"] [style*="var(--pos)"] {
-  text-shadow: 0 0 8px rgba(0,255,144,.5);
-}
-[data-theme="neon"] .neg, [data-theme="neon"] [style*="var(--neg)"] {
-  text-shadow: 0 0 8px rgba(255,0,200,.5);
-}
-
 /* Per-theme body gradient overrides */
 [data-theme="tableau"] body,
 [data-theme="powerbi"] body,
 [data-theme="gobierno"] body,
 [data-theme="ft"] body { background-image: none; }
-[data-theme="density"] body {
-  background-image:
-    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(0,201,177,.05) 0%, transparent 70%),
-    radial-gradient(ellipse 40% 50% at 10% 80%, rgba(59,158,255,.04) 0%, transparent 70%);
-}
 /* Card radius per theme */
 .card { border-radius: var(--radius-card, 4px); }
 
@@ -604,14 +317,6 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 [data-theme="tableau"] .kpi  { border-left: 4px solid var(--y21); }
 [data-theme="tableau"] .kpi-value { font-size: 28px; color:#b8a000; }
 [data-theme="tableau"] .card-hd-title { font-weight: 700; font-size: 9px; }
-
-/* Density: tight, information-dense */
-[data-theme="density"] .card { padding: 12px 14px; }
-[data-theme="density"] .card-hd { margin-bottom: 9px; }
-[data-theme="density"] .card-hd-title { font-size: 8.5px; font-weight: 500; letter-spacing:.1em; }
-[data-theme="density"] .kpi-value { font-size: 22px; }
-[data-theme="density"] .kpi-label { font-size: 7.5px; }
-[data-theme="density"] canvas { max-height: 185px; }
 
 /* Power BI: bordered structured cards */
 [data-theme="powerbi"] .card { border-top: 2px solid var(--y21); border-left: none; border-right: none; border-bottom: none; border-radius: 0; padding: 14px 16px; }
@@ -624,6 +329,196 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 [data-theme="gobierno"] .brand-title { font-family: var(--ui); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; }
 [data-theme="gobierno"] .brand-title em { font-style: normal; }
 [data-theme="gobierno"] .card-hd-title { font-weight: 600; font-size: 9px; }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA — PIZARRÓN
+   Estética: Gris carbón cálido, dorado, serifas
+══════════════════════════════════════════════════════════ */
+[data-theme="pizarron"] {
+  --bg:   #1E2124;
+  --s1:   #252830;
+  --s2:   #2C3038;
+  --s3:   #343840;
+  --bd:   #3E4350;
+  --bd2:  #525868;
+  --y21:  #F5C842;
+  --y22:  #4ECDC4;
+  --y23:  #FF6B6B;
+  --y24:  #A8DADC;
+  --pos:  #56CFB2;
+  --neg:  #FF6B6B;
+  --text: #E8E0D0;
+  --dim:  #6B7280;
+  --dim2: #2C3038;
+  --serif:  'Libre Baskerville', Georgia, serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #6B7280;
+  --chart-grid: #2C3038;
+  --radius-card: 6px;
+}
+[data-theme="pizarron"] body { background-image: none; font-size: 12.5px; }
+[data-theme="pizarron"] .card {
+  border-radius: 6px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25) !important;
+}
+[data-theme="pizarron"] .card-hd-title { font-weight: 600; letter-spacing: .04em; }
+[data-theme="pizarron"] .kpi { border-bottom: 2px solid var(--y21); border-radius: 6px !important; }
+[data-theme="pizarron"] .kpi-value { font-size: 26px; color: var(--text); }
+[data-theme="pizarron"] .brand-title { font-family: var(--serif); }
+[data-theme="pizarron"] .brand-title em { color: var(--y21); }
+[data-theme="pizarron"] .nav-item.active { color: var(--y21); }
+[data-theme="pizarron"] .nav-item.active::before { background: var(--y21); }
+[data-theme="pizarron"] .sidebar { background: #1A1D20; border-right-color: #3E4350; }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA — ÍNDIGO
+   Estética: Azul profundo, lavanda
+══════════════════════════════════════════════════════════ */
+[data-theme="indigo"] {
+  --bg:   #13111E;
+  --s1:   #1A1830;
+  --s2:   #201E3C;
+  --s3:   #272548;
+  --bd:   #352F5E;
+  --bd2:  #4A4480;
+  --y21:  #A78BFA;
+  --y22:  #60A5FA;
+  --y23:  #F472B6;
+  --y24:  #34D399;
+  --pos:  #34D399;
+  --neg:  #F87171;
+  --text: #E2DEFF;
+  --dim:  #6B63A8;
+  --dim2: #201E3C;
+  --serif:  'Inter', 'Segoe UI', sans-serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #6B63A8;
+  --chart-grid: #201E3C;
+  --radius-card: 10px;
+}
+[data-theme="indigo"] body {
+  background-image:
+    radial-gradient(ellipse 50% 40% at 70% 10%, rgba(167,139,250,.08) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 20% 90%, rgba(96,165,250,.06) 0%, transparent 60%);
+}
+[data-theme="indigo"] .card {
+  border-radius: 10px !important;
+  border-color: #352F5E !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3) !important;
+}
+[data-theme="indigo"] .card-hd-title { font-weight: 500; letter-spacing: .03em; color: #C4B8FF; }
+[data-theme="indigo"] .kpi { border-radius: 10px !important; border-color: #352F5E !important; }
+[data-theme="indigo"] .kpi-value { font-size: 26px; color: #A78BFA; }
+[data-theme="indigo"] .kpi-label { color: #6B63A8; }
+[data-theme="indigo"] .brand-title em { color: #A78BFA; }
+[data-theme="indigo"] .nav-item.active { color: #A78BFA; background: rgba(167,139,250,.1); }
+[data-theme="indigo"] .nav-item.active::before { background: #A78BFA; }
+[data-theme="indigo"] .nav-item:hover { background: rgba(167,139,250,.06); }
+[data-theme="indigo"] .sidebar { background: #100F1A; border-right-color: #352F5E; }
+[data-theme="indigo"] .chip { border-radius: 20px; }
+[data-theme="indigo"] .topbar { background: #100F1A; border-bottom-color: #352F5E; }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA — ROSÉ
+   Estética: Marfil y rosa palo
+══════════════════════════════════════════════════════════ */
+[data-theme="rose"] {
+  --bg:   #FDF8F6;
+  --s1:   #FFFFFF;
+  --s2:   #FDF0EE;
+  --s3:   #FAE6E3;
+  --bd:   #F0D4CF;
+  --bd2:  #DBAAA3;
+  --y21:  #B5344F;
+  --y22:  #7B4F8A;
+  --y23:  #C47A3A;
+  --y24:  #3A7A8A;
+  --pos:  #2E7D52;
+  --neg:  #B5344F;
+  --text: #2D1A1A;
+  --dim:  #A07070;
+  --dim2: #F5E0DC;
+  --serif:  'Libre Baskerville', Georgia, serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #A07070;
+  --chart-grid: #FAE6E3;
+  --radius-card: 8px;
+}
+[data-theme="rose"] body { background-image: none; }
+[data-theme="rose"] .card {
+  border-radius: 8px !important;
+  box-shadow: 0 1px 4px rgba(180,80,80,.08) !important;
+  border-color: #F0D4CF !important;
+}
+[data-theme="rose"] .card-hd-title { font-weight: 600; color: #2D1A1A; }
+[data-theme="rose"] .kpi {
+  border-radius: 8px !important;
+  border-color: #F0D4CF !important;
+  border-left: 3px solid #B5344F !important;
+}
+[data-theme="rose"] .kpi-value { color: #2D1A1A; font-size: 26px; }
+[data-theme="rose"] .kpi-label { color: #B5344F; font-weight: 600; }
+[data-theme="rose"] .brand-title { font-family: var(--serif); color: #2D1A1A; }
+[data-theme="rose"] .brand-title em { color: #B5344F; font-style: italic; }
+[data-theme="rose"] .sidebar { background: #FDF0EE; border-right: 1px solid #F0D4CF; }
+[data-theme="rose"] .nav-item { color: #A07070; }
+[data-theme="rose"] .nav-item.active { color: #B5344F; background: rgba(181,52,79,.06); }
+[data-theme="rose"] .nav-item.active::before { background: #B5344F; }
+[data-theme="rose"] .nav-item:hover { color: #B5344F; background: rgba(181,52,79,.04); }
+[data-theme="rose"] .topbar { background: #FFFFFF; border-bottom: 1px solid #F0D4CF; }
+[data-theme="rose"] .chip { border-radius: 20px; border-color: #DBAAA3; color: #A07070; }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA — JADE
+   Estética: Verde bosque oscuro, esmeralda
+══════════════════════════════════════════════════════════ */
+[data-theme="jade"] {
+  --bg:   #071510;
+  --s1:   #0C1E16;
+  --s2:   #10261C;
+  --s3:   #163022;
+  --bd:   #1E4030;
+  --bd2:  #2A5840;
+  --y21:  #10B981;
+  --y22:  #34D399;
+  --y23:  #FBBF24;
+  --y24:  #60A5FA;
+  --pos:  #10B981;
+  --neg:  #F87171;
+  --text: #D0F0E0;
+  --dim:  #2A5840;
+  --dim2: #0C1E16;
+  --serif:  'Inter', 'Segoe UI', sans-serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #2A5840;
+  --chart-grid: #10261C;
+  --radius-card: 6px;
+}
+[data-theme="jade"] body {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(16,185,129,.06) 0%, transparent 70%);
+}
+[data-theme="jade"] .card {
+  border-radius: 6px !important;
+  border-color: #1E4030 !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.3) !important;
+}
+[data-theme="jade"] .card-hd-title { color: #34D399; letter-spacing: .04em; }
+[data-theme="jade"] .kpi { border-radius: 6px !important; border-color: #1E4030 !important; border-left: 2px solid #10B981 !important; }
+[data-theme="jade"] .kpi-value { font-size: 25px; color: #10B981; }
+[data-theme="jade"] .kpi-label { color: #2A5840; }
+[data-theme="jade"] .brand-title em { color: #10B981; }
+[data-theme="jade"] .nav-item { color: #2A5840; }
+[data-theme="jade"] .nav-item.active { color: #10B981; background: rgba(16,185,129,.08); }
+[data-theme="jade"] .nav-item.active::before { background: #10B981; }
+[data-theme="jade"] .nav-item:hover { color: #34D399; background: rgba(16,185,129,.05); }
+[data-theme="jade"] .sidebar { background: #060F0A; border-right-color: #1E4030; }
+[data-theme="jade"] .topbar { background: #060F0A; border-bottom-color: #1E4030; }
+[data-theme="jade"] .chip { border-color: #1E4030; color: #2A5840; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -2139,14 +2034,20 @@ self.onmessage = async (e) => {
       <div class="cs-group" style="flex-direction:column;align-items:flex-start;gap:5px">
         <span class="cs-label">🎨 Tema</span>
         <div class="cs-chips" id="tema-chips" style="gap:4px">
-          <div class="chip on-lay" data-tema="" onclick="setTheme('',this)" title="Ejecutivo oscuro">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#c4d600;margin-right:4px;vertical-align:middle"></span>Ejecutivo
+          <div class="chip on-lay" data-tema="pizarron" onclick="setTheme('pizarron',this)" title="Pizarrón — gris carbón cálido, dorado">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#F5C842;margin-right:4px;vertical-align:middle"></span>Pizarrón
+          </div>
+          <div class="chip" data-tema="indigo" onclick="setTheme('indigo',this)" title="Índigo — azul profundo, lavanda">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#A78BFA;margin-right:4px;vertical-align:middle"></span>Índigo
+          </div>
+          <div class="chip" data-tema="rose" onclick="setTheme('rose',this)" title="Rosé — marfil y rosa palo">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#B5344F;margin-right:4px;vertical-align:middle"></span>Rosé
+          </div>
+          <div class="chip" data-tema="jade" onclick="setTheme('jade',this)" title="Jade — verde bosque oscuro, esmeralda">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#10B981;margin-right:4px;vertical-align:middle"></span>Jade
           </div>
           <div class="chip" data-tema="tableau" onclick="setTheme('tableau',this)" title="Tableau claro">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e8613c;margin-right:4px;vertical-align:middle"></span>Tableau
-          </div>
-          <div class="chip" data-tema="density" onclick="setTheme('density',this)" title="Alta densidad">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#00c9b1;margin-right:4px;vertical-align:middle"></span>Density
           </div>
           <div class="chip" data-tema="powerbi" onclick="setTheme('powerbi',this)" title="Power BI claro">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#118dff;margin-right:4px;vertical-align:middle"></span>Power BI
@@ -2154,14 +2055,8 @@ self.onmessage = async (e) => {
           <div class="chip" data-tema="gobierno" onclick="setTheme('gobierno',this)" title="Gobierno institucional">
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#003087;margin-right:4px;vertical-align:middle"></span>Gobierno
           </div>
-          <div class="chip" data-tema="bloomberg" onclick="setTheme('bloomberg',this)" title="Bloomberg Terminal — amber sobre negro, estilo trading">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#ff8c00;margin-right:4px;vertical-align:middle"></span>Bloomberg
-          </div>
-          <div class="chip" data-tema="ft" onclick="setTheme('ft',this)" title="Financial Times — papel salmón, serif, estilo informe impreso">
+          <div class="chip" data-tema="ft" onclick="setTheme('ft',this)" title="Financial Times — papel salmón, serif">
             <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#990F3D;margin-right:4px;vertical-align:middle"></span>FT Papel
-          </div>
-          <div class="chip" data-tema="neon" onclick="setTheme('neon',this)" title="Neon Wireframe — bordes luminosos, scanlines, cyberpunk">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#00ff90;margin-right:4px;vertical-align:middle;box-shadow:0 0 4px #00ff90"></span>Neon
           </div>
           <button class="imp-ctrl-btn" id="btn-fix-tema" onclick="fixDefaultTheme()" title="Fijar tema predeterminado" style="margin-left:4px;font-size:9px;padding:3px 8px">☆ Fijar</button>
         </div>
@@ -17378,7 +17273,7 @@ document.getElementById('sel-emp').value = 'EDELAR';
 (function initTheme() {
   const defaultT = localStorage.getItem('lr_default_theme');
   const lastT    = localStorage.getItem('lr_last_theme');
-  const t = defaultT !== null ? defaultT : (lastT !== null ? lastT : '');
+  const t = defaultT !== null ? defaultT : (lastT !== null ? lastT : 'pizarron');
   // Apply without triggering save (skipSave=true)
   document.documentElement.setAttribute('data-theme', t);
   document.querySelectorAll('#tema-chips .chip').forEach(c => {
