@@ -8560,8 +8560,10 @@ function buildComparacionFlujos() {
     // Equivalent: vB adjusted by inflation (what vB would be at current prices)
     const vBEq = (vB!=null&&ipc) ? vB * (1 + ipc/100) : null;
     const st = _estComp(lbl, tipo);
-    const cv = vn==null?'var(--dim)':vn>0?'var(--neg)':'var(--pos)';
-    const cr = vr==null?'var(--dim)':vr>0?'var(--neg)':'var(--pos)';
+    const isIng = tipo === 'ingreso';
+    // ingresos: sube = verde, baja = rojo  |  egresos/resultado: sube = rojo, baja = verde
+    const cv = vn==null?'var(--dim)': isIng ? (vn>0?'var(--pos)':'var(--neg)') : (vn>0?'var(--neg)':'var(--pos)');
+    const cr = vr==null?'var(--dim)': isIng ? (vr>0?'var(--pos)':'var(--neg)') : (vr>0?'var(--neg)':'var(--pos)');
     return `<tr style="background:${st.bg};${st.bt}">
       <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};border-bottom:1px solid var(--bd2)">${fmtM(vA)}</td>
@@ -8744,8 +8746,9 @@ function exportarFlujoExcel() {
     return (v<0?'($ ':' $ ') + a.toLocaleString('es-AR') + (v<0?')':'');
   };
   const P = (v, d=1) => v==null ? '—' : (v>0?'+':'')+v.toFixed(d)+'%';
-  const pColor = v => v==null?'#888':v>=0?'#1a9e68':'#d93025';
-  const pBg    = v => v==null?'transparent':v>=0?'#e8f5e9':'#fce8e6';
+  // isIng=true → sube=verde/baja=rojo | isIng=false → sube=rojo/baja=verde
+  const pColor = (v, isIng=false) => v==null?'#888': isIng?(v>=0?'#1a9e68':'#d93025'):(v>=0?'#d93025':'#1a9e68');
+  const pBg    = (v, isIng=false) => v==null?'transparent': isIng?(v>=0?'#e8f5e9':'#fce8e6'):(v>=0?'#fce8e6':'#e8f5e9');
   const covColor = c => c==null?'#888':c>=90?'#1a9e68':c>=70?'#b36a00':'#d93025';
 
   const hoy = new Date();
@@ -8817,25 +8820,27 @@ function exportarFlujoExcel() {
     const vn=(vA!=null&&vB!=null&&vB!==0)?(vA-vB)/Math.abs(vB)*100:null;
     const vr=(vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
     const isIng=tipo==='ingreso'; const isRes=tipo==='resultado'||tipo==='total';
-    const bg=isRes?'#fff8e1':isIng?'#e8f5f0':'#fff';
-    const fw=isRes?'700':'400';
+    const bg=isRes?'#fffde7':isIng?'#f0faf5':'#fafafa';
+    const fw=isRes?'700':isIng?'500':'400';
+    const lblColor=isRes?'#b36a00':isIng?'#1a6640':'#444';
+    const stripe=isRes?'border-left:3px solid #f0c040':'';
     const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
-    return `<tr style="background:${bg}">
-      <td style="padding:5px 10px;border-bottom:1px solid #eee;font-weight:${fw};font-family:monospace;font-size:10px">${lbl}</td>
-      <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:10px;font-weight:${fw};color:${vA<0?'#d93025':'#333'}">${C(vA)}</td>
-      <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:10px;color:#888">${C(vB)}</td>
-      ${ipc?`<td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:9px;color:#aaa">${vBEq!=null?'≈'+C(vBEq):'—'}</td>`:''}
-      <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:10px;font-weight:600;color:${pColor(vn!=null?-vn:null)};background:${vn!=null?pBg(-vn):'transparent'}">${P(vn)}</td>
-      <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:10px;font-weight:600;color:${pColor(vr!=null?-vr:null)};background:${vr!=null?pBg(-vr):'transparent'}">${P(vr)}</td>
+    return `<tr style="background:${bg};${stripe}">
+      <td style="padding:6px 12px;border-bottom:1px solid #e8eaf0;font-weight:${fw};font-family:monospace;font-size:10px;color:${lblColor}">${lbl}</td>
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e8eaf0;font-family:monospace;font-size:10px;font-weight:${fw};color:${vA!=null&&vA<0?'#d93025':'#333'}">${C(vA)}</td>
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e8eaf0;font-family:monospace;font-size:10px;color:#aaa">${C(vB)}</td>
+      ${ipc?`<td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e8eaf0;font-family:monospace;font-size:9px;color:#bbb">${vBEq!=null?'≈'+C(vBEq):'—'}</td>`:''}
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e8eaf0;font-family:monospace;font-size:10px;font-weight:600;color:${pColor(vn,isIng)};background:${pBg(vn,isIng)};border-radius:3px">${P(vn)}</td>
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e8eaf0;font-family:monospace;font-size:10px;font-weight:600;color:${pColor(vr,isIng)};background:${pBg(vr,isIng)};border-radius:3px">${P(vr)}</td>
     </tr>`;
   }).join('');
 
-  // ── KPI card helper ───────────────────────────────────────────────
+  // ── KPI card helper (legacy, kept for fallback) ────────────────────
   const kpiCard = (label, value, color='#333', border='#ddd', note='') =>
-    `<div style="background:#fff;border:1px solid ${border};border-left:4px solid ${border};border-radius:6px;padding:12px 16px;min-width:140px;flex:1">
-      <div style="font-size:8px;color:#999;font-family:monospace;letter-spacing:.08em;margin-bottom:6px">${label}</div>
-      <div style="font-size:16px;font-weight:700;color:${color};font-family:monospace">${value}</div>
-      ${note?`<div style="font-size:8px;color:#aaa;margin-top:4px;font-family:monospace">${note}</div>`:''}
+    `<div class="kpi-card" style="border-top-color:${border}">
+      <div class="lbl">${label}</div>
+      <div class="val" style="color:${color}">${value}</div>
+      ${note?`<div class="note">${note}</div>`:''}
     </div>`;
 
   // ── semáforo ──────────────────────────────────────────────────────
@@ -8851,24 +8856,81 @@ function exportarFlujoExcel() {
 <title>Informe Flujo de Fondos — ${fA.empresa} · ${fA.periodo}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; background: #f4f6f8; color: #333; font-size: 11px; }
-  .page { max-width: 960px; margin: 0 auto; padding: 24px; }
-  .header { background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: #fff; padding: 24px 28px; border-radius: 8px; margin-bottom: 20px; }
-  .header h1 { font-size: 20px; font-weight: 700; font-family: monospace; margin-bottom: 6px; }
-  .header .sub { font-size: 11px; color: rgba(255,255,255,.7); font-family: monospace; letter-spacing: .06em; }
-  .section-title { font-size: 10px; font-weight: 700; color: #1a237e; letter-spacing: .1em; text-transform: uppercase; margin: 20px 0 10px; border-bottom: 2px solid #1a237e; padding-bottom: 5px; }
-  .card { background: #fff; border-radius: 8px; border: 1px solid #e8eaf0; padding: 16px 18px; margin-bottom: 14px; }
-  .kpis { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
-  table.comp { width: 100%; border-collapse: collapse; font-size: 10px; }
-  table.comp thead th { background: #1a237e; color: #fff; padding: 7px 10px; text-align: right; font-family: monospace; font-size: 9px; letter-spacing: .06em; font-weight: 400; }
-  table.comp thead th:first-child { text-align: left; }
-  table.comp tbody tr:hover { background: #f0f4ff !important; }
-  .semaforo { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-radius: 6px; border-left: 5px solid ${semColor}; background: #fff; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee; margin-bottom: 14px; }
-  .semaforo .icon { font-size: 28px; }
-  .semaforo .status { font-size: 16px; font-weight: 700; color: ${semColor}; font-family: monospace; }
-  .semaforo .detail { font-size: 10px; color: #888; font-family: monospace; margin-top: 3px; }
-  .footer { text-align: center; color: #aaa; font-size: 8px; margin-top: 24px; font-family: monospace; }
-  @media print { body { background: #fff; } .page { padding: 10px; } }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef0f5; color: #2c2c3a; font-size: 11px; }
+  .page { max-width: 980px; margin: 0 auto; padding: 28px 24px; }
+
+  /* HEADER */
+  .header { background: linear-gradient(135deg, #0d1b4b 0%, #1a3a8f 60%, #1565c0 100%);
+    color: #fff; padding: 28px 32px; border-radius: 10px; margin-bottom: 22px;
+    box-shadow: 0 4px 18px rgba(21,101,192,.25); position: relative; overflow: hidden; }
+  .header::after { content:''; position:absolute; right:-40px; top:-40px; width:200px; height:200px;
+    background:rgba(255,255,255,.04); border-radius:50%; }
+  .header .badge { display:inline-block; background:rgba(255,255,255,.15); color:rgba(255,255,255,.9);
+    font-size:8px; font-family:monospace; letter-spacing:.1em; padding:3px 8px; border-radius:20px; margin-bottom:10px; }
+  .header h1 { font-size:22px; font-weight:700; font-family:monospace; margin-bottom:6px; letter-spacing:.02em; }
+  .header .sub { font-size:10.5px; color:rgba(255,255,255,.65); font-family:monospace; letter-spacing:.05em; }
+  .header .periods { margin-top:10px; display:flex; gap:10px; }
+  .header .period-tag { background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2);
+    color:#fff; font-family:monospace; font-size:10px; padding:3px 10px; border-radius:4px; }
+
+  /* SECTION TITLES */
+  .section-title { font-size:9px; font-weight:700; color:#1a3a8f; letter-spacing:.12em;
+    text-transform:uppercase; margin:22px 0 10px; display:flex; align-items:center; gap:8px; }
+  .section-title::after { content:''; flex:1; height:1px; background:linear-gradient(to right,#c5cae9,transparent); }
+
+  /* CARDS */
+  .card { background:#fff; border-radius:8px; border:1px solid #e3e6f0;
+    padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.05); }
+
+  /* KPI GRID */
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:16px; }
+  .kpi-card { background:#fff; border-radius:8px; border:1px solid #e3e6f0; border-top:3px solid #ddd;
+    padding:12px 14px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
+  .kpi-card .lbl { font-size:7.5px; color:#9ea3b8; font-family:monospace; letter-spacing:.1em; margin-bottom:6px; }
+  .kpi-card .val { font-size:15px; font-weight:700; font-family:monospace; }
+  .kpi-card .note { font-size:8px; color:#bbb; margin-top:4px; font-family:monospace; }
+
+  /* SEMÁFORO */
+  .semaforo { display:flex; align-items:center; gap:16px; padding:14px 20px; border-radius:8px;
+    border-left:5px solid ${semColor}; background:#fff; border:1px solid #e3e6f0;
+    border-left:5px solid ${semColor}; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.05); }
+  .semaforo .icon { font-size:30px; line-height:1; }
+  .semaforo .status { font-size:15px; font-weight:700; color:${semColor}; font-family:monospace; }
+  .semaforo .detail { font-size:10px; color:#888; font-family:monospace; margin-top:3px; }
+
+  /* TABLE */
+  table.comp { width:100%; border-collapse:collapse; font-size:10px; }
+  table.comp thead tr { background:linear-gradient(135deg,#0d1b4b,#1a3a8f); }
+  table.comp thead th { color:rgba(255,255,255,.85); padding:8px 10px; text-align:right;
+    font-family:monospace; font-size:8.5px; letter-spacing:.06em; font-weight:500; }
+  table.comp thead th:first-child { text-align:left; border-radius:0; }
+  table.comp tbody tr:nth-child(even) { filter:brightness(.97); }
+  table.comp tbody tr:hover { background:#e8edff !important; }
+  .pct-pill { display:inline-block; padding:1px 6px; border-radius:10px; font-size:9.5px; font-weight:600; font-family:monospace; }
+
+  /* COSTO LABORAL */
+  .lab-grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0; }
+  .lab-cell { padding:10px 14px; border-right:1px solid #eef0f5; }
+  .lab-cell:last-child { border-right:none; }
+  .lab-cell .lbl { font-size:7.5px; color:#9ea3b8; font-family:monospace; letter-spacing:.08em; margin-bottom:5px; }
+  .lab-cell .val { font-size:14px; font-weight:700; font-family:monospace; }
+  .lab-cell .sub { font-size:8.5px; color:#aaa; font-family:monospace; margin-top:3px; }
+
+  /* CHARTS GRID */
+  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .charts-grid .card { margin-bottom:0; }
+  .chart-title { font-size:9px; font-weight:700; color:#555; letter-spacing:.06em; text-transform:uppercase; margin-bottom:10px; font-family:monospace; }
+
+  /* FOOTER */
+  .footer { display:flex; justify-content:space-between; align-items:center; padding:12px 0;
+    border-top:1px solid #e3e6f0; color:#aaa; font-size:8px; font-family:monospace; margin-top:10px; }
+
+  @media print {
+    body { background:#fff; }
+    .page { padding:10px; }
+    .charts-grid { grid-template-columns:1fr 1fr; }
+    .header { box-shadow:none; }
+  }
 </style>
 </head>
 <body>
@@ -8876,58 +8938,87 @@ function exportarFlujoExcel() {
 
   <!-- ENCABEZADO -->
   <div class="header">
-    <div class="sub">INFORME DE FLUJO DE FONDOS · EMPRESAS ESTATALES LA RIOJA</div>
+    <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
     <h1>${fA.empresa}</h1>
-    <div class="sub">${fA.periodo} vs ${fB.periodo}${ipc?' · IPC '+ipc+'%':''} · Generado el ${fecha}</div>
+    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC '+ipc+'%':''}</div>
+    <div class="periods">
+      <span class="period-tag">▶ ${fA.periodo}</span>
+      <span style="color:rgba(255,255,255,.4);font-size:10px;align-self:center">vs</span>
+      <span class="period-tag" style="opacity:.7">${fB.periodo}</span>
+      <span style="margin-left:auto;color:rgba(255,255,255,.45);font-size:9px;font-family:monospace;align-self:center">${fecha}</span>
+    </div>
   </div>
 
   <!-- SEMÁFORO -->
   <div class="semaforo">
     <div class="icon">${semEmoji}</div>
-    <div>
+    <div style="flex:1">
       <div class="status">${semText}</div>
-      <div class="detail">Cobertura ing/egr: ${covA!=null?covA.toFixed(1)+'%':'—'}${covB!=null?' (ant: '+covB.toFixed(1)+'%  Δ '+(covA-covB>0?'+':'')+(covA-covB).toFixed(1)+' pp)':''}</div>
+      <div class="detail">Cobertura ingresos/egresos: <strong>${covA!=null?covA.toFixed(1)+'%':'—'}</strong>${covB!=null?' · período anterior: '+covB.toFixed(1)+'%  (Δ '+(covA-covB>0?'+':'')+(covA-covB).toFixed(1)+' pp)':''}</div>
     </div>
-    ${ipc&&necA?`<div style="margin-left:auto;text-align:right">
-      <div style="font-size:8px;color:#aaa;font-family:monospace">Proyección próx. período (IPC ${ipc}%)</div>
-      <div style="font-size:14px;font-weight:700;color:#b36a00;font-family:monospace">${C(necA*(1+ipc/100))}</div>
+    ${ipc&&necA?`<div style="text-align:right;border-left:1px solid #eee;padding-left:16px">
+      <div style="font-size:7.5px;color:#aaa;font-family:monospace;letter-spacing:.08em;margin-bottom:4px">PROYECCIÓN PRÓX. PERÍODO · IPC ${ipc}%</div>
+      <div style="font-size:16px;font-weight:700;color:#b36a00;font-family:monospace">${C(necA*(1+ipc/100))}</div>
     </div>`:''}
   </div>
 
   <!-- KPIs -->
   <div class="section-title">Indicadores clave</div>
   <div class="kpis">
-    ${kpiCard('NECESIDAD DE FONDOS · '+fA.periodo, C(necA), '#d93025', '#d93025')}
-    ${kpiCard('NECESIDAD DE FONDOS · '+fB.periodo, C(necB), '#888', '#ccc')}
-    ${kpiCard('VAR. NOMINAL DÉFICIT', P(varNom), pColor(varNom?-varNom:null), varNom!=null?(varNom>0?'#d93025':'#1a9e68'):'#ccc')}
-    ${ipc?kpiCard('VAR. REAL (FISHER)', P(varReal), pColor(varReal?-varReal:null), varReal!=null?(varReal>0?'#d93025':'#1a9e68'):'#ccc', 'IPC '+ipc+'%'):''}
-    ${kpiCard('COBERTURA ING/EGR', covA!=null?covA.toFixed(1)+'%':'—', covColor(covA), covColor(covA))}
-    ${kpiCard('TOTAL INGRESOS', C(ingA), '#1a9e68', '#1a9e68')}
-    ${kpiCard('TOTAL EGRESOS', C(egrA), '#d93025', '#d93025')}
+    <div class="kpi-card" style="border-top-color:#d93025;grid-column:span 2">
+      <div class="lbl">NECESIDAD DE FONDOS · ${fA.periodo}</div>
+      <div class="val" style="color:#d93025;font-size:20px">${C(necA)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:#aaa">
+      <div class="lbl">NECESIDAD ANT. · ${fB.periodo}</div>
+      <div class="val" style="color:#888">${C(necB)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:${pColor(-varNom)}">
+      <div class="lbl">VAR. NOMINAL DÉFICIT</div>
+      <div class="val" style="color:${pColor(-varNom)}">${P(varNom)}</div>
+    </div>
+    ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(-varReal)}">
+      <div class="lbl">VAR. REAL (FISHER)</div>
+      <div class="val" style="color:${pColor(-varReal)}">${P(varReal)}</div>
+      <div class="note">descontando IPC ${ipc}%</div>
+    </div>`:''}
+    <div class="kpi-card" style="border-top-color:${covColor(covA)}">
+      <div class="lbl">COBERTURA ING/EGR</div>
+      <div class="val" style="color:${covColor(covA)}">${covA!=null?covA.toFixed(1)+'%':'—'}</div>
+      ${covB!=null?`<div class="note">ant: ${covB.toFixed(1)}%</div>`:''}
+    </div>
+    <div class="kpi-card" style="border-top-color:#1a9e68">
+      <div class="lbl">TOTAL INGRESOS</div>
+      <div class="val" style="color:#1a9e68">${C(ingA)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:#d93025">
+      <div class="lbl">TOTAL EGRESOS</div>
+      <div class="val" style="color:#d93025">${C(egrA)}</div>
+    </div>
   </div>
 
   <!-- COSTO LABORAL -->
   ${(labA||labB)?`<div class="section-title">Costo laboral</div>
-  <div class="card" style="border-left:4px solid #e8c84a">
-    <div style="display:flex;gap:24px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:8px;color:#aaa;font-family:monospace;margin-bottom:4px">${fA.periodo}</div>
-        <div style="font-size:15px;font-weight:700;color:#d93025;font-family:monospace">${C(labA)}</div>
-        ${(egrA&&labA)?`<div style="font-size:9px;color:#888;font-family:monospace">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>`:''}
+  <div class="card" style="padding:0;border-top:3px solid #e8c84a;overflow:hidden">
+    <div class="lab-grid">
+      <div class="lab-cell">
+        <div class="lbl">${fA.periodo}</div>
+        <div class="val" style="color:#d93025">${C(labA)}</div>
+        ${(egrA&&labA)?`<div class="sub">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>`:''}
       </div>
-      <div>
-        <div style="font-size:8px;color:#aaa;font-family:monospace;margin-bottom:4px">${fB.periodo}</div>
-        <div style="font-size:15px;font-weight:700;color:#888;font-family:monospace">${C(labB)}</div>
-        ${(egrB&&labB)?`<div style="font-size:9px;color:#888;font-family:monospace">${(Math.abs(labB)/Math.abs(egrB)*100).toFixed(1)}% de egresos</div>`:''}
+      <div class="lab-cell">
+        <div class="lbl">${fB.periodo}</div>
+        <div class="val" style="color:#888">${C(labB)}</div>
+        ${(egrB&&labB)?`<div class="sub">${(Math.abs(labB)/Math.abs(egrB)*100).toFixed(1)}% de egresos</div>`:''}
       </div>
-      <div style="border-left:1px solid #eee;padding-left:24px">
-        <div style="font-size:8px;color:#aaa;font-family:monospace;margin-bottom:4px">VAR. NOMINAL</div>
-        <div style="font-size:15px;font-weight:700;font-family:monospace;color:${pColor(labVarNom?-labVarNom:null)}">${P(labVarNom)}</div>
+      <div class="lab-cell">
+        <div class="lbl">VAR. NOMINAL</div>
+        <div class="val" style="color:${pColor(-labVarNom)}">${P(labVarNom)}</div>
       </div>
-      ${ipc?`<div>
-        <div style="font-size:8px;color:#aaa;font-family:monospace;margin-bottom:4px">VAR. REAL (FISHER)</div>
-        <div style="font-size:15px;font-weight:700;font-family:monospace;color:${pColor(labVarReal?-labVarReal:null)}">${P(labVarReal)}</div>
-      </div>`:''}
+      ${ipc?`<div class="lab-cell">
+        <div class="lbl">VAR. REAL (FISHER)</div>
+        <div class="val" style="color:${pColor(-labVarReal)}">${P(labVarReal)}</div>
+      </div>`:'<div class="lab-cell"></div>'}
     </div>
   </div>`:''}
 
@@ -8936,10 +9027,10 @@ function exportarFlujoExcel() {
   <div class="card" style="padding:0;overflow:hidden">
     <table class="comp">
       <thead><tr>
-        <th style="text-align:left;width:35%">Concepto</th>
+        <th style="text-align:left;width:34%;padding-left:14px">Concepto</th>
         <th>${fA.periodo}</th>
-        <th>${fB.periodo}</th>
-        ${ipc?`<th title="Valor anterior actualizado por IPC ${ipc}%">${fB.periodo} + IPC</th>`:''}
+        <th style="opacity:.7">${fB.periodo}</th>
+        ${ipc?`<th style="opacity:.5" title="Valor anterior actualizado por IPC ${ipc}%">${fB.periodo} + IPC</th>`:''}
         <th>Var. nominal</th>
         <th>Var. real${ipc?' (Fisher)':''}</th>
       </tr></thead>
@@ -8947,19 +9038,22 @@ function exportarFlujoExcel() {
     </table>
   </div>
 
-  <!-- RANKING EGRESOS -->
-  <div class="section-title">Ranking de egresos — ${fA.periodo}</div>
-  <div class="card">
-    ${svgRanking || '<div style="color:#aaa;font-size:10px">Sin rubros de egreso clasificados.</div>'}
+  <!-- CHARTS GRID -->
+  <div class="charts-grid">
+    <div class="card">
+      <div class="chart-title">Ranking de egresos — ${fA.periodo}</div>
+      ${svgRanking || '<div style="color:#aaa;font-size:10px">Sin rubros de egreso clasificados.</div>'}
+    </div>
+    <div class="card">
+      <div class="chart-title">Variación nominal por rubro</div>
+      ${svgVariacion || '<div style="color:#aaa;font-size:10px">Sin datos comparativos.</div>'}
+    </div>
   </div>
 
-  <!-- VARIACIÓN POR RUBRO -->
-  <div class="section-title">Variación nominal por rubro</div>
-  <div class="card">
-    ${svgVariacion || '<div style="color:#aaa;font-size:10px">Sin datos comparativos.</div>'}
+  <div class="footer">
+    <span>Dashboard Empresas Estatales · Provincia de La Rioja</span>
+    <span>${fecha}</span>
   </div>
-
-  <div class="footer">Dashboard Empresas Estatales — Provincia de La Rioja · ${fecha}</div>
 </div>
 </body>
 </html>`;
