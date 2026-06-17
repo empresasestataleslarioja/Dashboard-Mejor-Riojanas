@@ -103,36 +103,6 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 }
 
 /* ══════════════════════════════════════════════════════════
-   TEMA 2 — TABLEAU CLARO
-   Tipografía: Inter + IBM Plex Mono
-   Estética: Tableau Desktop — blanco, grises estructurales,
-             naranja coral + azul acero, datos a la vista
-══════════════════════════════════════════════════════════ */
-[data-theme="tableau"] {
-  --bg:   #f4f4f4;
-  --s1:   #ffffff;
-  --s2:   #f0f0f0;
-  --s3:   #e4e4e4;
-  --bd:   #d0d0d0;
-  --bd2:  #aaaaaa;
-  --y21:  #e8613c;
-  --y22:  #4e79a7;
-  --y23:  #59a14f;
-  --y24:  #b07aa1;
-  --pos:  #59a14f;
-  --neg:  #e15759;
-  --text: #1a1a1a;
-  --dim:  #767676;
-  --dim2: #e0e0e0;
-  --serif:  'Inter', 'Segoe UI', sans-serif;
-  --mono:   'IBM Plex Mono', 'Consolas', monospace;
-  --ui:     'Inter', sans-serif;
-  --chart-tick: #767676;
-  --chart-grid: #e8e8e8;
-  --radius-card: 3px;
-}
-
-/* ══════════════════════════════════════════════════════════
    TEMA 4 — POWER BI CLARO
    Tipografía: Source Sans 3 + IBM Plex Mono
    Estética: Power BI Desktop light — gris perla, azul
@@ -312,12 +282,6 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 /* Card radius per theme */
 .card { border-radius: var(--radius-card, 4px); }
 
-/* Tableau: clean crisp cards */
-[data-theme="tableau"] .card { box-shadow: 0 1px 4px rgba(0,0,0,.10); border-top: 3px solid var(--bd2); border-radius: 0; }
-[data-theme="tableau"] .kpi  { border-left: 4px solid var(--y21); }
-[data-theme="tableau"] .kpi-value { font-size: 28px; color:#b8a000; }
-[data-theme="tableau"] .card-hd-title { font-weight: 700; font-size: 9px; }
-
 /* Power BI: bordered structured cards */
 [data-theme="powerbi"] .card { border-top: 2px solid var(--y21); border-left: none; border-right: none; border-bottom: none; border-radius: 0; padding: 14px 16px; }
 [data-theme="powerbi"] .kpi  { border-top: 2px solid var(--y21); border-radius: 0; }
@@ -372,153 +336,273 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 [data-theme="pizarron"] .sidebar { background: #1A1D20; border-right-color: #3E4350; }
 
 /* ══════════════════════════════════════════════════════════
-   TEMA — ÍNDIGO
-   Estética: Azul profundo, lavanda
+   TEMA — ATLAS
+   Estética: Navy sidebar + contenido blanco, paleta multicolor BI
 ══════════════════════════════════════════════════════════ */
-[data-theme="indigo"] {
-  --bg:   #13111E;
-  --s1:   #1A1830;
-  --s2:   #201E3C;
-  --s3:   #272548;
-  --bd:   #352F5E;
-  --bd2:  #4A4480;
-  --y21:  #A78BFA;
-  --y22:  #60A5FA;
-  --y23:  #F472B6;
-  --y24:  #34D399;
-  --pos:  #34D399;
-  --neg:  #F87171;
-  --text: #E2DEFF;
-  --dim:  #6B63A8;
-  --dim2: #201E3C;
+[data-theme="atlas"] {
+  --bg:   #F4F7FB;
+  --s1:   #FFFFFF;
+  --s2:   #EEF2F8;
+  --s3:   #E3EAF4;
+  --bd:   #D0DCF0;
+  --bd2:  #A8BDD8;
+  --y21:  #2563EB;
+  --y22:  #0EA5E9;
+  --y23:  #F59E0B;
+  --y24:  #8B5CF6;
+  --pos:  #059669;
+  --neg:  #DC2626;
+  --text: #0F172A;
+  --dim:  #64748B;
+  --dim2: #E3EAF4;
   --serif:  'Inter', 'Segoe UI', sans-serif;
   --mono:   'IBM Plex Mono', 'Courier New', monospace;
   --ui:     'Inter', 'Segoe UI', sans-serif;
-  --chart-tick: #6B63A8;
-  --chart-grid: #201E3C;
-  --radius-card: 10px;
-}
-[data-theme="indigo"] body {
-  background-image:
-    radial-gradient(ellipse 50% 40% at 70% 10%, rgba(167,139,250,.08) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 50% at 20% 90%, rgba(96,165,250,.06) 0%, transparent 60%);
-}
-[data-theme="indigo"] .card {
-  border-radius: 10px !important;
-  border-color: #352F5E !important;
-  box-shadow: 0 4px 16px rgba(0,0,0,.3) !important;
-}
-[data-theme="indigo"] .card-hd-title { font-weight: 500; letter-spacing: .03em; color: #C4B8FF; }
-[data-theme="indigo"] .kpi { border-radius: 10px !important; border-color: #352F5E !important; }
-[data-theme="indigo"] .kpi-value { font-size: 26px; color: #A78BFA; }
-[data-theme="indigo"] .kpi-label { color: #6B63A8; }
-[data-theme="indigo"] .brand-title em { color: #A78BFA; }
-[data-theme="indigo"] .nav-item.active { color: #A78BFA; background: rgba(167,139,250,.1); }
-[data-theme="indigo"] .nav-item.active::before { background: #A78BFA; }
-[data-theme="indigo"] .nav-item:hover { background: rgba(167,139,250,.06); }
-[data-theme="indigo"] .sidebar { background: #100F1A; border-right-color: #352F5E; }
-[data-theme="indigo"] .chip { border-radius: 20px; }
-[data-theme="indigo"] .topbar { background: #100F1A; border-bottom-color: #352F5E; }
-
-/* ══════════════════════════════════════════════════════════
-   TEMA — ROSÉ
-   Estética: Marfil y rosa palo
-══════════════════════════════════════════════════════════ */
-[data-theme="rose"] {
-  --bg:   #FDF8F6;
-  --s1:   #FFFFFF;
-  --s2:   #FDF0EE;
-  --s3:   #FAE6E3;
-  --bd:   #F0D4CF;
-  --bd2:  #DBAAA3;
-  --y21:  #B5344F;
-  --y22:  #7B4F8A;
-  --y23:  #C47A3A;
-  --y24:  #3A7A8A;
-  --pos:  #2E7D52;
-  --neg:  #B5344F;
-  --text: #2D1A1A;
-  --dim:  #A07070;
-  --dim2: #F5E0DC;
-  --serif:  'Libre Baskerville', Georgia, serif;
-  --mono:   'IBM Plex Mono', 'Courier New', monospace;
-  --ui:     'Inter', 'Segoe UI', sans-serif;
-  --chart-tick: #A07070;
-  --chart-grid: #FAE6E3;
+  --chart-tick: #64748B;
+  --chart-grid: #E3EAF4;
   --radius-card: 8px;
 }
-[data-theme="rose"] body { background-image: none; }
-[data-theme="rose"] .card {
-  border-radius: 8px !important;
-  box-shadow: 0 1px 4px rgba(180,80,80,.08) !important;
-  border-color: #F0D4CF !important;
+[data-theme="atlas"] body { background-image: none; }
+[data-theme="atlas"] .sidebar {
+  background: #16213E;
+  border-right: 1px solid #1E2D50;
 }
-[data-theme="rose"] .card-hd-title { font-weight: 600; color: #2D1A1A; }
-[data-theme="rose"] .kpi {
-  border-radius: 8px !important;
-  border-color: #F0D4CF !important;
-  border-left: 3px solid #B5344F !important;
+[data-theme="atlas"] .topbar {
+  background: #FFFFFF;
+  border-bottom: 1px solid #D0DCF0;
 }
-[data-theme="rose"] .kpi-value { color: #2D1A1A; font-size: 26px; }
-[data-theme="rose"] .kpi-label { color: #B5344F; font-weight: 600; }
-[data-theme="rose"] .brand-title { font-family: var(--serif); color: #2D1A1A; }
-[data-theme="rose"] .brand-title em { color: #B5344F; font-style: italic; }
-[data-theme="rose"] .sidebar { background: #FDF0EE; border-right: 1px solid #F0D4CF; }
-[data-theme="rose"] .nav-item { color: #A07070; }
-[data-theme="rose"] .nav-item.active { color: #B5344F; background: rgba(181,52,79,.06); }
-[data-theme="rose"] .nav-item.active::before { background: #B5344F; }
-[data-theme="rose"] .nav-item:hover { color: #B5344F; background: rgba(181,52,79,.04); }
-[data-theme="rose"] .topbar { background: #FFFFFF; border-bottom: 1px solid #F0D4CF; }
-[data-theme="rose"] .chip { border-radius: 20px; border-color: #DBAAA3; color: #A07070; }
+[data-theme="atlas"] .nav-item { color: #8BA4CC; }
+[data-theme="atlas"] .nav-item.active { color: #FFFFFF; background: rgba(255,255,255,.1); }
+[data-theme="atlas"] .nav-item.active::before { background: #60A5FA; }
+[data-theme="atlas"] .nav-item:hover { color: #FFFFFF; background: rgba(255,255,255,.07); }
+[data-theme="atlas"] .brand-title { color: #FFFFFF; }
+[data-theme="atlas"] .brand-title em { color: #60A5FA; }
+[data-theme="atlas"] .brand-sub { color: #8BA4CC; }
+[data-theme="atlas"] .card {
+  background: #FFFFFF !important;
+  border: 1px solid #D0DCF0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 4px rgba(21,59,120,.06) !important;
+}
+[data-theme="atlas"] .card-hd-title { color: #0F172A; font-weight: 600; }
+[data-theme="atlas"] .kpi {
+  background: #FFFFFF !important;
+  border: 1px solid #D0DCF0 !important;
+  border-left: 3px solid #2563EB !important;
+  border-radius: 8px !important;
+}
+[data-theme="atlas"] .kpi-value { color: #0F172A; font-size: 26px; font-weight: 700; }
+[data-theme="atlas"] .kpi-label { color: #64748B; font-weight: 500; }
+[data-theme="atlas"] .chip { border-color: #D0DCF0; color: #475569; background: #F8FAFD; }
+[data-theme="atlas"] .chip.on-lay,
+[data-theme="atlas"] .chip.on-ali,
+[data-theme="atlas"] .chip.on-ser,
+[data-theme="atlas"] .chip.on-ind,
+[data-theme="atlas"] .chip.on-pro,
+[data-theme="atlas"] .chip.on-sin { background: #2563EB; color: #FFFFFF; border-color: #2563EB; }
+[data-theme="atlas"] .nav-section { color: #5A7AAA; }
+[data-theme="atlas"] .sidebar-logo svg path { fill: #60A5FA; }
 
 /* ══════════════════════════════════════════════════════════
-   TEMA — JADE
-   Estética: Verde bosque oscuro, esmeralda
+   TEMA — GRAFITO
+   Estética: Sidebar negro mate + contenido blanco, acento cyan
 ══════════════════════════════════════════════════════════ */
-[data-theme="jade"] {
-  --bg:   #071510;
-  --s1:   #0C1E16;
-  --s2:   #10261C;
-  --s3:   #163022;
-  --bd:   #1E4030;
-  --bd2:  #2A5840;
-  --y21:  #10B981;
-  --y22:  #34D399;
-  --y23:  #FBBF24;
-  --y24:  #60A5FA;
+[data-theme="grafito"] {
+  --bg:   #F9FAFB;
+  --s1:   #FFFFFF;
+  --s2:   #F3F4F6;
+  --s3:   #E5E7EB;
+  --bd:   #D1D5DB;
+  --bd2:  #9CA3AF;
+  --y21:  #06B6D4;
+  --y22:  #6366F1;
+  --y23:  #F59E0B;
+  --y24:  #10B981;
   --pos:  #10B981;
-  --neg:  #F87171;
-  --text: #D0F0E0;
-  --dim:  #2A5840;
-  --dim2: #0C1E16;
+  --neg:  #EF4444;
+  --text: #111827;
+  --dim:  #6B7280;
+  --dim2: #E5E7EB;
   --serif:  'Inter', 'Segoe UI', sans-serif;
   --mono:   'IBM Plex Mono', 'Courier New', monospace;
   --ui:     'Inter', 'Segoe UI', sans-serif;
-  --chart-tick: #2A5840;
-  --chart-grid: #10261C;
+  --chart-tick: #6B7280;
+  --chart-grid: #E5E7EB;
   --radius-card: 6px;
 }
-[data-theme="jade"] body {
-  background-image:
-    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(16,185,129,.06) 0%, transparent 70%);
+[data-theme="grafito"] body { background-image: none; }
+[data-theme="grafito"] .sidebar {
+  background: #111827;
+  border-right: 1px solid #1F2937;
 }
-[data-theme="jade"] .card {
+[data-theme="grafito"] .topbar {
+  background: #FFFFFF;
+  border-bottom: 1px solid #E5E7EB;
+}
+[data-theme="grafito"] .nav-item { color: #6B7280; }
+[data-theme="grafito"] .nav-item.active { color: #F9FAFB; background: rgba(249,250,251,.08); }
+[data-theme="grafito"] .nav-item.active::before { background: #06B6D4; }
+[data-theme="grafito"] .nav-item:hover { color: #F9FAFB; background: rgba(249,250,251,.05); }
+[data-theme="grafito"] .brand-title { color: #F9FAFB; }
+[data-theme="grafito"] .brand-title em { color: #06B6D4; }
+[data-theme="grafito"] .brand-sub { color: #6B7280; }
+[data-theme="grafito"] .card {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
   border-radius: 6px !important;
-  border-color: #1E4030 !important;
-  box-shadow: 0 2px 10px rgba(0,0,0,.3) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06) !important;
 }
-[data-theme="jade"] .card-hd-title { color: #34D399; letter-spacing: .04em; }
-[data-theme="jade"] .kpi { border-radius: 6px !important; border-color: #1E4030 !important; border-left: 2px solid #10B981 !important; }
-[data-theme="jade"] .kpi-value { font-size: 25px; color: #10B981; }
-[data-theme="jade"] .kpi-label { color: #2A5840; }
-[data-theme="jade"] .brand-title em { color: #10B981; }
-[data-theme="jade"] .nav-item { color: #2A5840; }
-[data-theme="jade"] .nav-item.active { color: #10B981; background: rgba(16,185,129,.08); }
-[data-theme="jade"] .nav-item.active::before { background: #10B981; }
-[data-theme="jade"] .nav-item:hover { color: #34D399; background: rgba(16,185,129,.05); }
-[data-theme="jade"] .sidebar { background: #060F0A; border-right-color: #1E4030; }
-[data-theme="jade"] .topbar { background: #060F0A; border-bottom-color: #1E4030; }
-[data-theme="jade"] .chip { border-color: #1E4030; color: #2A5840; }
+[data-theme="grafito"] .card-hd-title { color: #111827; font-weight: 600; }
+[data-theme="grafito"] .kpi {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
+  border-top: 3px solid #06B6D4 !important;
+  border-radius: 6px !important;
+}
+[data-theme="grafito"] .kpi-value { color: #111827; font-size: 26px; font-weight: 700; }
+[data-theme="grafito"] .kpi-label { color: #6B7280; font-weight: 500; }
+[data-theme="grafito"] .chip { border-color: #E5E7EB; color: #374151; background: #F9FAFB; }
+[data-theme="grafito"] .chip.on-lay,
+[data-theme="grafito"] .chip.on-ali,
+[data-theme="grafito"] .chip.on-ser,
+[data-theme="grafito"] .chip.on-ind,
+[data-theme="grafito"] .chip.on-pro,
+[data-theme="grafito"] .chip.on-sin { background: #06B6D4; color: #FFFFFF; border-color: #06B6D4; }
+[data-theme="grafito"] .nav-section { color: #4B5563; }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA — COBRE
+   Estética: Sidebar chocolate oscuro + contenido crema, acento ámbar
+══════════════════════════════════════════════════════════ */
+[data-theme="cobre"] {
+  --bg:   #FBF8F3;
+  --s1:   #FFFFFF;
+  --s2:   #F5F0E8;
+  --s3:   #EDE5D8;
+  --bd:   #DDD0BC;
+  --bd2:  #BBA888;
+  --y21:  #D97706;
+  --y22:  #0891B2;
+  --y23:  #7C3AED;
+  --y24:  #059669;
+  --pos:  #059669;
+  --neg:  #DC2626;
+  --text: #1C1008;
+  --dim:  #92745A;
+  --dim2: #EDE5D8;
+  --serif:  'Libre Baskerville', 'Georgia', serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #92745A;
+  --chart-grid: #EDE5D8;
+  --radius-card: 6px;
+}
+[data-theme="cobre"] body { background-image: none; }
+[data-theme="cobre"] .sidebar {
+  background: #2C1708;
+  border-right: 1px solid #3D2410;
+}
+[data-theme="cobre"] .topbar {
+  background: #FFFFFF;
+  border-bottom: 1px solid #DDD0BC;
+}
+[data-theme="cobre"] .nav-item { color: #8C6A50; }
+[data-theme="cobre"] .nav-item.active { color: #FFD580; background: rgba(255,213,128,.1); }
+[data-theme="cobre"] .nav-item.active::before { background: #D97706; }
+[data-theme="cobre"] .nav-item:hover { color: #FFD580; background: rgba(255,213,128,.07); }
+[data-theme="cobre"] .brand-title { color: #FFE8CC; font-family: var(--serif); }
+[data-theme="cobre"] .brand-title em { color: #D97706; }
+[data-theme="cobre"] .brand-sub { color: #8C6A50; }
+[data-theme="cobre"] .card {
+  background: #FFFFFF !important;
+  border: 1px solid #DDD0BC !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 4px rgba(120,70,20,.08) !important;
+}
+[data-theme="cobre"] .card-hd-title { color: #1C1008; font-weight: 600; }
+[data-theme="cobre"] .kpi {
+  background: #FFFFFF !important;
+  border: 1px solid #DDD0BC !important;
+  border-left: 3px solid #D97706 !important;
+  border-radius: 6px !important;
+}
+[data-theme="cobre"] .kpi-value { color: #1C1008; font-size: 26px; font-weight: 700; }
+[data-theme="cobre"] .kpi-label { color: #D97706; font-weight: 600; }
+[data-theme="cobre"] .chip { border-color: #DDD0BC; color: #7A5A3A; background: #FBF8F3; }
+[data-theme="cobre"] .chip.on-lay,
+[data-theme="cobre"] .chip.on-ali,
+[data-theme="cobre"] .chip.on-ser,
+[data-theme="cobre"] .chip.on-ind,
+[data-theme="cobre"] .chip.on-pro,
+[data-theme="cobre"] .chip.on-sin { background: #D97706; color: #FFFFFF; border-color: #D97706; }
+[data-theme="cobre"] .nav-section { color: #5A3A20; }
+
+/* ══════════════════════════════════════════════════════════
+   TEMA — MINERAL
+   Estética: Sidebar azul-pizarra + contenido gris frío, acento teal
+══════════════════════════════════════════════════════════ */
+[data-theme="mineral"] {
+  --bg:   #F0F4F8;
+  --s1:   #FFFFFF;
+  --s2:   #E8EEF5;
+  --s3:   #DDE5F0;
+  --bd:   #C8D6E8;
+  --bd2:  #9AB4CE;
+  --y21:  #0891B2;
+  --y22:  #3B82F6;
+  --y23:  #F59E0B;
+  --y24:  #8B5CF6;
+  --pos:  #059669;
+  --neg:  #DC2626;
+  --text: #0F1E2E;
+  --dim:  #5A7A96;
+  --dim2: #DDE5F0;
+  --serif:  'Inter', 'Segoe UI', sans-serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #5A7A96;
+  --chart-grid: #DDE5F0;
+  --radius-card: 8px;
+}
+[data-theme="mineral"] body { background-image: none; }
+[data-theme="mineral"] .sidebar {
+  background: #1E3A5F;
+  border-right: 1px solid #254A78;
+}
+[data-theme="mineral"] .topbar {
+  background: #FFFFFF;
+  border-bottom: 1px solid #C8D6E8;
+}
+[data-theme="mineral"] .nav-item { color: #7A9EC0; }
+[data-theme="mineral"] .nav-item.active { color: #FFFFFF; background: rgba(255,255,255,.1); }
+[data-theme="mineral"] .nav-item.active::before { background: #0891B2; }
+[data-theme="mineral"] .nav-item:hover { color: #FFFFFF; background: rgba(255,255,255,.07); }
+[data-theme="mineral"] .brand-title { color: #FFFFFF; }
+[data-theme="mineral"] .brand-title em { color: #38BDF8; }
+[data-theme="mineral"] .brand-sub { color: #7A9EC0; }
+[data-theme="mineral"] .card {
+  background: #FFFFFF !important;
+  border: 1px solid #C8D6E8 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 1px 4px rgba(30,58,95,.07) !important;
+}
+[data-theme="mineral"] .card-hd-title { color: #0F1E2E; font-weight: 600; }
+[data-theme="mineral"] .kpi {
+  background: #FFFFFF !important;
+  border: 1px solid #C8D6E8 !important;
+  border-top: 3px solid #0891B2 !important;
+  border-radius: 8px !important;
+}
+[data-theme="mineral"] .kpi-value { color: #0F1E2E; font-size: 26px; font-weight: 700; }
+[data-theme="mineral"] .kpi-label { color: #5A7A96; font-weight: 500; }
+[data-theme="mineral"] .chip { border-color: #C8D6E8; color: #3A5A7A; background: #F0F4F8; }
+[data-theme="mineral"] .chip.on-lay,
+[data-theme="mineral"] .chip.on-ali,
+[data-theme="mineral"] .chip.on-ser,
+[data-theme="mineral"] .chip.on-ind,
+[data-theme="mineral"] .chip.on-pro,
+[data-theme="mineral"] .chip.on-sin { background: #0891B2; color: #FFFFFF; border-color: #0891B2; }
+[data-theme="mineral"] .nav-section { color: #5A7A96; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -2037,23 +2121,23 @@ self.onmessage = async (e) => {
           <div class="chip on-lay" data-tema="pizarron" onclick="setTheme('pizarron',this)" title="Pizarrón — gris carbón cálido, dorado">
             <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#F5C842;margin-right:4px;vertical-align:middle"></span>Pizarrón
           </div>
-          <div class="chip" data-tema="indigo" onclick="setTheme('indigo',this)" title="Índigo — azul profundo, lavanda">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#A78BFA;margin-right:4px;vertical-align:middle"></span>Índigo
+          <div class="chip" data-tema="atlas" onclick="setTheme('atlas',this)" title="Atlas — navy sidebar, contenido blanco">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#2563EB;margin-right:4px;vertical-align:middle"></span>Atlas
           </div>
-          <div class="chip" data-tema="rose" onclick="setTheme('rose',this)" title="Rosé — marfil y rosa palo">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#B5344F;margin-right:4px;vertical-align:middle"></span>Rosé
+          <div class="chip" data-tema="grafito" onclick="setTheme('grafito',this)" title="Grafito — sidebar negro, acento cyan">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#06B6D4;margin-right:4px;vertical-align:middle"></span>Grafito
           </div>
-          <div class="chip" data-tema="jade" onclick="setTheme('jade',this)" title="Jade — verde bosque oscuro, esmeralda">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#10B981;margin-right:4px;vertical-align:middle"></span>Jade
+          <div class="chip" data-tema="cobre" onclick="setTheme('cobre',this)" title="Cobre — sidebar chocolate, acento ámbar">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#D97706;margin-right:4px;vertical-align:middle"></span>Cobre
           </div>
-          <div class="chip" data-tema="tableau" onclick="setTheme('tableau',this)" title="Tableau claro">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#e8613c;margin-right:4px;vertical-align:middle"></span>Tableau
+          <div class="chip" data-tema="mineral" onclick="setTheme('mineral',this)" title="Mineral — slate azul, acento teal">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0891B2;margin-right:4px;vertical-align:middle"></span>Mineral
           </div>
           <div class="chip" data-tema="powerbi" onclick="setTheme('powerbi',this)" title="Power BI claro">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#118dff;margin-right:4px;vertical-align:middle"></span>Power BI
+            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#118dff;margin-right:4px;vertical-align:middle"></span>Power BI
           </div>
           <div class="chip" data-tema="gobierno" onclick="setTheme('gobierno',this)" title="Gobierno institucional">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#003087;margin-right:4px;vertical-align:middle"></span>Gobierno
+            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#003087;margin-right:4px;vertical-align:middle"></span>Gobierno
           </div>
           <div class="chip" data-tema="ft" onclick="setTheme('ft',this)" title="Financial Times — papel salmón, serif">
             <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#990F3D;margin-right:4px;vertical-align:middle"></span>FT Papel
