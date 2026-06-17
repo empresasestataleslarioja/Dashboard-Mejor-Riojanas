@@ -8459,14 +8459,50 @@ function buildComparacionFlujos() {
     { l:'Var. real (−IPC)',     v:fmtP(varReal),                                                 c:colVar(varReal) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
-    { l:'Cob. costo laboral',  v:labCovA ? labCovA.toFixed(1)+'%' : '—',                        c:'var(--text)' },
     ...(ipc&&necB ? [{ l:`Necesidad ant. + IPC`, v:fmtM(necB*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del período anterior en pesos actuales' }] : []),
   ].map(k => `<div style="padding:${k.big?'10px 18px':'8px 14px'};background:var(--s2);
     border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':'110px'};
     ${k.big?'border-left:3px solid var(--neg)':''}">
     <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">${k.l}</div>
     <div style="font-size:${k.big?'16px':'14px'};font-weight:700;color:${k.c};font-family:var(--mono)">${k.v}</div>
-  </div>`).join('');
+  </div>`).join('') +
+  (() => {
+    // Bloque comparativo costo laboral
+    if (!labA && !labB) return '';
+    const labVarNom = (labA!=null&&labB&&labB!==0) ? (labA-labB)/Math.abs(labB)*100 : null;
+    const labVarReal = (labVarNom!=null&&ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
+    const labPctEgrA = (egrA&&labA) ? Math.abs(labA)/Math.abs(egrA)*100 : null;
+    const labPctEgrB = (egrB&&labB) ? Math.abs(labB)/Math.abs(egrB)*100 : null;
+    const cpA = labCovA ? labCovA.toFixed(1)+'%' : '—';
+    const cpB = labCovB ? labCovB.toFixed(1)+'%' : '—';
+    const colLab = labVarNom==null?'var(--dim)':labVarNom>0?'var(--neg)':'var(--pos)';
+    return `<div style="padding:10px 16px;background:var(--s2);border:1px solid var(--bd);
+      border-left:3px solid #e8c84a;border-radius:4px;min-width:260px">
+      <div style="font-size:8px;color:#e8c84a;font-family:var(--mono);letter-spacing:.08em;margin-bottom:8px">COSTO LABORAL</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-family:var(--mono)">
+        <div>
+          <div style="font-size:7px;color:var(--dim);margin-bottom:2px">${fA.periodo}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--neg)">${fmtM(labA)}</div>
+          ${labPctEgrA!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrA.toFixed(1)}% de egresos</div>`:''}
+          <div style="font-size:8px;color:var(--dim);margin-top:1px">Cob. ingresos: ${cpA}</div>
+        </div>
+        <div>
+          <div style="font-size:7px;color:var(--dim);margin-bottom:2px">${fB.periodo}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--dim)">${fmtM(labB)}</div>
+          ${labPctEgrB!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrB.toFixed(1)}% de egresos</div>`:''}
+          <div style="font-size:8px;color:var(--dim);margin-top:1px">Cob. ingresos: ${cpB}</div>
+        </div>
+        <div style="padding-top:4px;border-top:1px solid var(--bd)">
+          <div style="font-size:7px;color:var(--dim);margin-bottom:2px">Var. nominal</div>
+          <div style="font-size:12px;font-weight:700;color:${colLab}">${fmtP(labVarNom)}</div>
+        </div>
+        <div style="padding-top:4px;border-top:1px solid var(--bd)">
+          <div style="font-size:7px;color:var(--dim);margin-bottom:2px">Var. real (−IPC)</div>
+          <div style="font-size:12px;font-weight:700;color:${labVarReal==null?'var(--dim)':labVarReal>0?'var(--neg)':'var(--pos)'}">${fmtP(labVarReal)}</div>
+        </div>
+      </div>
+    </div>`;
+  })();
 
   // Tabla comparativa con distinción visual igual que vista individual
   const tbl = document.getElementById('tbl-flujos');
@@ -11124,8 +11160,7 @@ function buildAuditERProvisorio(emp) {
 
   const fmt = v => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
-    const abs = Math.abs(v);
-    const s = abs >= 1e6 ? (abs/1e6).toFixed(1)+'M' : abs >= 1e3 ? (abs/1e3).toFixed(0)+'k' : abs.toFixed(0);
+    const s = Math.abs(Math.round(v)).toLocaleString('es-AR');
     return `<span style="color:${v<0?'var(--neg)':'inherit'}">${v<0?'−':''}$${s}</span>`;
   };
   const fmtPct = p => p == null ? '<span style="color:var(--dim)">—</span>' : `${p>=0?'+':''}${p.toFixed(1)}%`;
