@@ -10879,6 +10879,97 @@ function _erMensualSetConcepto(emp, anio, filaIdx, concepto) {
   buildEvolucionMensual(emp);
 }
 
+// ── Helper compartido: totales anuales del ER Estándar ──────────────
+// Usa el mismo clasificador exhaustivo que la vista "ER Estándar" de
+// buildEvolucionMensual, para que Auditoría y Vista muestren los mismos números.
+function _erStdAnual(emp, yr) {
+  const erData = DATA.er_mensual?.[emp]?.[yr];
+  if (!erData || !Array.isArray(erData.filas) || !erData.filas.length) return {};
+
+  const clasificar = t => {
+    t = String(t || '').toUpperCase().trim();
+    if (!t) return null;
+    if (['INGRESOS','GASTOS','CUADRO DE RESULTADOS','CUENTA'].includes(t)) return null;
+    if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
+    if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA|RESULTADO\s+DE\s+OPERACI/.test(t)) return 'resOperativo';
+    if (/ANTES\s+(DE|DEL)\s+IMP/.test(t)) return 'resAntesImp';
+    if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO|RESULTADO\s+FINAL/.test(t)) return 'resEjercicio';
+    if (/TOTAL\s+(DE\s+)?GASTOS/.test(t)) return 'IGNORAR';
+    if (/COMISION|GASTO.*VENTA|GASTOS\s+DE\s+VENTA/.test(t)) return 'gastoCom';
+    if (/DESCUENTO.*OTORGAD/.test(t)) return 'gastoCom';
+    if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
+    if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) {
+      if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+      return 'ventas';
+    }
+    if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
+    if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
+    if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
+    if (/IMPUEST.*GANANCIA|IMPUESTO\s+DIFERIDO|A\s+LAS\s+GANANCIAS/.test(t)) return 'impuesto';
+    if (/COMERCIALIZAC|COMERCIALES|MERCADOTECNIA|PUBLICIDAD|FLETE|ENCOMIENDA/.test(t)) return 'gastoCom';
+    if (/ADMINISTRAC|ADMINISTRATIV/.test(t)) return 'gastoAdm';
+    if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+    if (/OTROS\s+EGRESO/.test(t)) return 'otrosGastos';
+    if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA|SOCIAL|APORTE|CONTRIBUC|HONORARIO|AMORTIZAC|DEPRECIAC|SEGURO|ART\b|ALQUILER|COMBUSTIBLE|LUBRICANTE|MANTENIMIENTO|REPARACION|REPUESTO|HERRAMIENTA|SERVICIO|IMPUESTO|TASA|VIATICO|MOVILIDAD|PREVISION|ENERGIA|ELECTRICID|TELEFON|INTERNET|PAPELERIA|ROPA|VEHICULO|RODADO|ASIGNACION|FAMILIAR|INDEMNIZAC|INDEMINIZAC|CESE|FONDO|UOYEP|IERIC|RENATRE|GASTO|EGRESO|VARIOS|GENERAL|PERSONAL|SUMAS|REMUNERAT|PASAJE|VIGILANCIA|LIMPIEZA|GAS\b|AGUA\b|INSUMOS|PROVISION|ESCRIBAN|AUDITORIA|PUBLICACION|CONSUMO|DIETA|REFRIGERIO|CAPACITAC|OFICINA/.test(t)) return 'gastoOper';
+    return null;
+  };
+
+  // Acumular por rubro y mes
+  const rv = {}; // rv[rubro][mes] = suma
+  const add = (rb, m, v) => { if (v==null) return; if (!rv[rb]) rv[rb]={}; rv[rb][m] = (rv[rb][m]||0)+v; };
+
+  erData.filas.forEach(f => {
+    const cs = f.conceptoStd;
+    let rb = cs==='ventas'?'ventas': cs==='costo'?'costo': cs==='utilBruta'?'utilBruta':
+             cs==='gastoAdm'?'gastoAdm': cs==='gastoCom'?'gastoCom': cs==='resOperativo'?'resOperativo':
+             cs==='resFinanciero'?'resFinanciero': cs==='resAntesImp'?'resAntesImp': cs==='resEjercicio'?'resEjercicio':
+             clasificar(f.lbl);
+    if (!rb || rb==='IGNORAR' || rb==='COMPONENTE_VENTA') return;
+    Object.entries(f.valores||{}).forEach(([m,v]) => add(rb, Number(m), v));
+  });
+
+  // Suma anual por rubro
+  const tot = rb => { const ms=rv[rb]; if (!ms) return null; const s=Object.values(ms).reduce((a,b)=>a+b,0); return s||null; };
+
+  let ventas=tot('ventas'), costo=tot('costo');
+  let gastoAdm=tot('gastoAdm'), gastoCom=tot('gastoCom'), gastoOper=tot('gastoOper');
+  let otrosIng=tot('otrosIngresos'), resFin=tot('resFinanciero'), imp=tot('impuesto');
+
+  // Ventas brutas fallback
+  if (ventas==null) {
+    let vb=null;
+    erData.filas.forEach(f => {
+      if (/VENTAS\s+BRUTAS/.test(String(f.lbl||'').toUpperCase())) Object.values(f.valores||{}).forEach(v=>{ vb=(vb||0)+v; });
+    });
+    ventas = vb;
+  }
+
+  // Cascada de subtotales
+  let utilBruta = tot('utilBruta');
+  if (utilBruta==null && (ventas!=null||costo!=null)) utilBruta=(ventas||0)+(costo||0);
+
+  let resOp = tot('resOperativo');
+  if (resOp==null && (utilBruta!=null||gastoAdm!=null||gastoCom!=null||gastoOper!=null))
+    resOp=(utilBruta||0)+(gastoAdm||0)+(gastoCom||0)+(gastoOper||0)+(otrosIng||0);
+
+  let resEj = tot('resEjercicio');
+  if (resEj==null && (resOp!=null||resFin!=null))
+    resEj=(resOp||0)+(resFin||0)+(imp||0);
+
+  return {
+    ventas_netas:          ventas,
+    costo_ventas:          costo,
+    utilidad_bruta:        utilBruta,
+    gastos_admin:          gastoAdm!=null||gastoOper!=null ? (gastoAdm||0)+(gastoOper||0)||null : null,
+    gastos_comercializacion: gastoCom,
+    resultado_operativo:   resOp,
+    gastos_financieros:    resFin,
+    gastos_fiscales:       imp,
+    otros_ingresos:        otrosIng,
+    resultado_neto:        resEj,
+  };
+}
+
 // Marcar pendiente de guardar + cache
 function _erMensualSync(emp, anio) {
   try { saveDataToLocalCache(); } catch(e) {}
@@ -10947,30 +11038,6 @@ function buildAuditERProvisorio(emp) {
     });
   }
 
-  // Debug: mostrar qué datos hay disponibles si no hay cruce
-  const _balVals = Object.values(_balances || {});
-  const _dbgInfo = {
-    erMKeys: Object.keys(erM),
-    erBKeys: Object.keys(erB),
-    allErKeys: Object.keys(DATA.er || {}),
-    allErMKeys: Object.keys(DATA.er_mensual || {}),
-    allBalEmps: _balVals.map(b => `"${b.empresa}" per=${String(b.periodo||'')} ren=${JSON.stringify(Object.keys(b.indicadores?.rentabilidad||{}))}`),
-  };
-  console.log('[AuditER] emp=', emp, _dbgInfo);
-
-  // Concepto: mapeo monthly conceptoStd → clave en DATA.er (balance formal)
-  const MAP_M2B = {
-    ventas:       'ventas_netas',
-    costo:        'costo_ventas',
-    utilBruta:    'utilidad_bruta',
-    gastoAdm:     'gastos_admin',
-    gastoCom:     'gastos_comercializacion',
-    resOperativo: 'resultado_operativo',
-    resEjercicio: 'resultado_neto',
-    resFinanciero:'gastos_financieros',
-    impuesto:     'gastos_fiscales',
-    otrosIngresos:'otros_ingresos',
-  };
   const LABELS = {
     ventas_netas:'Ventas / Ingresos netos', costo_ventas:'Costo de ventas',
     utilidad_bruta:'Utilidad bruta', gastos_admin:'Gastos administración',
@@ -10983,31 +11050,22 @@ function buildAuditERProvisorio(emp) {
     'gastos_fiscales','otros_ingresos','resultado_neto'];
   const IS_SUBTOTAL = new Set(['utilidad_bruta','resultado_operativo','resultado_neto']);
 
-  // Años con datos en ambas fuentes
-  const aniosCruce = Object.keys(erM).filter(yr => {
-    const bal = erB[yr];
-    return bal && Object.keys(bal).length > 0;
-  }).sort();
+  // Años con ER mensual — mostrar todos, con o sin balance
+  const todosAniosM = Object.keys(erM).sort();
+  const aniosCruce  = todosAniosM.filter(yr => erB[yr] && Object.keys(erB[yr]).length > 0);
 
-  if (aniosCruce.length === 0) {
-    // Mostrar diagnóstico si hay datos parciales (una fuente sí, la otra no)
-    const hayErM = _dbgInfo.erMKeys.length > 0;
-    const hayErB = _dbgInfo.erBKeys.length > 0;
-    if (!hayErM && !hayErB) return; // nada cargado para esta empresa, ocultar
+  if (todosAniosM.length === 0) {
+    // No hay ER mensual en absoluto: diagnóstico
+    const hayErB = Object.keys(erB).length > 0;
+    if (!hayErB) return;
     wrap.style.display = '';
-    const todasErKeys = _dbgInfo.allErKeys.join(', ') || '(ninguna)';
-    const todasErMKeys = _dbgInfo.allErMKeys.join(', ') || '(ninguna)';
+    const allBalEmps = Object.values(_balances||{}).map(b=>`"${b.empresa}" (${String(b.periodo||'')})`);
     wrap.innerHTML = `<div class="card" style="padding:12px 16px;border-left:3px solid #ff8c47">
-      <div style="font-size:10px;font-weight:600;margin-bottom:6px;color:#ff8c47">⚠ Auditoría ER: sin años en común</div>
+      <div style="font-size:10px;font-weight:600;margin-bottom:6px;color:#ff8c47">⚠ Sin ER provisorio para "${emp}"</div>
       <div style="font-size:9px;color:var(--dim);line-height:1.7;font-family:var(--mono)">
-        <b>ER mensual (provisorio) para "${emp}":</b> años ${hayErM ? _dbgInfo.erMKeys.join(', ') : '— no hay datos'}<br>
-        <b>Balance formal para "${emp}":</b> años ${hayErB ? _dbgInfo.erBKeys.join(', ') : '— no hay datos'}<br>
-        ${!hayErB && _dbgInfo.allErKeys.length ? `<span style="color:#ff8c47">DATA.er keys: ${todasErKeys}</span><br>` : ''}
-        ${!hayErB && _dbgInfo.allBalEmps?.length ? `<span style="color:#ff8c47">Balances individuales cargados: ${_dbgInfo.allBalEmps.join(' | ')}</span><br>` : ''}
-        ${!hayErM && _dbgInfo.allErMKeys.length ? `<span style="color:#ff8c47">Empresas con ER mensual cargado: ${todasErMKeys}</span><br>` : ''}
-        <span style="margin-top:4px;display:inline-block">Para ver la auditoría, ambas fuentes deben tener datos del mismo año.</span>
-      </div>
-    </div>`;
+        Hay balance cargado (años: ${Object.keys(erB).join(', ')}) pero no se encontró ER mensual provisorio.<br>
+        Importá el ER mensual desde el módulo Estado de Resultados para ver la auditoría.<br>
+        ${allBalEmps.length?`Balances en memoria: ${allBalEmps.join(' | ')}`:''}</div></div>`;
     return;
   }
 
@@ -11029,21 +11087,8 @@ function buildAuditERProvisorio(emp) {
   // KPI resumen global: último año con ambas fuentes
   const lastYr = aniosCruce[aniosCruce.length - 1];
   const _kpiSumHtml = (() => {
-    const erData = erM[lastYr];
     const balAcc = erB[lastYr] || {};
-    const provAcc2 = {};
-    if (erData && Array.isArray(erData.filas)) {
-      erData.filas.forEach(f => {
-        const clave = MAP_M2B[f.conceptoStd];
-        if (!clave) return;
-        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
-        if (suma !== 0) provAcc2[clave] = (provAcc2[clave] || 0) + suma;
-      });
-      if (provAcc2.utilidad_bruta == null && provAcc2.ventas_netas != null)
-        provAcc2.utilidad_bruta = (provAcc2.ventas_netas||0) + (provAcc2.costo_ventas||0);
-      if (provAcc2.resultado_operativo == null && provAcc2.utilidad_bruta != null)
-        provAcc2.resultado_operativo = (provAcc2.utilidad_bruta||0) + (provAcc2.gastos_admin||0) + (provAcc2.gastos_comercializacion||0);
-    }
+    const provAcc2 = _erStdAnual(emp, lastYr);
     const vpV = provAcc2.ventas_netas, vbV = balAcc.ventas_netas;
     const kpis = [
       { lbl:'Margen bruto', p: vpV?provAcc2.utilidad_bruta/vpV*100:null, b: vbV?balAcc.utilidad_bruta/vbV*100:null },
@@ -11083,22 +11128,7 @@ function buildAuditERProvisorio(emp) {
     ${_kpiSumHtml}`;
 
   for (const yr of aniosCruce) {
-    // Sumar datos mensuales del ER provisorio
-    const erData = erM[yr];
-    const provAcc = {};
-    if (erData && Array.isArray(erData.filas)) {
-      erData.filas.forEach(f => {
-        const clave = MAP_M2B[f.conceptoStd];
-        if (!clave) return;
-        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
-        if (suma !== 0) provAcc[clave] = (provAcc[clave] || 0) + suma;
-      });
-      // Derivar subtotales si faltan
-      if (provAcc.utilidad_bruta == null && provAcc.ventas_netas != null)
-        provAcc.utilidad_bruta = (provAcc.ventas_netas||0) + (provAcc.costo_ventas||0);
-      if (provAcc.resultado_operativo == null && provAcc.utilidad_bruta != null)
-        provAcc.resultado_operativo = (provAcc.utilidad_bruta||0) + (provAcc.gastos_admin||0) + (provAcc.gastos_comercializacion||0);
-    }
+    const provAcc = _erStdAnual(emp, yr);
 
     const balAcc = erB[yr] || {};
     const baseP = provAcc.ventas_netas || 0;
