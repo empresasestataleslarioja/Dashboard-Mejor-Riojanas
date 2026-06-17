@@ -10886,6 +10886,7 @@ function _erStdAnual(emp, yr) {
   const erData = DATA.er_mensual?.[emp]?.[yr];
   if (!erData || !Array.isArray(erData.filas) || !erData.filas.length) return {};
 
+  // Same classifier as buildEvolucionMensual
   const clasificar = t => {
     t = String(t || '').toUpperCase().trim();
     if (!t) return null;
@@ -10914,59 +10915,111 @@ function _erStdAnual(emp, yr) {
     return null;
   };
 
-  // Acumular por rubro y mes
-  const rv = {}; // rv[rubro][mes] = suma
-  const add = (rb, m, v) => { if (v==null) return; if (!rv[rb]) rv[rb]={}; rv[rb][m] = (rv[rb][m]||0)+v; };
+  // Step 1: accumulate raw rubro values per period key (same as buildEvolucionMensual rubroVals)
+  const rubroVals = {};
+  const addVal = (rb, m, v) => {
+    if (v == null) return;
+    if (!rubroVals[rb]) rubroVals[rb] = {};
+    rubroVals[rb][m] = (rubroVals[rb][m] || 0) + v;
+  };
 
   erData.filas.forEach(f => {
     const cs = f.conceptoStd;
-    let rb = cs==='ventas'?'ventas': cs==='costo'?'costo': cs==='utilBruta'?'utilBruta':
-             cs==='gastoAdm'?'gastoAdm': cs==='gastoCom'?'gastoCom': cs==='resOperativo'?'resOperativo':
-             cs==='resFinanciero'?'resFinanciero': cs==='resAntesImp'?'resAntesImp': cs==='resEjercicio'?'resEjercicio':
-             clasificar(f.lbl);
-    if (!rb || rb==='IGNORAR' || rb==='COMPONENTE_VENTA') return;
-    Object.entries(f.valores||{}).forEach(([m,v]) => add(rb, Number(m), v));
+    let rb;
+    if (cs === 'ventas') rb = 'ventas';
+    else if (cs === 'costo') rb = 'costo';
+    else if (cs === 'utilBruta') rb = 'utilBruta';
+    else if (cs === 'gastoAdm') rb = 'gastoAdm';
+    else if (cs === 'gastoCom') rb = 'gastoCom';
+    else if (cs === 'resOperativo') rb = 'resOperativo';
+    else if (cs === 'resFinanciero') rb = 'resFinanciero';
+    else if (cs === 'resAntesImp') rb = 'resAntesImp';
+    else if (cs === 'resEjercicio') rb = 'resEjercicio';
+    else rb = clasificar(f.lbl);
+    if (!rb || rb === 'IGNORAR' || rb === 'COMPONENTE_VENTA') return;
+    Object.entries(f.valores || {}).forEach(([m, v]) => addVal(rb, Number(m), v));
   });
 
-  // Suma anual por rubro
-  const tot = rb => { const ms=rv[rb]; if (!ms) return null; const s=Object.values(ms).reduce((a,b)=>a+b,0); return s||null; };
-
-  let ventas=tot('ventas'), costo=tot('costo');
-  let gastoAdm=tot('gastoAdm'), gastoCom=tot('gastoCom'), gastoOper=tot('gastoOper');
-  let otrosIng=tot('otrosIngresos'), resFin=tot('resFinanciero'), imp=tot('impuesto');
-
-  // Ventas brutas fallback
-  if (ventas==null) {
-    let vb=null;
+  // Ventas brutas fallback (same as buildEvolucionMensual)
+  const _hayVentas = Object.keys(rubroVals.ventas || {}).length > 0;
+  if (!_hayVentas) {
     erData.filas.forEach(f => {
-      if (/VENTAS\s+BRUTAS/.test(String(f.lbl||'').toUpperCase())) Object.values(f.valores||{}).forEach(v=>{ vb=(vb||0)+v; });
+      const t = String(f.lbl || '').toUpperCase();
+      if (/VENTAS\s+BRUTAS/.test(t))
+        Object.entries(f.valores || {}).forEach(([m, v]) => addVal('ventas', Number(m), v));
+      else if (/DEVOLUCION|^DESCUENTO/.test(t) && !/OTORGAD/.test(t))
+        Object.entries(f.valores || {}).forEach(([m, v]) => { if (v != null) addVal('ventas', Number(m), -Math.abs(v)); });
     });
-    ventas = vb;
   }
 
-  // Cascada de subtotales
-  let utilBruta = tot('utilBruta');
-  if (utilBruta==null && (ventas!=null||costo!=null)) utilBruta=(ventas||0)+(costo||0);
+  // Step 2: per-period cascade (mirrors buildEvolucionMensual valConcMes logic exactly)
+  const allPeriods = [...new Set(
+    Object.values(rubroVals).flatMap(pm => Object.keys(pm).map(Number))
+  )];
 
-  let resOp = tot('resOperativo');
-  if (resOp==null && (utilBruta!=null||gastoAdm!=null||gastoCom!=null||gastoOper!=null))
-    resOp=(utilBruta||0)+(gastoAdm||0)+(gastoCom||0)+(gastoOper||0)+(otrosIng||0);
+  const gv = (rb, m) => rubroVals[rb]?.[m] ?? null;
+  const vcm = {}; // valConcMes equivalent
+  const sv = (k, m, v) => { if (!vcm[k]) vcm[k] = {}; vcm[k][m] = v; };
 
-  let resEj = tot('resEjercicio');
-  if (resEj==null && (resOp!=null||resFin!=null))
-    resEj=(resOp||0)+(resFin||0)+(imp||0);
+  allPeriods.forEach(m => {
+    const ventas    = gv('ventas', m);
+    const costo     = gv('costo', m);
+    const gastoAdm  = gv('gastoAdm', m);
+    const gastoCom  = gv('gastoCom', m);
+    const gastoOper = gv('gastoOper', m);
+    const otrosIng  = gv('otrosIngresos', m);
+    const otrosGas  = gv('otrosGastos', m);
+    const resFin    = gv('resFinanciero', m);
+    const impuesto  = gv('impuesto', m);
+
+    let utilBruta = gv('utilBruta', m);
+    if (utilBruta == null && (ventas != null || costo != null))
+      utilBruta = (ventas || 0) + (costo || 0);
+
+    let resOp = gv('resOperativo', m);
+    if (resOp == null && (utilBruta != null || gastoAdm != null || gastoCom != null || gastoOper != null))
+      resOp = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (otrosIng || 0) + (otrosGas || 0);
+
+    let resAntesImp = gv('resAntesImp', m);
+    if (resAntesImp == null && (resOp != null || resFin != null))
+      resAntesImp = (resOp || 0) + (resFin || 0);
+
+    let resEj = gv('resEjercicio', m);
+    if (resEj == null && (resAntesImp != null || impuesto != null))
+      resEj = (resAntesImp || 0) + (impuesto || 0);
+
+    sv('ventas', m, ventas);
+    sv('costo', m, costo);
+    sv('utilBruta', m, utilBruta);
+    sv('gastoAdm', m, gastoAdm);
+    sv('gastoCom', m, gastoCom);
+    sv('gastoOper', m, gastoOper);
+    sv('resOperativo', m, resOp);
+    sv('resFinanciero', m, resFin);
+    sv('resAntesImp', m, resAntesImp);
+    sv('resEjercicio', m, resEj);
+  });
+
+  // Step 3: sum across all periods
+  const sum = k => {
+    const pm = vcm[k]; if (!pm) return null;
+    const s = Object.values(pm).reduce((a, v) => a + (v ?? 0), 0);
+    return s !== 0 ? s : null;
+  };
+
+  const gastoAdmTot = sum('gastoAdm'), gastoOperTot = sum('gastoOper');
 
   return {
-    ventas_netas:          ventas,
-    costo_ventas:          costo,
-    utilidad_bruta:        utilBruta,
-    gastos_admin:          gastoAdm!=null||gastoOper!=null ? (gastoAdm||0)+(gastoOper||0)||null : null,
-    gastos_comercializacion: gastoCom,
-    resultado_operativo:   resOp,
-    gastos_financieros:    resFin,
-    gastos_fiscales:       imp,
-    otros_ingresos:        otrosIng,
-    resultado_neto:        resEj,
+    ventas_netas:             sum('ventas'),
+    costo_ventas:             sum('costo'),
+    utilidad_bruta:           sum('utilBruta'),
+    gastos_admin:             (gastoAdmTot != null || gastoOperTot != null) ? (gastoAdmTot || 0) + (gastoOperTot || 0) || null : null,
+    gastos_comercializacion:  sum('gastoCom'),
+    resultado_operativo:      sum('resOperativo'),
+    gastos_financieros:       sum('resFinanciero'),
+    gastos_fiscales:          sum('impuesto'),
+    otros_ingresos:           sum('otrosIngresos'),
+    resultado_neto:           sum('resEjercicio'),
   };
 }
 
