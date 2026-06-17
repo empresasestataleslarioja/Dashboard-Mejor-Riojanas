@@ -10928,7 +10928,7 @@ function buildAuditERProvisorio(emp) {
           !bEmpNorm.includes(empNorm.substring(0,8)) &&
           !empNorm.includes(bEmpNorm.substring(0,8))) return;
       // Detectar año del período (ej "2023", "EJERCICIO 2024", etc.)
-      const mYr = (b.periodo || '').match(/20\d\d/);
+      const mYr = String(b.periodo || '').match(/20\d\d/);
       if (!mYr) return;
       const yr = mYr[0];
       const ren = b.indicadores?.rentabilidad || {};
@@ -10944,13 +10944,15 @@ function buildAuditERProvisorio(emp) {
   }
 
   // Debug: mostrar qué datos hay disponibles si no hay cruce
+  const _balVals = Object.values(_balances || {});
   const _dbgInfo = {
     erMKeys: Object.keys(erM),
     erBKeys: Object.keys(erB),
     allErKeys: Object.keys(DATA.er || {}),
     allErMKeys: Object.keys(DATA.er_mensual || {}),
-    allBalEmps: Object.values(_balances || {}).map(b => `${b.empresa} (${b.periodo})`),
+    allBalEmps: _balVals.map(b => `"${b.empresa}" per=${String(b.periodo||'')} ren=${JSON.stringify(Object.keys(b.indicadores?.rentabilidad||{}))}`),
   };
+  console.log('[AuditER] emp=', emp, _dbgInfo);
 
   // Concepto: mapeo monthly conceptoStd → clave en DATA.er (balance formal)
   const MAP_M2B = {
