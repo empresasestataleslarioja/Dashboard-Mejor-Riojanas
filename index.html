@@ -3888,6 +3888,13 @@ self.onmessage = async (e) => {
         📄 Generar informe Word
       </button>
 
+      <button id="btn-export-excel" onclick="exportarFlujoExcel()"
+        style="padding:5px 14px;background:rgba(71,255,180,.08);
+        border:1.5px solid var(--pos);color:#1a9e68;border-radius:4px;
+        cursor:pointer;font-family:var(--mono);font-size:10px">
+        📊 Exportar Excel
+      </button>
+
       <span id="flujo-msg" style="font-size:9px;font-family:var(--mono);
         color:var(--dim);margin-left:4px"></span>
     </div>
@@ -4069,12 +4076,18 @@ self.onmessage = async (e) => {
       <!-- KPIs -->
       <div id="flujo-kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px"></div>
 
+      <!-- Semáforo de consistencia presupuestaria -->
+      <div id="flujo-semaforo" style="margin-bottom:14px"></div>
+
       <!-- Tabla de rubros con distinciones visuales -->
       <div class="card" style="margin-bottom:14px;overflow:hidden">
         <div style="overflow-x:auto">
           <table id="tbl-flujos" style="width:100%;border-collapse:collapse;font-size:10px"></table>
         </div>
       </div>
+
+      <!-- Ranking de egresos por peso relativo -->
+      <div id="flujo-ranking" style="margin-bottom:14px"></div>
 
       <!-- Gráficos — nueva hoja en impresión -->
       <div class="row2 print-page-break" style="margin-bottom:14px">
@@ -4091,6 +4104,13 @@ self.onmessage = async (e) => {
             <span class="card-hd-unit">actual vs anterior</span>
           </div>
           <canvas id="ch-flujo-egr"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-hd">
+            <span class="card-hd-title">Tendencia histórica</span>
+            <span class="card-hd-unit">necesidad y cobertura</span>
+          </div>
+          <canvas id="ch-flujo-tend"></canvas>
         </div>
       </div>
 
@@ -8586,6 +8606,156 @@ function buildComparacionFlujos() {
   },{ plugins:{ legend:{ labels:{ font:{size:8} } } },
       scales:{ y:{ ticks:{ callback: v=>'$'+v+'M', font:{size:8} } },
                x:{ ticks:{ font:{size:8} } } } });
+
+  // ── 1. SEMÁFORO DE CONSISTENCIA PRESUPUESTARIA ──────────────────
+  (() => {
+    const semEl = document.getElementById('flujo-semaforo');
+    if (!semEl) return;
+    if (covA == null) { semEl.innerHTML = ''; return; }
+    let icon, label, color;
+    if (covA >= 90)      { icon='🟢'; label='Cobertura solvente (≥90%)';    color='var(--pos)'; }
+    else if (covA >= 70) { icon='🟡'; label='Cobertura con alerta (70–89%)'; color='#e8c84a'; }
+    else                 { icon='🔴'; label='Cobertura crítica (<70%)';       color='var(--neg)'; }
+    const deltaCov = (covA!=null&&covB!=null) ? (covA-covB) : null;
+    const deltaStr = deltaCov!=null ? `<span style="font-size:11px;font-family:var(--mono);color:${deltaCov>=0?'var(--pos)':'var(--neg)'};margin-left:10px">${deltaCov>=0?'+':''}${deltaCov.toFixed(1)} pp vs período anterior</span>` : '';
+    semEl.innerHTML = `<div style="padding:12px 18px;background:var(--s2);border:1px solid var(--bd);
+      border-left:3px solid ${color};border-radius:4px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span style="font-size:20px">${icon}</span>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:${color};font-family:var(--mono)">${label}</div>
+        <div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-top:3px">
+          Cobertura actual: <span style="color:${color};font-weight:700">${covA.toFixed(1)}%</span>
+          ${covB!=null?`&nbsp;·&nbsp; Período anterior: <span style="color:var(--dim)">${covB.toFixed(1)}%</span>`:''}
+          ${deltaStr}
+        </div>
+      </div>
+    </div>`;
+  })();
+
+  // ── 2. RANKING DE EGRESOS POR PESO RELATIVO ─────────────────────
+  (() => {
+    const rankEl = document.getElementById('flujo-ranking');
+    if (!rankEl) return;
+    const rubEgr = fA.rubros.filter(r => r.tipo==='egreso' && r.actual)
+      .sort((a,b) => Math.abs(b.actual) - Math.abs(a.actual));
+    if (!rubEgr.length || !egrA) { rankEl.innerHTML = ''; return; }
+    const totalEgr = Math.abs(egrA);
+    const rows = rubEgr.map(r => {
+      const pct = (Math.abs(r.actual) / totalEgr * 100);
+      return `<div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+          <span style="font-size:8px;color:var(--dim);font-family:var(--mono)">${r.label}</span>
+          <span style="font-size:8px;color:var(--neg);font-family:var(--mono)">${fmtM(r.actual)} &nbsp; ${pct.toFixed(1)}%</span>
+        </div>
+        <div style="height:6px;background:var(--s3);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${Math.min(pct,100).toFixed(1)}%;background:var(--neg);border-radius:3px;opacity:.75"></div>
+        </div>
+      </div>`;
+    }).join('');
+    rankEl.innerHTML = `<div class="card" style="padding:14px 16px">
+      <div style="font-size:8px;color:var(--dim);font-family:var(--mono);letter-spacing:.08em;margin-bottom:10px;text-transform:uppercase">Ranking de egresos — ${fA.periodo}</div>
+      ${rows}
+    </div>`;
+  })();
+
+  // ── 3. PROYECCIÓN DÉFICIT AJUSTADO POR IPC (extra KPI card) ─────
+  (() => {
+    if (!(ipc > 0 && necA != null)) return;
+    const kpisEl = document.getElementById('flujo-kpis');
+    if (!kpisEl) return;
+    const card = document.createElement('div');
+    card.style.cssText = 'padding:10px 18px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #e8c84a;border-radius:4px;min-width:150px';
+    card.innerHTML = `<div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">Proyección próx. período</div>
+      <div style="font-size:16px;font-weight:700;color:#e8c84a;font-family:var(--mono)">${fmtM(necA * (1 + ipc/100))}</div>
+      <div style="font-size:7px;color:var(--dim);font-family:var(--mono);margin-top:3px">si IPC se mantiene en ${ipc}%</div>`;
+    kpisEl.appendChild(card);
+  })();
+
+  // ── 4. GRÁFICO DE TENDENCIA TEMPORAL ────────────────────────────
+  (() => {
+    const tendCanvas = document.getElementById('ch-flujo-tend');
+    if (!tendCanvas) return;
+    const empresa = fA.empresa;
+    const allFlujos = Object.values(DATA.flujos || {})
+      .filter(f => f.empresa === empresa)
+      .sort((a,b) => a.periodo < b.periodo ? -1 : a.periodo > b.periodo ? 1 : 0);
+    if (allFlujos.length < 3) {
+      tendCanvas.style.display = 'none'; return;
+    }
+    tendCanvas.style.display = '';
+    const periodos = allFlujos.map(f => f.periodo);
+    const necesidades = allFlujos.map(f => _flujoNecesidad(f));
+    const coberturas  = allFlujos.map(f => {
+      const ing = _flujoIngTotal(f);
+      const egr = _flujoEgrTotal(f);
+      return (ing && egr) ? parseFloat((ing / Math.abs(egr) * 100).toFixed(1)) : null;
+    });
+    mkChart('ch-flujo-tend','line',{
+      labels: periodos,
+      datasets:[
+        { label:'Necesidad fondos', data: necesidades,
+          borderColor:'var(--neg)', backgroundColor:'rgba(255,71,102,.08)',
+          yAxisID:'y', tension:.3, pointRadius:3 },
+        { label:'Cobertura %', data: coberturas,
+          borderColor:'var(--pos)', backgroundColor:'rgba(71,255,180,.08)',
+          yAxisID:'y2', tension:.3, pointRadius:3, borderDash:[4,3] },
+      ]
+    },{ plugins:{ legend:{ labels:{ font:{size:8} } } },
+        scales:{
+          y:{ ticks:{ callback: v=>'$'+(v/1e6).toFixed(1)+'M', font:{size:7} }, position:'left' },
+          y2:{ ticks:{ callback: v=>v+'%', font:{size:7} }, position:'right', grid:{ drawOnChartArea:false } }
+        }
+    });
+  })();
+}
+
+// ── EXPORTAR FLUJO A EXCEL ────────────────────────────────────────
+function exportarFlujoExcel() {
+  const claveA = document.getElementById('sel-flujo-a')?.value;
+  const claveB = document.getElementById('sel-flujo-b')?.value;
+  if (!claveA || !claveB) { alert('Seleccioná ambos períodos primero.'); return; }
+  const fA = DATA.flujos[claveA];
+  const fB = DATA.flujos[claveB];
+  if (!fA || !fB) return;
+  const ipc = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
+
+  const labelsA = new Map(fA.rubros.map(r => [r.key, r]));
+  const labelsB = new Map(fB.rubros.map(r => [r.key, r]));
+  const allKeys = [...new Set([...labelsA.keys(), ...labelsB.keys()])];
+
+  const fmtNum = v => v==null ? '' : Math.round(v);
+
+  // Sheet 1: Comparativo
+  const compRows = [['Rubro', fA.periodo, fB.periodo, 'Var. nominal %', 'Var. real %']];
+  allKeys.forEach(k => {
+    const rA = labelsA.get(k), rB = labelsB.get(k);
+    const vA = rA?.actual ?? null;
+    const vB = rB?.actual ?? null;
+    const lbl = rA?.label || rB?.label || k;
+    const vn = (vA!=null&&vB!=null&&vB!==0) ? parseFloat(((vA-vB)/Math.abs(vB)*100).toFixed(2)) : null;
+    const vr = (vn!=null&&ipc) ? parseFloat((((1+vn/100)/(1+ipc/100)-1)*100).toFixed(2)) : null;
+    compRows.push([lbl, fmtNum(vA), fmtNum(vB), vn ?? '', vr ?? '']);
+  });
+
+  // Sheet 2: Ranking egresos
+  const egrA = _flujoEgrTotal(fA);
+  const rubEgr = fA.rubros.filter(r => r.tipo==='egreso' && r.actual)
+    .sort((a,b) => Math.abs(b.actual) - Math.abs(a.actual));
+  const rankRows = [['Rubro', 'Monto', '% del total egresos']];
+  rubEgr.forEach(r => {
+    const pct = egrA ? parseFloat((Math.abs(r.actual)/Math.abs(egrA)*100).toFixed(2)) : '';
+    rankRows.push([r.label, Math.round(r.actual), pct]);
+  });
+
+  const wb = window.XLSX.utils.book_new();
+  const ws1 = window.XLSX.utils.aoa_to_sheet(compRows);
+  const ws2 = window.XLSX.utils.aoa_to_sheet(rankRows);
+  window.XLSX.utils.book_append_sheet(wb, ws1, 'Comparativo');
+  window.XLSX.utils.book_append_sheet(wb, ws2, 'Ranking egresos');
+
+  const empresa = (fA.empresa || 'empresa').replace(/\s+/g,'_');
+  const periodo = (fA.periodo || 'periodo').replace(/\s+/g,'_');
+  window.XLSX.writeFile(wb, `flujo-${empresa}-${periodo}.xlsx`);
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
