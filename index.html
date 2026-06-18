@@ -12242,9 +12242,7 @@ function _informeEjecutivoRender(emp) {
       const f = fact[y], s = sit[y], t = transXanio[y] || 0;
       const neto = s != null ? s + t : null;
       const mg = (f && s != null) ? p(s / f) : '—';
-      const ipcP = _ipcAcumEntrePeriodos
-        ? (() => { const py = String(parseInt(y)-1); return allYearsConTrans.includes(py) ? _ipcAcumEntrePeriodos(y, py) : null; })()
-        : null;
+      const ipcP = (() => { const py = String(parseInt(y)-1); return allYearsConTrans.includes(py) ? _ipcAcumEntrePeriodos(String(y), py) : null; })();
       const varNom = (() => { const py = String(parseInt(y)-1); const pf = fact[py]; return (f && pf && pf!==0) ? (f-pf)/Math.abs(pf)*100 : null; })();
       const varReal = (varNom != null && ipcP) ? ((1+varNom/100)/(1+ipcP/100)-1)*100 : null;
       return { y, f, s, t, neto, mg, varNom, varReal };
