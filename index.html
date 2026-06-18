@@ -11752,10 +11752,12 @@ function _erStdAnual(emp, yr) {
 
   // Step 1: accumulate raw rubro values per period key (same as buildEvolucionMensual rubroVals)
   const rubroVals = {};
+  const _RUBROS_GASTO = new Set(['costo','gastoAdm','gastoCom','gastoOper','otrosGastos']);
   const addVal = (rb, m, v) => {
     if (v == null) return;
     if (!rubroVals[rb]) rubroVals[rb] = {};
-    rubroVals[rb][m] = (rubroVals[rb][m] || 0) + v;
+    const val = _RUBROS_GASTO.has(rb) ? -Math.abs(v) : v;
+    rubroVals[rb][m] = (rubroVals[rb][m] || 0) + val;
   };
 
   erData.filas.forEach(f => {
@@ -12133,10 +12135,10 @@ function buildEvolucionMensual(emp) {
   const toggle = `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
     <button onclick="window._erMensualVista='estandar';buildEvolucionMensual('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
-      background:${vista==='estandar'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='estandar'?'#001':'var(--dim)'}">ER Estándar</button>
+      background:${vista==='estandar'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='estandar'?'#001':'var(--dim)'}">ER Provisorio Completo</button>
     <button onclick="window._erMensualVista='original';buildEvolucionMensual('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
-      background:${vista==='original'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='original'?'#001':'var(--dim)'}">ER Original (completo)</button>
+      background:${vista==='original'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='original'?'#001':'var(--dim)'}">ER Original Detallado</button>
     <button onclick="window._erMensualVista='tendencia';buildEvolucionMensual('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--bd);
       background:${vista==='tendencia'?'var(--acc,#47e8ff)':'transparent'};color:${vista==='tendencia'?'#001':'var(--dim)'}">📈 Tendencia</button>
@@ -12267,10 +12269,12 @@ function buildEvolucionMensual(emp) {
 
       // Agrupar todas las filas por rubro, sumando valores mes a mes
       const rubroVals = {}; // rubroVals[rubro][mes] = suma
+      const _RUBROS_GASTO = new Set(['costo','gastoAdm','gastoCom','gastoOper','otrosGastos']);
       const addVal = (rubro, m, v) => {
         if (v == null) return;
         if (!rubroVals[rubro]) rubroVals[rubro] = {};
-        rubroVals[rubro][m] = (rubroVals[rubro][m] || 0) + v;
+        const val = _RUBROS_GASTO.has(rubro) ? -Math.abs(v) : v;
+        rubroVals[rubro][m] = (rubroVals[rubro][m] || 0) + val;
       };
       // Rubros que son subtotales/resultados (vienen como total, no se suman partidas)
       const RUBROS_RESULTADO = ['utilBruta','resOperativo','resAntesImp','resEjercicio'];
