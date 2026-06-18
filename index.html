@@ -11810,8 +11810,8 @@ function _erStdAnual(emp, yr) {
     const impuesto  = gv('impuesto', m);
 
     let utilBruta = gv('utilBruta', m);
-    if (utilBruta == null && (ventas != null || costo != null))
-      utilBruta = (ventas || 0) + (costo || 0);
+    if (utilBruta == null && ventas != null && costo != null)
+      utilBruta = ventas + costo;
 
     let resOp = gv('resOperativo', m);
     if (resOp == null && (utilBruta != null || gastoAdm != null || gastoCom != null || gastoOper != null))
@@ -20757,6 +20757,13 @@ function analizarBalanceLocal(filename, texto) {
     '[Mm]ercader[ií]as?',
     'BIENES\\s+DE\\s+CAMBIO',
   ]);
+  const cxp = buscar([
+    '[Dd]eudas?\\s+[Cc]omerciales?',
+    '[Cc]uentas?\\s+(?:por|a)\\s+[Pp]agar',
+    '[Pp]roveedores?',
+    'DEUDAS\\s+COMERCIALES',
+    'CUENTAS\\s+POR\\s+PAGAR',
+  ]);
   const intereses = buscar([
     '[Rr]esultados?\\s+[Ff]inancieros?\\s+y\\s+por\\s+[Tt]enencia',
     '[Rr]esultados?\\s+[Ff]inancieros?',
@@ -20836,7 +20843,9 @@ function analizarBalanceLocal(filename, texto) {
   // Ordenar por posición de aparición en el texto
   const _erRubros = Object.values(_erMap).sort((a, b) => a.pos - b.pos);
 
-  const liqSeca  = (activoC != null && inv != null && pasivoC) ? safe(activoC - inv, pasivoC) : liqCorr;
+  // Fix: solo calcular liquidez seca cuando inventarios está explícitamente disponible.
+  // Si inv es null, dejar liqSeca en null (no igualar a liquidez_corriente: induciría a error).
+  const liqSeca  = (activoC != null && inv != null && pasivoC) ? safe(activoC - inv, pasivoC) : null;
   const capTrab  = (activoC != null && pasivoC != null) ? activoC - pasivoC : null;
   const endeudam = safe(pasivoT, activoT);
   const dPat     = safe(pasivoT, patrimon);
@@ -20855,6 +20864,7 @@ function analizarBalanceLocal(filename, texto) {
   const rotAct   = safe(ventasEfectivas, activoT);
   const rotInv   = (inv && costo) ? safe(costo, inv) : null;
   const diasCob  = (cxc && ventas && ventas > 0) ? cxc / ventas * 365 : null;
+  const diasPag  = (cxp && costo && costo !== 0) ? Math.abs(cxp) / Math.abs(costo) * 365 : null;
 
   // ── 10. Alertas ───────────────────────────────────────────
   const alertas = [];
@@ -20865,6 +20875,15 @@ function analizarBalanceLocal(filename, texto) {
   if (resNeto  != null && resNeto < 0)       alertas.push('Resultado del ejercicio negativo');
   if (dPat     != null && dPat > 2)          alertas.push('Deuda mayor al doble del patrimonio');
   if (diasCob  != null && diasCob > 90)      alertas.push(`Días de cobro elevados (${diasCob.toFixed(0)} días)`);
+  // Ecuación patrimonial: Activo = Pasivo + PN (tolerancia 1% por redondeos)
+  if (activoT != null && pasivoT != null && patrimon != null) {
+    const diff = Math.abs(activoT - (pasivoT + patrimon));
+    if (diff > Math.abs(activoT) * 0.01)
+      alertas.push(`Balance descuadrado: Activo (${(activoT/1e6).toFixed(1)}M) ≠ Pasivo + PN (${((pasivoT+patrimon)/1e6).toFixed(1)}M)`);
+  }
+  // Cobertura de intereses: advertir si hay deuda significativa pero no se encontraron intereses
+  if (intereses == null && endeudam != null && endeudam > 0.4)
+    alertas.push('No se detectaron gastos financieros — la cobertura de intereses no puede calcularse');
 
   const tieneAlgo = [activoC,pasivoC,activoT,pasivoT,patrimon,ventas,resNeto].some(v => v != null);
 
@@ -20948,7 +20967,7 @@ function analizarBalanceLocal(filename, texto) {
         sub_total_agro:subTotal1,
       },
       eficiencia:   { rotacion_activos:rotAct, rotacion_inventarios:rotInv, dias_cobro:diasCob,
-                      dias_pago:null, costo_ventas:costo, cuentas_cobrar:cxc },
+                      dias_pago:diasPag, costo_ventas:costo, cuentas_cobrar:cxc, cuentas_pagar:cxp },
     },
     diagnostico: `Balance de ${empresa} — período ${periodo} (${moneda}). ` + diag.join(' '),
     alertas,
@@ -22169,7 +22188,7 @@ function showBalanceResult() {
   // ── Tablas de indicadores con barras de progreso visuales ──
   document.getElementById('bal-liquidez').innerHTML    = buildIndicTableVis([
     { lbl:'Liquidez corriente',  val:liq.liquidez_corriente,  tipo:'ratio', ok:liq.liquidez_corriente>=1,    score:scores.liquidez,   ref:'≥ 1.0', desc:'Capacidad de pagar deudas de corto plazo' },
-    { lbl:'Liquidez seca',       val:liq.liquidez_seca,       tipo:'ratio', ok:liq.liquidez_seca>=1,         score:null,              ref:'≥ 1.0', desc:'Sin considerar inventarios' },
+    { lbl:'Liquidez seca',       val:liq.liquidez_seca,       tipo:'ratio', ok:liq.liquidez_seca!=null&&liq.liquidez_seca>=1, score:null, ref:'≥ 1.0', desc: liq.liquidez_seca != null ? 'Activo corriente − inventarios / Pasivo corriente' : 'No calculable — inventarios no detectados en el balance' },
     { lbl:'Capital de trabajo',  val:liq.capital_trabajo,     tipo:'monto', ok:liq.capital_trabajo>0,        score:null,              ref:'> 0',   desc:'Activo corriente − Pasivo corriente' },
     { lbl:'Activo corriente',    val:liq.activo_corriente,    tipo:'monto', ok:true,                         score:null,              ref:'',      desc:'' },
     { lbl:'Pasivo corriente',    val:liq.pasivo_corriente,    tipo:'monto', ok:null,                         score:null,              ref:'',      desc:'' },
@@ -22197,8 +22216,10 @@ function showBalanceResult() {
   document.getElementById('bal-eficiencia').innerHTML = buildIndicTableVis([
     { lbl:'Rotación activos',    val:efi.rotacion_activos,     tipo:'ratio', ok:efi.rotacion_activos>0.5,    score:scores.eficiencia, ref:'> 0.5', desc:'Ventas / Activo total' },
     { lbl:'Rotación inventarios',val:efi.rotacion_inventarios, tipo:'ratio', ok:efi.rotacion_inventarios>1,  score:null,              ref:'> 1.0', desc:'Costo ventas / Inventarios' },
-    { lbl:'Días de cobro',       val:efi.dias_cobro,           tipo:'dias',  ok:efi.dias_cobro<60,           score:null,              ref:'< 60d', desc:'Plazo promedio de cobranza' },
+    { lbl:'Días de cobro',       val:efi.dias_cobro,           tipo:'dias',  ok:efi.dias_cobro!=null&&efi.dias_cobro<60, score:null, ref:'< 60d', desc:'Cuentas por cobrar / Ventas × 365' },
+    { lbl:'Días de pago',        val:efi.dias_pago,            tipo:'dias',  ok:efi.dias_pago!=null&&efi.dias_pago>20,  score:null, ref:'> 20d', desc:'Cuentas por pagar / Costo ventas × 365' },
     { lbl:'Cuentas a cobrar',    val:efi.cuentas_cobrar,       tipo:'monto', ok:true,                        score:null,              ref:'',      desc:'' },
+    { lbl:'Cuentas a pagar',     val:efi.cuentas_pagar,        tipo:'monto', ok:null,                        score:null,              ref:'',      desc:'' },
     { lbl:'Costo de ventas',     val:efi.costo_ventas,         tipo:'monto', ok:null,                        score:null,              ref:'',      desc:'' },
   ], b.moneda);
 
@@ -22454,6 +22475,8 @@ function generarDiagnosticoFinanciero(liq, sol, ren, efi, b) {
     }
     if (efi.dias_cobro != null)
       parrafos.push(`El <strong>plazo de cobro promedio es ${Math.round(efi.dias_cobro)} días</strong> — ${efi.dias_cobro < 30 ? 'excelente gestión de cobranzas' : efi.dias_cobro < 60 ? 'plazo de cobro razonable' : 'plazo extendido que puede generar presión sobre la liquidez'}.`);
+    if (efi.dias_pago != null)
+      parrafos.push(`El <strong>plazo de pago promedio es ${Math.round(efi.dias_pago)} días</strong> — ${efi.dias_pago > 45 ? 'la empresa demora el pago a proveedores, lo que puede indicar tensión de caja o negociación favorable' : efi.dias_pago > 20 ? 'plazo de pago dentro de parámetros normales' : 'pago muy rápido a proveedores; podría negociarse mayor plazo para mejorar el capital de trabajo'}.`);
     if (parrafos.length)
       secciones.push({ titulo: 'Eficiencia', color: '#47e8ff', texto: parrafos });
   }
@@ -23605,8 +23628,9 @@ function _balEditorGuardarInterno() {
   if (liq.activo_corriente!=null && liq.pasivo_corriente!=null) {
     liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
     liq.capital_trabajo    = liq.activo_corriente - liq.pasivo_corriente;
-    const activoLiq = liq.activo_corriente - (liq.inventarios || 0);
-    liq.liquidez_seca = safe(activoLiq, liq.pasivo_corriente);
+    liq.liquidez_seca = liq.inventarios != null
+      ? safe(liq.activo_corriente - liq.inventarios, liq.pasivo_corriente)
+      : null;
   }
   if (sol.pasivo_total!=null && sol.activo_total!=null)
     sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
@@ -26010,9 +26034,10 @@ function applyCloudData(cloud, opts) {
             rotacion_activos:     _pf(r.rotacion_activos),
             rotacion_inventarios: _pf(r.rotacion_inventarios),
             dias_cobro:           _pf(r.dias_cobro),
+            dias_pago:            _pf(r.dias_pago),
             costo_ventas:         _pf(r.costo_ventas),
             cuentas_cobrar:       _pf(r.cuentas_cobrar),
-            dias_pago:            null,
+            cuentas_pagar:        _pf(r.cuentas_pagar),
           },
         },
         estructura_er: (function() {
@@ -26399,8 +26424,10 @@ function buildCloudPayload() {
       rotacion_activos:      efi.rotacion_activos      ?? '',
       rotacion_inventarios:  efi.rotacion_inventarios  ?? '',
       dias_cobro:            efi.dias_cobro            ?? '',
+      dias_pago:             efi.dias_pago             ?? '',
       costo_ventas:          efi.costo_ventas          ?? '',
       cuentas_cobrar:        efi.cuentas_cobrar        ?? '',
+      cuentas_pagar:         efi.cuentas_pagar         ?? '',
       // Diagnóstico
       alertas:               (b.alertas || []).join(' | '),
       diagnostico:           (b.diagnostico || '').slice(0, 500),
