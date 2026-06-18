@@ -8316,7 +8316,8 @@ function _guardarFlujoData(data) {
   };
 
   saveDataToLocalCache();
-  try { _dispararAutoSync(); } catch(e) {}
+  // Subir inmediatamente a Sheets para que el nuevo flujo no sea pisado por un sync posterior
+  try { syncToCloud('Guardado de flujo'); } catch(e) { try { _dispararAutoSync(); } catch(e2) {} }
   _poblarSelectoresFlujos();
   buildFlujos();
 
@@ -8464,7 +8465,8 @@ function _eliminarFlujo(clave) {
   if (!confirm('¿Eliminar este flujo?')) return;
   delete DATA.flujos[clave];
   saveDataToLocalCache();
-  try { _dispararAutoSync(); } catch(e) {}
+  // Subir inmediatamente a Sheets para que la eliminación persista
+  try { syncToCloud('Eliminación de flujo'); } catch(e) { try { _dispararAutoSync(); } catch(e2) {} }
   buildFlujos();
 }
 
@@ -26066,12 +26068,16 @@ function applyCloudData(cloud, opts) {
   // Restaurar flujos de fondos desde Sheets
 
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
-    // SHEETS MANDA: reemplazar todos los flujos con los de Sheets
+    // Guardar los flujos locales más recientes antes de pisar con Sheets
+    const flujosPrevios = DATA.flujos || {};
     DATA.flujos = {};
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
       const tsCloud = parseInt(f.timestamp) || 0;
+      // Si hay una versión local más nueva (cargada manualmente o recién importada), conservarla
+      const tsLocal = parseInt(flujosPrevios[clave]?.timestamp) || 0;
+      if (tsLocal > tsCloud) { DATA.flujos[clave] = flujosPrevios[clave]; return; }
       let rubros_parsed = [];
       try { rubros_parsed = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
       let meses_parsed = [];
