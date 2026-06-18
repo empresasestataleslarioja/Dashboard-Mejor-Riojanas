@@ -8967,6 +8967,10 @@ function exportarFlujoExcel() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
   if (!claveA || !claveB) { alert('Seleccioná ambos períodos primero.'); return; }
+
+  // Abrir pestaña PRIMERO (gesto directo del usuario, antes de cualquier cómputo)
+  const _win = window.open('about:blank', '_blank');
+  if (!_win) { showStorageStatus('⚠ El navegador bloqueó la nueva pestaña — permitir popups para este sitio.', '#ff8c47'); return; }
   const fA = DATA.flujos[claveA];
   const fB = DATA.flujos[claveB];
   if (!fA || !fB) return;
@@ -9313,16 +9317,10 @@ function exportarFlujoExcel() {
 </body>
 </html>`;
 
-  // Abrir en nueva pestaña — window.open dentro de un click handler es permitido por el navegador
-  const win = window.open('about:blank', '_blank');
-  if (win) {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  } else {
-    // Fallback si popups bloqueados: mostrar aviso
-    showStorageStatus('⚠ El navegador bloqueó la nueva pestaña. Permitir popups para este sitio y volver a intentar.', '#ff8c47');
-  }
+  // Escribir el HTML en la pestaña ya abierta
+  _win.document.open();
+  _win.document.write(html);
+  _win.document.close();
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
