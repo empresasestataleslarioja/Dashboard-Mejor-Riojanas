@@ -12100,16 +12100,15 @@ function buildAuditERProvisorio(emp) {
 function informeEjecutivo(emp) {
   if (!emp) { alert('Seleccioná una empresa primero'); return; }
 
-  const years    = ys();
-  const fact     = DATA.fact[emp]    || {};
-  const sit      = DATA.sit[emp]     || {};
-  const pers     = DATA.personal.find(d => d.e === emp) || {};
-  const ruboLbl  = getRuboLabel(emp);
-  const hoy      = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
+  const years   = ys();
+  const fact    = DATA.fact[emp]  || {};
+  const sit     = DATA.sit[emp]   || {};
+  const ruboLbl = getRuboLabel(emp);
+  const hoy     = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
 
   // Balances de esta empresa, ordenados por período
   const bals = Object.values(_balances)
-    .filter(b => b.empresa === emp)
+    .filter(b => b.empresa === emp || b.vinculada === emp)
     .sort((a,b) => String(a.periodo).localeCompare(String(b.periodo)));
 
   // Flujos de esta empresa
@@ -12117,69 +12116,194 @@ function informeEjecutivo(emp) {
     .filter(f => f.empresa === emp)
     .sort((a,b) => String(a.periodo).localeCompare(String(b.periodo)));
 
-  // ── Helpers de formato ───────────────────────────────────────────────────────
-  const m  = v => v == null ? '—' : fv(v);
-  const p  = v => v == null ? '—' : (v*100).toFixed(1) + '%';
-  const r2 = v => v == null ? '—' : v.toFixed(2);
-  const d  = v => v == null ? '—' : Math.round(v) + ' días';
-  const pctFmt = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
-  const semaforo = (v, ok, warn) => {
-    if (v == null) return '<span style="color:#888">—</span>';
-    if (ok(v))   return `<span style="color:#2ecc71">✓</span>`;
-    if (warn(v)) return `<span style="color:#f39c12">△</span>`;
-    return `<span style="color:#e74c3c">✗</span>`;
-  };
+  // Transferencias de esta empresa
+  const transEmp = _transEmpresa(emp);
+  const transXanio = {};
+  transEmp.forEach(t => {
+    const y = String(t.año);
+    transXanio[y] = (transXanio[y] || 0) + (t.importe || 0);
+  });
+  const transOrgs = {};
+  transEmp.forEach(t => {
+    if (!t.organismo) return;
+    transOrgs[t.organismo] = (transOrgs[t.organismo] || 0) + (t.importe || 0);
+  });
 
-  // ── Sección: Evolución facturación y resultado ───────────────────────────────
+  // Personal
+  const persRec = DATA.personal.find(d => d.e === emp);
+
+  // ── Helpers de formato ────────────────────────────────────────────────────────
+  const m   = v => v == null ? '—' : fv(v);
+  const p   = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
+  const r2  = v => v == null ? '—' : v.toFixed(2);
+  const dd  = v => v == null ? '—' : Math.round(v) + ' días';
+  const pct = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+  const sem = (v, ok, warn) => {
+    if (v == null) return '<span style="color:#888">—</span>';
+    if (ok(v))   return '<span style="color:#2ecc71;font-weight:700">✓</span>';
+    if (warn(v)) return '<span style="color:#e67e22;font-weight:700">△</span>';
+    return '<span style="color:#e74c3c;font-weight:700">✗</span>';
+  };
+  const rowBal = (lbl, v, bold, indent) =>
+    `<tr${bold ? ' class="ie-tr-bold"' : ''}>
+      <td${indent ? ' style="padding-left:18px;font-size:8.5pt;color:#555"' : ''}>${lbl}</td>
+      <td style="text-align:right">${m(v)}</td>
+    </tr>`;
+
+  // ── Sección A: KPI de portada ─────────────────────────────────────────────────
   const yearsConDatos = years.filter(y => fact[y] || sit[y] != null);
-  let tablaER = '';
-  if (yearsConDatos.length) {
-    const cols = yearsConDatos.map(y => {
-      const f = fact[y], s = sit[y];
+  const lastY  = yearsConDatos[yearsConDatos.length - 1];
+  const lastF  = lastY ? fact[lastY]          : null;
+  const lastS  = lastY ? sit[lastY]           : null;
+  const lastT  = lastY ? (transXanio[lastY] || 0) : null;
+  const lastPD = persRec ? _persGetTotal(persRec, lastY) : null;
+  const lastBal = bals[bals.length - 1];
+
+  const kpis = [
+    lastF   != null ? { lbl:`Facturación ${lastY}`,    val: m(lastF),   color:'#1a3a8f' } : null,
+    lastS   != null ? { lbl:`Resultado ${lastY}`,      val: m(lastS),   color: lastS >= 0 ? '#1a7a4a' : '#c0392b' } : null,
+    lastT   != null && lastT > 0 ? { lbl:`Transferencias ${lastY}`, val: m(lastT), color:'#7d3c98' } : null,
+    lastPD  != null ? { lbl:`Dotación ${lastY}`,       val: lastPD + ' empleados', color:'#1a5f7a' } : null,
+    lastBal ? { lbl:`Balance cargado`,                val: lastBal.periodo, color:'#4a5568' } : null,
+  ].filter(Boolean);
+
+  const htmlKPIs = kpis.length ? `
+  <div class="ie-kpi-strip">
+    ${kpis.map(k => `<div class="ie-kpi"><div class="ie-kpi-val" style="color:${k.color}">${k.val}</div><div class="ie-kpi-lbl">${k.lbl}</div></div>`).join('')}
+  </div>` : '';
+
+  // ── Sección 1: Diagnóstico general ───────────────────────────────────────────
+  const diag = [];
+  if (lastBal) {
+    const dliq = lastBal.indicadores?.liquidez     || {};
+    const dsol = lastBal.indicadores?.solvencia    || {};
+    const dren = lastBal.indicadores?.rentabilidad || {};
+    if (dliq.liquidez_corriente != null)
+      diag.push(dliq.liquidez_corriente >= 1
+        ? `✓ Liquidez corriente adecuada (${r2(dliq.liquidez_corriente)}) — la empresa puede cubrir sus obligaciones de corto plazo`
+        : `✗ Liquidez corriente insuficiente (${r2(dliq.liquidez_corriente)}) — riesgo de incumplimiento de obligaciones corrientes`);
+    if (dliq.capital_trabajo != null)
+      diag.push(dliq.capital_trabajo > 0
+        ? `✓ Capital de trabajo positivo (${m(dliq.capital_trabajo)})`
+        : `✗ Capital de trabajo negativo (${m(dliq.capital_trabajo)}) — tensión financiera de corto plazo`);
+    if (dsol.razon_endeudamiento != null)
+      diag.push(dsol.razon_endeudamiento < 0.6
+        ? `✓ Endeudamiento controlado (${p(dsol.razon_endeudamiento)} del activo)`
+        : `✗ Endeudamiento elevado (${p(dsol.razon_endeudamiento)} del activo) — requiere monitoreo`);
+    if (dsol.patrimonio_neto != null)
+      diag.push(dsol.patrimonio_neto > 0
+        ? `✓ Patrimonio neto positivo (${m(dsol.patrimonio_neto)})`
+        : `✗ Patrimonio neto negativo (${m(dsol.patrimonio_neto)}) — empresa técnicamente insolvente`);
+    if (dren.roe != null)
+      diag.push(dren.roe > 0
+        ? `✓ Rentabilidad sobre patrimonio positiva — ROE ${p(dren.roe)}`
+        : `✗ ROE negativo (${p(dren.roe)}) — pérdidas sobre el patrimonio invertido`);
+    if (dren.margen_operativo != null)
+      diag.push(dren.margen_operativo > 0
+        ? `✓ Margen operativo positivo (${p(dren.margen_operativo)})`
+        : `✗ Margen operativo negativo (${p(dren.margen_operativo)}) — la operación no genera excedente`);
+  }
+  // Crecimiento real de facturación
+  const uyrs = yearsConDatos.slice(-2);
+  if (uyrs.length === 2) {
+    const f1 = fact[uyrs[0]], f2 = fact[uyrs[1]];
+    if (f1 && f2 && f1 !== 0) {
+      const varNom = (f2 - f1) / Math.abs(f1) * 100;
+      const ipcPer = _ipcAcumEntrePeriodos(String(uyrs[1]), String(uyrs[0]));
+      if (ipcPer) {
+        const varReal = ((1 + varNom / 100) / (1 + ipcPer / 100) - 1) * 100;
+        diag.push(varReal >= 0
+          ? `✓ Facturación con crecimiento real del ${varReal.toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`
+          : `△ Facturación con caída real del ${Math.abs(varReal).toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`);
+      }
+    }
+  }
+  // Dependencia de transferencias
+  if (lastT && lastF && lastT > 0) {
+    const pctTrans = lastT / lastF * 100;
+    diag.push(pctTrans > 50
+      ? `⚠ Transferencias estatales representan el ${pctTrans.toFixed(1)}% de la facturación — alta dependencia del aporte público`
+      : `△ Transferencias estatales: ${pctTrans.toFixed(1)}% de la facturación en ${lastY}`);
+  }
+
+  const htmlDiag = diag.length ? `
+  <h2 class="ie-h2">Diagnóstico General</h2>
+  <div class="ie-diag">${diag.join('<br>')}</div>` : '';
+
+  // ── Sección 2: Facturación, resultado y transferencias ────────────────────────
+  const allYearsConTrans = [...new Set([...yearsConDatos, ...Object.keys(transXanio)])].sort();
+  let htmlFact = '';
+  if (allYearsConTrans.length) {
+    const filas = allYearsConTrans.map(y => {
+      const f = fact[y], s = sit[y], t = transXanio[y] || 0;
+      const neto = s != null ? s + t : null;
       const mg = (f && s != null) ? p(s / f) : '—';
-      return { y, f, s, mg };
+      const ipcP = _ipcAcumEntrePeriodos
+        ? (() => { const py = String(parseInt(y)-1); return allYearsConTrans.includes(py) ? _ipcAcumEntrePeriodos(y, py) : null; })()
+        : null;
+      const varNom = (() => { const py = String(parseInt(y)-1); const pf = fact[py]; return (f && pf && pf!==0) ? (f-pf)/Math.abs(pf)*100 : null; })();
+      const varReal = (varNom != null && ipcP) ? ((1+varNom/100)/(1+ipcP/100)-1)*100 : null;
+      return { y, f, s, t, neto, mg, varNom, varReal };
     });
-    tablaER = `
+    htmlFact = `
     <table class="ie-tabla">
-      <thead><tr><th>Año</th><th>Facturación</th><th>Resultado</th><th>Margen</th></tr></thead>
-      <tbody>${cols.map(c => `
+      <thead><tr>
+        <th>Año</th><th>Facturación</th><th>Var. real</th>
+        <th>Resultado operativo</th><th>Margen</th>
+        <th>Transferencias</th><th>Resultado neto c/transf.</th>
+      </tr></thead>
+      <tbody>${filas.map(c => `
         <tr>
-          <td>${c.y}</td>
+          <td><strong>${c.y}</strong></td>
           <td>${m(c.f)}</td>
-          <td style="color:${c.s!=null?(c.s>=0?'#2ecc71':'#e74c3c'):'inherit'}">${m(c.s)}</td>
+          <td style="color:${c.varReal!=null?(c.varReal>=0?'#1a7a4a':'#c0392b'):'#888'}">${c.varReal!=null?pct(c.varReal):'—'}</td>
+          <td style="color:${c.s!=null?(c.s>=0?'#1a7a4a':'#c0392b'):'inherit'}">${m(c.s)}</td>
           <td>${c.mg}</td>
+          <td style="color:#7d3c98">${c.t > 0 ? m(c.t) : '—'}</td>
+          <td style="color:${c.neto!=null?(c.neto>=0?'#1a7a4a':'#c0392b'):'inherit'}">${m(c.neto)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
   }
 
-  // ── Sección: ER mensual acumulado anual (si hay datos ER) ───────────────────
-  let tablaERDet = '';
-  const erEmp = (DATA.er_mensual||{})[emp] || {};
+  // ── Sección 3: Estado de Resultados mensual acumulado ────────────────────────
+  const erEmp   = (DATA.er_mensual || {})[emp] || {};
   const erYears = Object.keys(erEmp).sort();
+  let htmlERDet = '';
   if (erYears.length) {
-    const rubrosER = ['ventas','costo','utilBruta','gastoAdm','gastoCom','gastoOper','otrosIngresos','resOperativo','resFinanciero','resEjercicio'];
-    const lblER = { ventas:'Ventas netas', costo:'Costo ventas', utilBruta:'Utilidad bruta',
+    const rubrosER = ['ventas','costo','utilBruta','gastoAdm','gastoCom','gastoOper','otrosIngresos','resOperativo','resFinanciero','impuesto','resEjercicio'];
+    const lblER = {
+      ventas:'Ventas / Ingresos', costo:'Costo de ventas', utilBruta:'UTILIDAD BRUTA',
       gastoAdm:'G. Administración', gastoCom:'G. Comercialización', gastoOper:'G. Operativos',
-      otrosIngresos:'Otros ingresos', resOperativo:'Resultado operativo',
-      resFinanciero:'Resultado financiero', resEjercicio:'Resultado ejercicio' };
-    const calcAnual = (yr, rb) => {
-      const filas = (erEmp[yr]||{}).filas || [];
-      const fila = filas.find(f => f.conceptoStd === rb);
-      if (!fila) return null;
-      return Object.values(fila.valores||{}).reduce((s,v)=>s+(v||0), 0) || null;
+      otrosIngresos:'Otros ingresos / egresos', resOperativo:'RESULTADO OPERATIVO',
+      resFinanciero:'Resultado financiero', impuesto:'Impuesto a las ganancias',
+      resEjercicio:'RESULTADO DEL EJERCICIO'
     };
-    const rowsER = rubrosER.filter(rb => erYears.some(y => calcAnual(y,rb) != null));
+    const calcAnual = (yr, rb) => {
+      const filas = (erEmp[yr] || {}).filas || [];
+      const fila  = filas.find(f => f.conceptoStd === rb);
+      if (!fila) return null;
+      const tot = Object.values(fila.valores || {}).reduce((s, v) => s + (v || 0), 0);
+      return tot === 0 ? null : tot;
+    };
+    const isBold   = rb => ['utilBruta','resOperativo','resEjercicio'].includes(rb);
+    const isSep    = rb => ['utilBruta','resOperativo','resFinanciero'].includes(rb);
+    const rowsER   = rubrosER.filter(rb => erYears.some(y => calcAnual(y, rb) != null));
     if (rowsER.length) {
-      const isBold = rb => ['utilBruta','resOperativo','resEjercicio'].includes(rb);
-      tablaERDet = `
+      // Agregar fila de margen operativo y neto si hay ventas
+      htmlERDet = `
       <table class="ie-tabla">
-        <thead><tr><th>Concepto</th>${erYears.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
-        <tbody>${rowsER.map(rb => {
+        <thead><tr><th>Concepto</th>${erYears.map(y => `<th style="text-align:right">${y}</th>`).join('')}</tr></thead>
+        <tbody>
+        ${rowsER.map(rb => {
           const vals = erYears.map(y => calcAnual(y, rb));
-          return `<tr${isBold(rb)?' style="font-weight:700;border-top:1px solid #ccc"':''}>
-            <td>${lblER[rb]||rb}</td>
-            ${vals.map(v => `<td style="color:${v!=null&&v<0?'#c0392b':'inherit'}">${m(v)}</td>`).join('')}
+          const bold = isBold(rb), sep = isSep(rb);
+          return `<tr${bold ? ' class="ie-tr-bold"' : ''}${sep ? ' style="border-top:2px solid #1a3a8f"' : ''}>
+            <td${bold ? '' : ' style="padding-left:14px;color:#555"'}>${lblER[rb] || rb}</td>
+            ${vals.map((v, i) => {
+              const isNeg = v != null && v < 0;
+              return `<td style="text-align:right;color:${isNeg ? '#c0392b' : 'inherit'}">${m(v)}</td>`;
+            }).join('')}
           </tr>`;
         }).join('')}
         </tbody>
@@ -12187,14 +12311,14 @@ function informeEjecutivo(emp) {
     }
   }
 
-  // ── Sección: Balances ────────────────────────────────────────────────────────
-  let tablaBal = '';
+  // ── Sección 4: Balance ───────────────────────────────────────────────────────
+  let htmlBal = '';
   if (bals.length) {
-    const fmtBal = (b) => {
-      const liq = b.indicadores?.liquidez    || {};
-      const sol = b.indicadores?.solvencia   || {};
-      const ren = b.indicadores?.rentabilidad|| {};
-      const efi = b.indicadores?.eficiencia  || {};
+    const getInds = b => {
+      const liq = b.indicadores?.liquidez     || {};
+      const sol = b.indicadores?.solvencia    || {};
+      const ren = b.indicadores?.rentabilidad || {};
+      const efi = b.indicadores?.eficiencia   || {};
       const aC  = sol.activo_corriente  ?? liq.activo_corriente;
       const aNC = sol.activo_no_corriente;
       const aT  = sol.activo_total;
@@ -12204,211 +12328,244 @@ function informeEjecutivo(emp) {
       const pn  = sol.patrimonio_neto;
       return { liq, sol, ren, efi, aC, aNC, aT, pC, pNC, pT, pn };
     };
-    const ultBal = bals[bals.length - 1];
-    const { liq, sol, ren, efi, aC, aNC, aT, pC, pNC, pT, pn } = fmtBal(ultBal);
+    const ub = bals[bals.length - 1];
+    const { liq, sol, ren, efi, aC, aNC, aT, pC, pNC, pT, pn } = getInds(ub);
 
-    // Tabla situación patrimonial
-    const rowBal = (lbl, v, bold) => `<tr${bold?' style="font-weight:700;border-top:1px solid #bbb"':''}>
-      <td>${lbl}</td><td>${m(v)}</td></tr>`;
-    tablaBal = `
-    <h3 class="ie-h3">Estado de Situación Patrimonial — ${ultBal.periodo}</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+    // Situación patrimonial
+    htmlBal = `
+    <h3 class="ie-h3">Estado de Situación Patrimonial — ${ub.periodo} <span style="font-weight:400;color:#888;font-size:8pt">(${ub.moneda || 'ARS'})</span></h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px">
       <table class="ie-tabla">
-        <thead><tr><th>ACTIVO</th><th>Importe</th></tr></thead>
+        <thead><tr><th>ACTIVO</th><th style="text-align:right">Importe</th></tr></thead>
         <tbody>
-          ${rowBal('Activo corriente', aC)}
-          ${rowBal('Activo no corriente', aNC)}
+          ${rowBal('Activo corriente', aC, false, true)}
+          ${rowBal('Activo no corriente', aNC, false, true)}
           ${rowBal('ACTIVO TOTAL', aT, true)}
         </tbody>
       </table>
       <table class="ie-tabla">
-        <thead><tr><th>PASIVO Y PN</th><th>Importe</th></tr></thead>
+        <thead><tr><th>PASIVO Y PATRIMONIO NETO</th><th style="text-align:right">Importe</th></tr></thead>
         <tbody>
-          ${rowBal('Pasivo corriente', pC)}
-          ${rowBal('Pasivo no corriente', pNC)}
+          ${rowBal('Pasivo corriente', pC, false, true)}
+          ${rowBal('Pasivo no corriente', pNC, false, true)}
           ${rowBal('PASIVO TOTAL', pT, true)}
-          ${rowBal('Patrimonio Neto', pn, true)}
+          ${rowBal('PATRIMONIO NETO', pn, true)}
         </tbody>
       </table>
     </div>
 
-    <h3 class="ie-h3">Indicadores Financieros — ${ultBal.periodo}</h3>
+    <h3 class="ie-h3">Ratios Financieros — ${ub.periodo}</h3>
     <table class="ie-tabla">
-      <thead><tr><th>Indicador</th><th>Valor</th><th>Referencia</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Categoría</th><th>Indicador</th><th style="text-align:right">Valor</th><th>Referencia</th><th style="text-align:center">Estado</th></tr></thead>
       <tbody>
-        <tr><td>Liquidez corriente</td><td>${r2(liq.liquidez_corriente)}</td><td>≥ 1.0</td>
-          <td>${semaforo(liq.liquidez_corriente, v=>v>=1.5, v=>v>=1)}</td></tr>
-        <tr><td>Liquidez seca</td>
-          <td>${liq.liquidez_seca != null ? r2(liq.liquidez_seca) : '<em style="color:#888;font-size:8pt">sin inventarios</em>'}</td>
+        <tr class="ie-tr-cat"><td colspan="5">LIQUIDEZ</td></tr>
+        <tr><td></td><td>Liquidez corriente</td><td style="text-align:right">${r2(liq.liquidez_corriente)}</td><td>≥ 1.0</td><td style="text-align:center">${sem(liq.liquidez_corriente, v=>v>=1.5, v=>v>=1)}</td></tr>
+        <tr><td></td><td>Liquidez seca</td>
+          <td style="text-align:right">${liq.liquidez_seca != null ? r2(liq.liquidez_seca) : '<em style="color:#aaa;font-size:8pt">sin inventarios</em>'}</td>
           <td>≥ 1.0</td>
-          <td>${liq.liquidez_seca != null ? semaforo(liq.liquidez_seca, v=>v>=1, v=>v>=0.7) : '<span style="color:#888">—</span>'}</td></tr>
-        <tr><td>Capital de trabajo</td><td>${m(liq.capital_trabajo)}</td><td>&gt; 0</td>
-          <td>${semaforo(liq.capital_trabajo, v=>v>0, v=>v===0)}</td></tr>
-        <tr style="border-top:1px solid #ccc"><td>Endeudamiento</td><td>${p(sol.razon_endeudamiento)}</td><td>&lt; 60%</td>
-          <td>${semaforo(sol.razon_endeudamiento, v=>v<0.4, v=>v<0.6)}</td></tr>
-        <tr><td>Deuda / Patrimonio</td><td>${r2(sol.deuda_patrimonio)}</td><td>&lt; 1.0</td>
-          <td>${semaforo(sol.deuda_patrimonio, v=>v<0.5, v=>v<1)}</td></tr>
-        ${sol.cobertura_intereses != null ? `<tr><td>Cobertura de intereses</td><td>${r2(sol.cobertura_intereses)}x</td><td>&gt; 1.5x</td>
-          <td>${semaforo(sol.cobertura_intereses, v=>v>=2, v=>v>=1.5)}</td></tr>` : ''}
-        <tr style="border-top:1px solid #ccc"><td>ROE</td><td>${p(ren.roe)}</td><td>&gt; 0%</td>
-          <td>${semaforo(ren.roe, v=>v>0.08, v=>v>0)}</td></tr>
-        <tr><td>ROA</td><td>${p(ren.roa)}</td><td>&gt; 0%</td>
-          <td>${semaforo(ren.roa, v=>v>0.05, v=>v>0)}</td></tr>
-        <tr><td>Margen neto</td><td>${p(ren.margen_neto)}</td><td>&gt; 0%</td>
-          <td>${semaforo(ren.margen_neto, v=>v>0.05, v=>v>0)}</td></tr>
-        <tr><td>Margen operativo</td><td>${p(ren.margen_operativo)}</td><td>&gt; 0%</td>
-          <td>${semaforo(ren.margen_operativo, v=>v>0.05, v=>v>0)}</td></tr>
-        ${ren.margen_bruto != null ? `<tr><td>Margen bruto</td><td>${p(ren.margen_bruto)}</td><td>&gt; 0%</td>
-          <td>${semaforo(ren.margen_bruto, v=>v>0.15, v=>v>0)}</td></tr>` : ''}
-        <tr style="border-top:1px solid #ccc"><td>Rotación activos</td><td>${r2(efi.rotacion_activos)}</td><td>&gt; 0.5</td>
-          <td>${semaforo(efi.rotacion_activos, v=>v>=1, v=>v>=0.5)}</td></tr>
-        ${efi.dias_cobro != null ? `<tr><td>Días de cobro</td><td>${d(efi.dias_cobro)}</td><td>&lt; 60 días</td>
-          <td>${semaforo(efi.dias_cobro, v=>v<30, v=>v<60)}</td></tr>` : ''}
-        ${efi.dias_pago != null ? `<tr><td>Días de pago</td><td>${d(efi.dias_pago)}</td><td>&gt; 20 días</td>
-          <td>${semaforo(efi.dias_pago, v=>v>=30, v=>v>=20)}</td></tr>` : ''}
+          <td style="text-align:center">${liq.liquidez_seca != null ? sem(liq.liquidez_seca, v=>v>=1, v=>v>=0.7) : '<span style="color:#aaa">—</span>'}</td></tr>
+        <tr><td></td><td>Capital de trabajo</td><td style="text-align:right">${m(liq.capital_trabajo)}</td><td>&gt; 0</td><td style="text-align:center">${sem(liq.capital_trabajo, v=>v>0, v=>v===0)}</td></tr>
+        <tr class="ie-tr-cat"><td colspan="5">SOLVENCIA</td></tr>
+        <tr><td></td><td>Endeudamiento</td><td style="text-align:right">${p(sol.razon_endeudamiento)}</td><td>&lt; 60%</td><td style="text-align:center">${sem(sol.razon_endeudamiento, v=>v<0.4, v=>v<0.6)}</td></tr>
+        <tr><td></td><td>Deuda / Patrimonio</td><td style="text-align:right">${r2(sol.deuda_patrimonio)}</td><td>&lt; 1.0</td><td style="text-align:center">${sem(sol.deuda_patrimonio, v=>v<0.5, v=>v<1)}</td></tr>
+        ${sol.cobertura_intereses != null ? `<tr><td></td><td>Cobertura de intereses</td><td style="text-align:right">${r2(sol.cobertura_intereses)}x</td><td>&gt; 1.5x</td><td style="text-align:center">${sem(sol.cobertura_intereses, v=>v>=2, v=>v>=1.5)}</td></tr>` : ''}
+        <tr class="ie-tr-cat"><td colspan="5">RENTABILIDAD</td></tr>
+        <tr><td></td><td>ROE</td><td style="text-align:right">${p(ren.roe)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.roe, v=>v>0.08, v=>v>0)}</td></tr>
+        <tr><td></td><td>ROA</td><td style="text-align:right">${p(ren.roa)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.roa, v=>v>0.05, v=>v>0)}</td></tr>
+        <tr><td></td><td>Margen neto</td><td style="text-align:right">${p(ren.margen_neto)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.margen_neto, v=>v>0.05, v=>v>0)}</td></tr>
+        <tr><td></td><td>Margen operativo</td><td style="text-align:right">${p(ren.margen_operativo)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.margen_operativo, v=>v>0.05, v=>v>0)}</td></tr>
+        ${ren.margen_bruto != null ? `<tr><td></td><td>Margen bruto</td><td style="text-align:right">${p(ren.margen_bruto)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.margen_bruto, v=>v>0.15, v=>v>0)}</td></tr>` : ''}
+        <tr class="ie-tr-cat"><td colspan="5">EFICIENCIA</td></tr>
+        <tr><td></td><td>Rotación activos</td><td style="text-align:right">${r2(efi.rotacion_activos)}</td><td>&gt; 0.5</td><td style="text-align:center">${sem(efi.rotacion_activos, v=>v>=1, v=>v>=0.5)}</td></tr>
+        ${efi.dias_cobro != null ? `<tr><td></td><td>Días de cobro</td><td style="text-align:right">${dd(efi.dias_cobro)}</td><td>&lt; 60 días</td><td style="text-align:center">${sem(efi.dias_cobro, v=>v<30, v=>v<60)}</td></tr>` : ''}
+        ${efi.dias_pago  != null ? `<tr><td></td><td>Días de pago</td><td style="text-align:right">${dd(efi.dias_pago)}</td><td>&gt; 20 días</td><td style="text-align:center">${sem(efi.dias_pago, v=>v>=30, v=>v>=20)}</td></tr>` : ''}
+        ${efi.rotacion_inventarios != null ? `<tr><td></td><td>Rotación inventarios</td><td style="text-align:right">${r2(efi.rotacion_inventarios)}</td><td>&gt; 1.0</td><td style="text-align:center">${sem(efi.rotacion_inventarios, v=>v>=3, v=>v>=1)}</td></tr>` : ''}
       </tbody>
     </table>`;
 
-    // Comparativo de balances si hay más de uno
+    // Evolución de balances (si hay más de uno)
     if (bals.length > 1) {
-      const metricasBal = [
-        { lbl:'Activo total',       get: b => fmtBal(b).aT,                 fmt: m },
-        { lbl:'Pasivo total',       get: b => fmtBal(b).pT,                 fmt: m },
-        { lbl:'Patrimonio Neto',    get: b => fmtBal(b).pn,                 fmt: m },
-        { lbl:'Liquidez corriente', get: b => b.indicadores?.liquidez?.liquidez_corriente, fmt: r2 },
-        { lbl:'Endeudamiento',      get: b => b.indicadores?.solvencia?.razon_endeudamiento, fmt: p },
-        { lbl:'ROE',                get: b => b.indicadores?.rentabilidad?.roe, fmt: p },
-        { lbl:'ROA',                get: b => b.indicadores?.rentabilidad?.roa, fmt: p },
+      const metricas = [
+        { lbl:'Activo total',         get: b => getInds(b).aT,  fmt: m },
+        { lbl:'Pasivo total',         get: b => getInds(b).pT,  fmt: m },
+        { lbl:'Patrimonio Neto',      get: b => getInds(b).pn,  fmt: m },
+        { lbl:'Liquidez corriente',   get: b => b.indicadores?.liquidez?.liquidez_corriente, fmt: r2 },
+        { lbl:'Endeudamiento',        get: b => b.indicadores?.solvencia?.razon_endeudamiento, fmt: p },
+        { lbl:'ROE',                  get: b => b.indicadores?.rentabilidad?.roe, fmt: p },
+        { lbl:'ROA',                  get: b => b.indicadores?.rentabilidad?.roa, fmt: p },
+        { lbl:'Margen operativo',     get: b => b.indicadores?.rentabilidad?.margen_operativo, fmt: p },
+        { lbl:'Rotación activos',     get: b => b.indicadores?.eficiencia?.rotacion_activos, fmt: r2 },
       ];
-      tablaBal += `
+      htmlBal += `
       <h3 class="ie-h3">Evolución de Balances</h3>
       <table class="ie-tabla">
-        <thead><tr><th>Indicador</th>${bals.map(b=>`<th>${b.periodo}</th>`).join('')}</tr></thead>
-        <tbody>${metricasBal.map(met => `
-          <tr><td>${met.lbl}</td>${bals.map(b => `<td>${met.fmt(met.get(b))}</td>`).join('')}</tr>
-        `).join('')}
+        <thead><tr><th>Indicador</th>${bals.map(b=>`<th style="text-align:right">${b.periodo}</th>`).join('')}</tr></thead>
+        <tbody>${metricas.map(met => `
+          <tr><td>${met.lbl}</td>${bals.map(b => {
+            const v = met.get(b);
+            return `<td style="text-align:right;color:${v!=null&&typeof v==='number'&&v<0?'#c0392b':'inherit'}">${met.fmt(v)}</td>`;
+          }).join('')}</tr>`).join('')}
         </tbody>
       </table>`;
     }
 
-    // Alertas del último balance
-    if (ultBal.alertas?.length) {
-      tablaBal += `<div class="ie-alertas"><strong>⚠ Alertas contables</strong><ul>
-        ${ultBal.alertas.map(a=>`<li>${a}</li>`).join('')}</ul></div>`;
+    // Alertas contables
+    if (ub.alertas?.length) {
+      htmlBal += `<div class="ie-alertas"><strong>⚠ Alertas contables</strong>
+        <ul>${ub.alertas.map(a => `<li>${a}</li>`).join('')}</ul></div>`;
     }
   }
 
-  // ── Sección: Flujo de Fondos ─────────────────────────────────────────────────
-  let tablaFlujos = '';
+  // ── Sección 5: Flujos de fondos ───────────────────────────────────────────────
+  let htmlFlujos = '';
   if (flujos.length) {
-    tablaFlujos = `
+    // Detalle de rubros del flujo más reciente
+    const ultFlujo = flujos[flujos.length - 1];
+    const rubrosUlt = (ultFlujo.rubros || []).filter(r => r.actual != null || r.anterior != null);
+    const detalleRubros = rubrosUlt.length ? `
+    <h3 class="ie-h3">Detalle de rubros — ${ultFlujo.periodo} (${ultFlujo.tipo || ''})</h3>
     <table class="ie-tabla">
-      <thead><tr><th>Período</th><th>Tipo</th><th>Ingresos</th><th>Egresos</th><th>Necesidad fondos</th><th>IPC acum.</th></tr></thead>
+      <thead><tr><th>Concepto</th><th style="text-align:right">Actual</th><th style="text-align:right">Anterior</th><th style="text-align:right">Var. %</th></tr></thead>
+      <tbody>${rubrosUlt.map(r => `
+        <tr>
+          <td style="${['ingreso','total'].includes(r.tipo)?'font-weight:600':'padding-left:12px;color:#555'}">${r.label||r.key}</td>
+          <td style="text-align:right;color:${r.tipo==='egreso'&&r.actual>0?'#c0392b':'inherit'}">${m(r.actual)}</td>
+          <td style="text-align:right;color:#888">${m(r.anterior)}</td>
+          <td style="text-align:right;color:${r.var_pct!=null?(r.var_pct>0?'#1a7a4a':'#c0392b'):'#888'}">${r.var_pct!=null?pct(r.var_pct):'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : '';
+
+    htmlFlujos = `
+    <table class="ie-tabla">
+      <thead><tr><th>Período</th><th>Tipo</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Egresos</th><th style="text-align:right">Necesidad fondos</th><th style="text-align:right">IPC acum.</th></tr></thead>
       <tbody>${flujos.map(f => {
         const ing = _flujoIngTotal(f), egr = _flujoEgrTotal(f), nec = _flujoNecesidad(f);
         return `<tr>
-          <td>${f.periodo}</td>
-          <td style="font-size:8pt;color:#888">${f.tipo||'—'}</td>
-          <td>${m(ing)}</td>
-          <td>${m(egr != null ? -Math.abs(egr) : null)}</td>
-          <td style="color:${nec>0?'#e74c3c':'#2ecc71'}">${m(nec)}</td>
-          <td>${f.ipc ? f.ipc.toFixed(1)+'%' : '—'}</td>
+          <td><strong>${f.periodo}</strong></td>
+          <td style="font-size:8pt;color:#888">${f.tipo || '—'}</td>
+          <td style="text-align:right">${m(ing)}</td>
+          <td style="text-align:right;color:#c0392b">${egr != null ? m(-Math.abs(egr)) : '—'}</td>
+          <td style="text-align:right;color:${nec>0?'#c0392b':'#1a7a4a'}">${m(nec)}</td>
+          <td style="text-align:right">${f.ipc ? f.ipc.toFixed(1)+'%' : '—'}</td>
         </tr>`;
       }).join('')}
       </tbody>
-    </table>`;
+    </table>
+    ${detalleRubros}`;
   }
 
-  // ── Sección: Personal ────────────────────────────────────────────────────────
-  let tablaPersonal = '';
-  if (pers && pers.dotacion) {
-    const dotyears = Object.keys(pers.dotacion).sort();
-    if (dotyears.length) {
-      tablaPersonal = `
+  // ── Sección 6: Transferencias ─────────────────────────────────────────────────
+  let htmlTrans = '';
+  if (transEmp.length) {
+    const totalTrans = Object.values(transXanio).reduce((s,v) => s+v, 0);
+    const topOrgs = Object.entries(transOrgs)
+      .sort((a,b) => b[1]-a[1]).slice(0,5);
+    htmlTrans = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <h3 class="ie-h3">Transferencias por año</h3>
+        <table class="ie-tabla">
+          <thead><tr><th>Año</th><th style="text-align:right">Importe</th><th style="text-align:right">% s/fact.</th></tr></thead>
+          <tbody>${Object.entries(transXanio).sort().map(([y,t]) => {
+            const fY = fact[y];
+            return `<tr>
+              <td>${y}</td>
+              <td style="text-align:right;color:#7d3c98">${m(t)}</td>
+              <td style="text-align:right;color:#888">${(fY && fY>0) ? p(t/fY) : '—'}</td>
+            </tr>`;
+          }).join('')}
+          <tr class="ie-tr-bold"><td>TOTAL PERÍODO</td><td style="text-align:right;color:#7d3c98">${m(totalTrans)}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h3 class="ie-h3">Principales organismos aportantes</h3>
+        <table class="ie-tabla">
+          <thead><tr><th>Organismo</th><th style="text-align:right">Total</th><th style="text-align:right">% s/total</th></tr></thead>
+          <tbody>${topOrgs.map(([org,tot]) => `
+            <tr>
+              <td style="font-size:8.5pt">${org}</td>
+              <td style="text-align:right;color:#7d3c98">${m(tot)}</td>
+              <td style="text-align:right;color:#888">${totalTrans>0?p(tot/totalTrans):'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  // ── Sección 7: Personal ───────────────────────────────────────────────────────
+  let htmlPersonal = '';
+  if (persRec) {
+    const persYears = years.filter(y => _persGetTotal(persRec, y) != null);
+    if (persYears.length) {
+      const costosY = persYears.map(y => {
+        const dot  = _persGetTotal(persRec, y);
+        const cost = persRec.costo?.[y] ?? null;
+        const fact_y = fact[y] ?? null;
+        return { y, dot, cost, cxe: (dot && cost) ? Math.round(cost / dot) : null,
+                 pctFact: (cost && fact_y && fact_y > 0) ? cost / fact_y * 100 : null };
+      });
+      const dotMax  = Math.max(...costosY.map(c => c.dot  || 0));
+      const costMax = Math.max(...costosY.map(c => c.cost || 0));
+      htmlPersonal = `
       <table class="ie-tabla">
-        <thead><tr><th>Año</th><th>Dotación</th><th>Costo laboral</th><th>Costo / empleado</th></tr></thead>
-        <tbody>${dotyears.map(y => {
-          const dot = pers.dotacion?.[y], cost = pers.costo?.[y];
-          return `<tr>
-            <td>${y}</td>
-            <td>${dot ?? '—'}</td>
-            <td>${cost != null ? m(cost) : '—'}</td>
-            <td>${(dot && cost) ? m(Math.round(cost/dot)) : '—'}</td>
-          </tr>`;
-        }).join('')}
+        <thead><tr>
+          <th>Año</th><th style="text-align:right">Dotación</th><th style="text-align:right">Costo laboral</th>
+          <th style="text-align:right">Costo / empleado</th><th style="text-align:right">% s/facturación</th>
+        </tr></thead>
+        <tbody>${costosY.map(c => `
+          <tr>
+            <td><strong>${c.y}</strong></td>
+            <td style="text-align:right">${c.dot ?? '—'}</td>
+            <td style="text-align:right">${c.cost != null ? m(c.cost) : '—'}</td>
+            <td style="text-align:right">${c.cxe != null ? m(c.cxe) : '—'}</td>
+            <td style="text-align:right;color:${c.pctFact!=null&&c.pctFact>60?'#c0392b':c.pctFact!=null&&c.pctFact>40?'#e67e22':'#1a7a4a'}">${c.pctFact!=null?c.pctFact.toFixed(1)+'%':'—'}</td>
+          </tr>`).join('')}
         </tbody>
       </table>`;
     }
   }
 
-  // ── Diagnóstico global ───────────────────────────────────────────────────────
-  const diag = [];
-  const lastBal = bals[bals.length - 1];
-  if (lastBal) {
-    const liq = lastBal.indicadores?.liquidez || {};
-    const sol = lastBal.indicadores?.solvencia || {};
-    const ren = lastBal.indicadores?.rentabilidad || {};
-    if (liq.liquidez_corriente != null)
-      diag.push(liq.liquidez_corriente >= 1
-        ? `✓ Liquidez corriente adecuada (${r2(liq.liquidez_corriente)})`
-        : `✗ Liquidez corriente insuficiente (${r2(liq.liquidez_corriente)}) — riesgo de incumplimiento de obligaciones a corto plazo`);
-    if (sol.razon_endeudamiento != null)
-      diag.push(sol.razon_endeudamiento < 0.6
-        ? `✓ Endeudamiento controlado (${p(sol.razon_endeudamiento)} del activo)`
-        : `✗ Endeudamiento elevado (${p(sol.razon_endeudamiento)} del activo) — requiere atención`);
-    if (sol.patrimonio_neto != null)
-      diag.push(sol.patrimonio_neto > 0
-        ? `✓ Patrimonio neto positivo (${m(sol.patrimonio_neto)})`
-        : `✗ Patrimonio neto negativo (${m(sol.patrimonio_neto)}) — empresa técnicamente insolvente`);
-    if (ren.roe != null)
-      diag.push(ren.roe > 0
-        ? `✓ Rentabilidad positiva — ROE ${p(ren.roe)}`
-        : `✗ ROE negativo (${p(ren.roe)}) — la empresa destruye valor sobre el patrimonio`);
-  }
-  const uyrs = yearsConDatos.slice(-2);
-  if (uyrs.length === 2) {
-    const f1 = fact[uyrs[0]], f2 = fact[uyrs[1]];
-    if (f1 && f2 && f1 !== 0) {
-      const varNom = (f2 - f1) / Math.abs(f1) * 100;
-      const ipcPer = _ipcAcumEntrePeriodos(String(uyrs[1]), String(uyrs[0]));
-      if (ipcPer) {
-        const varReal = ((1 + varNom/100) / (1 + ipcPer/100) - 1) * 100;
-        diag.push(varReal >= 0
-          ? `✓ Facturación con crecimiento real del ${varReal.toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (IPC acum. ${ipcPer.toFixed(1)}%)`
-          : `△ Facturación con caída real del ${Math.abs(varReal).toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (IPC acum. ${ipcPer.toFixed(1)}%)`);
-      }
-    }
-  }
-
-  // ── Armar HTML completo ──────────────────────────────────────────────────────
+  // ── CSS ───────────────────────────────────────────────────────────────────────
   const css = `
+    *, *::before, *::after { box-sizing: border-box; }
     body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #1a1a2e; margin: 0; background: #fff; }
-    .ie-portada { background: #1a3a8f; color: #fff; padding: 32px 40px; margin-bottom: 24px; }
-    .ie-portada h1 { margin: 0 0 6px; font-size: 20pt; letter-spacing: .02em; }
-    .ie-portada .ie-sub { font-size: 10pt; opacity: .7; }
+    .ie-portada { background: #1a3a8f; color: #fff; padding: 28px 40px 20px; }
+    .ie-portada h1 { margin: 0 0 4px; font-size: 22pt; letter-spacing: .01em; }
+    .ie-portada .ie-sub { font-size: 9.5pt; opacity: .75; }
+    .ie-kpi-strip { display: flex; gap: 0; border-top: 3px solid #e8ecf4; border-bottom: 3px solid #e8ecf4; margin-bottom: 0; }
+    .ie-kpi { flex: 1; padding: 12px 20px; border-right: 1px solid #e8ecf4; }
+    .ie-kpi:last-child { border-right: none; }
+    .ie-kpi-val { font-size: 13pt; font-weight: 700; line-height: 1.2; }
+    .ie-kpi-lbl { font-size: 7.5pt; color: #888; text-transform: uppercase; letter-spacing: .07em; margin-top: 2px; }
     .ie-body { padding: 0 32px 32px; }
-    h2.ie-h2 { font-size: 12pt; color: #1a3a8f; border-bottom: 2px solid #1a3a8f; padding-bottom: 4px; margin: 24px 0 10px; text-transform: uppercase; letter-spacing: .06em; }
-    h3.ie-h3 { font-size: 10pt; color: #1a3a8f; margin: 16px 0 6px; }
-    .ie-tabla { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 12px; }
-    .ie-tabla th { background: #1a3a8f; color: #fff; padding: 5px 8px; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; }
-    .ie-tabla td { padding: 4px 8px; border-bottom: 1px solid #e5e9f0; vertical-align: top; }
+    h2.ie-h2 { font-size: 11pt; color: #1a3a8f; border-bottom: 2px solid #1a3a8f; padding-bottom: 3px; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: .07em; }
+    h3.ie-h3 { font-size: 9.5pt; color: #1a3a8f; margin: 14px 0 5px; font-weight: 700; }
+    .ie-tabla { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 10px; }
+    .ie-tabla th { background: #1a3a8f; color: #fff; padding: 5px 8px; text-align: left; font-weight: 600; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .05em; }
+    .ie-tabla td { padding: 4px 8px; border-bottom: 1px solid #eaeef5; vertical-align: middle; }
     .ie-tabla tr:nth-child(even) td { background: #f7f8fc; }
-    .ie-diag { background: #f0f4ff; border-left: 3px solid #1a3a8f; padding: 10px 14px; margin: 8px 0; font-size: 9.5pt; line-height: 1.7; }
-    .ie-alertas { background: #fff8e7; border-left: 3px solid #f39c12; padding: 8px 14px; margin: 10px 0; font-size: 9pt; }
+    .ie-tr-bold td { font-weight: 700; background: #eef2fb !important; border-top: 1px solid #c5cfe8; }
+    .ie-tr-cat td { font-size: 7.5pt; font-weight: 700; color: #1a3a8f; text-transform: uppercase; letter-spacing: .06em; background: #e8edf8 !important; padding: 3px 8px; }
+    .ie-diag { background: #f0f4ff; border-left: 3px solid #1a3a8f; padding: 10px 14px; margin: 8px 0 4px; font-size: 9.5pt; line-height: 1.75; }
+    .ie-alertas { background: #fff8e6; border-left: 3px solid #e67e22; padding: 8px 14px; margin: 10px 0; font-size: 9pt; }
     .ie-alertas ul { margin: 4px 0 0 16px; padding: 0; }
     .ie-alertas li { margin-bottom: 2px; }
-    .ie-footer { margin-top: 32px; font-size: 7.5pt; color: #aaa; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+    .ie-footer { margin-top: 32px; font-size: 7.5pt; color: #aaa; border-top: 1px solid #e0e4ec; padding-top: 8px; }
     @media print {
       body { font-size: 9pt; }
-      .ie-portada { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .ie-tabla th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      h2.ie-h2 { page-break-after: avoid; }
+      .ie-portada, .ie-kpi-strip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .ie-tabla th, .ie-tr-cat td, .ie-tr-bold td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h2.ie-h2 { page-break-after: avoid; margin-top: 18px; }
+      h3.ie-h3 { page-break-after: avoid; }
       .ie-tabla { page-break-inside: auto; }
+      tr { page-break-inside: avoid; }
     }
   `;
 
-  const seccion = (titulo, contenido) => contenido
-    ? `<h2 class="ie-h2">${titulo}</h2>${contenido}` : '';
+  const sec = (titulo, cont) => cont ? `<h2 class="ie-h2">${titulo}</h2>${cont}` : '';
 
   const html = `<!DOCTYPE html><html lang="es"><head>
     <meta charset="utf-8">
@@ -12417,26 +12574,22 @@ function informeEjecutivo(emp) {
   </head><body>
   <div class="ie-portada">
     <h1>${emp}</h1>
-    <div class="ie-sub">Informe Ejecutivo · ${ruboLbl} · ${hoy}</div>
+    <div class="ie-sub">${ruboLbl} · Informe Ejecutivo · ${hoy}</div>
   </div>
+  ${htmlKPIs}
   <div class="ie-body">
-    ${diag.length ? `
-    <h2 class="ie-h2">Diagnóstico General</h2>
-    <div class="ie-diag">${diag.join('<br>')}</div>` : ''}
-
-    ${seccion('Facturación y Resultado', tablaER)}
-    ${seccion('Estado de Resultados Anual', tablaERDet)}
-    ${seccion('Balance y Ratios Financieros', tablaBal)}
-    ${seccion('Flujos de Fondos', tablaFlujos)}
-    ${seccion('Personal', tablaPersonal)}
-
-    <div class="ie-footer">
-      Dashboard Mejor Riojanas · Generado el ${hoy} · Datos de fuente interna
-    </div>
+    ${htmlDiag}
+    ${sec('Facturación, Resultado y Transferencias', htmlFact)}
+    ${sec('Estado de Resultados Anual Detallado', htmlERDet)}
+    ${sec('Balance y Ratios Financieros', htmlBal)}
+    ${sec('Flujos de Fondos', htmlFlujos)}
+    ${sec('Transferencias del Estado', htmlTrans)}
+    ${sec('Personal', htmlPersonal)}
+    <div class="ie-footer">Dashboard Mejor Riojanas · Generado el ${hoy} · Todos los importes en moneda corriente de cada ejercicio</div>
   </div>
   </body></html>`;
 
-  // Mostrar en overlay con iframe (sin popup, funciona siempre)
+  // Overlay iframe
   let overlay = document.getElementById('_ie_overlay');
   if (overlay) overlay.remove();
   overlay = document.createElement('div');
@@ -12445,31 +12598,22 @@ function informeEjecutivo(emp) {
 
   const bar = document.createElement('div');
   bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0';
-
-  const titulo = document.createElement('span');
-  titulo.style.cssText = 'color:#aaa;font-size:9pt;font-family:monospace;flex:1';
-  titulo.textContent = `Informe Ejecutivo — ${emp}`;
-
-  const btnPrint = document.createElement('button');
-  btnPrint.textContent = '🖨 Imprimir';
-  btnPrint.style.cssText = 'background:#1a5fb4;color:#fff;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
-  btnPrint.onclick = () => iframe.contentWindow.print();
-
-  const btnClose = document.createElement('button');
-  btnClose.textContent = '✕ Cerrar';
-  btnClose.style.cssText = 'background:#333;color:#ccc;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
-  btnClose.onclick = () => overlay.remove();
-
+  const tit = document.createElement('span');
+  tit.style.cssText = 'color:#aaa;font-size:9pt;font-family:monospace;flex:1';
+  tit.textContent = `Informe Ejecutivo — ${emp}`;
+  const bPrint = document.createElement('button');
+  bPrint.textContent = '🖨 Imprimir';
+  bPrint.style.cssText = 'background:#1a5fb4;color:#fff;border:none;padding:5px 14px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
+  const bClose = document.createElement('button');
+  bClose.textContent = '✕ Cerrar';
+  bClose.style.cssText = 'background:#333;color:#ccc;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'flex:1;border:none;width:100%;background:#fff';
-
-  bar.appendChild(titulo);
-  bar.appendChild(btnPrint);
-  bar.appendChild(btnClose);
-  overlay.appendChild(bar);
-  overlay.appendChild(iframe);
+  bPrint.onclick = () => iframe.contentWindow.print();
+  bClose.onclick = () => overlay.remove();
+  bar.appendChild(tit); bar.appendChild(bPrint); bar.appendChild(bClose);
+  overlay.appendChild(bar); overlay.appendChild(iframe);
   document.body.appendChild(overlay);
-
   iframe.contentDocument.open();
   iframe.contentDocument.write(html);
   iframe.contentDocument.close();
