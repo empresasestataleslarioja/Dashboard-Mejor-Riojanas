@@ -8671,14 +8671,16 @@ function editarFlujo(clave) {
 function buildComparacionFlujos() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
-  // IPC: usar el ingresado manualmente, o si es 0 usar el del flujo A guardado
+  // IPC: manual > auto-calculado entre períodos (INDEC) > guardado en flujo A
   const ipcInput = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
   const fA_prev  = DATA.flujos[claveA];
-  const ipc = ipcInput > 0 ? ipcInput : (fA_prev?.ipc || 0);
-  // Actualizar el input para reflejar el valor usado
+  const fB_prev  = DATA.flujos[claveB];
+  const ipcAuto  = (fA_prev && fB_prev) ? _ipcAcumEntrePeriodos(fA_prev.periodo, fB_prev.periodo) : null;
+  const ipc = ipcInput > 0 ? ipcInput : (ipcAuto ?? fA_prev?.ipc ?? 0);
+  // Actualizar el input con el valor calculado para que sea visible
   if (ipc > 0 && ipcInput === 0) {
     const ipcEl = document.getElementById('comp-flujo-ipc');
-    if (ipcEl) ipcEl.value = ipc;
+    if (ipcEl) { ipcEl.value = ipc; ipcEl.title = ipcAuto != null ? 'Calculado automáticamente desde INDEC' : 'Valor guardado en el flujo'; }
   }
   const wrap   = document.getElementById('flujo-comp-wrap');
 
@@ -8962,19 +8964,49 @@ function buildComparacionFlujos() {
   })();
 }
 
+// ── IPC acumulado entre dos períodos usando INFL.mensual ─────────
+// Período "más nuevo" = pA (ej: "Ejercicio 2024"), "más viejo" = pB (ej: "Ejercicio 2023")
+// Retorna el % acumulado desde el mes siguiente al cierre de pB hasta el cierre de pA
+function _ipcAcumEntrePeriodos(pA, pB) {
+  if (!pA || !pB || !INFL || !INFL.mensual) return null;
+  const MESES_NOM = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
+                     julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
+  const parsePer = p => {
+    const s = (p||'').toLowerCase();
+    const anio = parseInt(s.match(/20\d\d/)?.[0]);
+    const mesNom = Object.keys(MESES_NOM).find(m => s.includes(m));
+    const mes = mesNom ? MESES_NOM[mesNom] : 12; // sin mes → diciembre (cierre anual)
+    return anio ? { anio, mes } : null;
+  };
+  const ppa = parsePer(pA), ppb = parsePer(pB);
+  if (!ppa || !ppb) return null;
+  // Iterar desde mes ppb.mes+1 hasta ppa.mes (incluido) en el rango de años
+  let acum = 1;
+  let anio = ppb.anio, mes = ppb.mes + 1;
+  if (mes > 12) { anio++; mes = 1; }
+  while (anio < ppa.anio || (anio === ppa.anio && mes <= ppa.mes)) {
+    const mensualAnio = INFL.mensual[anio];
+    const tasa = mensualAnio ? (mensualAnio[mes - 1] ?? null) : null;
+    if (tasa == null) break; // sin datos, detener
+    acum *= (1 + tasa / 100);
+    mes++;
+    if (mes > 12) { anio++; mes = 1; }
+  }
+  return acum > 1 ? parseFloat(((acum - 1) * 100).toFixed(1)) : null;
+}
+
 // ── EXPORTAR FLUJO A EXCEL ────────────────────────────────────────
 function exportarFlujoExcel() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
   if (!claveA || !claveB) { alert('Seleccioná ambos períodos primero.'); return; }
-
-  // Abrir pestaña PRIMERO (gesto directo del usuario, antes de cualquier cómputo)
-  const _win = window.open('about:blank', '_blank');
-  if (!_win) { showStorageStatus('⚠ El navegador bloqueó la nueva pestaña — permitir popups para este sitio.', '#ff8c47'); return; }
   const fA = DATA.flujos[claveA];
   const fB = DATA.flujos[claveB];
   if (!fA || !fB) return;
-  const ipc = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
+  // IPC: manual > auto-calculado entre períodos > guardado en flujo A
+  const ipcManual = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
+  const ipcAuto   = _ipcAcumEntrePeriodos(fA.periodo, fB.periodo);
+  const ipc = ipcManual > 0 ? ipcManual : (ipcAuto ?? fA.ipc ?? 0);
 
   const necA  = _flujoNecesidad(fA),  necB  = _flujoNecesidad(fB);
   const ingA  = _flujoIngTotal(fA),   ingB  = _flujoIngTotal(fB);
@@ -9195,7 +9227,7 @@ function exportarFlujoExcel() {
   <div class="header">
     <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
     <h1>${fA.empresa}</h1>
-    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC '+ipc+'%':''}</div>
+    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC acumulado '+ipc+'%'+(ipcManual>0?' (manual)':(ipcAuto!=null?' (INDEC)':' (guardado)')):''}  </div>
     <div class="periods">
       <span class="period-tag">▶ ${fA.periodo}</span>
       <span style="color:rgba(255,255,255,.4);font-size:10px;align-self:center">vs</span>
@@ -9317,10 +9349,40 @@ function exportarFlujoExcel() {
 </body>
 </html>`;
 
-  // Escribir el HTML en la pestaña ya abierta
-  _win.document.open();
-  _win.document.write(html);
-  _win.document.close();
+  // Mostrar en overlay con iframe (sin popup, funciona siempre)
+  let overlay = document.getElementById('_flujo_rpt_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_flujo_rpt_overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;flex-direction:column;background:#1a1f2e';
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0';
+  bar.innerHTML = `<span style="color:#aaa;font-size:9pt;font-family:monospace;flex:1">Informe — ${fA.empresa} · ${fA.periodo} vs ${fB.periodo}</span>`;
+
+  const btnPrint = document.createElement('button');
+  btnPrint.textContent = '🖨 Imprimir';
+  btnPrint.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
+  btnPrint.onclick = () => iframe.contentWindow.print();
+
+  const btnClose = document.createElement('button');
+  btnClose.textContent = '✕ Cerrar';
+  btnClose.style.cssText = 'padding:6px 14px;background:#333;color:#aaa;border:1px solid #555;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace';
+  btnClose.onclick = () => overlay.remove();
+
+  bar.appendChild(btnPrint);
+  bar.appendChild(btnClose);
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'flex:1;border:none;width:100%;background:#eef0f5';
+
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  document.body.appendChild(overlay);
+
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
