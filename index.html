@@ -12099,6 +12099,10 @@ function buildAuditERProvisorio(emp) {
 // ── INFORME EJECUTIVO POR EMPRESA ─────────────────────────────────────────────
 function informeEjecutivo(emp) {
   if (!emp) { alert('Seleccioná una empresa primero'); return; }
+  try { _informeEjecutivoRender(emp); }
+  catch(e) { alert('Error al generar el informe: ' + e.message + '\n\n' + e.stack?.split('\n').slice(0,4).join('\n')); }
+}
+function _informeEjecutivoRender(emp) {
 
   const years   = ys();
   const fact    = DATA.fact[emp]  || {};
