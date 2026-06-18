@@ -9306,28 +9306,24 @@ function exportarFlujoExcel() {
     <span>${fecha}</span>
   </div>
 </div>
-<div style="position:fixed;bottom:20px;right:20px;display:flex;gap:8px;z-index:9999" class="no-print">
-  <button onclick="window.print()" style="padding:9px 18px;background:linear-gradient(135deg,#0d1b4b,#1a3a8f);color:#fff;border:none;border-radius:6px;font-family:monospace;font-size:11px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(21,101,192,.4)">🖨 Imprimir</button>
-  <button onclick="(() => { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'})); a.download='informe-flujo.html'; a.click(); })()" style="padding:9px 18px;background:rgba(71,255,180,.12);color:#1a9e68;border:1.5px solid #1a9e6855;border-radius:6px;font-family:monospace;font-size:11px;font-weight:600;cursor:pointer">⬇ Descargar</button>
+<div style="position:fixed;bottom:20px;right:20px;z-index:9999" class="no-print">
+  <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,#0d1b4b,#1a3a8f);color:#fff;border:none;border-radius:6px;font-family:monospace;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 14px rgba(21,101,192,.45)">🖨 Imprimir</button>
 </div>
-<style>.no-print{} @media print{.no-print{display:none!important}}</style>
+<style>@media print{.no-print{display:none!important}}</style>
 </body>
 </html>`;
 
-  // Abrir en nueva pestaña
-  const win = window.open('', '_blank');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  } else {
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `informe-flujo-${(fA.empresa||'empresa').replace(/\s+/g,'_')}-${(fA.periodo||'').replace(/\s+/g,'_')}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  // Abrir en nueva pestaña via Blob URL (no bloqueado por popup blockers)
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
