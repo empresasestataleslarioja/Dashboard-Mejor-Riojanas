@@ -3817,7 +3817,7 @@ self.onmessage = async (e) => {
         </div>
 
         <!-- Texto extraído (colapsable) -->
-        <div class="rowfull card">
+        <div class="rowfull card" style="display:none">
           <div class="card-hd" style="cursor:pointer" onclick="toggleBalRaw()">
             <span class="card-hd-title">📄 Texto extraído del PDF</span>
             <button onclick="event.stopPropagation();descargarTextoBalance()" style="margin-left:8px;background:none;
@@ -3836,7 +3836,10 @@ self.onmessage = async (e) => {
           <div class="card-hd">
             <span class="card-hd-title">Clasificación según balances</span>
             <span class="card-hd-unit">resultado de balances vs carga manual</span>
-            <select id="bal-clasif-tipo" onchange="buildClasificacionBalances()" style="margin-left:auto;background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:2px;cursor:pointer">
+            <select id="bal-clasif-anio" onchange="buildClasificacionBalances()" style="margin-left:auto;background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:2px;cursor:pointer">
+              <option value="">Todos los años</option>
+            </select>
+            <select id="bal-clasif-tipo" onchange="buildClasificacionBalances()" style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:2px;cursor:pointer">
               <option value="neto">Resultado neto</option>
               <option value="operativo">Resultado operativo</option>
             </select>
@@ -6114,125 +6117,251 @@ function _rptBalance(autoPrint) {
   const sol = ind.solvencia   || {};
   const efi = ind.eficiencia  || {};
 
-  const fM = function(v) {
-    if (v==null) return '—';
-    var sign=v<0?'−':'';
-    return sign+'$ '+Math.round(Math.abs(v)).toLocaleString('es-AR');
-  };
-  const fP = v => v==null?'—':v.toFixed(1)+'%';
+  // ── Fuentes correctas de datos patrimoniales ──────────────────────
+  // activo_corriente y pasivo_corriente viven en liquidez; el resto en solvencia
+  const activoC  = sol.activo_corriente  ?? liq.activo_corriente;
+  const activoNC = sol.activo_no_corriente;
+  const activoT  = sol.activo_total ?? ((activoC??0)+(activoNC??0)||null);
+  const pasivoC  = sol.pasivo_corriente  ?? liq.pasivo_corriente;
+  const pasivoNC = sol.pasivo_no_corriente;
+  const pasivoT  = sol.pasivo_total ?? ((pasivoC??0)+(pasivoNC??0)||null);
+  const patrimon = sol.patrimonio_neto;
+
+  const fM = v => { if(v==null)return'—'; return (v<0?'($ ':'$ ')+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':''); };
+  const fP = v => v==null?'—':(v>0?'+':'')+v.toFixed(1)+'%';
   const fR = v => v==null?'—':v.toFixed(2);
-  const pC = (v,ok) => ok===true?'pu':ok===false?'pd':'pn';
-  const pT = (v,ok) => ok===true?'▲ favorable':ok===false?'▼ revisar':'';
+  const pColor = v => v==null?'#888':v>0?'#1a9e68':'#d93025';
+  const pBg    = v => v==null?'transparent':v>0?'#e8f5e9':'#fce8e6';
 
-  // ER si existe
-  let erRows = '';
-  const er = b.estructura_er || [];
-  if (er.length) {
-    erRows = er.map(r=>{
-      const cls = r.calc ? 'trt' : '';
-      const bold = r.calc ? 'font-weight:600;' : '';
-      return `<tr class="${cls}"><td style="${bold}">${r.lbl}</td>
-        <td style="${bold}text-align:right">${fM(r.val)}</td>
-        <td style="${bold}text-align:right">${ren.ventas_ingresos&&r.val!=null ? (r.val/ren.ventas_ingresos*100).toFixed(1)+'%' : '—'}</td>
-      </tr>`;
-    }).join('');
-  }
-
-  // Buscar balance anterior de misma empresa
+  // Buscar balance anterior de misma empresa (para comparativo)
   const anterior = Object.values(_balances).find(b2=>
-    b2.empresa===b.empresa && b2.periodo!==b.periodo && b2 !== b);
-  const hasAnterior = !!anterior;
+    b2.empresa===b.empresa && String(b2.periodo)!==String(b.periodo) && b2!==b);
 
-  const subtitle = hasAnterior
-    ? `${b.empresa} · Comparativo ${anterior.periodo} vs ${b.periodo}`
-    : `${b.empresa} · Ejercicio ${b.periodo}`;
+  const er = b.estructura_er || [];
+  const erRows = er.map(r=>{
+    const fw=r.calc?'700':'400';
+    const bg=r.calc?'#f8f9fa':'#fff';
+    const pct=ren.ventas_ingresos&&r.val!=null?(r.val/ren.ventas_ingresos*100).toFixed(1)+'%':'—';
+    return `<tr style="background:${bg}">
+      <td style="padding:5px 10px;border-bottom:1px solid #eee;font-weight:${fw};font-family:monospace;font-size:10px">${r.lbl}</td>
+      <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:10px;font-weight:${fw};color:${r.val!=null&&r.val<0?'#d93025':'#333'}">${fM(r.val)}</td>
+      <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:9px;color:#888">${pct}</td>
+    </tr>`;
+  }).join('');
 
-  var _b = [];
-  var barItemsBal = [
-    {l:'Activo corriente', v:sol.activo_corriente||0, fmt:fM(sol.activo_corriente)},
-    {l:'Activo no corr.',  v:sol.activo_no_corriente||0, fmt:fM(sol.activo_no_corriente)},
-    {l:'Pasivo corriente', v:sol.pasivo_corriente||0,  fmt:fM(sol.pasivo_corriente)},
-    {l:'Pasivo no corr.',  v:sol.pasivo_no_corriente||0, fmt:fM(sol.pasivo_no_corriente)},
-    {l:'Patrimonio neto',  v:Math.abs(sol.patrimonio_neto||0), fmt:fM(sol.patrimonio_neto)},
-  ].filter(function(d){return d.v>0;});
-  _b.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Balance</title>');
-  _b.push(_rptCSS());
-  _b.push('</head><body><div class="pg">');
-  _b.push(_rptHeader('Análisis de Balances', subtitle));
-  _b.push('<div class="kg">');
-  _b.push(_rptKpi('Ingresos por ventas', fM(ren.ventas_ingresos), b.periodo, '#0f6e56', ''));
-  _b.push(_rptKpi('Resultado del ejercicio', fM(ren.resultado_neto), (ren.resultado_neto||0)>0?'Positivo':'Negativo', '#185fa5', (ren.resultado_neto||0)>0?'up':'dn'));
-  _b.push(_rptKpi('Resultado operativo', fM(ren.resultado_operativo), 'Antes de resultados financieros', '#ba7517', (ren.resultado_operativo||0)>0?'up':'dn'));
-  _b.push(_rptKpi('Margen neto', ren.ventas_ingresos&&ren.resultado_neto!=null?fP(ren.resultado_neto/ren.ventas_ingresos*100):'—', 'sobre ventas', '#534ab7', ''));
-  _b.push('</div><div class="r3">');
-  _b.push('<div class="cc"><div class="st">Liquidez</div>'
-    + '<div class="rr"><span class="rl">Liquidez corriente</span><span class="rv">'+fR(liq.liquidez_corriente)+'<span class="pill '+(liq.liquidez_corriente>=1?'pu':'pd')+'">'+(liq.liquidez_corriente>=1?'ok':'bajo')+'</span></span></div>'
-    + '<div class="rr"><span class="rl">Liquidez seca</span><span class="rv">'+fR(liq.liquidez_seca)+'</span></div>'
-    + '<div class="rr"><span class="rl">Capital de trabajo</span><span class="rv">'+fM(liq.capital_trabajo)+'</span></div>'
-    + '</div>');
-  _b.push('<div class="cc"><div class="st">Solvencia</div>'
-    + '<div class="rr"><span class="rl">Endeudamiento</span><span class="rv">'+fR(sol.endeudamiento)+'<span class="pill '+((sol.endeudamiento||0)<=0.8?'pu':'pd')+'">'+((sol.endeudamiento||0)<=0.8?'bajo':'alto')+'</span></span></div>'
-    + '<div class="rr"><span class="rl">Autonomía financiera</span><span class="rv">'+fP(sol.autonomia_financiera)+'</span></div>'
-    + '<div class="rr"><span class="rl">Cobertura de deuda</span><span class="rv">'+fR(sol.cobertura_deuda)+'</span></div>'
-    + '</div>');
-  _b.push('<div class="cc"><div class="st">Rentabilidad</div>'
-    + '<div class="rr"><span class="rl">ROE</span><span class="rv">'+fP(ren.roe)+'<span class="pill '+((ren.roe||0)>0?'pu':'pd')+'">'+((ren.roe||0)>0?'pos.':'neg.')+'</span></span></div>'
-    + '<div class="rr"><span class="rl">ROA</span><span class="rv">'+fP(ren.roa)+'</span></div>'
-    + '<div class="rr"><span class="rl">Margen bruto</span><span class="rv">'+(ren.ventas_ingresos&&ren.utilidad_bruta!=null?fP(ren.utilidad_bruta/ren.ventas_ingresos*100):'—')+'</span></div>'
-    + '</div>');
-  _b.push('</div><div class="r2">');
-  if (er.length) {
-    _b.push('<div><div class="st">Estado de resultados</div><div class="tw"><table>');
-    _b.push('<thead><tr><th style="width:58%">Rubro</th><th>Importe</th><th>% ventas</th></tr></thead>');
-    _b.push('<tbody>'+erRows+'</tbody></table></div></div>');
-  } else {
-    _b.push('<div></div>');
-  }
-  _b.push('<div><div class="st">Situación patrimonial</div>');
-  _b.push('<div class="tw"><table>');
-  _b.push('<thead><tr><th style="text-align:left;width:60%">Rubro</th><th>Importe</th></tr></thead><tbody>');
-  _b.push('<tr class="sr"><td colspan="2">Activo</td></tr>');
-  _b.push('<tr><td>Activo corriente</td><td>'+fM(sol.activo_corriente)+'</td></tr>');
-  _b.push('<tr><td>Activo no corriente</td><td>'+fM(sol.activo_no_corriente)+'</td></tr>');
-  _b.push('<tr class="trt"><td><b>Activo total</b></td><td><b>'+fM((sol.activo_corriente||0)+(sol.activo_no_corriente||0))+'</b></td></tr>');
-  _b.push('<tr class="sr"><td colspan="2">Pasivo</td></tr>');
-  _b.push('<tr><td>Pasivo corriente</td><td>'+fM(sol.pasivo_corriente)+'</td></tr>');
-  _b.push('<tr><td>Pasivo no corriente</td><td>'+fM(sol.pasivo_no_corriente)+'</td></tr>');
-  _b.push('<tr class="trt"><td><b>Pasivo total</b></td><td><b>'+fM((sol.pasivo_corriente||0)+(sol.pasivo_no_corriente||0))+'</b></td></tr>');
-  _b.push('<tr class="trf"><td><b>Patrimonio neto</b></td><td><b>'+fM(sol.patrimonio_neto)+'</b></td></tr>');
-  _b.push('</tbody></table></div>');
-  _b.push('</div>');        // cerrar segunda col del r2
-  _b.push('</div>');        // cerrar r2
-  // ── Diagnóstico financiero — ancho completo ──────────────────────
-  _b.push('<div style="width:100%;margin-top:14px">');
-  _b.push('<div class="st">Diagnóstico financiero</div>');
-  var diagTxt = generarDiagnosticoFinanciero(liq, sol, ren, efi, b);
-  // Convertir HTML de diagnóstico a versión imprimible (sin variables CSS)
-  // Limpiar estilos del dashboard y reconstruir con estilos de impresión
-  var diagPrint = diagTxt
-    .replace(/style="[^"]*"/g, '')          // quitar todos los estilos inline
-    .replace(/class="[^"]*"/g, '')          // quitar clases
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/g, '');
+  // SVG horizontal bar: estructura patrimonial
+  const patItems = [
+    {l:'Activo corriente',    v:activoC,  c:'#1a9e6888'},
+    {l:'Activo no corriente', v:activoNC, c:'#1a9e6855'},
+    {l:'Pasivo corriente',    v:pasivoC,  c:'#d9302588'},
+    {l:'Pasivo no corriente', v:pasivoNC, c:'#d9302555'},
+    {l:'Patrimonio neto',     v:Math.abs(patrimon??0)||null, c:patrimon!=null&&patrimon>=0?'#1565c088':'#d9302588'},
+  ].filter(d=>d.v!=null&&d.v!==0);
+  const svgPat = (() => {
+    if (!patItems.length) return '';
+    const maxV = Math.max(...patItems.map(d=>Math.abs(d.v)));
+    const rowH=28,pad=8,labelW=170,barW=240,valW=100,W=pad+labelW+barW+valW+pad,H=pad+patItems.length*rowH+pad;
+    const rows=patItems.map((d,i)=>{
+      const y=pad+i*rowH; const w=maxV?Math.abs(d.v)/maxV*(barW-6):0;
+      return `<g>
+        <text x="${pad+labelW-4}" y="${y+17}" font-size="9" fill="#555" font-family="monospace" text-anchor="end">${d.l}</text>
+        <rect x="${pad+labelW}" y="${y+7}" width="${w}" height="${rowH-14}" rx="2" fill="${d.c}"/>
+        <text x="${pad+labelW+barW+4}" y="${y+17}" font-size="9.5" font-weight="600" fill="#333" font-family="monospace">${fM(d.v)}</text>
+      </g>`;
+    }).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="display:block">
+      <rect width="${W}" height="${H}" fill="white"/>${rows}</svg>`;
+  })();
 
-  // Agregar estilos de impresión específicos
-  var diagStyle = '<style>'
-    + '.diag-sec{margin-bottom:12px;padding:8px 12px;border-left:3px solid #185fa5;background:#f7f8fa}'
-    + '.diag-sec h4{font-size:8.5pt;font-weight:600;color:#185fa5;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}'
-    + '.diag-sec p{font-size:8pt;line-height:1.7;color:#222;margin-bottom:3px}'
-    + '.diag-sec strong{font-weight:600;color:#111}'
-    + '.diag-glob{padding:8px 12px;border:1px solid #ddd;border-radius:4px;background:#f0f4f8;margin-bottom:14px;font-size:8.5pt;color:#222;line-height:1.7}'
-    + '</style>';
+  const hoy = new Date();
+  const fecha = hoy.toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const resColor = pColor(ren.resultado_neto);
+  const semEmoji = ren.resultado_neto==null?'⚪':ren.resultado_neto>=0?'🟢':'🔴';
+  const semText  = ren.resultado_neto==null?'Sin datos':ren.resultado_neto>=0?'Resultado positivo':'Resultado negativo (déficit)';
 
-  // Reconstruir estructura diagnóstico con clases de impresión
-  var diagClean = diagPrint
-    .replace(/<div[^>]*margin-bottom:14px[^>]*>/g, '<div class="diag-sec">')
-    .replace(/<div[^>]*border:1px solid[^>]*>/g, '<div class="diag-glob">');
+  return `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8">
+<title>Análisis de Balance — ${b.empresa} · ${b.periodo}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#eef0f5;color:#2c2c3a;font-size:11px}
+  .page{max-width:980px;margin:0 auto;padding:28px 24px}
+  .header{background:linear-gradient(135deg,#0d1b4b 0%,#1a3a8f 60%,#1565c0 100%);
+    color:#fff;padding:28px 32px;border-radius:10px;margin-bottom:22px;
+    box-shadow:0 4px 18px rgba(21,101,192,.25);position:relative;overflow:hidden}
+  .header::after{content:'';position:absolute;right:-40px;top:-40px;width:200px;height:200px;
+    background:rgba(255,255,255,.04);border-radius:50%}
+  .header .badge{display:inline-block;background:rgba(255,255,255,.15);color:rgba(255,255,255,.9);
+    font-size:8px;font-family:monospace;letter-spacing:.1em;padding:3px 8px;border-radius:20px;margin-bottom:10px}
+  .header h1{font-size:22px;font-weight:700;font-family:monospace;margin-bottom:6px}
+  .header .sub{font-size:10.5px;color:rgba(255,255,255,.65);font-family:monospace;letter-spacing:.05em}
+  .header .periods{margin-top:10px;display:flex;gap:10px;align-items:center}
+  .header .period-tag{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+    color:#fff;font-family:monospace;font-size:10px;padding:3px 10px;border-radius:4px}
+  .section-title{font-size:9px;font-weight:700;color:#1a3a8f;letter-spacing:.12em;
+    text-transform:uppercase;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+  .section-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,#c5cae9,transparent)}
+  .card{background:#fff;border-radius:8px;border:1px solid #e3e6f0;
+    padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+  .kpi-card{background:#fff;border-radius:8px;border:1px solid #e3e6f0;border-top:3px solid #ddd;
+    padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+  .kpi-card .lbl{font-size:7.5px;color:#9ea3b8;font-family:monospace;letter-spacing:.1em;margin-bottom:6px}
+  .kpi-card .val{font-size:15px;font-weight:700;font-family:monospace}
+  .kpi-card .note{font-size:8px;color:#bbb;margin-top:4px;font-family:monospace}
+  .semaforo{display:flex;align-items:center;gap:16px;padding:14px 20px;border-radius:8px;
+    background:#fff;border:1px solid #e3e6f0;border-left:5px solid ${resColor};
+    margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .semaforo .icon{font-size:30px;line-height:1}
+  .semaforo .status{font-size:15px;font-weight:700;color:${resColor};font-family:monospace}
+  .semaforo .detail{font-size:10px;color:#888;font-family:monospace;margin-top:3px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+  .ind-block{background:#fff;border-radius:8px;border:1px solid #e3e6f0;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+  .ind-title{font-size:8px;font-weight:700;color:#1a3a8f;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;font-family:monospace}
+  .ind-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0}
+  .ind-row:last-child{border-bottom:none}
+  .ind-lbl{font-size:9px;color:#555}
+  .ind-val{font-size:10px;font-weight:700;font-family:monospace;color:#333}
+  .pill{font-size:7px;padding:1px 5px;border-radius:10px;margin-left:5px;font-family:monospace}
+  .pill-ok{background:#e8f5e9;color:#1a9e68}.pill-bad{background:#fce8e6;color:#d93025}
+  table.comp{width:100%;border-collapse:collapse}
+  table.comp thead tr{background:linear-gradient(135deg,#0d1b4b,#1a3a8f)}
+  table.comp thead th{color:rgba(255,255,255,.85);padding:8px 10px;text-align:right;
+    font-family:monospace;font-size:8.5px;letter-spacing:.06em;font-weight:500}
+  table.comp thead th:first-child{text-align:left}
+  table.comp tbody tr:nth-child(even){filter:brightness(.97)}
+  .pat-row{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid #f0f0f0}
+  .pat-row:last-child{border-bottom:none}
+  .pat-section{background:#f5f8ff;font-weight:700;font-size:8.5px;color:#1a3a8f;letter-spacing:.06em;text-transform:uppercase}
+  .pat-total{background:#eef2ff;font-weight:700;border-top:2px solid #c5cae9}
+  .pat-pn{background:#e8f5e9;font-weight:700;font-size:11px;border-top:2px solid #1a9e68}
+  .footer{display:flex;justify-content:space-between;align-items:center;padding:12px 0;
+    border-top:1px solid #e3e6f0;color:#aaa;font-size:8px;font-family:monospace;margin-top:10px}
+  @media print{body{background:#fff}.page{padding:10px}.grid2,.grid3{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
 
-  _b.push(diagStyle + '<div style="width:100%;font-size:8pt;line-height:1.7;color:#222">'+diagClean+'</div>');
-  _b.push('</div>');        // cerrar div diagnóstico
-  _b.push(_rptFooter());
-  _b.push('</div></body></html>');
-  return _b.join('');
+  <div class="header">
+    <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
+    <h1>${b.empresa}</h1>
+    <div class="sub">ANÁLISIS DE BALANCE${anterior?' · COMPARATIVO':''}</div>
+    <div class="periods">
+      <span class="period-tag">▶ Ejercicio ${b.periodo}</span>
+      ${anterior?`<span style="color:rgba(255,255,255,.4);font-size:10px">vs</span><span class="period-tag" style="opacity:.7">${anterior.periodo}</span>`:''}
+      <span style="margin-left:auto;color:rgba(255,255,255,.45);font-size:9px;font-family:monospace">${fecha}</span>
+    </div>
+  </div>
+
+  <div class="semaforo">
+    <div class="icon">${semEmoji}</div>
+    <div style="flex:1">
+      <div class="status">${semText}</div>
+      <div class="detail">
+        ${ren.resultado_neto!=null?`Resultado: ${fM(ren.resultado_neto)}`:''}
+        ${ren.ventas_ingresos?` · Ventas: ${fM(ren.ventas_ingresos)}`:''}
+        ${ren.ventas_ingresos&&ren.resultado_neto!=null?` · Margen neto: ${fP(ren.resultado_neto/ren.ventas_ingresos*100)}`:''}
+      </div>
+    </div>
+    ${liq.liquidez_corriente!=null?`<div style="text-align:right;border-left:1px solid #eee;padding-left:16px">
+      <div style="font-size:7.5px;color:#aaa;font-family:monospace;letter-spacing:.08em;margin-bottom:4px">LIQUIDEZ CORRIENTE</div>
+      <div style="font-size:16px;font-weight:700;font-family:monospace;color:${liq.liquidez_corriente>=1?'#1a9e68':'#d93025'}">${fR(liq.liquidez_corriente)}</div>
+    </div>`:''}
+  </div>
+
+  <div class="section-title">Indicadores clave</div>
+  <div class="kpis">
+    <div class="kpi-card" style="border-top-color:${pColor(ren.ventas_ingresos)};grid-column:span 2">
+      <div class="lbl">VENTAS / INGRESOS</div>
+      <div class="val" style="color:#1a9e68;font-size:20px">${fM(ren.ventas_ingresos)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:${resColor}">
+      <div class="lbl">RESULTADO DEL EJERCICIO</div>
+      <div class="val" style="color:${resColor}">${fM(ren.resultado_neto)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:${pColor(ren.resultado_operativo)}">
+      <div class="lbl">RESULTADO OPERATIVO</div>
+      <div class="val" style="color:${pColor(ren.resultado_operativo)}">${fM(ren.resultado_operativo)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:#1565c0">
+      <div class="lbl">MARGEN NETO</div>
+      <div class="val" style="color:#1565c0">${ren.ventas_ingresos&&ren.resultado_neto!=null?fP(ren.resultado_neto/ren.ventas_ingresos*100):'—'}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:#b36a00">
+      <div class="lbl">ROE</div>
+      <div class="val" style="color:${pColor(ren.roe)}">${fP(ren.roe)}</div>
+    </div>
+    <div class="kpi-card" style="border-top-color:#555">
+      <div class="lbl">ROA</div>
+      <div class="val" style="color:${pColor(ren.roa)}">${fP(ren.roa)}</div>
+    </div>
+  </div>
+
+  <div class="section-title">Situación patrimonial</div>
+  <div class="grid2">
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:0">
+        <div class="pat-row pat-section"><span>ACTIVO</span></div>
+        <div class="pat-row"><span style="font-size:10px">Activo corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(activoC)}</span></div>
+        <div class="pat-row"><span style="font-size:10px">Activo no corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(activoNC)}</span></div>
+        <div class="pat-row pat-total"><span style="font-size:10px">Activo total</span><span style="font-family:monospace;font-size:11px;color:#1a3a8f">${fM(activoT)}</span></div>
+        <div class="pat-row pat-section" style="margin-top:4px"><span>PASIVO</span></div>
+        <div class="pat-row"><span style="font-size:10px">Pasivo corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(pasivoC)}</span></div>
+        <div class="pat-row"><span style="font-size:10px">Pasivo no corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(pasivoNC)}</span></div>
+        <div class="pat-row pat-total"><span style="font-size:10px">Pasivo total</span><span style="font-family:monospace;font-size:11px;color:#d93025">${fM(pasivoT)}</span></div>
+        <div class="pat-row pat-pn"><span>Patrimonio neto</span><span style="font-family:monospace;font-size:13px;color:${pColor(patrimon)}">${fM(patrimon)}</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:8px;color:#aaa;font-family:monospace;letter-spacing:.08em;margin-bottom:10px">DISTRIBUCIÓN PATRIMONIAL</div>
+      ${svgPat || '<div style="color:#aaa;font-size:10px;padding:20px 0">Sin datos patrimoniales disponibles.</div>'}
+    </div>
+  </div>
+
+  <div class="section-title">Indicadores financieros</div>
+  <div class="grid3">
+    <div class="ind-block">
+      <div class="ind-title">Liquidez</div>
+      <div class="ind-row"><span class="ind-lbl">Corriente</span><span class="ind-val">${fR(liq.liquidez_corriente)}<span class="pill ${liq.liquidez_corriente!=null&&liq.liquidez_corriente>=1?'pill-ok':'pill-bad'}">${liq.liquidez_corriente!=null&&liq.liquidez_corriente>=1?'ok':'bajo'}</span></span></div>
+      <div class="ind-row"><span class="ind-lbl">Seca</span><span class="ind-val">${fR(liq.liquidez_seca)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Capital de trabajo</span><span class="ind-val">${fM(liq.capital_trabajo)}</span></div>
+    </div>
+    <div class="ind-block">
+      <div class="ind-title">Solvencia</div>
+      <div class="ind-row"><span class="ind-lbl">Endeudamiento</span><span class="ind-val">${fR(sol.endeudamiento)}<span class="pill ${sol.endeudamiento!=null&&sol.endeudamiento<=0.8?'pill-ok':'pill-bad'}">${sol.endeudamiento!=null&&sol.endeudamiento<=0.8?'bajo':'alto'}</span></span></div>
+      <div class="ind-row"><span class="ind-lbl">Autonomía financiera</span><span class="ind-val">${fP(sol.autonomia_financiera)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Cobertura de deuda</span><span class="ind-val">${fR(sol.cobertura_deuda)}</span></div>
+    </div>
+    <div class="ind-block">
+      <div class="ind-title">Rentabilidad</div>
+      <div class="ind-row"><span class="ind-lbl">ROE</span><span class="ind-val" style="color:${pColor(ren.roe)}">${fP(ren.roe)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">ROA</span><span class="ind-val" style="color:${pColor(ren.roa)}">${fP(ren.roa)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Margen bruto</span><span class="ind-val">${ren.ventas_ingresos&&ren.utilidad_bruta!=null?fP(ren.utilidad_bruta/ren.ventas_ingresos*100):'—'}</span></div>
+    </div>
+  </div>
+
+  ${er.length?`<div class="section-title">Estado de resultados</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="comp">
+      <thead><tr>
+        <th style="text-align:left;padding-left:14px;width:55%">Concepto</th>
+        <th>Importe</th>
+        <th>% ventas</th>
+      </tr></thead>
+      <tbody>${erRows}</tbody>
+    </table>
+  </div>`:''}
+
+  <div class="footer">
+    <span>Dashboard Empresas Estatales · Provincia de La Rioja</span>
+    <span>${fecha}</span>
+  </div>
+</div>
+</body>
+</html>`;
 }
 
 // ══════════════════════════════════════════════════
@@ -21566,6 +21695,16 @@ function buildClasificacionBalances() {
 
   const tipoSel = document.getElementById('bal-clasif-tipo')?.value || 'neto';
   const campoBal = tipoSel === 'operativo' ? 'resultado_operativo' : 'resultado_neto';
+  const anioSel  = document.getElementById('bal-clasif-anio')?.value || '';
+
+  // Recolectar todos los años disponibles para el selector
+  const anioSel_ = document.getElementById('bal-clasif-anio');
+  if (anioSel_) {
+    const todosAnios = [...new Set(Object.values(_balances||{}).map(b=>String(b.periodo||'').match(/20\d\d/)?.[0]).filter(Boolean))].sort();
+    const curVal = anioSel_.value;
+    anioSel_.innerHTML = '<option value="">Todos los años</option>'
+      + todosAnios.map(a=>`<option value="${a}"${curVal===a?' selected':''}>${a}</option>`).join('');
+  }
 
   // Recolectar resultado de cada balance: {empresa, periodo, resBal}
   const items = [];
@@ -21575,6 +21714,8 @@ function buildClasificacionBalances() {
     const resBal = ren[campoBal];
     if (resBal == null) return;
     const periodo = String(b.periodo || b.cierre || b.año || '?');
+    // Filtrar por año si está seleccionado
+    if (anioSel && !periodo.includes(anioSel)) return;
     // Carga manual correspondiente (DATA.sit[empresa][año])
     const resManual = DATA.sit?.[b.empresa]?.[periodo] ?? null;
     items.push({ empresa: b.empresa, periodo, resBal, resManual });
@@ -26222,7 +26363,7 @@ function saveDataToLocalCache() {
     actualizarIndicadorGuardado(snap.savedAt);
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
-      showStorageStatus('⚠ Sin espacio en el navegador — ER mensual no guardado localmente', '#ff8c47');
+      showStorageStatus('⚠ Almacenamiento local lleno — el navegador no tiene más espacio disponible (localStorage). Los datos se mantienen en memoria pero no se guardarán al cerrar la pestaña. Para liberar espacio: Configuración del sitio → Borrar datos del sitio, o exportá los datos antes de cerrar.', '#ff8c47');
     }
   }
 }
