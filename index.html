@@ -9313,17 +9313,16 @@ function exportarFlujoExcel() {
 </body>
 </html>`;
 
-  // Abrir en nueva pestaña via Blob URL (no bloqueado por popup blockers)
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  // Abrir en nueva pestaña — window.open dentro de un click handler es permitido por el navegador
+  const win = window.open('about:blank', '_blank');
+  if (win) {
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  } else {
+    // Fallback si popups bloqueados: mostrar aviso
+    showStorageStatus('⚠ El navegador bloqueó la nueva pestaña. Permitir popups para este sitio y volver a intentar.', '#ff8c47');
+  }
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
