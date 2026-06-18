@@ -2425,9 +2425,13 @@ self.onmessage = async (e) => {
 
     <!-- ══ POR EMPRESA ═══════════════════════════════════ -->
     <div class="panel" id="panel-empresa">
-      <div class="sel-row">
+      <div class="sel-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="sel-label">Empresa</span>
         <select class="sel" id="sel-emp" onchange="buildEmpresa()"></select>
+        <button onclick="informeEjecutivo(document.getElementById('sel-emp').value)"
+          style="background:#1a5fb4;color:#fff;border:none;padding:6px 14px;font-size:9pt;font-family:var(--mono);border-radius:3px;cursor:pointer;white-space:nowrap">
+          📋 Informe Ejecutivo
+        </button>
       </div>
       <div class="evo-row" id="evo-cards"></div>
 
@@ -12090,6 +12094,385 @@ function buildAuditERProvisorio(emp) {
   html += `</div>`;
   wrap.innerHTML = html;
   wrap.style.display = '';
+}
+
+// ── INFORME EJECUTIVO POR EMPRESA ─────────────────────────────────────────────
+function informeEjecutivo(emp) {
+  if (!emp) { alert('Seleccioná una empresa primero'); return; }
+
+  const years    = ys();
+  const fact     = DATA.fact[emp]    || {};
+  const sit      = DATA.sit[emp]     || {};
+  const pers     = DATA.personal.find(d => d.e === emp) || {};
+  const ruboLbl  = getRuboLabel(emp);
+  const hoy      = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
+
+  // Balances de esta empresa, ordenados por período
+  const bals = Object.values(_balances)
+    .filter(b => b.empresa === emp)
+    .sort((a,b) => String(a.periodo).localeCompare(String(b.periodo)));
+
+  // Flujos de esta empresa
+  const flujos = Object.values(DATA.flujos || {})
+    .filter(f => f.empresa === emp)
+    .sort((a,b) => String(a.periodo).localeCompare(String(b.periodo)));
+
+  // ── Helpers de formato ───────────────────────────────────────────────────────
+  const m  = v => v == null ? '—' : fv(v);
+  const p  = v => v == null ? '—' : (v*100).toFixed(1) + '%';
+  const r2 = v => v == null ? '—' : v.toFixed(2);
+  const d  = v => v == null ? '—' : Math.round(v) + ' días';
+  const pctFmt = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+  const semaforo = (v, ok, warn) => {
+    if (v == null) return '<span style="color:#888">—</span>';
+    if (ok(v))   return `<span style="color:#2ecc71">✓</span>`;
+    if (warn(v)) return `<span style="color:#f39c12">△</span>`;
+    return `<span style="color:#e74c3c">✗</span>`;
+  };
+
+  // ── Sección: Evolución facturación y resultado ───────────────────────────────
+  const yearsConDatos = years.filter(y => fact[y] || sit[y] != null);
+  let tablaER = '';
+  if (yearsConDatos.length) {
+    const cols = yearsConDatos.map(y => {
+      const f = fact[y], s = sit[y];
+      const mg = (f && s != null) ? p(s / f) : '—';
+      return { y, f, s, mg };
+    });
+    tablaER = `
+    <table class="ie-tabla">
+      <thead><tr><th>Año</th><th>Facturación</th><th>Resultado</th><th>Margen</th></tr></thead>
+      <tbody>${cols.map(c => `
+        <tr>
+          <td>${c.y}</td>
+          <td>${m(c.f)}</td>
+          <td style="color:${c.s!=null?(c.s>=0?'#2ecc71':'#e74c3c'):'inherit'}">${m(c.s)}</td>
+          <td>${c.mg}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  // ── Sección: ER mensual acumulado anual (si hay datos ER) ───────────────────
+  let tablaERDet = '';
+  const erEmp = (DATA.er_mensual||{})[emp] || {};
+  const erYears = Object.keys(erEmp).sort();
+  if (erYears.length) {
+    const rubrosER = ['ventas','costo','utilBruta','gastoAdm','gastoCom','gastoOper','otrosIngresos','resOperativo','resFinanciero','resEjercicio'];
+    const lblER = { ventas:'Ventas netas', costo:'Costo ventas', utilBruta:'Utilidad bruta',
+      gastoAdm:'G. Administración', gastoCom:'G. Comercialización', gastoOper:'G. Operativos',
+      otrosIngresos:'Otros ingresos', resOperativo:'Resultado operativo',
+      resFinanciero:'Resultado financiero', resEjercicio:'Resultado ejercicio' };
+    const calcAnual = (yr, rb) => {
+      const filas = (erEmp[yr]||{}).filas || [];
+      const fila = filas.find(f => f.conceptoStd === rb);
+      if (!fila) return null;
+      return Object.values(fila.valores||{}).reduce((s,v)=>s+(v||0), 0) || null;
+    };
+    const rowsER = rubrosER.filter(rb => erYears.some(y => calcAnual(y,rb) != null));
+    if (rowsER.length) {
+      const isBold = rb => ['utilBruta','resOperativo','resEjercicio'].includes(rb);
+      tablaERDet = `
+      <table class="ie-tabla">
+        <thead><tr><th>Concepto</th>${erYears.map(y=>`<th>${y}</th>`).join('')}</tr></thead>
+        <tbody>${rowsER.map(rb => {
+          const vals = erYears.map(y => calcAnual(y, rb));
+          return `<tr${isBold(rb)?' style="font-weight:700;border-top:1px solid #ccc"':''}>
+            <td>${lblER[rb]||rb}</td>
+            ${vals.map(v => `<td style="color:${v!=null&&v<0?'#c0392b':'inherit'}">${m(v)}</td>`).join('')}
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>`;
+    }
+  }
+
+  // ── Sección: Balances ────────────────────────────────────────────────────────
+  let tablaBal = '';
+  if (bals.length) {
+    const fmtBal = (b) => {
+      const liq = b.indicadores?.liquidez    || {};
+      const sol = b.indicadores?.solvencia   || {};
+      const ren = b.indicadores?.rentabilidad|| {};
+      const efi = b.indicadores?.eficiencia  || {};
+      const aC  = sol.activo_corriente  ?? liq.activo_corriente;
+      const aNC = sol.activo_no_corriente;
+      const aT  = sol.activo_total;
+      const pC  = sol.pasivo_corriente  ?? liq.pasivo_corriente;
+      const pNC = sol.pasivo_no_corriente;
+      const pT  = sol.pasivo_total;
+      const pn  = sol.patrimonio_neto;
+      return { liq, sol, ren, efi, aC, aNC, aT, pC, pNC, pT, pn };
+    };
+    const ultBal = bals[bals.length - 1];
+    const { liq, sol, ren, efi, aC, aNC, aT, pC, pNC, pT, pn } = fmtBal(ultBal);
+
+    // Tabla situación patrimonial
+    const rowBal = (lbl, v, bold) => `<tr${bold?' style="font-weight:700;border-top:1px solid #bbb"':''}>
+      <td>${lbl}</td><td>${m(v)}</td></tr>`;
+    tablaBal = `
+    <h3 class="ie-h3">Estado de Situación Patrimonial — ${ultBal.periodo}</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
+      <table class="ie-tabla">
+        <thead><tr><th>ACTIVO</th><th>Importe</th></tr></thead>
+        <tbody>
+          ${rowBal('Activo corriente', aC)}
+          ${rowBal('Activo no corriente', aNC)}
+          ${rowBal('ACTIVO TOTAL', aT, true)}
+        </tbody>
+      </table>
+      <table class="ie-tabla">
+        <thead><tr><th>PASIVO Y PN</th><th>Importe</th></tr></thead>
+        <tbody>
+          ${rowBal('Pasivo corriente', pC)}
+          ${rowBal('Pasivo no corriente', pNC)}
+          ${rowBal('PASIVO TOTAL', pT, true)}
+          ${rowBal('Patrimonio Neto', pn, true)}
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="ie-h3">Indicadores Financieros — ${ultBal.periodo}</h3>
+    <table class="ie-tabla">
+      <thead><tr><th>Indicador</th><th>Valor</th><th>Referencia</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Liquidez corriente</td><td>${r2(liq.liquidez_corriente)}</td><td>≥ 1.0</td>
+          <td>${semaforo(liq.liquidez_corriente, v=>v>=1.5, v=>v>=1)}</td></tr>
+        <tr><td>Liquidez seca</td>
+          <td>${liq.liquidez_seca != null ? r2(liq.liquidez_seca) : '<em style="color:#888;font-size:8pt">sin inventarios</em>'}</td>
+          <td>≥ 1.0</td>
+          <td>${liq.liquidez_seca != null ? semaforo(liq.liquidez_seca, v=>v>=1, v=>v>=0.7) : '<span style="color:#888">—</span>'}</td></tr>
+        <tr><td>Capital de trabajo</td><td>${m(liq.capital_trabajo)}</td><td>&gt; 0</td>
+          <td>${semaforo(liq.capital_trabajo, v=>v>0, v=>v===0)}</td></tr>
+        <tr style="border-top:1px solid #ccc"><td>Endeudamiento</td><td>${p(sol.razon_endeudamiento)}</td><td>&lt; 60%</td>
+          <td>${semaforo(sol.razon_endeudamiento, v=>v<0.4, v=>v<0.6)}</td></tr>
+        <tr><td>Deuda / Patrimonio</td><td>${r2(sol.deuda_patrimonio)}</td><td>&lt; 1.0</td>
+          <td>${semaforo(sol.deuda_patrimonio, v=>v<0.5, v=>v<1)}</td></tr>
+        ${sol.cobertura_intereses != null ? `<tr><td>Cobertura de intereses</td><td>${r2(sol.cobertura_intereses)}x</td><td>&gt; 1.5x</td>
+          <td>${semaforo(sol.cobertura_intereses, v=>v>=2, v=>v>=1.5)}</td></tr>` : ''}
+        <tr style="border-top:1px solid #ccc"><td>ROE</td><td>${p(ren.roe)}</td><td>&gt; 0%</td>
+          <td>${semaforo(ren.roe, v=>v>0.08, v=>v>0)}</td></tr>
+        <tr><td>ROA</td><td>${p(ren.roa)}</td><td>&gt; 0%</td>
+          <td>${semaforo(ren.roa, v=>v>0.05, v=>v>0)}</td></tr>
+        <tr><td>Margen neto</td><td>${p(ren.margen_neto)}</td><td>&gt; 0%</td>
+          <td>${semaforo(ren.margen_neto, v=>v>0.05, v=>v>0)}</td></tr>
+        <tr><td>Margen operativo</td><td>${p(ren.margen_operativo)}</td><td>&gt; 0%</td>
+          <td>${semaforo(ren.margen_operativo, v=>v>0.05, v=>v>0)}</td></tr>
+        ${ren.margen_bruto != null ? `<tr><td>Margen bruto</td><td>${p(ren.margen_bruto)}</td><td>&gt; 0%</td>
+          <td>${semaforo(ren.margen_bruto, v=>v>0.15, v=>v>0)}</td></tr>` : ''}
+        <tr style="border-top:1px solid #ccc"><td>Rotación activos</td><td>${r2(efi.rotacion_activos)}</td><td>&gt; 0.5</td>
+          <td>${semaforo(efi.rotacion_activos, v=>v>=1, v=>v>=0.5)}</td></tr>
+        ${efi.dias_cobro != null ? `<tr><td>Días de cobro</td><td>${d(efi.dias_cobro)}</td><td>&lt; 60 días</td>
+          <td>${semaforo(efi.dias_cobro, v=>v<30, v=>v<60)}</td></tr>` : ''}
+        ${efi.dias_pago != null ? `<tr><td>Días de pago</td><td>${d(efi.dias_pago)}</td><td>&gt; 20 días</td>
+          <td>${semaforo(efi.dias_pago, v=>v>=30, v=>v>=20)}</td></tr>` : ''}
+      </tbody>
+    </table>`;
+
+    // Comparativo de balances si hay más de uno
+    if (bals.length > 1) {
+      const metricasBal = [
+        { lbl:'Activo total',       get: b => fmtBal(b).aT,                 fmt: m },
+        { lbl:'Pasivo total',       get: b => fmtBal(b).pT,                 fmt: m },
+        { lbl:'Patrimonio Neto',    get: b => fmtBal(b).pn,                 fmt: m },
+        { lbl:'Liquidez corriente', get: b => b.indicadores?.liquidez?.liquidez_corriente, fmt: r2 },
+        { lbl:'Endeudamiento',      get: b => b.indicadores?.solvencia?.razon_endeudamiento, fmt: p },
+        { lbl:'ROE',                get: b => b.indicadores?.rentabilidad?.roe, fmt: p },
+        { lbl:'ROA',                get: b => b.indicadores?.rentabilidad?.roa, fmt: p },
+      ];
+      tablaBal += `
+      <h3 class="ie-h3">Evolución de Balances</h3>
+      <table class="ie-tabla">
+        <thead><tr><th>Indicador</th>${bals.map(b=>`<th>${b.periodo}</th>`).join('')}</tr></thead>
+        <tbody>${metricasBal.map(met => `
+          <tr><td>${met.lbl}</td>${bals.map(b => `<td>${met.fmt(met.get(b))}</td>`).join('')}</tr>
+        `).join('')}
+        </tbody>
+      </table>`;
+    }
+
+    // Alertas del último balance
+    if (ultBal.alertas?.length) {
+      tablaBal += `<div class="ie-alertas"><strong>⚠ Alertas contables</strong><ul>
+        ${ultBal.alertas.map(a=>`<li>${a}</li>`).join('')}</ul></div>`;
+    }
+  }
+
+  // ── Sección: Flujo de Fondos ─────────────────────────────────────────────────
+  let tablaFlujos = '';
+  if (flujos.length) {
+    tablaFlujos = `
+    <table class="ie-tabla">
+      <thead><tr><th>Período</th><th>Tipo</th><th>Ingresos</th><th>Egresos</th><th>Necesidad fondos</th><th>IPC acum.</th></tr></thead>
+      <tbody>${flujos.map(f => {
+        const ing = _flujoIngTotal(f), egr = _flujoEgrTotal(f), nec = _flujoNecesidad(f);
+        return `<tr>
+          <td>${f.periodo}</td>
+          <td style="font-size:8pt;color:#888">${f.tipo||'—'}</td>
+          <td>${m(ing)}</td>
+          <td>${m(egr != null ? -Math.abs(egr) : null)}</td>
+          <td style="color:${nec>0?'#e74c3c':'#2ecc71'}">${m(nec)}</td>
+          <td>${f.ipc ? f.ipc.toFixed(1)+'%' : '—'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  // ── Sección: Personal ────────────────────────────────────────────────────────
+  let tablaPersonal = '';
+  if (pers && pers.dotacion) {
+    const dotyears = Object.keys(pers.dotacion).sort();
+    if (dotyears.length) {
+      tablaPersonal = `
+      <table class="ie-tabla">
+        <thead><tr><th>Año</th><th>Dotación</th><th>Costo laboral</th><th>Costo / empleado</th></tr></thead>
+        <tbody>${dotyears.map(y => {
+          const dot = pers.dotacion?.[y], cost = pers.costo?.[y];
+          return `<tr>
+            <td>${y}</td>
+            <td>${dot ?? '—'}</td>
+            <td>${cost != null ? m(cost) : '—'}</td>
+            <td>${(dot && cost) ? m(Math.round(cost/dot)) : '—'}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>`;
+    }
+  }
+
+  // ── Diagnóstico global ───────────────────────────────────────────────────────
+  const diag = [];
+  const lastBal = bals[bals.length - 1];
+  if (lastBal) {
+    const liq = lastBal.indicadores?.liquidez || {};
+    const sol = lastBal.indicadores?.solvencia || {};
+    const ren = lastBal.indicadores?.rentabilidad || {};
+    if (liq.liquidez_corriente != null)
+      diag.push(liq.liquidez_corriente >= 1
+        ? `✓ Liquidez corriente adecuada (${r2(liq.liquidez_corriente)})`
+        : `✗ Liquidez corriente insuficiente (${r2(liq.liquidez_corriente)}) — riesgo de incumplimiento de obligaciones a corto plazo`);
+    if (sol.razon_endeudamiento != null)
+      diag.push(sol.razon_endeudamiento < 0.6
+        ? `✓ Endeudamiento controlado (${p(sol.razon_endeudamiento)} del activo)`
+        : `✗ Endeudamiento elevado (${p(sol.razon_endeudamiento)} del activo) — requiere atención`);
+    if (sol.patrimonio_neto != null)
+      diag.push(sol.patrimonio_neto > 0
+        ? `✓ Patrimonio neto positivo (${m(sol.patrimonio_neto)})`
+        : `✗ Patrimonio neto negativo (${m(sol.patrimonio_neto)}) — empresa técnicamente insolvente`);
+    if (ren.roe != null)
+      diag.push(ren.roe > 0
+        ? `✓ Rentabilidad positiva — ROE ${p(ren.roe)}`
+        : `✗ ROE negativo (${p(ren.roe)}) — la empresa destruye valor sobre el patrimonio`);
+  }
+  const uyrs = yearsConDatos.slice(-2);
+  if (uyrs.length === 2) {
+    const f1 = fact[uyrs[0]], f2 = fact[uyrs[1]];
+    if (f1 && f2 && f1 !== 0) {
+      const varNom = (f2 - f1) / Math.abs(f1) * 100;
+      const ipcPer = _ipcAcumEntrePeriodos(String(uyrs[1]), String(uyrs[0]));
+      if (ipcPer) {
+        const varReal = ((1 + varNom/100) / (1 + ipcPer/100) - 1) * 100;
+        diag.push(varReal >= 0
+          ? `✓ Facturación con crecimiento real del ${varReal.toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (IPC acum. ${ipcPer.toFixed(1)}%)`
+          : `△ Facturación con caída real del ${Math.abs(varReal).toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (IPC acum. ${ipcPer.toFixed(1)}%)`);
+      }
+    }
+  }
+
+  // ── Armar HTML completo ──────────────────────────────────────────────────────
+  const css = `
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #1a1a2e; margin: 0; background: #fff; }
+    .ie-portada { background: #1a3a8f; color: #fff; padding: 32px 40px; margin-bottom: 24px; }
+    .ie-portada h1 { margin: 0 0 6px; font-size: 20pt; letter-spacing: .02em; }
+    .ie-portada .ie-sub { font-size: 10pt; opacity: .7; }
+    .ie-body { padding: 0 32px 32px; }
+    h2.ie-h2 { font-size: 12pt; color: #1a3a8f; border-bottom: 2px solid #1a3a8f; padding-bottom: 4px; margin: 24px 0 10px; text-transform: uppercase; letter-spacing: .06em; }
+    h3.ie-h3 { font-size: 10pt; color: #1a3a8f; margin: 16px 0 6px; }
+    .ie-tabla { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 12px; }
+    .ie-tabla th { background: #1a3a8f; color: #fff; padding: 5px 8px; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; }
+    .ie-tabla td { padding: 4px 8px; border-bottom: 1px solid #e5e9f0; vertical-align: top; }
+    .ie-tabla tr:nth-child(even) td { background: #f7f8fc; }
+    .ie-diag { background: #f0f4ff; border-left: 3px solid #1a3a8f; padding: 10px 14px; margin: 8px 0; font-size: 9.5pt; line-height: 1.7; }
+    .ie-alertas { background: #fff8e7; border-left: 3px solid #f39c12; padding: 8px 14px; margin: 10px 0; font-size: 9pt; }
+    .ie-alertas ul { margin: 4px 0 0 16px; padding: 0; }
+    .ie-alertas li { margin-bottom: 2px; }
+    .ie-footer { margin-top: 32px; font-size: 7.5pt; color: #aaa; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+    @media print {
+      body { font-size: 9pt; }
+      .ie-portada { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .ie-tabla th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h2.ie-h2 { page-break-after: avoid; }
+      .ie-tabla { page-break-inside: auto; }
+    }
+  `;
+
+  const seccion = (titulo, contenido) => contenido
+    ? `<h2 class="ie-h2">${titulo}</h2>${contenido}` : '';
+
+  const html = `<!DOCTYPE html><html lang="es"><head>
+    <meta charset="utf-8">
+    <title>Informe Ejecutivo — ${emp}</title>
+    <style>${css}</style>
+  </head><body>
+  <div class="ie-portada">
+    <h1>${emp}</h1>
+    <div class="ie-sub">Informe Ejecutivo · ${ruboLbl} · ${hoy}</div>
+  </div>
+  <div class="ie-body">
+    ${diag.length ? `
+    <h2 class="ie-h2">Diagnóstico General</h2>
+    <div class="ie-diag">${diag.join('<br>')}</div>` : ''}
+
+    ${seccion('Facturación y Resultado', tablaER)}
+    ${seccion('Estado de Resultados Anual', tablaERDet)}
+    ${seccion('Balance y Ratios Financieros', tablaBal)}
+    ${seccion('Flujos de Fondos', tablaFlujos)}
+    ${seccion('Personal', tablaPersonal)}
+
+    <div class="ie-footer">
+      Dashboard Mejor Riojanas · Generado el ${hoy} · Datos de fuente interna
+    </div>
+  </div>
+  </body></html>`;
+
+  // Mostrar en overlay con iframe (sin popup, funciona siempre)
+  let overlay = document.getElementById('_ie_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_ie_overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;flex-direction:column;background:#1a1f2e';
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0';
+
+  const titulo = document.createElement('span');
+  titulo.style.cssText = 'color:#aaa;font-size:9pt;font-family:monospace;flex:1';
+  titulo.textContent = `Informe Ejecutivo — ${emp}`;
+
+  const btnPrint = document.createElement('button');
+  btnPrint.textContent = '🖨 Imprimir';
+  btnPrint.style.cssText = 'background:#1a5fb4;color:#fff;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
+  btnPrint.onclick = () => iframe.contentWindow.print();
+
+  const btnClose = document.createElement('button');
+  btnClose.textContent = '✕ Cerrar';
+  btnClose.style.cssText = 'background:#333;color:#ccc;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
+  btnClose.onclick = () => overlay.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'flex:1;border:none;width:100%;background:#fff';
+
+  bar.appendChild(titulo);
+  bar.appendChild(btnPrint);
+  bar.appendChild(btnClose);
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  document.body.appendChild(overlay);
+
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
 }
 
 function buildEvolucionMensual(emp) {
