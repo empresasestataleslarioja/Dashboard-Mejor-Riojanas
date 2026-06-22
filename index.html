@@ -8701,6 +8701,58 @@ function buildComparacionFlujos() {
 
   wrap.style.display = '';
 
+  // ── Punto 3: advertir si los períodos no son consecutivos ────────
+  const _parsePeriodoFlujo = per => {
+    const s = (per || '').toLowerCase();
+    const anio = parseInt(s.match(/20\d\d/)?.[0]);
+    if (!anio) return null;
+    // Detectar cuatrimestre o trimestre
+    const cuatMatch = s.match(/([1-4])[°ºo]?\s*(?:cuatrimestre|cuatrim|cuat)/);
+    const trimMatch = s.match(/([1-4])[°ºo]?\s*(?:trimestre|trim)/);
+    if (cuatMatch) return { anio, tipo:'cuat', num: parseInt(cuatMatch[1]) };
+    if (trimMatch) return { anio, tipo:'trim', num: parseInt(trimMatch[1]) };
+    // Detectar mes por nombre
+    const MESES = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
+                   julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
+    const mesNom = Object.keys(MESES).find(m => s.includes(m));
+    if (mesNom) return { anio, tipo:'mes', num: MESES[mesNom] };
+    return { anio, tipo:'anio', num: 1 };
+  };
+  const _diffMesesFlujo = (pA, pB) => {
+    const a = _parsePeriodoFlujo(pA), b = _parsePeriodoFlujo(pB);
+    if (!a || !b) return null;
+    const duracion = { cuat:4, trim:3, mes:1, anio:12 };
+    const mesInicioA = a.tipo === 'cuat' ? (a.num-1)*4+1 : a.tipo === 'trim' ? (a.num-1)*3+1 : a.num;
+    const mesInicioB = b.tipo === 'cuat' ? (b.num-1)*4+1 : b.tipo === 'trim' ? (b.num-1)*3+1 : b.num;
+    const absA = a.anio * 12 + mesInicioA;
+    const absB = b.anio * 12 + mesInicioB;
+    return Math.abs(absA - absB - (duracion[b.tipo] || 4));
+  };
+  const gapMeses = _diffMesesFlujo(fA.periodo, fB.periodo);
+  const durEsperada = (() => {
+    const p = _parsePeriodoFlujo(fA.periodo);
+    return p ? { cuat:4, trim:3, mes:1, anio:12 }[p.tipo] || 4 : 4;
+  })();
+  // Mostrar / ocultar advertencia de gap
+  let alertaGapEl = document.getElementById('flujo-alerta-gap');
+  if (!alertaGapEl) {
+    alertaGapEl = document.createElement('div');
+    alertaGapEl.id = 'flujo-alerta-gap';
+    alertaGapEl.style.cssText = 'margin:6px 0 10px';
+    wrap.insertBefore(alertaGapEl, wrap.firstChild);
+  }
+  if (gapMeses != null && gapMeses > durEsperada) {
+    alertaGapEl.innerHTML = `
+      <div style="background:#1a0f2a;border:1px solid #7c3aed;border-radius:4px;padding:7px 12px;
+        font-size:8.5pt;font-family:var(--mono);color:#c4b5fd">
+        ⚠ Los períodos no son consecutivos — hay un desfase de ~${gapMeses} mes${gapMeses!==1?'es':''} entre el cierre
+        de <strong>${fB.periodo}</strong> y el inicio de <strong>${fA.periodo}</strong>.
+        El IPC acumulado puede no reflejar el intervalo correcto.
+      </div>`;
+  } else {
+    alertaGapEl.innerHTML = '';
+  }
+
   // Título
   document.getElementById('flujo-comp-titulo').textContent =
     `${fA.empresa} — ${fA.periodo} vs ${fB.periodo}`;
@@ -10596,6 +10648,24 @@ function _persGetTotal(d, y) {
 function _persGetMeses(d, y) {
   if (!d || !d.m || !d.m[y]) return Array(12).fill(null);
   return d.m[y];
+}
+
+// ── Extraer costo laboral desde ER mensual (punto 2 mejoras necesarias) ───────
+// Busca en DATA.er_mensual[emp][yr].filas las filas cuyo lbl original
+// contenga palabras clave de personal/sueldos y acumula sus valores anuales.
+// Retorna null si no hay datos disponibles.
+function _costoLaboralDesdeER(emp, yr) {
+  const erAnio = (DATA.er_mensual?.[emp]?.[yr]);
+  if (!erAnio) return null;
+  const REGEX_PERSONAL = /SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA\s+SOC|APORTE\s+PAT|CONTRIBUC|HABERES?|SAC\b|AGUINALDO|GASTO[S]?\s+DE\s+PERSONAL|MASA\s+SALARIAL/i;
+  let total = 0;
+  let encontro = false;
+  (erAnio.filas || []).forEach(f => {
+    if (!REGEX_PERSONAL.test(f.lbl || '')) return;
+    const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
+    if (suma !== 0) { total += Math.abs(suma); encontro = true; }
+  });
+  return encontro ? total : null;
 }
 
 // ── Toggle detalle mensual en carga manual ────────────────────────
@@ -12519,10 +12589,14 @@ function _informeEjecutivoRender(emp) {
     const persYears = years.filter(y => _persGetTotal(persRec, y) != null);
     if (persYears.length) {
       const costosY = persYears.map(y => {
-        const dot  = _persGetTotal(persRec, y);
-        const cost = persRec.costo?.[y] ?? null;
+        const dot    = _persGetTotal(persRec, y);
+        const costManual = persRec.costo?.[y] ?? null;
+        // Punto 2: si no hay costo manual, intentar extraerlo del ER mensual
+        const costER = costManual == null ? _costoLaboralDesdeER(emp, String(y)) : null;
+        const cost   = costManual ?? costER;
+        const fuenteCosto = costManual != null ? '' : costER != null ? ' <span style="font-size:7.5pt;color:#888">(ER)</span>' : '';
         const fact_y = fact[y] ?? null;
-        return { y, dot, cost, cxe: (dot && cost) ? Math.round(cost / dot) : null,
+        return { y, dot, cost, fuenteCosto, cxe: (dot && cost) ? Math.round(cost / dot) : null,
                  pctFact: (cost && fact_y && fact_y > 0) ? cost / fact_y * 100 : null };
       });
       const dotMax  = Math.max(...costosY.map(c => c.dot  || 0));
@@ -12537,7 +12611,7 @@ function _informeEjecutivoRender(emp) {
           <tr>
             <td><strong>${c.y}</strong></td>
             <td style="text-align:right">${c.dot ?? '—'}</td>
-            <td style="text-align:right">${c.cost != null ? m(c.cost) : '—'}</td>
+            <td style="text-align:right">${c.cost != null ? m(c.cost) + c.fuenteCosto : '—'}</td>
             <td style="text-align:right">${c.cxe != null ? m(c.cxe) : '—'}</td>
             <td style="text-align:right;color:${c.pctFact!=null&&c.pctFact>60?'#c0392b':c.pctFact!=null&&c.pctFact>40?'#e67e22':'#1a7a4a'}">${c.pctFact!=null?c.pctFact.toFixed(1)+'%':'—'}</td>
           </tr>`).join('')}
