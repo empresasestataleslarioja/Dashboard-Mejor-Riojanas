@@ -14622,20 +14622,6 @@ function _alertaTransCoberturaUpdate() {
         </div>
       </div>
     </div>`;
-    : '';
-
-  el.style.display = '';
-  el.innerHTML = `
-    <div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;padding:9px 14px;margin:6px 0;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
-      <span style="color:#fbbf24;font-size:12pt;line-height:1.3">⚠</span>
-      <div style="color:#fde68a;font-size:9pt;font-family:var(--mono);line-height:1.6">
-        <strong>${anioRef} — ${semsLabel}:</strong> ${rangos.join(', ')}
-        ${mesesLabel}
-        <span style="color:#a8762e;display:block;font-size:8pt;margin-top:2px">
-          Verificar si corresponden a semanas sin carga o a feriados no contemplados
-        </span>
-      </div>
-    </div>`;
 }
 
 function buildTransferencias() {
