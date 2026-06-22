@@ -14568,8 +14568,8 @@ function _alertaTransCoberturaUpdate() {
     const mes = parseInt(t.mes) || null;
     if (t.semana) {
       semanasCubiertas.add(parseInt(t.semana));
-    } else if (mes && t.esMesCompleto) {
-      // Solo cubre el mes entero si fue cargado como mes completo
+    } else if (mes && t.esMesCompleto !== false) {
+      // Cubre el mes entero si fue cargado como mes completo, o si es registro legacy (sin campo esMesCompleto)
       _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s));
     }
   });
