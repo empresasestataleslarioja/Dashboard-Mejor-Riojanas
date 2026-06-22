@@ -17174,9 +17174,9 @@ function tryParseSIDIF(wb, fname) {
       const excelSerialToDate = (n) => {
         if (typeof n !== 'number' || n < 40000 || n > 60000) return null;
         const d = new Date(Math.round((n - 25569) * 86400 * 1000));
-        const yr = d.getUTCFullYear(), mo = d.getUTCMonth() + 1;
+        const yr = d.getUTCFullYear(), mo = d.getUTCMonth() + 1, dy = d.getUTCDate();
         return (yr >= 2000 && yr <= 2100 && mo >= 1 && mo <= 12)
-          ? { año: yr, mes: mo } : null;
+          ? { año: yr, mes: mo, dia: dy } : null;
       };
 
       const parseFechaStr = (s) => {
@@ -17186,21 +17186,19 @@ function tryParseSIDIF(wb, fname) {
         let m = s.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})/);
         if (m) {
           let yr = parseInt(m[3]); if (yr < 100) yr += 2000;
-          const mo = parseInt(m[2]);
+          const mo = parseInt(m[2]), dy = parseInt(m[1]);
           if (yr >= 2000 && yr <= 2100 && mo >= 1 && mo <= 12)
-            return { año: yr, mes: mo };
+            return { año: yr, mes: mo, dia: dy };
         }
         // "2026-04-27" (YYYY-MM-DD)
-        m = s.match(/^(20\d{2})-(0?[1-9]|1[0-2])/);
-        if (m) return { año: parseInt(m[1]), mes: parseInt(m[2]) };
+        m = s.match(/^(20\d{2})-(0?[1-9]|1[0-2])-(\d{1,2})/);
+        if (m) return { año: parseInt(m[1]), mes: parseInt(m[2]), dia: parseInt(m[3]) };
         return null;
       };
 
-      let mes = 0, año = 0;
+      let mes = 0, año = 0, _diaFecha = null;
 
       // ── 1. Leer F.Registro PG desde wsRaw (.w = texto formateado "DD/MM/YYYY") ──
-      // cell.w es lo más confiable: SheetJS lo genera aplicando el formato Excel
-      // aunque .v sea un número de serie crudo
       const iFecha = idx(['f.registro pg','f.registro op','f.registro',
                           'fecha registro','fecha pago','fregistro']);
       if (iFecha >= 0 && wsRaw) {
@@ -17209,14 +17207,13 @@ function tryParseSIDIF(wb, fname) {
           const cell    = wsRaw[cellKey];
           if (cell?.w) {
             const fd = parseFechaStr(cell.w);
-            if (fd) { año = fd.año; mes = fd.mes; }
+            if (fd) { año = fd.año; mes = fd.mes; _diaFecha = fd.dia; }
           }
-          // Si .w no dio resultado, intentar .v
           if ((!año || !mes) && cell?.v != null) {
             const fd = typeof cell.v === 'number'
               ? excelSerialToDate(cell.v)
               : parseFechaStr(String(cell.v));
-            if (fd) { año = fd.año; mes = fd.mes; }
+            if (fd) { año = fd.año; mes = fd.mes; _diaFecha = fd.dia; }
           }
         } catch(e) {}
       }
@@ -17226,34 +17223,38 @@ function tryParseSIDIF(wb, fname) {
         const v = row[iFecha];
         let fd = null;
         if (v instanceof Date) {
-          // Con cellDates:true SheetJS devuelve Date — usar UTC para evitar offset de zona horaria
-          fd = { año: v.getUTCFullYear(), mes: v.getUTCMonth() + 1 };
+          fd = { año: v.getUTCFullYear(), mes: v.getUTCMonth() + 1, dia: v.getUTCDate() };
         } else if (typeof v === 'number') {
           fd = excelSerialToDate(v);
         } else if (typeof v === 'string') {
           fd = parseFechaStr(v);
         }
-        if (fd && fd.año >= 2000 && fd.año <= 2100) { año = fd.año; mes = fd.mes; }
+        if (fd && fd.año >= 2000 && fd.año <= 2100) { año = fd.año; mes = fd.mes; _diaFecha = fd.dia; }
       }
 
       // ── 3. Sin F.Registro PG: sin mes ni año (no inventar) ───────
-      // No usar otras columnas — podrían contener el período referenciado, no la fecha real
 
       const categoria = clasificarTransferencia(cgto, observ, suel);
 
-      // Extraer semana o mes-completo del nombre del archivo
-      // Caso A: "Semana 23 2024.xlsx", "Sem_5.xlsx", "semana23.xlsx"
-      // Caso B: "Enero 2024.xlsx", "Mayo_2024.xlsx", "03 2024.xlsx"
-      const _fnLow = (fname || '').toLowerCase();
-      const _semMatch = _fnLow.match(/[Ss]em(?:ana)?[\s_\-]*(\d{1,2})/);
-      const _mesNomMatch = _fnLow.match(/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/);
-      const _mesNumMatch = !_mesNomMatch && _fnLow.match(/\b(0?[1-9]|1[0-2])\b/);
-      const _MESES_IDX = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
-      let _semana = _semMatch ? parseInt(_semMatch[1]) : null;
+      // ── Calcular semana ISO desde la fecha real del pago ──────────
+      // Si tenemos día + mes + año, calcular semana ISO directamente.
+      // Fallback: detectar desde nombre del archivo.
+      let _semana = null;
       let _esMesCompleto = false;
-      if (!_semana) {
-        if (_mesNomMatch) { _esMesCompleto = true; }
-        else if (_mesNumMatch) { _esMesCompleto = true; }
+
+      if (_diaFecha && mes && año) {
+        // Semana ISO desde la fecha exacta del pago
+        _semana = _isoWeek(new Date(año, mes - 1, _diaFecha));
+      } else {
+        // Sin fecha exacta: intentar detectar desde nombre del archivo
+        const _fnLow = (fname || '').toLowerCase();
+        const _semMatch = _fnLow.match(/[Ss]em(?:ana)?[\s_\-]*(\d{1,2})/);
+        const _mesNomMatch = _fnLow.match(/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/);
+        const _mesNumMatch = !_mesNomMatch && _fnLow.match(/\b(0?[1-9]|1[0-2])\b/);
+        _semana = _semMatch ? parseInt(_semMatch[1]) : null;
+        if (!_semana) {
+          if (_mesNomMatch || _mesNumMatch) _esMesCompleto = true;
+        }
       }
 
       rows.push({ saf, organismo:org, beneficiario:ben, ff,
@@ -17261,9 +17262,9 @@ function tryParseSIDIF(wb, fname) {
                   observacion:observ, incluye_sueldos:suel,
                   mes:mes||null, año:año||null, importe:imp,
                   semana: _semana,
-                  esMesCompleto: _esMesCompleto || false,
+                  esMesCompleto: _esMesCompleto,
                   categoria, _hoja: sheetName,
-                  _archivo: fname || '' }); // nombre del archivo de carga
+                  _archivo: fname || '' });
     }
     return rows;
   }
