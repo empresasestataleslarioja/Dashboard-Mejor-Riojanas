@@ -3259,9 +3259,10 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="flex:1;min-height:0">
-              <canvas id="ch-trans-donut" style="max-height:300px;width:100%"></canvas>
+            <div style="position:relative;display:flex;align-items:center;justify-content:center">
+              <canvas id="ch-trans-donut" style="max-height:220px;width:100%"></canvas>
             </div>
+            <div id="trans-donut-legend" style="margin-top:6px;flex:1"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -5196,7 +5197,9 @@ function buildSingleChart(id, effectiveType, data, opts, baseType) {
       y: { ticks:{color: tickColor, font:{family:'var(--mono, Azeret Mono)',size:9}}, grid:{color: gridColor} }
     }
   };
-  charts[id] = new Chart(el, { type: renderType, data: renderData, options: deepMerge(defaults, opts) });
+  const chartPlugins = opts._plugins || [];
+  delete opts._plugins;
+  charts[id] = new Chart(el, { type: renderType, data: renderData, options: deepMerge(defaults, opts), plugins: chartPlugins });
   el.onclick = () => openDrill(id);
 }
 
@@ -14727,31 +14730,55 @@ function buildTransferencias() {
 
   // ── Gráfico dona: composición por categoría ───────────────────
   const donutCats  = topCat.filter(c=>catTotals[c]>0);
+  const donutTotal = donutCats.reduce((s,c)=>s+catTotals[c],0);
+  const _donutCenterPlugin = {
+    id:'_donutCenter',
+    afterDraw(chart) {
+      const {ctx,chartArea:{top,bottom,left,right}} = chart;
+      const cx = (left+right)/2, cy = (top+bottom)/2;
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#888'; ctx.font = '9px monospace';
+      ctx.fillText('TOTAL', cx, cy - 10);
+      ctx.fillStyle = '#e0e0e0'; ctx.font = 'bold 13px monospace';
+      ctx.fillText(fvShort(donutTotal), cx, cy + 7);
+      ctx.restore();
+    }
+  };
   mkChart('ch-trans-donut','doughnut',{
     labels:   donutCats,
     datasets: [{
       data:            donutCats.map(c=>catTotals[c]/1e6),
       backgroundColor: donutCats.map(c=>TRANS_COLORS[c]),
       borderWidth: 2,
-      borderColor: 'var(--bg)',
+      borderColor: '#0d0f1a',
     }]
   },{
     plugins:{
-      legend:{
-        position: 'bottom',
-        labels:{
-          color: 'var(--text)',
-          font: { size: 10 },
-          padding: 12,
-          boxWidth: 12,
-          boxHeight: 12,
-        }
-      },
-      tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvShort(ctx.raw*1e6)} (${(ctx.raw/donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}%)` } }
+      legend: { display: false },
+      tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvShort(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
     },
-    cutout: '62%',
-    layout: { padding: { top: 8, bottom: 4 } }
+    _plugins: [ _donutCenterPlugin ],
+    cutout: '65%',
+    layout: { padding: 8 }
   });
+
+  // ── Tabla de referencias personalizada ───────────────────────
+  const legendEl = document.getElementById('trans-donut-legend');
+  if (legendEl) {
+    legendEl.innerHTML = donutCats.map(c => {
+      const pct = donutTotal > 0 ? (catTotals[c]/donutTotal*100) : 0;
+      return `
+        <div style="display:grid;grid-template-columns:10px 1fr auto auto;
+            gap:0 8px;align-items:center;padding:5px 4px;
+            border-bottom:1px solid var(--bd)">
+          <div style="width:10px;height:10px;border-radius:2px;background:${TRANS_COLORS[c]};flex-shrink:0"></div>
+          <div style="font-size:9pt;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c}</div>
+          <div style="font-size:9pt;color:var(--text);font-family:var(--mono);text-align:right;white-space:nowrap">${fvShort(catTotals[c])}</div>
+          <div style="font-size:8.5pt;color:var(--dim);font-family:var(--mono);text-align:right;white-space:nowrap;min-width:36px">${pct.toFixed(1)}%</div>
+        </div>`;
+    }).join('');
+  }
 
   // ── Gráfico barras: por beneficiario ─────────────────────────
   const benMap = {};
