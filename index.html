@@ -14551,7 +14551,10 @@ function _alertaTransCoberturaUpdate() {
   const anioActual = hoy.getFullYear();
 
   const trans = DATA.transferencias || [];
-  const aniosConDatos = [...new Set(trans.map(t=>t.año).filter(Boolean))].sort((a,b)=>a-b);
+  // Normalizar año a número para garantizar comparaciones correctas
+  const aniosConDatos = [...new Set(
+    trans.map(t => parseInt(t.año)).filter(n => !isNaN(n) && n > 2000)
+  )].sort((a,b) => a-b);
   if (!aniosConDatos.length) { el.style.display='none'; return; }
   const anioRef = Math.max(...aniosConDatos);
 
@@ -14559,48 +14562,66 @@ function _alertaTransCoberturaUpdate() {
   const semanasEsperadas = _semanasLaboralesHasta(anioRef, limite);
   if (!semanasEsperadas.length) { el.style.display='none'; return; }
 
-  // Semanas cubiertas por registros del año de referencia
+  // Semanas cubiertas — normalizar año y mes a número
   const semanasCubiertas = new Set();
-  trans.filter(t => t.año === anioRef).forEach(t => {
+  trans.filter(t => parseInt(t.año) === anioRef).forEach(t => {
+    const mes = parseInt(t.mes) || null;
     if (t.semana) {
-      semanasCubiertas.add(t.semana);
-    } else if (t.esMesCompleto && t.mes) {
-      // Carga por mes completo: marcar todas las semanas hábiles de ese mes
-      _semanasDelMes(anioRef, t.mes).forEach(s => semanasCubiertas.add(s));
-    } else if (t.mes) {
-      // Sin semana pero con mes: asumir mes completo cubierto
-      _semanasDelMes(anioRef, t.mes).forEach(s => semanasCubiertas.add(s));
+      semanasCubiertas.add(parseInt(t.semana));
+    } else if (mes) {
+      // Con mes (o mes completo): cubrir todas las semanas hábiles del mes
+      _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s));
     }
   });
 
   const semanasFaltantes = semanasEsperadas.filter(s => !semanasCubiertas.has(s));
 
-  if (!semanasFaltantes.length) {
-    el.style.display = 'none'; el.innerHTML = ''; return;
-  }
-
-  // Agrupar semanas faltantes en rangos consecutivos para legibilidad
-  const rangos = [];
-  let ini = semanasFaltantes[0], ant = ini;
-  for (let i = 1; i <= semanasFaltantes.length; i++) {
-    const cur = semanasFaltantes[i];
-    if (cur === ant + 1) { ant = cur; continue; }
-    rangos.push(ini === ant ? `Sem ${ini}` : `Sem ${ini}–${ant}`);
-    ini = ant = cur;
-  }
-  const semsLabel = semanasFaltantes.length === 1
-    ? `1 semana faltante`
-    : `${semanasFaltantes.length} semanas faltantes`;
-
-  // Detectar si hay meses enteros sin ningún dato (para mostrar también)
-  const mesesConDatos = new Set(trans.filter(t=>t.año===anioRef&&t.mes).map(t=>t.mes));
-  const mesLimite = anioRef === anioActual ? hoy.getMonth() : 11; // 0-based hasta mes anterior
+  // Meses enteros sin ningún dato
+  const mesesConDatos = new Set(
+    trans.filter(t => parseInt(t.año) === anioRef && parseInt(t.mes)).map(t => parseInt(t.mes))
+  );
+  const mesLimite = anioRef === anioActual ? hoy.getMonth() : 11; // 0-based
   const mesesFaltantes = [];
   for (let m = 1; m <= mesLimite; m++) {
     if (!mesesConDatos.has(m)) mesesFaltantes.push(MESES_NOM[m-1]);
   }
+
+  if (!semanasFaltantes.length && !mesesFaltantes.length) {
+    el.style.display = 'none'; el.innerHTML = ''; return;
+  }
+
+  // Agrupar semanas faltantes en rangos
+  const rangos = [];
+  if (semanasFaltantes.length) {
+    let ini = semanasFaltantes[0], ant = ini;
+    for (let i = 1; i <= semanasFaltantes.length; i++) {
+      const cur = semanasFaltantes[i];
+      if (cur === ant + 1) { ant = cur; continue; }
+      rangos.push(ini === ant ? `Sem ${ini}` : `Sem ${ini}–${ant}`);
+      ini = ant = cur;
+    }
+  }
+
+  const semsLabel = semanasFaltantes.length
+    ? `<strong>${semanasFaltantes.length} semana${semanasFaltantes.length>1?'s':''} sin datos:</strong> ${rangos.join(', ')}`
+    : '';
   const mesesLabel = mesesFaltantes.length
-    ? `<br><span style="color:#f5c57a">Meses sin ningún dato: <strong>${mesesFaltantes.join(', ')}</strong></span>`
+    ? `<strong>Meses sin ningún registro:</strong> ${mesesFaltantes.join(', ')}`
+    : '';
+  const lineas = [semsLabel, mesesLabel].filter(Boolean).join('<br>');
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;
+      padding:9px 14px;margin:0 0 8px;display:flex;align-items:flex-start;gap:10px">
+      <span style="color:#fbbf24;font-size:12pt;flex-shrink:0">⚠</span>
+      <div style="color:#fde68a;font-size:9pt;font-family:var(--mono);line-height:1.7">
+        <span style="color:#f5c57a;font-weight:700">${anioRef}</span> — ${lineas}
+        <div style="color:#a8762e;font-size:8pt;margin-top:2px">
+          Verificar si corresponden a semanas sin carga o a feriados no contemplados
+        </div>
+      </div>
+    </div>`;
     : '';
 
   el.style.display = '';
