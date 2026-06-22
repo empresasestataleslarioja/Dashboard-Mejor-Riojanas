@@ -3259,10 +3259,10 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="position:relative;display:flex;align-items:center;justify-content:center">
-              <canvas id="ch-trans-donut" style="max-height:260px;width:100%"></canvas>
+            <div style="position:relative;flex:1;min-height:200px">
+              <canvas id="ch-trans-donut" style="width:100%;height:100%"></canvas>
             </div>
-            <div id="trans-donut-legend" style="margin-top:14px;flex:1;border-top:1px solid var(--bd);padding-top:6px"></div>
+            <div id="trans-donut-legend" style="margin-top:10px;border-top:1px solid var(--bd);padding-top:8px"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -14745,10 +14745,10 @@ function buildTransferencias() {
       const cx = (left+right)/2, cy = (top+bottom)/2;
       ctx.save();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#888'; ctx.font = '9px monospace';
-      ctx.fillText('TOTAL', cx, cy - 10);
-      ctx.fillStyle = '#e0e0e0'; ctx.font = 'bold 13px monospace';
-      ctx.fillText(fvShort(donutTotal), cx, cy + 7);
+      ctx.fillStyle = '#888'; ctx.font = '10px monospace';
+      ctx.fillText('TOTAL', cx, cy - 12);
+      ctx.fillStyle = '#e0e0e0'; ctx.font = 'bold 15px monospace';
+      ctx.fillText(fvShort(donutTotal), cx, cy + 8);
       ctx.restore();
     }
   };
@@ -14766,8 +14766,9 @@ function buildTransferencias() {
       tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
     },
     _plugins: [ _donutCenterPlugin ],
-    cutout: '80%',
-    layout: { padding: 4 }
+    cutout: '52%',
+    maintainAspectRatio: false,
+    layout: { padding: 6 }
   });
 
   // ── Tabla de referencias personalizada ───────────────────────
