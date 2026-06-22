@@ -14619,9 +14619,9 @@ function _alertaTransCoberturaUpdate() {
     .sort((a,b) => a-b)
     .map(m => MESES_NOM[m-1]);
 
-  if (!semanasFaltantes.length && !mesesFaltantes.length && !mesesSinNumSem.length) {
-    el.style.display = 'none'; el.innerHTML = ''; return;
-  }
+  const hayAlertas = semanasFaltantes.length || mesesFaltantes.length || mesesSinNumSem.length;
+  const hayMensual = mesMensual.size > 0;
+  if (!hayAlertas && !hayMensual) { el.style.display = 'none'; el.innerHTML = ''; return; }
 
   // Agrupar semanas faltantes en rangos
   const rangos = [];
@@ -14644,18 +14644,32 @@ function _alertaTransCoberturaUpdate() {
   const mesesLabel = mesesFaltantes.length
     ? `<strong>Meses sin ningún registro:</strong> ${mesesFaltantes.join(', ')}`
     : '';
-  const lineas = [semsLabel, mesesSinNumLabel, mesesLabel].filter(Boolean).join('<br>');
 
+  // Meses cargados como mes completo (informativo)
+  const mesesMensualNom = [...mesMensual]
+    .filter(m => m <= (mesLimite + 1))
+    .sort((a,b) => a-b)
+    .map(m => MESES_NOM[m-1]);
+  const mesesMensualLabel = mesesMensualNom.length
+    ? `<span style="color:#86efac"><strong>Mes completo:</strong> ${mesesMensualNom.join(', ')}</span>`
+    : '';
+
+  const lineas = [semsLabel, mesesSinNumLabel, mesesLabel, mesesMensualLabel].filter(Boolean).join('<br>');
+
+  const bgColor    = hayAlertas ? '#2a1a00' : '#0f2a1a';
+  const bdColor    = hayAlertas ? '#b45309' : '#16a34a';
+  const icono      = hayAlertas ? '<span style="color:#fbbf24;font-size:12pt;flex-shrink:0">⚠</span>' : '<span style="color:#4ade80;font-size:12pt;flex-shrink:0">✓</span>';
+  const notaFinal  = hayAlertas
+    ? `<div style="color:#a8762e;font-size:8pt;margin-top:2px">Verificar si corresponden a semanas sin carga o a feriados no contemplados</div>`
+    : '';
   el.style.display = '';
   el.innerHTML = `
-    <div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;
+    <div style="background:${bgColor};border:1px solid ${bdColor};border-radius:4px;
       padding:9px 14px;margin:0 0 8px;display:flex;align-items:flex-start;gap:10px">
-      <span style="color:#fbbf24;font-size:12pt;flex-shrink:0">⚠</span>
+      ${icono}
       <div style="color:#fde68a;font-size:9pt;font-family:var(--mono);line-height:1.7">
         <span style="color:#f5c57a;font-weight:700">${anioRef}</span> — ${lineas}
-        <div style="color:#a8762e;font-size:8pt;margin-top:2px">
-          Verificar si corresponden a semanas sin carga o a feriados no contemplados
-        </div>
+        ${notaFinal}
       </div>
     </div>`;
 }
