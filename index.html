@@ -14564,41 +14564,62 @@ function _alertaTransCoberturaUpdate() {
 
   // Meses con al menos un registro en anioRef
   const transAnio = trans.filter(t => parseInt(t.año) === anioRef);
-  const mesesConDatos = new Set(
-    transAnio.filter(t => parseInt(t.mes)).map(t => parseInt(t.mes))
-  );
   const mesLimite = anioRef === anioActual ? hoy.getMonth() : 11; // 0-based
+
+  // Clasificar meses según tipo de carga:
+  //   "mensual"  → tiene registros con esMesCompleto=true o esMesCompleto=undefined (legacy)
+  //   "semanal"  → tiene registros con semana explícito (número)
+  //   "sinSemana"→ tiene registros con esMesCompleto=false pero sin semana (cargado semanalmente
+  //                pero sin número de semana identificado en el nombre del archivo)
+  const mesMensual  = new Set(); // cubierto completo
+  const mesSemanal  = new Set(); // analizar semanas faltantes
+  const mesSinSemana= new Set(); // registros semanales sin número → pedir recarga
+  const mesesConDatos = new Set();
+
+  transAnio.forEach(t => {
+    const mes = parseInt(t.mes); if (!mes) return;
+    mesesConDatos.add(mes);
+    if (t.semana) {
+      mesSemanal.add(mes);
+    } else if (t.esMesCompleto === false) {
+      // Cargado después del código de detección pero sin semana en el nombre
+      if (!mesSemanal.has(mes)) mesSinSemana.add(mes);
+    } else {
+      // esMesCompleto=true o undefined (legacy) → mensual
+      mesMensual.add(mes);
+    }
+  });
+  // Un mes promovido a semanal ya no es sinSemana
+  mesSemanal.forEach(m => mesSinSemana.delete(m));
+
+  // Meses completamente sin datos
   const mesesFaltantes = [];
   for (let m = 1; m <= mesLimite; m++) {
     if (!mesesConDatos.has(m)) mesesFaltantes.push(MESES_NOM[m-1]);
   }
 
-  // Semanas faltantes: solo dentro de meses que SÍ tienen datos y usan campo semana
-  // Un mes con registros pero sin semana explícita se considera cubierto completo
-  const mesesConSemana = new Set(
-    transAnio.filter(t => t.semana && parseInt(t.mes)).map(t => parseInt(t.mes))
-  );
+  // Semanas cubiertas por registros con campo semana
   const semanasCubiertas = new Set();
-  transAnio.forEach(t => {
-    const mes = parseInt(t.mes) || null;
-    if (t.semana) {
-      semanasCubiertas.add(parseInt(t.semana));
-    } else if (mes && mesesConDatos.has(mes) && !mesesConSemana.has(mes)) {
-      // Mes con datos pero sin semanas explícitas → cubre todas las semanas del mes
-      _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s));
-    }
-  });
+  transAnio.forEach(t => { if (t.semana) semanasCubiertas.add(parseInt(t.semana)); });
+  // Meses mensuales: marcar todas sus semanas como cubiertas
+  mesMensual.forEach(mes => _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s)));
 
-  // Semanas esperadas solo en meses que tienen datos y usan campo semana
+  // Semanas faltantes dentro de meses con carga semanal
   const semanasFaltantes = [];
-  mesesConSemana.forEach(mes => {
+  mesSemanal.forEach(mes => {
     _semanasDelMes(anioRef, mes).forEach(s => {
       if (!semanasCubiertas.has(s)) semanasFaltantes.push(s);
     });
   });
   semanasFaltantes.sort((a,b) => a-b);
 
-  if (!semanasFaltantes.length && !mesesFaltantes.length) {
+  // Meses con registros semanales pero sin número de semana
+  const mesesSinNumSem = [...mesSinSemana]
+    .filter(m => m <= (mesLimite + 1))
+    .sort((a,b) => a-b)
+    .map(m => MESES_NOM[m-1]);
+
+  if (!semanasFaltantes.length && !mesesFaltantes.length && !mesesSinNumSem.length) {
     el.style.display = 'none'; el.innerHTML = ''; return;
   }
 
@@ -14617,10 +14638,13 @@ function _alertaTransCoberturaUpdate() {
   const semsLabel = semanasFaltantes.length
     ? `<strong>${semanasFaltantes.length} semana${semanasFaltantes.length>1?'s':''} sin datos:</strong> ${rangos.join(', ')}`
     : '';
+  const mesesSinNumLabel = mesesSinNumSem.length
+    ? `<strong>Sin número de semana identificado:</strong> ${mesesSinNumSem.join(', ')} — recargá los archivos para detectar faltantes`
+    : '';
   const mesesLabel = mesesFaltantes.length
     ? `<strong>Meses sin ningún registro:</strong> ${mesesFaltantes.join(', ')}`
     : '';
-  const lineas = [semsLabel, mesesLabel].filter(Boolean).join('<br>');
+  const lineas = [semsLabel, mesesSinNumLabel, mesesLabel].filter(Boolean).join('<br>');
 
   el.style.display = '';
   el.innerHTML = `
