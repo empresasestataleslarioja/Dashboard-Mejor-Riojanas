@@ -17815,7 +17815,21 @@ function _normFname(s) {
     .replace(/\.xls[x]?$/, '').replace(/[-_\s]+/g, ' ').trim();
 }
 
-function _aplicarSIDIF(sidifResult, fname, modo) {
+function _aplicarSIDIF(sidifResult, fname, modo, periodoOverride) {
+  // periodoOverride: { tipo:'semana', semana:15 } | { tipo:'mes' } | null
+  if (periodoOverride && sidifResult.rows) {
+    sidifResult.rows = sidifResult.rows.map(r => {
+      const nr = Object.assign({}, r);
+      if (periodoOverride.tipo === 'semana') {
+        nr.semana = periodoOverride.semana;
+        nr.esMesCompleto = false;
+      } else if (periodoOverride.tipo === 'mes') {
+        nr.semana = null;
+        nr.esMesCompleto = true;
+      }
+      return nr;
+    });
+  }
   const fnameNorm = _normFname(fname);
 
   console.log(`[SIDIF] modo=${modo} fname="${fname}" rows=${sidifResult.rows.length}`);
@@ -17908,6 +17922,29 @@ function _aplicarSIDIF(sidifResult, fname, modo) {
   marcarPendienteGuardar();
 }
 
+// ── Selector de período para archivos sin semana/mes en el nombre ──
+function _sidifPeriodoSelectorHTML(sidifResult) {
+  // Si todos los registros ya tienen semana o esMesCompleto, no mostrar selector
+  const rows = sidifResult.rows || [];
+  const yaDetectado = rows.length > 0 && rows.every(r => r.semana || r.esMesCompleto);
+  if (yaDetectado) return '';
+  const opts = ['<option value="auto">— Detectado automáticamente (sin semana/mes) —</option>',
+                '<option value="mes">📅 Mes completo</option>'];
+  for (let s = 1; s <= 53; s++) opts.push(`<option value="${s}">Semana ${s}</option>`);
+  return `<div style="margin:10px 0;padding:10px 12px;background:rgba(71,160,255,.08);
+      border:1px solid #3b82f640;border-radius:4px;font-size:10px;color:var(--text)">
+    <strong>¿Qué período corresponde a este archivo?</strong>
+    <div style="font-size:9px;color:var(--dim);margin:3px 0 8px">
+      No se detectó semana ni mes en el nombre del archivo.
+      Seleccioná para que quede registrado correctamente.
+    </div>
+    <select id="_sidif-periodo-sel" style="width:100%;padding:5px 8px;background:var(--s2);
+        border:1px solid var(--bd2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px">
+      ${opts.join('')}
+    </select>
+  </div>`;
+}
+
 // ── Confirmación del diálogo de duplicados ────────────────────────
 function confirmarSIDIF(modo, fname, _unused) {
   const pending = window._pendingSIDIF;
@@ -17920,7 +17957,14 @@ function confirmarSIDIF(modo, fname, _unused) {
     return;
   }
 
-  _aplicarSIDIF(pending.sidifResult, pending.fname, modo);
+  const sel = document.getElementById('_sidif-periodo-sel');
+  let periodoOverride = null;
+  if (sel) {
+    const v = sel.value;
+    if (v === 'mes') periodoOverride = { tipo: 'mes' };
+    else if (v && v !== 'auto') periodoOverride = { tipo: 'semana', semana: parseInt(v) };
+  }
+  _aplicarSIDIF(pending.sidifResult, pending.fname, modo, periodoOverride);
 }
 
 // ── Parser de formato Ventas/Gastos mensual (acumulado por empresa) ──
@@ -18808,6 +18852,7 @@ function handleImportWorkbook(wb, fname) {
             ⚠ Posibles duplicados detectados — ${fname}
           </div>
           ${msgArchivo}${msgReg}
+          ${_sidifPeriodoSelectorHTML(sidifResult)}
           <div style="font-size:10px;color:var(--text);margin-bottom:12px;line-height:1.7">
             ¿Cómo querés proceder?
           </div>
@@ -18842,7 +18887,34 @@ function handleImportWorkbook(wb, fname) {
       return;
     }
 
-    // ── Sin duplicados: importar directamente ──────────────────────
+    // ── Sin duplicados ─────────────────────────────────────────────
+    const selHTML = _sidifPeriodoSelectorHTML(sidifResult);
+    if (selHTML) {
+      // Mostrar mini-diálogo solo para elegir período antes de importar
+      window._pendingSIDIF = { sidifResult, fname, cargaAnterior: null, rowsNuevos: sidifResult.rows };
+      document.getElementById('import-result').innerHTML = `
+        <div style="padding:14px;background:var(--s2);border:1px solid var(--bd2);
+          border-radius:5px;font-family:var(--mono)">
+          <div style="font-size:11px;font-weight:600;color:var(--acc);margin-bottom:8px">
+            ✓ ${sidifResult.rows.length} registros listos para importar — ${fname}
+          </div>
+          ${selHTML}
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button onclick="confirmarSIDIF('todos','${fname.replace(/'/g,"\\'")}',{})"
+              style="flex:1;padding:8px 12px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a40;
+              color:#1a9e68;font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono)">
+              ✓ Importar
+            </button>
+            <button onclick="confirmarSIDIF('cancelar','','{})"
+              style="padding:8px 12px;background:var(--s3);border:1px solid var(--bd2);
+              color:var(--dim);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono)">
+              ✕ Cancelar
+            </button>
+          </div>
+        </div>`;
+      document.getElementById('import-preview').style.display = 'none';
+      return;
+    }
     _aplicarSIDIF(sidifResult, fname, 'todos');
     return;
   }
