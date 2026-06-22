@@ -14412,6 +14412,137 @@ function restaurarTransDesdeBackup() {
 }
 
 
+// ── Feriados nacionales argentinos fijos (dd-mm) ─────────────────────────────
+const _FERIADOS_AR_FIJOS = new Set([
+  '01-01','01-05','09-07','25-12','08-12', // Año nuevo, Día del Trabajador, Independencia, Navidad, Inmaculada
+  '20-06','17-08','12-10','20-11',          // Güemes, San Martín, Diversidad Cultural, Soberanía
+]);
+// Feriados movibles por año (Carnaval lunes/martes, Semana Santa jue/vie, puentes declarados)
+// Solo años disponibles; se puede extender manualmente.
+const _FERIADOS_AR_MOVIBLES = {
+  2024: new Set(['12-02','13-02','28-03','29-03','01-04']),
+  2025: new Set(['03-03','04-03','17-04','18-04','02-04']),
+  2026: new Set(['16-02','17-02','02-04','03-04']),
+};
+
+function _esFeriadoAR(fecha) {
+  const dd = String(fecha.getDate()).padStart(2,'0');
+  const mm = String(fecha.getMonth()+1).padStart(2,'0');
+  const key = `${dd}-${mm}`;
+  if (_FERIADOS_AR_FIJOS.has(key)) return true;
+  const mov = _FERIADOS_AR_MOVIBLES[fecha.getFullYear()];
+  return mov ? mov.has(key) : false;
+}
+
+// Número de semana ISO 8601
+function _isoWeek(d) {
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+}
+
+// Semanas con al menos un día hábil (lun-vie, no feriado) hasta 'hasta' inclusive
+function _semanasLaboralesHasta(anio, hasta) {
+  const semanas = new Set();
+  const fin = new Date(Math.min(hasta.getTime(), new Date(anio, 11, 31).getTime()));
+  let d = new Date(anio, 0, 1);
+  while (d <= fin) {
+    const dow = d.getDay(); // 0=dom,6=sab
+    if (dow >= 1 && dow <= 5 && !_esFeriadoAR(d)) semanas.add(_isoWeek(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return [...semanas].sort((a,b) => a-b);
+}
+
+// Semanas ISO cubiertas por un mes completo (cualquier día hábil del mes)
+function _semanasDelMes(anio, mes) {
+  const semanas = new Set();
+  const dias = new Date(anio, mes, 0).getDate(); // días en el mes
+  for (let d = 1; d <= dias; d++) {
+    const fecha = new Date(anio, mes-1, d);
+    const dow = fecha.getDay();
+    if (dow >= 1 && dow <= 5 && !_esFeriadoAR(fecha)) semanas.add(_isoWeek(fecha));
+  }
+  return semanas;
+}
+
+function _alertaTransCoberturaUpdate() {
+  const el = document.getElementById('trans-alerta-meses');
+  if (!el) return;
+
+  const MESES_NOM = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const hoy = new Date();
+  const anioActual = hoy.getFullYear();
+
+  const trans = DATA.transferencias || [];
+  const aniosConDatos = [...new Set(trans.map(t=>t.año).filter(Boolean))].sort((a,b)=>a-b);
+  if (!aniosConDatos.length) { el.style.display='none'; return; }
+  const anioRef = Math.max(...aniosConDatos);
+
+  const limite = anioRef === anioActual ? hoy : new Date(anioRef, 11, 31);
+  const semanasEsperadas = _semanasLaboralesHasta(anioRef, limite);
+  if (!semanasEsperadas.length) { el.style.display='none'; return; }
+
+  // Semanas cubiertas por registros del año de referencia
+  const semanasCubiertas = new Set();
+  trans.filter(t => t.año === anioRef).forEach(t => {
+    if (t.semana) {
+      semanasCubiertas.add(t.semana);
+    } else if (t.esMesCompleto && t.mes) {
+      // Carga por mes completo: marcar todas las semanas hábiles de ese mes
+      _semanasDelMes(anioRef, t.mes).forEach(s => semanasCubiertas.add(s));
+    } else if (t.mes) {
+      // Sin semana pero con mes: asumir mes completo cubierto
+      _semanasDelMes(anioRef, t.mes).forEach(s => semanasCubiertas.add(s));
+    }
+  });
+
+  const semanasFaltantes = semanasEsperadas.filter(s => !semanasCubiertas.has(s));
+
+  if (!semanasFaltantes.length) {
+    el.style.display = 'none'; el.innerHTML = ''; return;
+  }
+
+  // Agrupar semanas faltantes en rangos consecutivos para legibilidad
+  const rangos = [];
+  let ini = semanasFaltantes[0], ant = ini;
+  for (let i = 1; i <= semanasFaltantes.length; i++) {
+    const cur = semanasFaltantes[i];
+    if (cur === ant + 1) { ant = cur; continue; }
+    rangos.push(ini === ant ? `Sem ${ini}` : `Sem ${ini}–${ant}`);
+    ini = ant = cur;
+  }
+  const semsLabel = semanasFaltantes.length === 1
+    ? `1 semana faltante`
+    : `${semanasFaltantes.length} semanas faltantes`;
+
+  // Detectar si hay meses enteros sin ningún dato (para mostrar también)
+  const mesesConDatos = new Set(trans.filter(t=>t.año===anioRef&&t.mes).map(t=>t.mes));
+  const mesLimite = anioRef === anioActual ? hoy.getMonth() : 11; // 0-based hasta mes anterior
+  const mesesFaltantes = [];
+  for (let m = 1; m <= mesLimite; m++) {
+    if (!mesesConDatos.has(m)) mesesFaltantes.push(MESES_NOM[m-1]);
+  }
+  const mesesLabel = mesesFaltantes.length
+    ? `<br><span style="color:#f5c57a">Meses sin ningún dato: <strong>${mesesFaltantes.join(', ')}</strong></span>`
+    : '';
+
+  el.style.display = '';
+  el.innerHTML = `
+    <div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;padding:9px 14px;margin:6px 0;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <span style="color:#fbbf24;font-size:12pt;line-height:1.3">⚠</span>
+      <div style="color:#fde68a;font-size:9pt;font-family:var(--mono);line-height:1.6">
+        <strong>${anioRef} — ${semsLabel}:</strong> ${rangos.join(', ')}
+        ${mesesLabel}
+        <span style="color:#a8762e;display:block;font-size:8pt;margin-top:2px">
+          Verificar si corresponden a semanas sin carga o a feriados no contemplados
+        </span>
+      </div>
+    </div>`;
+}
+
 function buildTransferencias() {
   const empty   = document.getElementById('trans-empty');
   const content = document.getElementById('trans-content');
@@ -14452,46 +14583,8 @@ function buildTransferencias() {
       <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(1)}% del total</div>
     </div>`).join('')}`;
 
-  // ── Alerta de meses faltantes ────────────────────────────────
-  const alertaMesesEl = document.getElementById('trans-alerta-meses');
-  if (alertaMesesEl) {
-    const MESES_NOM = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    const hoyD  = new Date();
-    const anioActual = hoyD.getFullYear();
-    const mesActual  = hoyD.getMonth() + 1; // 1-12
-
-    // Detectar años con datos
-    const aniosConDatos = [...new Set((DATA.transferencias||[]).map(t=>t.año).filter(Boolean))].sort();
-    const anioRef = aniosConDatos.length ? Math.max(...aniosConDatos) : anioActual;
-
-    // Meses cargados para el año de referencia
-    const mesesCargados = new Set(
-      (DATA.transferencias||[]).filter(t=>t.año===anioRef && t.mes).map(t=>t.mes)
-    );
-    // Meses esperados: del 1 hasta el mes anterior al actual (si mismo año) o hasta diciembre
-    const mesLimite = anioRef === anioActual ? mesActual - 1 : 12;
-    const mesesFaltantes = [];
-    for (let m = 1; m <= mesLimite; m++) {
-      if (!mesesCargados.has(m)) mesesFaltantes.push(m);
-    }
-
-    if (mesesFaltantes.length) {
-      const lbls = mesesFaltantes.map(m => MESES_NOM[m-1]).join(', ');
-      alertaMesesEl.style.display = '';
-      alertaMesesEl.innerHTML = `
-        <div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;padding:8px 14px;margin:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span style="color:#fbbf24;font-size:11pt">⚠</span>
-          <span style="color:#fde68a;font-size:9pt;font-family:var(--mono)">
-            <strong>${anioRef}:</strong> meses sin transferencias cargadas: <strong>${lbls}</strong>
-            <span style="color:#a8762e"> — verificar si corresponden carga semanal o mensual pendiente</span>
-          </span>
-        </div>`;
-    } else {
-      alertaMesesEl.style.display = 'none';
-      alertaMesesEl.innerHTML = '';
-    }
-  }
+  // ── Alerta de semanas / meses faltantes ─────────────────────
+  _alertaTransCoberturaUpdate();
 
   // Contar registros sin año
   const sinAño = DATA.transferencias.filter(t => !t.año).length;
@@ -17017,10 +17110,27 @@ function tryParseSIDIF(wb, fname) {
 
       const categoria = clasificarTransferencia(cgto, observ, suel);
 
+      // Extraer semana o mes-completo del nombre del archivo
+      // Caso A: "Semana 23 2024.xlsx", "Sem_5.xlsx", "semana23.xlsx"
+      // Caso B: "Enero 2024.xlsx", "Mayo_2024.xlsx", "03 2024.xlsx"
+      const _fnLow = (fname || '').toLowerCase();
+      const _semMatch = _fnLow.match(/[Ss]em(?:ana)?[\s_\-]*(\d{1,2})/);
+      const _mesNomMatch = _fnLow.match(/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/);
+      const _mesNumMatch = !_mesNomMatch && _fnLow.match(/\b(0?[1-9]|1[0-2])\b/);
+      const _MESES_IDX = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
+      let _semana = _semMatch ? parseInt(_semMatch[1]) : null;
+      let _esMesCompleto = false;
+      if (!_semana) {
+        if (_mesNomMatch) { _esMesCompleto = true; }
+        else if (_mesNumMatch) { _esMesCompleto = true; }
+      }
+
       rows.push({ saf, organismo:org, beneficiario:ben, ff,
                   cgto: cgto || nroSIDIF,
                   observacion:observ, incluye_sueldos:suel,
                   mes:mes||null, año:año||null, importe:imp,
+                  semana: _semana,
+                  esMesCompleto: _esMesCompleto || false,
                   categoria, _hoja: sheetName,
                   _archivo: fname || '' }); // nombre del archivo de carga
     }
@@ -26233,12 +26343,14 @@ async function syncSoloTransferencias() {
       ff:           t.ff           || '',
       cgto:         t.cgto         || '',
       observacion:  t.observacion  || '',
-      mes:          t.mes          || '',
-      año:          t.año          || '',
-      importe:      t.importe      || 0,
-      categoria:    t.categoria    || 'Sin Clasificar',
-      _archivo:     t._archivo     || '',
-      _hoja:        t._hoja        || '',
+      mes:            t.mes             || '',
+      año:            t.año             || '',
+      importe:        t.importe         || 0,
+      categoria:      t.categoria       || 'Sin Clasificar',
+      semana:         t.semana          || '',
+      esMesCompleto:  t.esMesCompleto   ? 1 : '',
+      _archivo:       t._archivo        || '',
+      _hoja:          t._hoja           || '',
     }));
 
     const total = transRows.length;
@@ -26535,12 +26647,14 @@ function applyCloudData(cloud, opts) {
       ff:           r.ff           || '',
       cgto:         r.cgto         || '',
       observacion:  r.observacion  || '',
-      mes:          r.mes   ? (parseInt(r.mes) || 0) : 0,
-      año:          r.año   ? (parseInt(r.año) || 0) : 0,
-      importe:      parseFloat(r.importe) || 0,
-      categoria:    r.categoria    || 'Sin Clasificar',
-      _archivo:     r._archivo     || '',
-      _hoja:        r._hoja        || '',
+      mes:            r.mes   ? (parseInt(r.mes) || 0) : 0,
+      año:            r.año   ? (parseInt(r.año) || 0) : 0,
+      importe:        parseFloat(r.importe) || 0,
+      categoria:      r.categoria       || 'Sin Clasificar',
+      semana:         r.semana ? (parseInt(r.semana) || null) : null,
+      esMesCompleto:  r.esMesCompleto === 1 || r.esMesCompleto === '1' || r.esMesCompleto === true,
+      _archivo:       r._archivo        || '',
+      _hoja:          r._hoja           || '',
     }));
     // Recalcular años disponibles
     DATA.transferencias.forEach(t => {
