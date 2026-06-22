@@ -3262,7 +3262,7 @@ self.onmessage = async (e) => {
             <div style="position:relative;display:flex;align-items:center;justify-content:center">
               <canvas id="ch-trans-donut" style="max-height:260px;width:100%"></canvas>
             </div>
-            <div id="trans-donut-legend" style="margin-top:6px;flex:1"></div>
+            <div id="trans-donut-legend" style="margin-top:14px;flex:1;border-top:1px solid var(--bd);padding-top:6px"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -14570,45 +14570,34 @@ function _alertaTransCoberturaUpdate() {
   const mesLimite = anioRef === anioActual ? hoy.getMonth() : 11; // 0-based
 
   // Clasificar meses:
-  //   mesMensual  → todos los registros del mes sin semana (carga por mes completo)
-  //   mesSemanal  → al menos un registro con semana (carga semanal)
-  //   mesSinSemana→ registros con esMesCompleto=false explícito y sin semana (necesitan recarga)
-  // Regla: si UN registro del mes tiene semana, el mes es semanal.
-  //        Si ninguno tiene semana ni esMesCompleto=false, es mensual (legacy o mes completo).
+  //   mesMensual → tiene datos pero ningún registro con semana (carga mensual o legacy)
+  //   mesSemanal → al menos un registro con semana ISO calculada desde F.Registro PG
   const mesMensual   = new Set();
   const mesSemanal   = new Set();
-  const mesSinSemana = new Set();
   const mesesConDatos = new Set();
 
-  // Agrupar por mes
   const porMes = {};
   transAnio.forEach(t => {
     const mes = parseInt(t.mes); if (!mes) return;
     mesesConDatos.add(mes);
-    if (!porMes[mes]) porMes[mes] = { conSemana: 0, sinSemana: 0, sinSemanaExplicito: 0 };
+    if (!porMes[mes]) porMes[mes] = { conSemana: 0, total: 0 };
+    porMes[mes].total++;
     if (t.semana) porMes[mes].conSemana++;
-    else if (t.esMesCompleto === false) porMes[mes].sinSemanaExplicito++;
-    else porMes[mes].sinSemana++;
   });
 
   Object.entries(porMes).forEach(([mesStr, cnt]) => {
     const mes = parseInt(mesStr);
-    if (cnt.conSemana > 0) {
-      mesSemanal.add(mes);          // tiene al menos un registro con semana
-    } else if (cnt.sinSemanaExplicito > 0 && cnt.sinSemana === 0) {
-      mesSinSemana.add(mes);        // solo registros sin semana y esMesCompleto=false
-    } else {
-      mesMensual.add(mes);          // todo legacy o esMesCompleto=true → mes completo
-    }
+    if (cnt.conSemana > 0) mesSemanal.add(mes);
+    else                   mesMensual.add(mes);
   });
 
-  // Meses completamente sin datos
+  // Meses sin ningún dato
   const mesesFaltantes = [];
   for (let m = 1; m <= mesLimite; m++) {
     if (!mesesConDatos.has(m)) mesesFaltantes.push(MESES_NOM[m-1]);
   }
 
-  // Semanas cubiertas
+  // Semanas cubiertas (registros con semana + todas las semanas de meses mensuales)
   const semanasCubiertas = new Set();
   transAnio.forEach(t => { if (t.semana) semanasCubiertas.add(parseInt(t.semana)); });
   mesMensual.forEach(mes => _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s)));
@@ -14622,15 +14611,9 @@ function _alertaTransCoberturaUpdate() {
   });
   semanasFaltantes.sort((a,b) => a-b);
 
-  // Meses sin número de semana identificado
-  const mesesSinNumSem = [...mesSinSemana]
-    .filter(m => m <= (mesLimite + 1))
-    .sort((a,b) => a-b)
-    .map(m => MESES_NOM[m-1]);
-
-  const hayAlertas = semanasFaltantes.length || mesesFaltantes.length || mesesSinNumSem.length;
+  const hayAlertas = semanasFaltantes.length || mesesFaltantes.length;
   const hayMensual = mesMensual.size > 0;
-  if (!hayAlertas && !hayMensual) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!hayAlertas && !hayMensual && !mesSemanal.size) { el.style.display = 'none'; el.innerHTML = ''; return; }
 
   // Agrupar semanas faltantes con referencia de fechas aproximadas
   const rangos = [];
@@ -14662,23 +14645,26 @@ function _alertaTransCoberturaUpdate() {
   const semsLabel = semanasFaltantes.length
     ? `<strong>${semanasFaltantes.length} semana${semanasFaltantes.length>1?'s':''} sin datos:</strong> ${rangos.join(', ')}`
     : '';
-  const mesesSinNumLabel = mesesSinNumSem.length
-    ? `<strong>Sin número de semana identificado:</strong> ${mesesSinNumSem.join(', ')} — recargá los archivos para detectar faltantes`
-    : '';
   const mesesLabel = mesesFaltantes.length
     ? `<strong>Meses sin ningún registro:</strong> ${mesesFaltantes.join(', ')}`
     : '';
 
-  // Meses cargados como mes completo (informativo)
+  // Meses mensuales (informativo en verde)
   const mesesMensualNom = [...mesMensual]
-    .filter(m => m <= (mesLimite + 1))
-    .sort((a,b) => a-b)
-    .map(m => MESES_NOM[m-1]);
+    .filter(m => m <= (mesLimite + 1)).sort((a,b) => a-b).map(m => MESES_NOM[m-1]);
   const mesesMensualLabel = mesesMensualNom.length
     ? `<span style="color:#86efac"><strong>Mes completo:</strong> ${mesesMensualNom.join(', ')}</span>`
     : '';
 
-  const lineas = [semsLabel, mesesSinNumLabel, mesesLabel, mesesMensualLabel].filter(Boolean).join('<br>');
+  // Meses con carga semanal sin faltantes (informativo en verde)
+  const mesSemOK = [...mesSemanal].filter(m => {
+    return ![...semanasFaltantes].some(s => _semanasDelMes(anioRef, m).has(s));
+  }).sort((a,b)=>a-b).map(m=>MESES_NOM[m-1]);
+  const mesesSemLabel = mesSemOK.length
+    ? `<span style="color:#86efac"><strong>Semanal completo:</strong> ${mesSemOK.join(', ')}</span>`
+    : '';
+
+  const lineas = [semsLabel, mesesLabel, mesesMensualLabel, mesesSemLabel].filter(Boolean).join('<br>');
 
   const bgColor    = hayAlertas ? '#2a1a00' : '#0f2a1a';
   const bdColor    = hayAlertas ? '#b45309' : '#16a34a';
@@ -14780,8 +14766,8 @@ function buildTransferencias() {
       tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
     },
     _plugins: [ _donutCenterPlugin ],
-    cutout: '72%',
-    layout: { padding: 2 }
+    cutout: '80%',
+    layout: { padding: 4 }
   });
 
   // ── Tabla de referencias personalizada ───────────────────────
