@@ -14756,11 +14756,11 @@ function buildTransferencias() {
   },{
     plugins:{
       legend: { display: false },
-      tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvShort(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
+      tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
     },
     _plugins: [ _donutCenterPlugin ],
-    cutout: '65%',
-    layout: { padding: 8 }
+    cutout: '70%',
+    layout: { padding: { top: 4, bottom: 0, left: 4, right: 4 } }
   });
 
   // ── Tabla de referencias personalizada ───────────────────────
@@ -14770,12 +14770,12 @@ function buildTransferencias() {
       const pct = donutTotal > 0 ? (catTotals[c]/donutTotal*100) : 0;
       return `
         <div style="display:grid;grid-template-columns:10px 1fr auto auto;
-            gap:0 8px;align-items:center;padding:5px 4px;
+            gap:0 8px;align-items:center;padding:4px 2px;
             border-bottom:1px solid var(--bd)">
           <div style="width:10px;height:10px;border-radius:2px;background:${TRANS_COLORS[c]};flex-shrink:0"></div>
-          <div style="font-size:9pt;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c}</div>
-          <div style="font-size:9pt;color:var(--text);font-family:var(--mono);text-align:right;white-space:nowrap">${fvShort(catTotals[c])}</div>
-          <div style="font-size:8.5pt;color:var(--dim);font-family:var(--mono);text-align:right;white-space:nowrap;min-width:36px">${pct.toFixed(1)}%</div>
+          <div style="font-size:8.5pt;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c}</div>
+          <div style="font-size:8.5pt;color:var(--text);font-family:var(--mono);text-align:right;white-space:nowrap">${fvFull(catTotals[c])}</div>
+          <div style="font-size:8pt;color:var(--dim);font-family:var(--mono);text-align:right;white-space:nowrap;min-width:38px">${pct.toFixed(1)}%</div>
         </div>`;
     }).join('');
   }
@@ -17165,7 +17165,7 @@ function tryParseSIDIF(wb, fname) {
 
     const iSAF  = idx(['etd. emisora op','etd. emisora pg','etd','saf']);
     const iOrg  = idx(['denominación saf','organismo','saf']);
-    const iBen  = idx(['denominación beneficiario','beneficiario']);
+    const iBen  = idx(['denominación beneficiario','beneficiario','benef']);
     const iFF   = idx(['f.f.','ff ']);
     const iCGto = idx(['cgto','nro. sidif','nro sidif','sidif']);
     // También capturar el número SIDIF para identificar el pago
