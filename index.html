@@ -3259,8 +3259,8 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center">
-              <canvas id="ch-trans-donut" style="max-height:260px;width:100%"></canvas>
+            <div style="flex:1;min-height:0">
+              <canvas id="ch-trans-donut" style="max-height:300px;width:100%"></canvas>
             </div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
@@ -14737,10 +14737,20 @@ function buildTransferencias() {
     }]
   },{
     plugins:{
-      legend:{ position:'right', labels:{ color:'var(--text)', font:{size:10} } },
+      legend:{
+        position: 'bottom',
+        labels:{
+          color: 'var(--text)',
+          font: { size: 10 },
+          padding: 12,
+          boxWidth: 12,
+          boxHeight: 12,
+        }
+      },
       tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvShort(ctx.raw*1e6)} (${(ctx.raw/donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}%)` } }
     },
-    cutout:'58%'
+    cutout: '62%',
+    layout: { padding: { top: 8, bottom: 4 } }
   });
 
   // ── Gráfico barras: por beneficiario ─────────────────────────
