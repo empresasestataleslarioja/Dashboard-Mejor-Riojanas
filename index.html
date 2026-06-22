@@ -2883,6 +2883,7 @@ self.onmessage = async (e) => {
     <!-- ══ TRANSFERENCIAS ══════════════════════════════════════ -->
     <div class="panel" id="panel-transferencias">
       <div class="kpi-strip" id="kpi-trans"></div>
+      <div id="trans-alerta-meses" style="display:none"></div>
 
       <!-- filtros multi-selección estilo Excel -->
       <div class="sel-row" style="margin-bottom:8px;flex-wrap:wrap;gap:6px;align-items:center">
@@ -3266,6 +3267,7 @@ self.onmessage = async (e) => {
               <span class="card-hd-unit">$ millones</span>
             </div>
             <canvas id="ch-trans-saf" style="max-height:240px"></canvas>
+            <div id="saf-totales-tabla" style="margin-top:8px;overflow-x:auto"></div>
           </div>
         </div>
 
@@ -12178,34 +12180,35 @@ function _informeEjecutivoRender(emp) {
 
   // ── Sección 1: Diagnóstico general ───────────────────────────────────────────
   const diag = [];
+  const balRef = lastBal ? ` <span style="font-size:8pt;color:#888">(balance ${lastBal.periodo})</span>` : '';
   if (lastBal) {
     const dliq = lastBal.indicadores?.liquidez     || {};
     const dsol = lastBal.indicadores?.solvencia    || {};
     const dren = lastBal.indicadores?.rentabilidad || {};
     if (dliq.liquidez_corriente != null)
       diag.push(dliq.liquidez_corriente >= 1
-        ? `✓ Liquidez corriente adecuada (${r2(dliq.liquidez_corriente)}) — la empresa puede cubrir sus obligaciones de corto plazo`
-        : `✗ Liquidez corriente insuficiente (${r2(dliq.liquidez_corriente)}) — riesgo de incumplimiento de obligaciones corrientes`);
+        ? `✓ Liquidez corriente adecuada (${r2(dliq.liquidez_corriente)})${balRef} — puede cubrir obligaciones de corto plazo`
+        : `✗ Liquidez corriente insuficiente (${r2(dliq.liquidez_corriente)})${balRef} — riesgo de incumplimiento de obligaciones corrientes`);
     if (dliq.capital_trabajo != null)
       diag.push(dliq.capital_trabajo > 0
-        ? `✓ Capital de trabajo positivo (${m(dliq.capital_trabajo)})`
-        : `✗ Capital de trabajo negativo (${m(dliq.capital_trabajo)}) — tensión financiera de corto plazo`);
+        ? `✓ Capital de trabajo positivo (${m(dliq.capital_trabajo)})${balRef}`
+        : `✗ Capital de trabajo negativo (${m(dliq.capital_trabajo)})${balRef} — tensión financiera de corto plazo`);
     if (dsol.razon_endeudamiento != null)
       diag.push(dsol.razon_endeudamiento < 0.6
-        ? `✓ Endeudamiento controlado (${p(dsol.razon_endeudamiento)} del activo)`
-        : `✗ Endeudamiento elevado (${p(dsol.razon_endeudamiento)} del activo) — requiere monitoreo`);
+        ? `✓ Endeudamiento controlado (${p(dsol.razon_endeudamiento)} del activo)${balRef}`
+        : `✗ Endeudamiento elevado (${p(dsol.razon_endeudamiento)} del activo)${balRef} — requiere monitoreo`);
     if (dsol.patrimonio_neto != null)
       diag.push(dsol.patrimonio_neto > 0
-        ? `✓ Patrimonio neto positivo (${m(dsol.patrimonio_neto)})`
-        : `✗ Patrimonio neto negativo (${m(dsol.patrimonio_neto)}) — empresa técnicamente insolvente`);
+        ? `✓ Patrimonio neto positivo (${m(dsol.patrimonio_neto)})${balRef}`
+        : `✗ Patrimonio neto negativo (${m(dsol.patrimonio_neto)})${balRef} — empresa técnicamente insolvente`);
     if (dren.roe != null)
       diag.push(dren.roe > 0
-        ? `✓ Rentabilidad sobre patrimonio positiva — ROE ${p(dren.roe)}`
-        : `✗ ROE negativo (${p(dren.roe)}) — pérdidas sobre el patrimonio invertido`);
+        ? `✓ Rentabilidad sobre patrimonio positiva — ROE ${p(dren.roe)}${balRef}`
+        : `✗ ROE negativo (${p(dren.roe)})${balRef} — pérdidas sobre el patrimonio invertido`);
     if (dren.margen_operativo != null)
       diag.push(dren.margen_operativo > 0
-        ? `✓ Margen operativo positivo (${p(dren.margen_operativo)})`
-        : `✗ Margen operativo negativo (${p(dren.margen_operativo)}) — la operación no genera excedente`);
+        ? `✓ Margen operativo positivo (${p(dren.margen_operativo)})${balRef}`
+        : `✗ Margen operativo negativo (${p(dren.margen_operativo)})${balRef} — la operación no genera excedente`);
   }
   // Crecimiento real de facturación
   const uyrs = yearsConDatos.slice(-2);
@@ -12217,17 +12220,26 @@ function _informeEjecutivoRender(emp) {
       if (ipcPer) {
         const varReal = ((1 + varNom / 100) / (1 + ipcPer / 100) - 1) * 100;
         diag.push(varReal >= 0
-          ? `✓ Facturación con crecimiento real del ${varReal.toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`
-          : `△ Facturación con caída real del ${Math.abs(varReal).toFixed(1)}% entre ${uyrs[0]} y ${uyrs[1]} (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`);
+          ? `✓ Facturación ${uyrs[0]}→${uyrs[1]}: crecimiento real +${varReal.toFixed(1)}% (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`
+          : `△ Facturación ${uyrs[0]}→${uyrs[1]}: caída real ${varReal.toFixed(1)}% (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`);
+      } else {
+        diag.push(`△ Facturación ${uyrs[0]}→${uyrs[1]}: variación nominal ${pct(varNom)} (IPC no disponible para calcular variación real)`);
       }
     }
+  }
+  // Resultado del último año con datos
+  if (lastY && sit[lastY] != null) {
+    const s = sit[lastY];
+    diag.push(s >= 0
+      ? `✓ Resultado operativo positivo en ${lastY}: ${m(s)}`
+      : `✗ Resultado operativo negativo en ${lastY}: ${m(s)}`);
   }
   // Dependencia de transferencias
   if (lastT && lastF && lastT > 0) {
     const pctTrans = lastT / lastF * 100;
     diag.push(pctTrans > 50
-      ? `⚠ Transferencias estatales representan el ${pctTrans.toFixed(1)}% de la facturación — alta dependencia del aporte público`
-      : `△ Transferencias estatales: ${pctTrans.toFixed(1)}% de la facturación en ${lastY}`);
+      ? `⚠ Transferencias estatales en ${lastY}: ${m(lastT)} — representan el ${pctTrans.toFixed(1)}% de la facturación (alta dependencia del aporte público)`
+      : `△ Transferencias estatales en ${lastY}: ${m(lastT)} (${pctTrans.toFixed(1)}% de la facturación)`);
   }
 
   const htmlDiag = diag.length ? `
@@ -12235,7 +12247,11 @@ function _informeEjecutivoRender(emp) {
   <div class="ie-diag">${diag.join('<br>')}</div>` : '';
 
   // ── Sección 2: Facturación, resultado y transferencias ────────────────────────
-  const allYearsConTrans = [...new Set([...yearsConDatos, ...Object.keys(transXanio)])].sort();
+  // Normalizar a string para evitar duplicados por tipo (number vs string)
+  const allYearsConTrans = [...new Set([
+    ...yearsConDatos.map(String),
+    ...Object.keys(transXanio)
+  ])].sort();
   let htmlFact = '';
   if (allYearsConTrans.length) {
     const filas = allYearsConTrans.map(y => {
@@ -14436,6 +14452,47 @@ function buildTransferencias() {
       <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(1)}% del total</div>
     </div>`).join('')}`;
 
+  // ── Alerta de meses faltantes ────────────────────────────────
+  const alertaMesesEl = document.getElementById('trans-alerta-meses');
+  if (alertaMesesEl) {
+    const MESES_NOM = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                       'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const hoyD  = new Date();
+    const anioActual = hoyD.getFullYear();
+    const mesActual  = hoyD.getMonth() + 1; // 1-12
+
+    // Detectar años con datos
+    const aniosConDatos = [...new Set((DATA.transferencias||[]).map(t=>t.año).filter(Boolean))].sort();
+    const anioRef = aniosConDatos.length ? Math.max(...aniosConDatos) : anioActual;
+
+    // Meses cargados para el año de referencia
+    const mesesCargados = new Set(
+      (DATA.transferencias||[]).filter(t=>t.año===anioRef && t.mes).map(t=>t.mes)
+    );
+    // Meses esperados: del 1 hasta el mes anterior al actual (si mismo año) o hasta diciembre
+    const mesLimite = anioRef === anioActual ? mesActual - 1 : 12;
+    const mesesFaltantes = [];
+    for (let m = 1; m <= mesLimite; m++) {
+      if (!mesesCargados.has(m)) mesesFaltantes.push(m);
+    }
+
+    if (mesesFaltantes.length) {
+      const lbls = mesesFaltantes.map(m => MESES_NOM[m-1]).join(', ');
+      alertaMesesEl.style.display = '';
+      alertaMesesEl.innerHTML = `
+        <div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;padding:8px 14px;margin:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="color:#fbbf24;font-size:11pt">⚠</span>
+          <span style="color:#fde68a;font-size:9pt;font-family:var(--mono)">
+            <strong>${anioRef}:</strong> meses sin transferencias cargadas: <strong>${lbls}</strong>
+            <span style="color:#a8762e"> — verificar si corresponden carga semanal o mensual pendiente</span>
+          </span>
+        </div>`;
+    } else {
+      alertaMesesEl.style.display = 'none';
+      alertaMesesEl.innerHTML = '';
+    }
+  }
+
   // Contar registros sin año
   const sinAño = DATA.transferencias.filter(t => !t.año).length;
   const msgSinAño = sinAño > 0
@@ -14515,6 +14572,32 @@ function buildTransferencias() {
       y:{ stacked:true, ticks:{ callback:v=>fvShort(v*1e6) } }
     }
   });
+
+  // ── Tabla numérica de totales por SAF ─────────────────────────
+  const safTotalesEl = document.getElementById('saf-totales-tabla');
+  if (safTotalesEl && safs.length) {
+    const totalGeneral = safs.reduce((s,sf)=>s+Object.values(safMap[sf]).reduce((a,b)=>a+b,0),0);
+    safTotalesEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt;font-family:var(--mono)">
+      <thead><tr style="border-bottom:1px solid var(--bd2)">
+        <th style="text-align:left;padding:3px 6px;color:var(--dim)">SAF</th>
+        <th style="text-align:right;padding:3px 6px;color:var(--dim)">Total</th>
+        <th style="text-align:right;padding:3px 6px;color:var(--dim)">%</th>
+      </tr></thead>
+      <tbody>${safs.map(sf=>{
+        const tot=Object.values(safMap[sf]).reduce((a,b)=>a+b,0);
+        return `<tr style="border-bottom:1px solid var(--bd2)22">
+          <td style="padding:3px 6px;color:var(--text)">${sf.length>30?sf.slice(0,28)+'…':sf}</td>
+          <td style="padding:3px 6px;text-align:right;color:#47e8ff">${fv(tot)}</td>
+          <td style="padding:3px 6px;text-align:right;color:var(--dim)">${totalGeneral>0?(tot/totalGeneral*100).toFixed(1)+'%':'—'}</td>
+        </tr>`;
+      }).join('')}
+      <tr style="border-top:1px solid var(--bd2);font-weight:700">
+        <td style="padding:4px 6px;color:var(--text)">TOTAL</td>
+        <td style="padding:4px 6px;text-align:right;color:#47e8ff">${fv(totalGeneral)}</td>
+        <td style="padding:4px 6px;text-align:right;color:var(--dim)">100%</td>
+      </tr></tbody>
+    </table>`;
+  }
 
   // ── Gráfico barras horizontales: total por categoría ─────────
   mkChart('ch-trans-cat','bar',{
