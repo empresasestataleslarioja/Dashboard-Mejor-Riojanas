@@ -3260,7 +3260,7 @@ self.onmessage = async (e) => {
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
             <div style="position:relative;display:flex;align-items:center;justify-content:center">
-              <canvas id="ch-trans-donut" style="max-height:220px;width:100%"></canvas>
+              <canvas id="ch-trans-donut" style="max-height:260px;width:100%"></canvas>
             </div>
             <div id="trans-donut-legend" style="margin-top:6px;flex:1"></div>
           </div>
@@ -14569,31 +14569,38 @@ function _alertaTransCoberturaUpdate() {
   const transAnio = trans.filter(t => parseInt(t.año) === anioRef);
   const mesLimite = anioRef === anioActual ? hoy.getMonth() : 11; // 0-based
 
-  // Clasificar meses según tipo de carga:
-  //   "mensual"  → tiene registros con esMesCompleto=true o esMesCompleto=undefined (legacy)
-  //   "semanal"  → tiene registros con semana explícito (número)
-  //   "sinSemana"→ tiene registros con esMesCompleto=false pero sin semana (cargado semanalmente
-  //                pero sin número de semana identificado en el nombre del archivo)
-  const mesMensual  = new Set(); // cubierto completo
-  const mesSemanal  = new Set(); // analizar semanas faltantes
-  const mesSinSemana= new Set(); // registros semanales sin número → pedir recarga
+  // Clasificar meses:
+  //   mesMensual  → todos los registros del mes sin semana (carga por mes completo)
+  //   mesSemanal  → al menos un registro con semana (carga semanal)
+  //   mesSinSemana→ registros con esMesCompleto=false explícito y sin semana (necesitan recarga)
+  // Regla: si UN registro del mes tiene semana, el mes es semanal.
+  //        Si ninguno tiene semana ni esMesCompleto=false, es mensual (legacy o mes completo).
+  const mesMensual   = new Set();
+  const mesSemanal   = new Set();
+  const mesSinSemana = new Set();
   const mesesConDatos = new Set();
 
+  // Agrupar por mes
+  const porMes = {};
   transAnio.forEach(t => {
     const mes = parseInt(t.mes); if (!mes) return;
     mesesConDatos.add(mes);
-    if (t.semana) {
-      mesSemanal.add(mes);
-    } else if (t.esMesCompleto === false) {
-      // Cargado después del código de detección pero sin semana en el nombre
-      if (!mesSemanal.has(mes)) mesSinSemana.add(mes);
+    if (!porMes[mes]) porMes[mes] = { conSemana: 0, sinSemana: 0, sinSemanaExplicito: 0 };
+    if (t.semana) porMes[mes].conSemana++;
+    else if (t.esMesCompleto === false) porMes[mes].sinSemanaExplicito++;
+    else porMes[mes].sinSemana++;
+  });
+
+  Object.entries(porMes).forEach(([mesStr, cnt]) => {
+    const mes = parseInt(mesStr);
+    if (cnt.conSemana > 0) {
+      mesSemanal.add(mes);          // tiene al menos un registro con semana
+    } else if (cnt.sinSemanaExplicito > 0 && cnt.sinSemana === 0) {
+      mesSinSemana.add(mes);        // solo registros sin semana y esMesCompleto=false
     } else {
-      // esMesCompleto=true o undefined (legacy) → mensual
-      mesMensual.add(mes);
+      mesMensual.add(mes);          // todo legacy o esMesCompleto=true → mes completo
     }
   });
-  // Un mes promovido a semanal ya no es sinSemana
-  mesSemanal.forEach(m => mesSinSemana.delete(m));
 
   // Meses completamente sin datos
   const mesesFaltantes = [];
@@ -14601,10 +14608,9 @@ function _alertaTransCoberturaUpdate() {
     if (!mesesConDatos.has(m)) mesesFaltantes.push(MESES_NOM[m-1]);
   }
 
-  // Semanas cubiertas por registros con campo semana
+  // Semanas cubiertas
   const semanasCubiertas = new Set();
   transAnio.forEach(t => { if (t.semana) semanasCubiertas.add(parseInt(t.semana)); });
-  // Meses mensuales: marcar todas sus semanas como cubiertas
   mesMensual.forEach(mes => _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s)));
 
   // Semanas faltantes dentro de meses con carga semanal
@@ -14616,7 +14622,7 @@ function _alertaTransCoberturaUpdate() {
   });
   semanasFaltantes.sort((a,b) => a-b);
 
-  // Meses con registros semanales pero sin número de semana
+  // Meses sin número de semana identificado
   const mesesSinNumSem = [...mesSinSemana]
     .filter(m => m <= (mesLimite + 1))
     .sort((a,b) => a-b)
@@ -14626,14 +14632,29 @@ function _alertaTransCoberturaUpdate() {
   const hayMensual = mesMensual.size > 0;
   if (!hayAlertas && !hayMensual) { el.style.display = 'none'; el.innerHTML = ''; return; }
 
-  // Agrupar semanas faltantes en rangos
+  // Agrupar semanas faltantes con referencia de fechas aproximadas
   const rangos = [];
   if (semanasFaltantes.length) {
+    // Helper: fecha del lunes de una semana ISO
+    const _lunesISO = (anio, sem) => {
+      const jan4 = new Date(anio, 0, 4);
+      const lunes = new Date(jan4);
+      lunes.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1 + (sem - 1) * 7);
+      return lunes;
+    };
+    const _fmtCorto = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+
     let ini = semanasFaltantes[0], ant = ini;
     for (let i = 1; i <= semanasFaltantes.length; i++) {
       const cur = semanasFaltantes[i];
       if (cur === ant + 1) { ant = cur; continue; }
-      rangos.push(ini === ant ? `Sem ${ini}` : `Sem ${ini}–${ant}`);
+      const dIni  = _lunesISO(anioRef, ini);
+      const dFin  = _lunesISO(anioRef, ant);
+      dFin.setDate(dFin.getDate() + 4); // viernes
+      const ref = ini === ant
+        ? `Sem ${ini} (${_fmtCorto(dIni)}–${_fmtCorto(dFin)})`
+        : `Sem ${ini}–${ant} (${_fmtCorto(dIni)}–${_fmtCorto(dFin)})`;
+      rangos.push(ref);
       ini = ant = cur;
     }
   }
@@ -14759,8 +14780,8 @@ function buildTransferencias() {
       tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
     },
     _plugins: [ _donutCenterPlugin ],
-    cutout: '70%',
-    layout: { padding: { top: 4, bottom: 0, left: 4, right: 4 } }
+    cutout: '72%',
+    layout: { padding: 2 }
   });
 
   // ── Tabla de referencias personalizada ───────────────────────
