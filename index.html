@@ -14745,45 +14745,63 @@ function buildTransferencias() {
       const cx = (left+right)/2, cy = (top+bottom)/2;
       ctx.save();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#888'; ctx.font = '10px monospace';
-      ctx.fillText('TOTAL', cx, cy - 12);
-      ctx.fillStyle = '#e0e0e0'; ctx.font = 'bold 15px monospace';
-      ctx.fillText(fvShort(donutTotal), cx, cy + 8);
+      // Texto central: categoría al hover o total en reposo
+      const radius = Math.min(right-left, bottom-top) / 2 * (parseFloat('52')/100);
+      const fontSize = Math.max(10, Math.round(radius * 0.18));
+      ctx.fillStyle = 'rgba(180,180,180,0.55)';
+      ctx.font = `${Math.round(fontSize*0.75)}px var(--mono, monospace)`;
+      ctx.fillText('TOTAL', cx, cy - fontSize * 0.6);
+      ctx.fillStyle = '#d4d8e8';
+      ctx.font = `700 ${fontSize}px var(--mono, monospace)`;
+      ctx.fillText(fvShort(donutTotal), cx, cy + fontSize * 0.7);
       ctx.restore();
     }
   };
   mkChart('ch-trans-donut','doughnut',{
     labels:   donutCats,
     datasets: [{
-      data:            donutCats.map(c=>catTotals[c]/1e6),
-      backgroundColor: donutCats.map(c=>TRANS_COLORS[c]),
-      borderWidth: 2,
-      borderColor: '#0d0f1a',
+      data:             donutCats.map(c=>catTotals[c]/1e6),
+      backgroundColor:  donutCats.map(c=>TRANS_COLORS[c]),
+      hoverBackgroundColor: donutCats.map(c=>TRANS_COLORS[c]),
+      borderWidth:      3,
+      borderColor:      'var(--bg)',
+      hoverOffset:      8,
+      borderRadius:     4,
     }]
   },{
     plugins:{
       legend: { display: false },
-      tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)} (${(ctx.raw/donutTotal*100).toFixed(1)}%)` } }
+      tooltip:{ callbacks:{
+        label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)}`,
+        afterLabel: ctx => `  ${(ctx.raw / donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}% del total`
+      }}
     },
     _plugins: [ _donutCenterPlugin ],
-    cutout: '52%',
+    cutout: '56%',
     maintainAspectRatio: false,
-    layout: { padding: 0 }
+    layout: { padding: 8 }
   });
 
-  // ── Tabla de referencias personalizada ───────────────────────
+  // ── Leyenda personalizada con barra de porcentaje ─────────────
   const legendEl = document.getElementById('trans-donut-legend');
   if (legendEl) {
     legendEl.innerHTML = donutCats.map(c => {
       const pct = donutTotal > 0 ? (catTotals[c]/donutTotal*100) : 0;
       return `
-        <div style="display:grid;grid-template-columns:10px 1fr auto auto;
-            gap:0 8px;align-items:center;padding:4px 2px;
+        <div style="display:grid;grid-template-columns:12px 1fr auto;
+            gap:0 10px;align-items:center;padding:5px 0;
             border-bottom:1px solid var(--bd)">
-          <div style="width:10px;height:10px;border-radius:2px;background:${TRANS_COLORS[c]};flex-shrink:0"></div>
-          <div style="font-size:8.5pt;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c}</div>
-          <div style="font-size:8.5pt;color:var(--text);font-family:var(--mono);text-align:right;white-space:nowrap">${fvFull(catTotals[c])}</div>
-          <div style="font-size:8pt;color:var(--dim);font-family:var(--mono);text-align:right;white-space:nowrap;min-width:38px">${pct.toFixed(1)}%</div>
+          <div style="width:12px;height:12px;border-radius:3px;background:${TRANS_COLORS[c]}"></div>
+          <div>
+            <div style="font-size:8.5pt;color:var(--text)">${c}</div>
+            <div style="height:3px;background:var(--bd);border-radius:2px;margin-top:3px">
+              <div style="height:3px;width:${pct.toFixed(1)}%;background:${TRANS_COLORS[c]};border-radius:2px"></div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:8.5pt;color:var(--text);font-family:var(--mono);white-space:nowrap">${fvShort(catTotals[c])}</div>
+            <div style="font-size:7.5pt;color:var(--dim);font-family:var(--mono)">${pct.toFixed(1)}%</div>
+          </div>
         </div>`;
     }).join('');
   }
