@@ -3259,14 +3259,12 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="flex:1;min-height:0;display:flex;gap:14px;align-items:stretch;padding-bottom:4px">
-              <!-- donut: se expande en altura para llenar el card, cuadrado por aspect-ratio -->
-              <div style="flex:0 0 auto;height:100%;max-height:400px;aspect-ratio:1/1;position:relative;align-self:center">
-                <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
-              </div>
-              <!-- leyenda derecha, centrada verticalmente -->
-              <div id="trans-donut-legend" style="flex:1;min-width:0;align-self:center;overflow:hidden"></div>
+            <!-- donut: ancho 100% → cuadrado máximo → circunferencia grande -->
+            <div style="width:100%;aspect-ratio:1/1;position:relative">
+              <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
             </div>
+            <!-- leyenda debajo, ocupa el espacio restante -->
+            <div id="trans-donut-legend" style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -4938,14 +4936,14 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #panel-transferencias button    { display:none !important; }
   #panel-transferencias .kpi-strip { display:flex !important; flex-wrap:wrap !important; }
   #panel-transferencias canvas    { max-height:160px !important; }
-  /* Donut card en impresión: donut acotado + leyenda lateral visible */
-  #trans-donut-card { height:auto !important; }
-  #trans-donut-card > div:last-child { flex-direction:row !important; align-items:center !important; }
-  #trans-donut-card [style*="aspect-ratio"] {
-    height:150px !important; max-height:150px !important; width:150px !important; flex:0 0 150px !important;
-  }
-  #trans-donut-card canvas { max-height:150px !important; max-width:150px !important; }
-  #trans-donut-legend { display:flex !important; flex-direction:column !important; flex:1 !important; overflow:visible !important; }
+  /* Donut: layout horizontal en print — donut pequeño izquierda, leyenda derecha */
+  #trans-donut-card                { flex-direction:row !important; align-items:flex-start !important; flex-wrap:wrap !important; }
+  #trans-donut-card .card-hd       { width:100% !important; }
+  #trans-donut-card [style*="aspect-ratio"] { width:160px !important; aspect-ratio:1/1 !important; flex:0 0 160px !important; }
+  #trans-donut-card canvas         { max-height:160px !important; max-width:160px !important; }
+  #trans-donut-legend              { flex:1 !important; display:flex !important; flex-direction:column !important;
+                                     margin-top:0 !important; border-top:none !important; padding-top:0 !important;
+                                     padding-left:10px !important; overflow:visible !important; }
   #trans-multi-btns               { display:none !important; }
 
   /* ── RESULTADO — mostrar gráficos correctamente ─────────────────── */
