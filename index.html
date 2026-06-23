@@ -3254,18 +3254,18 @@ self.onmessage = async (e) => {
 
         <!-- fila superior: dona composición + barras por SAF -->
         <div class="row2" style="align-items:stretch">
-          <div class="card" style="display:flex;flex-direction:column;padding-bottom:12px">
+          <div class="card" id="trans-donut-card" style="display:flex;flex-direction:column">
             <div class="card-hd">
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="display:flex;flex:1;gap:12px;align-items:center;padding:8px 4px 0">
-              <!-- donut: cuadrado perfecto usando aspect-ratio nativo -->
-              <div style="flex:0 0 auto;width:clamp(200px,65%,360px);aspect-ratio:1/1;position:relative">
+            <div style="flex:1;min-height:0;display:flex;gap:14px;align-items:stretch;padding-bottom:4px">
+              <!-- donut: se expande en altura para llenar el card, cuadrado por aspect-ratio -->
+              <div style="flex:0 0 auto;height:100%;max-height:400px;aspect-ratio:1/1;position:relative;align-self:center">
                 <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
               </div>
-              <!-- leyenda derecha -->
-              <div id="trans-donut-legend" style="flex:1;min-width:0;overflow:hidden"></div>
+              <!-- leyenda derecha, centrada verticalmente -->
+              <div id="trans-donut-legend" style="flex:1;min-width:0;align-self:center;overflow:hidden"></div>
             </div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
@@ -4938,18 +4938,13 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #panel-transferencias button    { display:none !important; }
   #panel-transferencias .kpi-strip { display:flex !important; flex-wrap:wrap !important; }
   #panel-transferencias canvas    { max-height:160px !important; }
-  /* Donut card en impresión: layout fijo lado a lado, donut acotado, leyenda visible */
-  #panel-transferencias .row2 > .card:first-child {
-    display:flex !important; flex-direction:row !important;
-    align-items:center !important; gap:12px !important;
-    padding-bottom:8px !important;
+  /* Donut card en impresión: donut acotado + leyenda lateral visible */
+  #trans-donut-card { height:auto !important; }
+  #trans-donut-card > div:last-child { flex-direction:row !important; align-items:center !important; }
+  #trans-donut-card [style*="aspect-ratio"] {
+    height:150px !important; max-height:150px !important; width:150px !important; flex:0 0 150px !important;
   }
-  #panel-transferencias .row2 > .card:first-child [style*="aspect-ratio"] {
-    width:140px !important; height:140px !important; aspect-ratio:auto !important; flex:0 0 140px !important;
-  }
-  #panel-transferencias .row2 > .card:first-child canvas {
-    max-height:140px !important; width:140px !important; position:static !important;
-  }
+  #trans-donut-card canvas { max-height:150px !important; max-width:150px !important; }
   #trans-donut-legend { display:flex !important; flex-direction:column !important; flex:1 !important; overflow:visible !important; }
   #trans-multi-btns               { display:none !important; }
 
