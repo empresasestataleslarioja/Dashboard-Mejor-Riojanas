@@ -3259,12 +3259,14 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="display:flex;justify-content:center;align-items:center;padding:8px 0">
-              <div style="position:relative;width:min(100%,340px);padding-bottom:min(100%,340px)">
+            <div style="display:flex;flex:1;gap:12px;align-items:center;padding:8px 4px 0">
+              <!-- donut: cuadrado perfecto usando aspect-ratio nativo -->
+              <div style="flex:0 0 auto;width:clamp(160px,55%,280px);aspect-ratio:1/1;position:relative">
                 <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
               </div>
+              <!-- leyenda derecha -->
+              <div id="trans-donut-legend" style="flex:1;min-width:0;overflow:hidden"></div>
             </div>
-            <div id="trans-donut-legend" style="border-top:1px solid var(--bd);padding-top:6px;margin-top:0"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -14747,15 +14749,15 @@ function buildTransferencias() {
       const cx = (left+right)/2, cy = (top+bottom)/2;
       ctx.save();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      // Texto central: categoría al hover o total en reposo
-      const radius = Math.min(right-left, bottom-top) / 2 * (parseFloat('52')/100);
-      const fontSize = Math.max(10, Math.round(radius * 0.18));
-      ctx.fillStyle = 'rgba(180,180,180,0.55)';
-      ctx.font = `${Math.round(fontSize*0.75)}px var(--mono, monospace)`;
-      ctx.fillText('TOTAL', cx, cy - fontSize * 0.6);
+      const innerR = Math.min(right-left, bottom-top) / 2 * 0.50;
+      const fsLbl  = Math.max(8,  Math.round(innerR * 0.20));
+      const fsVal  = Math.max(11, Math.round(innerR * 0.32));
+      ctx.fillStyle = 'rgba(180,180,180,0.5)';
+      ctx.font = `${fsLbl}px var(--mono, monospace)`;
+      ctx.fillText('TOTAL', cx, cy - fsVal * 0.55);
       ctx.fillStyle = '#d4d8e8';
-      ctx.font = `700 ${fontSize}px var(--mono, monospace)`;
-      ctx.fillText(fvShort(donutTotal), cx, cy + fontSize * 0.7);
+      ctx.font = `700 ${fsVal}px var(--mono, monospace)`;
+      ctx.fillText(fvShort(donutTotal), cx, cy + fsLbl * 0.8);
       ctx.restore();
     }
   };
@@ -14767,42 +14769,38 @@ function buildTransferencias() {
       hoverBackgroundColor: donutCats.map(c=>TRANS_COLORS[c]),
       borderWidth:      3,
       borderColor:      'var(--bg)',
-      hoverOffset:      8,
-      borderRadius:     4,
+      hoverOffset:      6,
+      borderRadius:     3,
     }]
   },{
     plugins:{
       legend: { display: false },
       tooltip:{ callbacks:{
         label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)}`,
-        afterLabel: ctx => `  ${(ctx.raw / donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}% del total`
+        afterLabel: ctx => `  ${(ctx.raw / donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}%`
       }}
     },
     _plugins: [ _donutCenterPlugin ],
-    cutout: '56%',
+    cutout: '52%',
     maintainAspectRatio: false,
-    layout: { padding: 8 }
+    layout: { padding: 4 }
   });
 
-  // ── Leyenda personalizada con barra de porcentaje ─────────────
+  // ── Leyenda lateral compacta ──────────────────────────────────
   const legendEl = document.getElementById('trans-donut-legend');
   if (legendEl) {
     legendEl.innerHTML = donutCats.map(c => {
       const pct = donutTotal > 0 ? (catTotals[c]/donutTotal*100) : 0;
       return `
-        <div style="display:grid;grid-template-columns:12px 1fr auto;
-            gap:0 10px;align-items:center;padding:5px 0;
-            border-bottom:1px solid var(--bd)">
-          <div style="width:12px;height:12px;border-radius:3px;background:${TRANS_COLORS[c]}"></div>
-          <div>
-            <div style="font-size:8.5pt;color:var(--text)">${c}</div>
+        <div style="display:flex;align-items:flex-start;gap:7px;padding:5px 0;border-bottom:1px solid var(--bd)">
+          <div style="flex:0 0 10px;width:10px;height:10px;border-radius:2px;background:${TRANS_COLORS[c]};margin-top:2px"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:7.5pt;color:var(--dim);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c}</div>
+            <div style="font-size:8.5pt;font-weight:600;color:var(--text);font-family:var(--mono);white-space:nowrap">${fvFull(catTotals[c])}</div>
             <div style="height:3px;background:var(--bd);border-radius:2px;margin-top:3px">
               <div style="height:3px;width:${pct.toFixed(1)}%;background:${TRANS_COLORS[c]};border-radius:2px"></div>
             </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:8.5pt;color:var(--text);font-family:var(--mono);white-space:nowrap">${fvFull(catTotals[c])}</div>
-            <div style="font-size:7.5pt;color:var(--dim);font-family:var(--mono)">${pct.toFixed(1)}%</div>
+            <div style="font-size:7pt;color:var(--dim);font-family:var(--mono)">${pct.toFixed(1)}%</div>
           </div>
         </div>`;
     }).join('');
