@@ -3254,13 +3254,15 @@ self.onmessage = async (e) => {
 
         <!-- fila superior: dona composición + barras por SAF -->
         <div class="row2" style="align-items:stretch">
-          <div class="card" style="display:flex;flex-direction:column">
+          <div class="card" style="display:flex;flex-direction:column;padding-bottom:12px">
             <div class="card-hd">
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <canvas id="ch-trans-donut" style="width:100%;aspect-ratio:1;display:block"></canvas>
-            <div id="trans-donut-legend" style="border-top:1px solid var(--bd);padding-top:6px"></div>
+            <div style="position:relative;width:100%;padding-bottom:100%">
+              <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+            </div>
+            <div id="trans-donut-legend" style="border-top:1px solid var(--bd);padding-top:6px;margin-top:0"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -14765,7 +14767,7 @@ function buildTransferencias() {
     },
     _plugins: [ _donutCenterPlugin ],
     cutout: '52%',
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     layout: { padding: 0 }
   });
 
