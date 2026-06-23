@@ -24865,7 +24865,7 @@ function mostrarBalError(msg) {
 //  Reemplaza localStorage con sincronización centralizada
 // ═══════════════════════════════════════════════════════════════
 // Auto-sync — declaradas temprano para evitar acceso antes de inicialización
-var AUTOSYNC_DELAY = 15000;
+var AUTOSYNC_DELAY = 5000;
 var _autoSyncTimer = null;
 var _autoSyncEnabled = true;
 const LS_KEY      = 'lr_dashboard_data_v1';   // cache local
@@ -27737,6 +27737,8 @@ function saveDataToLocalCache() {
     };
     localStorage.setItem(LS_KEY, JSON.stringify(snap));
     actualizarIndicadorGuardado(snap.savedAt);
+    // Sheets es la fuente de verdad — disparar sync automático tras cada cambio
+    try { _dispararAutoSync(); } catch(e2) {}
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
       showStorageStatus('⚠ Almacenamiento local lleno — el navegador no tiene más espacio disponible (localStorage). Los datos se mantienen en memoria pero no se guardarán al cerrar la pestaña. Para liberar espacio: Configuración del sitio → Borrar datos del sitio, o exportá los datos antes de cerrar.', '#ff8c47');
@@ -27921,7 +27923,7 @@ function actualizarIndicadorGuardado(isoDate, extra) {
 // y luego sube automáticamente. Se cancela si hay otra modificación.
 // Auto-sync: declaraciones en el mismo bloque que las funciones que las usan
 if (typeof _autoSyncTimer === 'undefined')   var _autoSyncTimer = null;
-if (typeof AUTOSYNC_DELAY === 'undefined')   var AUTOSYNC_DELAY = 15000;
+if (typeof AUTOSYNC_DELAY === 'undefined')   var AUTOSYNC_DELAY = 5000;
 if (typeof _autoSyncEnabled === 'undefined') var _autoSyncEnabled = true;
 
 function _toggleAutoSync() {
@@ -28369,9 +28371,24 @@ setTimeout(() => {
     setTimeout(loadStateFromHash, 100);
   }
 
-  // Siempre cargar datos locales primero para mostrar algo de inmediato
+  // Cargar datos locales primero para mostrar algo de inmediato
   loadDataFromLocalCache();
   arrancar();
+
+  // Si Sheets está configurado, sincronizar automáticamente al abrir
+  // Sheets es la fuente de verdad — siempre prevalece sobre localStorage
+  if (_cloudUrl && _cloudToken) {
+    const ind = document.getElementById('save-indicator');
+    if (ind) { ind.textContent = '⟳ Actualizando desde Sheets…'; ind.style.color = '#47e8ff'; }
+    syncFromCloud(true).then(() => {
+      if (ind) { ind.textContent = '✓ Sincronizado con Sheets'; ind.style.color = '#47ffb4'; }
+      setTimeout(() => { if (ind && ind.textContent.includes('Sincronizado')) ind.textContent = ''; }, 4000);
+    }).catch(err => {
+      console.warn('[LR] Auto-sync startup fallido:', err);
+      if (ind) { ind.textContent = '⚠ Sin conexión a Sheets — mostrando datos locales'; ind.style.color = '#ff8c47'; }
+      setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
+    });
+  }
 
   // Advertir al usuario si cierra/recarga con cambios sin guardar en Sheets
   window.addEventListener('beforeunload', function(e) {
