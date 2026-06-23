@@ -6593,26 +6593,17 @@ function _rptTransferencias(autoPrint) {
   // Encabezado
   h.push(_rptHeader('Transferencias', subtitle));
 
-  // KPIs
-  h.push('<div class="kpi-row" id="sec_kpis">');
-  h.push('<div class="kp"><div class="kl">Total transferido</div><div class="kv">'+fM2(total)+'</div><div class="ks">'+nPagos.toLocaleString('es-AR')+' pagos · '+nBen+' beneficiarias</div></div>');
-  // Desglose por categorías — TODAS, no solo top 3
+  // KPIs: total + todas las categorías en una sola grilla uniforme
   var byCat = {};
   rows.forEach(function(r){ var k=r.categoria||'Otros'; byCat[k]=(byCat[k]||0)+(r.importe||0); });
   var cats = Object.entries(byCat).sort(function(a,b){return b[1]-a[1];});
-  // Las primeras 3 completan la fila superior junto al total
-  cats.slice(0,3).forEach(function(kv) {
+  h.push('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px" id="sec_kpis">');
+  h.push('<div class="kp"><div class="kl">Total transferido</div><div class="kv">'+fM2(total)+'</div><div class="ks">'+nPagos.toLocaleString('es-AR')+' pagos · '+nBen+' beneficiarias</div></div>');
+  cats.forEach(function(kv) {
     h.push('<div class="kp"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:12pt">'+fM2(kv[1])+'</div><div class="ks">'+(total?(kv[1]/total*100).toFixed(1):'0')+'% del total</div></div>');
   });
   h.push('</div>');
-  // Si hay más de 3 categorías, mostrar el resto en una grilla adicional
-  if (cats.length > 3) {
-    h.push('<div class="st">Todas las categorías</div>');
-    h.push('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px">');
-    cats.slice(3).forEach(function(kv) {
-      h.push('<div class="kp" style="padding:8px 10px"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:11pt">'+fM2(kv[1])+'</div><div class="ks">'+(total?(kv[1]/total*100).toFixed(1):'0')+'% del total</div></div>');
-    });
-    h.push('</div>');
+  if (false) { // bloque eliminado — ya no hay sección separada de categorías
   }
 
   // Fila 1: Composición + SAF (con leyendas capturadas del DOM)
