@@ -3259,12 +3259,8 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <!-- donut: ancho 100% → cuadrado máximo → circunferencia grande -->
-            <div style="width:100%;aspect-ratio:1/1;position:relative">
-              <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
-            </div>
-            <!-- leyenda debajo, ocupa el espacio restante -->
-            <div id="trans-donut-legend" style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"></div>
+            <canvas id="ch-trans-donut" style="width:100%;max-height:260px"></canvas>
+            <div id="trans-donut-legend" style="margin-top:6px;overflow-x:auto"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -4937,19 +4933,9 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #panel-transferencias .kpi-strip     { display:flex !important; flex-wrap:wrap !important; }
   #trans-multi-btns                    { display:none !important; }
 
-  /* Donut: en print layout horizontal — canvas acotado + leyenda visible al lado */
-  #trans-donut-card                    { flex-direction:row !important; flex-wrap:wrap !important; align-items:flex-start !important; }
-  #trans-donut-card .card-hd           { width:100% !important; margin-bottom:6px !important; }
-  #trans-donut-card > div:nth-child(2) { width:170px !important; height:170px !important; flex:0 0 170px !important; }
-  #trans-donut-card > div:nth-child(2) canvas { max-width:170px !important; max-height:170px !important; }
-  #trans-donut-legend                  { display:block !important; flex:1 !important; overflow:visible !important;
-                                         margin-top:0 !important; border-top:none !important;
-                                         padding-top:0 !important; padding-left:12px !important; }
-  #trans-donut-legend > div            { display:flex !important; }
-
-  /* SAF: mostrar tabla de referencias debajo del gráfico */
-  #saf-totales-tabla                   { display:block !important; overflow:visible !important; }
-  #panel-transferencias canvas         { max-height:180px !important; }
+  /* Leyendas de gráficos: siempre visibles en print */
+  #trans-donut-legend, #saf-totales-tabla { display:block !important; overflow:visible !important; }
+  #panel-transferencias canvas            { max-height:180px !important; }
 
   /* ── RESULTADO — mostrar gráficos correctamente ─────────────────── */
   #panel-resultado canvas         { max-height:180px !important; }
@@ -6567,6 +6553,25 @@ function _rptTransferencias(autoPrint) {
   var fechaStr = new Date().toLocaleDateString('es-AR',
     {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
+  // Capturar leyendas del DOM
+  function _capturarLeyenda(id) {
+    var el = document.getElementById(id);
+    if (!el) return '';
+    // Clonar y limpiar estilos con variables CSS no definidas en el reporte
+    var html = el.innerHTML;
+    // Reemplazar variables CSS por valores fijos para fondo blanco
+    html = html.replace(/var\(--text\)/g,'#111')
+               .replace(/var\(--dim\)/g,'#666')
+               .replace(/var\(--bd\)/g,'#ddd')
+               .replace(/var\(--bd2\)[a-z0-9]*\)?/gi,'#ccc')
+               .replace(/var\(--bd2\)/g,'#ccc')
+               .replace(/var\(--mono[^)]*\)/g,'monospace')
+               .replace(/var\(--[a-z0-9-]+\)/g,'inherit');
+    return '<div style="margin-top:8px;border-top:1px solid #ddd;padding-top:6px">'+html+'</div>';
+  }
+  var legendaDonut = _capturarLeyenda('trans-donut-legend');
+  var legendaSaf   = _capturarLeyenda('saf-totales-tabla');
+
   // CSS del reporte
   var css = _rptCSS() + '<style>'
     + '.img-chart{width:100%;display:block;border-radius:4px}'
@@ -6610,10 +6615,10 @@ function _rptTransferencias(autoPrint) {
     h.push('</div>');
   }
 
-  // Fila 1: Composición + SAF
+  // Fila 1: Composición + SAF (con leyendas capturadas del DOM)
   h.push('<div class="r2" id="sec_composicion">');
-  h.push('<div class="chart-card"><div class="chart-title">Composición por categoría <span class="chart-unit">$ total</span></div>'+(imgs.donut?'<img class="img-chart" src="'+imgs.donut+'">':'<p style="color:#999;font-size:8pt">Sin datos</p>')+'</div>');
-  h.push('<div class="chart-card"><div class="chart-title">Transferencias por SAF emisor <span class="chart-unit">$ millones</span></div>'+(imgs.saf?'<img class="img-chart" src="'+imgs.saf+'">':'<p style="color:#999;font-size:8pt">Sin datos</p>')+'</div>');
+  h.push('<div class="chart-card"><div class="chart-title">Composición por categoría <span class="chart-unit">$ total</span></div>'+(imgs.donut?'<img class="img-chart" src="'+imgs.donut+'">':'<p style="color:#999;font-size:8pt">Sin datos</p>')+legendaDonut+'</div>');
+  h.push('<div class="chart-card"><div class="chart-title">Transferencias por SAF emisor <span class="chart-unit">$ millones</span></div>'+(imgs.saf?'<img class="img-chart" src="'+imgs.saf+'">':'<p style="color:#999;font-size:8pt">Sin datos</p>')+legendaSaf+'</div>');
   h.push('</div>');
 
   // Por beneficiario
@@ -14793,7 +14798,7 @@ function buildTransferencias() {
     },
     _plugins: [ _donutCenterPlugin ],
     cutout: '52%',
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
     layout: { padding: 4 }
   });
 
