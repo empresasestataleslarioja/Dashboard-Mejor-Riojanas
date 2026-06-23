@@ -3549,6 +3549,9 @@ self.onmessage = async (e) => {
       <!-- Aviso de archivo duplicado — visible aunque bal-empty esté oculto -->
       <div id="bal-dup-msg" style="display:none;max-width:560px;margin:10px auto"></div>
 
+      <!-- Alerta de balances faltantes por año -->
+      <div id="bal-alerta-faltantes" style="display:none;max-width:760px;margin:8px auto 0"></div>
+
       <!-- Barra de progreso -->
       <div id="bal-progress" style="display:none;padding:36px 24px;text-align:center" class="rowfull card">
         <div id="bal-progress-icon" style="font-size:32px;margin-bottom:10px">📄</div>
@@ -4632,7 +4635,7 @@ document.addEventListener('DOMContentLoaded', checkAuth);
 
   /* ── BALANCES — reglas específicas ─────────────────────────────── */
   /* Ocultar UI de carga y controles que no van en impresión */
-  #bal-empty, #bal-progress, #bal-error-msg, #bal-dup-msg,
+  #bal-empty, #bal-progress, #bal-error-msg, #bal-dup-msg, #bal-alerta-faltantes,
   #btn-cargar-bal, #file-bal, #file-bal2, #file-bal-xlsx,
   #bal-comp-selector-row, #bal-editor-toggle, #bal-editor-wrap,
   #bal-raw-toggle, #bal-raw-wrap, #bal-vincular-card,
@@ -22258,6 +22261,7 @@ function actualizarFiltros() {
     if (_balEmpresaActiva) selEmp.value = _balEmpresaActiva;
   }
   _actualizarInfoEmpresa(_balEmpresaActiva);
+  _alertaBalFaltantesUpdate(_balEmpresaActiva);
   actualizarPeriodos();
 }
 
@@ -22274,9 +22278,53 @@ function _actualizarInfoEmpresa(emp) {
   }
 }
 
+function _alertaBalFaltantesUpdate(emp) {
+  const el = document.getElementById('bal-alerta-faltantes');
+  if (!el) return;
+  if (!emp) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  const añoActual = new Date().getFullYear();
+  const añoDesde  = 2020;
+  const bals = Object.values(_balances).filter(b => b.empresa === emp || b.vinculada === emp);
+  const añosCargados = new Set(bals.map(b => parseInt(b.periodo)).filter(n => !isNaN(n)));
+
+  const faltantes = [];
+  for (let a = añoDesde; a <= añoActual; a++) {
+    if (!añosCargados.has(a)) faltantes.push(a);
+  }
+
+  if (!faltantes.length) {
+    el.style.display = 'block';
+    el.innerHTML = `<div style="background:#0f2a1a;border:1px solid #16a34a;border-radius:4px;
+        padding:9px 14px;display:flex;align-items:flex-start;gap:10px">
+      <span style="font-size:12pt;flex-shrink:0;color:#4ade80">✓</span>
+      <div style="color:#bbf7d0;font-size:9pt;font-family:var(--mono);line-height:1.6">
+        Balances completos para <strong style="color:#4ade80">${emp}</strong>
+        — años ${añoDesde}–${añoActual} cargados correctamente.
+      </div></div>`;
+    return;
+  }
+
+  const cargados = [...añosCargados].filter(a => a >= añoDesde && a <= añoActual).sort();
+  const notaFinal = cargados.length
+    ? `<div style="color:#a8762e;font-size:8pt;margin-top:4px">Períodos cargados: ${cargados.join(' · ')}</div>`
+    : `<div style="color:#a8762e;font-size:8pt;margin-top:4px">No hay ningún balance cargado para esta empresa.</div>`;
+
+  el.style.display = 'block';
+  el.innerHTML = `<div style="background:#2a1a00;border:1px solid #b45309;border-radius:4px;
+      padding:9px 14px;display:flex;align-items:flex-start;gap:10px">
+    <span style="font-size:12pt;flex-shrink:0;color:#fbbf24">⚠</span>
+    <div style="color:#fde68a;font-size:9pt;font-family:var(--mono);line-height:1.7">
+      <strong style="color:#f5c57a">${emp}</strong> — balances faltantes:
+      <strong style="color:#fbbf24">${faltantes.join(' · ')}</strong>
+      ${notaFinal}
+    </div></div>`;
+}
+
 function elegirEmpresaSel(emp) {
   _balEmpresaActiva = emp || null;
   _actualizarInfoEmpresa(emp);
+  _alertaBalFaltantesUpdate(emp);
   actualizarPeriodos();
 }
 
