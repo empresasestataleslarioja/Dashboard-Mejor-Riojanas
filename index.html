@@ -3259,10 +3259,8 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="position:relative;width:100%;height:300px">
-              <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
-            </div>
-            <div id="trans-donut-legend" style="border-top:1px solid var(--bd);padding-top:6px"></div>
+            <canvas id="ch-trans-donut" style="flex:1;width:100%;min-height:0"></canvas>
+            <div id="trans-donut-legend" style="border-top:1px solid var(--bd);padding-top:6px;margin:0"></div>
           </div>
           <div class="card" style="display:flex;flex-direction:column">
             <div class="card-hd">
@@ -14768,7 +14766,7 @@ function buildTransferencias() {
     _plugins: [ _donutCenterPlugin ],
     cutout: '52%',
     maintainAspectRatio: false,
-    layout: { padding: 6 }
+    layout: { padding: 0 }
   });
 
   // ── Tabla de referencias personalizada ───────────────────────
