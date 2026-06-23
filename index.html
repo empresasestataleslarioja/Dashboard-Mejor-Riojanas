@@ -3259,8 +3259,10 @@ self.onmessage = async (e) => {
               <span class="card-hd-title">Composición por categoría</span>
               <span class="card-hd-unit" id="trans-total-lbl">$ total</span>
             </div>
-            <div style="position:relative;width:100%;padding-bottom:100%">
-              <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+            <div style="display:flex;justify-content:center;align-items:center;padding:8px 0">
+              <div style="position:relative;width:min(100%,260px);padding-bottom:min(100%,260px)">
+                <canvas id="ch-trans-donut" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+              </div>
             </div>
             <div id="trans-donut-legend" style="border-top:1px solid var(--bd);padding-top:6px;margin-top:0"></div>
           </div>
@@ -14799,7 +14801,7 @@ function buildTransferencias() {
             </div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:8.5pt;color:var(--text);font-family:var(--mono);white-space:nowrap">${fvShort(catTotals[c])}</div>
+            <div style="font-size:8.5pt;color:var(--text);font-family:var(--mono);white-space:nowrap">${fvFull(catTotals[c])}</div>
             <div style="font-size:7.5pt;color:var(--dim);font-family:var(--mono)">${pct.toFixed(1)}%</div>
           </div>
         </div>`;
