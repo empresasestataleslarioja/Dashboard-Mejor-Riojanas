@@ -1507,10 +1507,44 @@ self.onmessage = async (e) => {
 
 <!-- Encabezado superior en impresión -->
 <div id="print-header" style="display:none">
-  <div style="width:100%;border-bottom:1.5px solid #333;padding-bottom:5px;
-    margin-bottom:10px;text-align:right">
-    <div style="font-size:13pt;font-weight:700;color:#111" id="print-titulo">Dashboard BI La Rioja</div>
-    <div style="font-size:8.5pt;color:#555;margin-top:2px" id="print-subtitulo"></div>
+  <div style="width:100%;border-bottom:1.5px solid #333;padding-bottom:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <!-- Logos institucionales -->
+    <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:44px">
+        <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
+        <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
+        <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
+        <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
+        <text x="95" y="190" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
+        <text x="95" y="211" font-family="Arial,sans-serif" font-weight="400" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
+      </svg>
+      <div style="width:1px;height:36px;background:#ccc"></div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:38px">
+        <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
+        <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/>
+        <rect x="12" y="13" width="5" height="21" fill="#9aaac8"/>
+        <rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
+        <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
+        <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
+        <circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>
+        <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
+        <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
+        <polygon points="0,34 34,34 0,68" fill="#C62828"/>
+        <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
+        <circle cx="46" cy="48" r="3" fill="#F9A825"/>
+        <circle cx="56" cy="54" r="3" fill="#F9A825"/>
+        <circle cx="46" cy="61" r="3" fill="#F9A825"/>
+        <circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
+        <text x="80" y="36" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
+        <text x="80" y="63" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
+        <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
+      </svg>
+    </div>
+    <!-- Título del panel -->
+    <div style="text-align:right">
+      <div style="font-size:13pt;font-weight:700;color:#111" id="print-titulo">Dashboard BI La Rioja</div>
+      <div style="font-size:8.5pt;color:#555;margin-top:2px" id="print-subtitulo"></div>
+    </div>
   </div>
 </div>
 
@@ -1725,6 +1759,41 @@ self.onmessage = async (e) => {
           onmouseout="this.style.borderColor='rgba(255,71,102,.25)';this.style.color='var(--dim)'">
           👤 <span id="login-user-lbl">—</span> ▾
         </button>
+
+        <!-- Logos institucionales topbar -->
+        <div style="display:flex;align-items:center;gap:8px;padding-left:8px;border-left:1px solid var(--bd);flex-shrink:0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:30px;opacity:.9" title="La Rioja Gobierno">
+            <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
+            <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
+            <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
+            <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
+            <text x="95" y="190" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
+            <text x="95" y="211" font-family="Arial,sans-serif" font-weight="400" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
+          </svg>
+          <div style="width:1px;height:22px;background:var(--bd)"></div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:28px;opacity:.9" title="Mejor Riojanas">
+            <!-- Escudo cuadrante -->
+            <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
+            <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/>
+            <rect x="12" y="13" width="5" height="21" fill="#9aaac8"/>
+            <rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
+            <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
+            <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
+            <circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>
+            <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
+            <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
+            <polygon points="0,34 34,34 0,68" fill="#C62828"/>
+            <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
+            <circle cx="46" cy="48" r="3" fill="#F9A825"/>
+            <circle cx="56" cy="54" r="3" fill="#F9A825"/>
+            <circle cx="46" cy="61" r="3" fill="#F9A825"/>
+            <circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
+            <!-- Texto -->
+            <text x="80" y="36" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
+            <text x="80" y="63" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
+            <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
+          </svg>
+        </div>
       </div>
 
     </div><!-- /topbar-row1 -->
@@ -5606,7 +5675,7 @@ function _rptCSS() {
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Courier New',monospace;font-size:10pt;color:#111;background:#fff}
   .pg{padding:14px 18px 20px}
-  .hdr{display:flex;justify-content:flex-end;border-bottom:1.5px solid #185fa5;padding-bottom:6px;margin-bottom:12px}
+  .hdr{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #185fa5;padding-bottom:8px;margin-bottom:12px;gap:12px}
   .ht{font-size:14pt;font-weight:700;color:#185fa5;text-align:right}
   .hs{font-size:9pt;color:#555;margin-top:3px;text-align:right}
   .kg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px}
@@ -5655,10 +5724,40 @@ function _rptCSS() {
 function _rptHeader(titulo, subtitulo) {
   const fecha = new Date().toLocaleDateString('es-AR',
     {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  return `<div class="hdr"><div>
-    <div class="ht">BI La Rioja — ${titulo}</div>
-    <div class="hs">${subtitulo}</div>
-  </div></div>`;
+  const svgLaRioja = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:46px">
+    <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
+    <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
+    <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
+    <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
+    <text x="95" y="190" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
+    <text x="95" y="211" font-family="Arial,sans-serif" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
+  </svg>`;
+  const svgMejor = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:42px">
+    <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
+    <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/><rect x="12" y="13" width="5" height="21" fill="#9aaac8"/><rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
+    <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
+    <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
+    <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
+    <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
+    <polygon points="0,34 34,34 0,68" fill="#C62828"/>
+    <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
+    <circle cx="46" cy="48" r="3" fill="#F9A825"/><circle cx="56" cy="54" r="3" fill="#F9A825"/><circle cx="46" cy="61" r="3" fill="#F9A825"/><circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
+    <text x="80" y="36" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
+    <text x="80" y="63" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
+    <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
+  </svg>`;
+  return `<div class="hdr">
+    <div style="display:flex;align-items:center;gap:14px">
+      ${svgLaRioja}
+      <div style="width:1px;height:38px;background:#ccc"></div>
+      ${svgMejor}
+    </div>
+    <div style="text-align:right">
+      <div class="ht">BI La Rioja — ${titulo}</div>
+      <div class="hs">${subtitulo}</div>
+      <div style="font-size:7pt;color:#aaa;margin-top:2px;font-family:monospace">${fecha}</div>
+    </div>
+  </div>`;
 }
 
 function _rptFooter() {
