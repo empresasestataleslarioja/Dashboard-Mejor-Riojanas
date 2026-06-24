@@ -6582,10 +6582,11 @@ function _rptBalanceEstado() {
   const añoActual = new Date().getFullYear();
   const añoDesde  = 2020;
 
-  // Empresas: combinar las que tienen balance con las registradas en _empresas
-  const empConBal = new Set(todos.map(b => b.empresa).filter(Boolean));
-  const empReg    = new Set(Object.keys(_empresas || {}));
-  const todasEmps = [...new Set([...empConBal, ...empReg])].sort();
+  // Empresa canónica: preferir vinculada, fallback a empresa
+  const empCanon = b => (b.vinculada || b.empresa || '(Sin empresa)').trim();
+
+  // Empresas únicas presentes en balances
+  const todasEmps = [...new Set(todos.map(empCanon))].sort();
 
   const años = [];
   for (let a = añoDesde; a <= añoActual; a++) años.push(a);
@@ -6593,32 +6594,30 @@ function _rptBalanceEstado() {
   // Mapa presentados: empresa → Set de años
   const presentados = {};
   todos.forEach(b => {
-    if (!b.empresa) return;
-    if (!presentados[b.empresa]) presentados[b.empresa] = new Set();
+    const emp = empCanon(b);
+    if (!presentados[emp]) presentados[emp] = new Set();
     const p = parseInt(b.periodo);
-    if (!isNaN(p)) presentados[b.empresa].add(p);
+    if (!isNaN(p)) presentados[emp].add(p);
   });
 
   const totalCeldas    = todasEmps.length * años.length;
-  const totalPresent   = todos.filter(b => { const p = parseInt(b.periodo); return !isNaN(p) && p >= añoDesde && p <= añoActual; }).length;
+  const totalPresent   = todasEmps.reduce((s, e) => s + años.filter(a => (presentados[e]||new Set()).has(a)).length, 0);
   const totalFaltantes = totalCeldas - totalPresent;
   const pct = totalCeldas ? Math.round(totalPresent / totalCeldas * 100) : 0;
 
-  // Encabezado de años
+  if (!todasEmps.length) { alert('No hay balances cargados.'); return; }
+
   const thAnios = años.map(a => `<th>${a}</th>`).join('');
 
-  // Filas por empresa
   const filas = todasEmps.map(emp => {
     const set = presentados[emp] || new Set();
     const celdas = años.map(a => {
-      const ok = set.has(a);
-      if (ok)  return `<td style="background:#d1fae5;color:#065f46;text-align:center;font-size:11px;font-weight:700">✓</td>`;
+      if (set.has(a)) return `<td style="background:#d1fae5;color:#065f46;text-align:center;font-size:11px;font-weight:700">✓</td>`;
       if (a > añoActual) return `<td style="background:#f9fafb;color:#d1d5db;text-align:center;font-size:10px">—</td>`;
       return `<td style="background:#fee2e2;color:#991b1b;text-align:center;font-size:11px;font-weight:700">✗</td>`;
     }).join('');
     const presCount = años.filter(a => set.has(a)).length;
     const pctEmp = Math.round(presCount / años.length * 100);
-    const barW = pctEmp;
     const barC = pctEmp === 100 ? '#10b981' : pctEmp >= 50 ? '#f59e0b' : '#ef4444';
     return `<tr>
       <td style="padding:5px 10px;font-size:10px;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb">${emp}</td>
@@ -6626,7 +6625,7 @@ function _rptBalanceEstado() {
       <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb">
         <div style="display:flex;align-items:center;gap:6px">
           <div style="flex:1;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">
-            <div style="width:${barW}%;height:100%;background:${barC};border-radius:4px"></div>
+            <div style="width:${pctEmp}%;height:100%;background:${barC};border-radius:4px"></div>
           </div>
           <span style="font-size:8.5px;font-family:monospace;color:${barC};font-weight:700;white-space:nowrap">${presCount}/${años.length}</span>
         </div>
@@ -6634,10 +6633,9 @@ function _rptBalanceEstado() {
     </tr>`;
   }).join('');
 
-  // Fila totales por año
   const totalesPorAno = años.map(a => {
-    const n = todasEmps.filter(e => (presentados[e] || new Set()).has(a)).length;
-    const c = n === todasEmps.length ? '#065f46' : n === 0 ? '#991b1b' : '#92400e';
+    const n = todasEmps.filter(e => (presentados[e]||new Set()).has(a)).length;
+    const c  = n === todasEmps.length ? '#065f46' : n === 0 ? '#991b1b' : '#92400e';
     const bg = n === todasEmps.length ? '#d1fae5' : n === 0 ? '#fee2e2' : '#fef3c7';
     return `<td style="text-align:center;font-size:9px;font-weight:700;font-family:monospace;background:${bg};color:${c};padding:5px 4px">${n}/${todasEmps.length}</td>`;
   }).join('');
@@ -6657,7 +6655,8 @@ function _rptBalanceEstado() {
   .header h1{font-size:18px;font-weight:700;margin-bottom:5px}
   .header .sub{font-size:9px;color:rgba(255,255,255,.6);letter-spacing:.05em;margin-bottom:10px}
   .badge{display:inline-block;background:rgba(255,255,255,.13);color:#fff;
-    font-size:8px;font-family:monospace;letter-spacing:.1em;padding:3px 9px;border-radius:20px;border:1px solid rgba(255,255,255,.2);margin-right:6px}
+    font-size:8px;font-family:monospace;letter-spacing:.1em;padding:3px 9px;border-radius:20px;
+    border:1px solid rgba(255,255,255,.2);margin-right:6px}
   .logos-area{display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0;opacity:.9}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
   .kpi{background:#fff;border-radius:8px;border:1px solid #e3e6f0;padding:14px 16px;
@@ -6676,7 +6675,6 @@ function _rptBalanceEstado() {
   th:last-child{text-align:left;min-width:100px}
   .leyenda{display:flex;gap:16px;padding:10px 16px;font-size:9px;color:#6b7280;
     border-top:1px solid #f0f0f0;background:#fafafa}
-  .leyenda span{display:flex;align-items:center;gap:5px}
   .footer{text-align:center;margin-top:20px;font-size:8px;color:#bbb;font-family:monospace}
   @media print{body{background:#fff}.page{padding:8px 10px}.card{break-inside:avoid}}
 </style>
@@ -6702,36 +6700,16 @@ function _rptBalanceEstado() {
       </div>
     </div>
   </div>
-
   <div class="kpis">
-    <div class="kpi">
-      <div class="v" style="color:#1a3a8f">${todasEmps.length}</div>
-      <div class="l">Empresas</div>
-    </div>
-    <div class="kpi">
-      <div class="v" style="color:#065f46">${totalPresent}</div>
-      <div class="l">Balances presentados</div>
-    </div>
-    <div class="kpi">
-      <div class="v" style="color:#991b1b">${totalFaltantes}</div>
-      <div class="l">Pendientes de presentación</div>
-    </div>
-    <div class="kpi">
-      <div class="v" style="color:${pct>=80?'#065f46':pct>=50?'#92400e':'#991b1b'}">${pct}%</div>
-      <div class="l">Cobertura total</div>
-    </div>
+    <div class="kpi"><div class="v" style="color:#1a3a8f">${todasEmps.length}</div><div class="l">Empresas</div></div>
+    <div class="kpi"><div class="v" style="color:#065f46">${totalPresent}</div><div class="l">Balances presentados</div></div>
+    <div class="kpi"><div class="v" style="color:#991b1b">${totalFaltantes}</div><div class="l">Pendientes</div></div>
+    <div class="kpi"><div class="v" style="color:${pct>=80?'#065f46':pct>=50?'#92400e':'#991b1b'}">${pct}%</div><div class="l">Cobertura total</div></div>
   </div>
-
   <div class="card">
     <div class="card-title">Detalle por empresa y año</div>
     <table>
-      <thead>
-        <tr>
-          <th>Empresa</th>
-          ${thAnios}
-          <th style="text-align:left;padding-left:10px">Cobertura</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Empresa</th>${thAnios}<th style="text-align:left;padding-left:10px">Cobertura</th></tr></thead>
       <tbody>
         ${filas}
         <tr style="background:#f0f4ff;font-weight:700">
@@ -6742,18 +6720,14 @@ function _rptBalanceEstado() {
       </tbody>
     </table>
     <div class="leyenda">
-      <span><span style="color:#065f46;font-weight:700;font-size:13px">✓</span> Balance presentado</span>
-      <span><span style="color:#991b1b;font-weight:700;font-size:13px">✗</span> Pendiente / no presentado</span>
-      <span><span style="color:#d1d5db;font-size:11px">—</span> Período no aplicable</span>
+      <span><span style="color:#065f46;font-weight:700;font-size:13px">✓</span> Presentado</span>
+      <span><span style="color:#991b1b;font-weight:700;font-size:13px">✗</span> Pendiente</span>
+      <span><span style="color:#d1d5db;font-size:11px">—</span> No aplicable</span>
     </div>
   </div>
-
-  <div class="footer">
-    Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; ${fecha}
-  </div>
+  <div class="footer">Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; ${fecha}</div>
 </div>
-</body>
-</html>`;
+</body></html>`;
 
   var overlay = document.getElementById('_rpt_overlay');
   if (!overlay) {
@@ -6767,10 +6741,10 @@ function _rptBalanceEstado() {
   var bar = document.createElement('div');
   bar.style.cssText = 'background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #333';
   bar.innerHTML = '<span style="color:#47e8ff;font-family:monospace;font-size:11px;flex:1">📋 Estado de Presentación de Balances</span>'
-    + '<button onclick="window.frames[\'_rpt_frame2\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
+    + '<button onclick="window.frames[\'_rpt_frame_est\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
     + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
   var iframe = document.createElement('iframe');
-  iframe.name = '_rpt_frame2';
+  iframe.name = '_rpt_frame_est';
   iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
   overlay.appendChild(bar);
   overlay.appendChild(iframe);
@@ -6796,10 +6770,10 @@ function _rptBalanceIntegral() {
   const fR = v => v == null ? '—' : Number(v).toFixed(2);
   const colNum = v => v == null ? '#888' : v >= 0 ? '#1a6e3c' : '#b91c1c';
 
-  // Agrupar por empresa
+  // Agrupar por empresa canónica (vinculada tiene prioridad sobre empresa)
   const porEmpresa = {};
   todos.forEach(b => {
-    const emp = b.empresa || '(Sin empresa)';
+    const emp = (b.vinculada || b.empresa || '(Sin empresa)').trim();
     if (!porEmpresa[emp]) porEmpresa[emp] = [];
     porEmpresa[emp].push(b);
   });
