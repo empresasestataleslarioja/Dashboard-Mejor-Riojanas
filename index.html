@@ -3635,6 +3635,11 @@ self.onmessage = async (e) => {
                   <input type="file" id="file-bal2" accept=".pdf,.xlsx,.xls" style="display:none"
                     onchange="loadBalanceArchivo(this.files[0])">
                 </label>
+                <button onclick="_rptBalanceEstado()" title="Balances presentados y faltantes por empresa y año"
+                  style="padding:8px 14px;background:rgba(100,100,80,.08);border:1px solid #47e8ff55;
+                  color:var(--acc);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600;white-space:nowrap">
+                  📋 Estado de Presentación
+                </button>
                 <button onclick="_rptBalanceIntegral()" title="Reporte integral de balances por empresa y año"
                   style="padding:8px 14px;background:rgba(100,100,80,.08);border:1px solid #47e8ff55;
                   color:var(--acc);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600;white-space:nowrap">
@@ -6566,6 +6571,211 @@ function _rptBalance(autoPrint) {
 </div>
 </body>
 </html>`;
+}
+
+// ══════════════════════════════════════════════════
+//   REPORTE: ESTADO DE PRESENTACIÓN DE BALANCES
+// ══════════════════════════════════════════════════
+function _rptBalanceEstado() {
+  const todos = Object.values(_balances);
+  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const añoActual = new Date().getFullYear();
+  const añoDesde  = 2020;
+
+  // Empresas: combinar las que tienen balance con las registradas en _empresas
+  const empConBal = new Set(todos.map(b => b.empresa).filter(Boolean));
+  const empReg    = new Set(Object.keys(_empresas || {}));
+  const todasEmps = [...new Set([...empConBal, ...empReg])].sort();
+
+  const años = [];
+  for (let a = añoDesde; a <= añoActual; a++) años.push(a);
+
+  // Mapa presentados: empresa → Set de años
+  const presentados = {};
+  todos.forEach(b => {
+    if (!b.empresa) return;
+    if (!presentados[b.empresa]) presentados[b.empresa] = new Set();
+    const p = parseInt(b.periodo);
+    if (!isNaN(p)) presentados[b.empresa].add(p);
+  });
+
+  const totalCeldas    = todasEmps.length * años.length;
+  const totalPresent   = todos.filter(b => { const p = parseInt(b.periodo); return !isNaN(p) && p >= añoDesde && p <= añoActual; }).length;
+  const totalFaltantes = totalCeldas - totalPresent;
+  const pct = totalCeldas ? Math.round(totalPresent / totalCeldas * 100) : 0;
+
+  // Encabezado de años
+  const thAnios = años.map(a => `<th>${a}</th>`).join('');
+
+  // Filas por empresa
+  const filas = todasEmps.map(emp => {
+    const set = presentados[emp] || new Set();
+    const celdas = años.map(a => {
+      const ok = set.has(a);
+      if (ok)  return `<td style="background:#d1fae5;color:#065f46;text-align:center;font-size:11px;font-weight:700">✓</td>`;
+      if (a > añoActual) return `<td style="background:#f9fafb;color:#d1d5db;text-align:center;font-size:10px">—</td>`;
+      return `<td style="background:#fee2e2;color:#991b1b;text-align:center;font-size:11px;font-weight:700">✗</td>`;
+    }).join('');
+    const presCount = años.filter(a => set.has(a)).length;
+    const pctEmp = Math.round(presCount / años.length * 100);
+    const barW = pctEmp;
+    const barC = pctEmp === 100 ? '#10b981' : pctEmp >= 50 ? '#f59e0b' : '#ef4444';
+    return `<tr>
+      <td style="padding:5px 10px;font-size:10px;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb">${emp}</td>
+      ${celdas}
+      <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">
+            <div style="width:${barW}%;height:100%;background:${barC};border-radius:4px"></div>
+          </div>
+          <span style="font-size:8.5px;font-family:monospace;color:${barC};font-weight:700;white-space:nowrap">${presCount}/${años.length}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Fila totales por año
+  const totalesPorAno = años.map(a => {
+    const n = todasEmps.filter(e => (presentados[e] || new Set()).has(a)).length;
+    const c = n === todasEmps.length ? '#065f46' : n === 0 ? '#991b1b' : '#92400e';
+    const bg = n === todasEmps.length ? '#d1fae5' : n === 0 ? '#fee2e2' : '#fef3c7';
+    return `<td style="text-align:center;font-size:9px;font-weight:700;font-family:monospace;background:${bg};color:${c};padding:5px 4px">${n}/${todasEmps.length}</td>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8">
+<title>Estado de Presentación de Balances</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f8;color:#1e1e2d;font-size:11px}
+  .page{max-width:1020px;margin:0 auto;padding:28px 20px}
+  .header{background:linear-gradient(135deg,#0d1b4b 0%,#1a3a8f 60%,#1565c0 100%);
+    color:#fff;padding:26px 30px 22px;border-radius:10px;margin-bottom:20px;
+    box-shadow:0 4px 18px rgba(21,101,192,.25)}
+  .header-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+  .header h1{font-size:18px;font-weight:700;margin-bottom:5px}
+  .header .sub{font-size:9px;color:rgba(255,255,255,.6);letter-spacing:.05em;margin-bottom:10px}
+  .badge{display:inline-block;background:rgba(255,255,255,.13);color:#fff;
+    font-size:8px;font-family:monospace;letter-spacing:.1em;padding:3px 9px;border-radius:20px;border:1px solid rgba(255,255,255,.2);margin-right:6px}
+  .logos-area{display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0;opacity:.9}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .kpi{background:#fff;border-radius:8px;border:1px solid #e3e6f0;padding:14px 16px;
+    text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .kpi .v{font-size:24px;font-weight:700;font-family:monospace}
+  .kpi .l{font-size:8px;color:#9ea3b8;text-transform:uppercase;letter-spacing:.1em;margin-top:4px}
+  .card{background:#fff;border-radius:8px;border:1px solid #e3e6f0;
+    overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.05);margin-bottom:16px}
+  .card-title{padding:12px 16px 8px;font-size:11px;font-weight:700;color:#0d1b4b;
+    letter-spacing:.05em;border-bottom:1px solid #e5e7eb}
+  table{width:100%;border-collapse:collapse}
+  thead tr{background:#f0f4ff}
+  th{font-size:8.5px;font-weight:700;color:#1a3a8f;text-transform:uppercase;
+    letter-spacing:.06em;padding:7px 4px;text-align:center;border-bottom:2px solid #c5cae9;white-space:nowrap}
+  th:first-child{text-align:left;padding-left:10px;min-width:160px}
+  th:last-child{text-align:left;min-width:100px}
+  .leyenda{display:flex;gap:16px;padding:10px 16px;font-size:9px;color:#6b7280;
+    border-top:1px solid #f0f0f0;background:#fafafa}
+  .leyenda span{display:flex;align-items:center;gap:5px}
+  .footer{text-align:center;margin-top:20px;font-size:8px;color:#bbb;font-family:monospace}
+  @media print{body{background:#fff}.page{padding:8px 10px}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="header-inner">
+      <div>
+        <div class="sub">ESTADO DE PRESENTACIÓN</div>
+        <h1>Balances Presentados y Pendientes</h1>
+        <div class="sub">Empresas Estatales · Provincia de La Rioja</div>
+        <div style="margin-top:10px">
+          <span class="badge">${todasEmps.length} EMPRESAS</span>
+          <span class="badge">${añoDesde}–${añoActual}</span>
+          <span class="badge">${fecha}</span>
+        </div>
+      </div>
+      <div class="logos-area">
+        ${_svgLaRioja(44)}
+        <div style="width:1px;height:38px;background:rgba(255,255,255,.3)"></div>
+        ${_svgMejorRiojanas(38)}
+      </div>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="v" style="color:#1a3a8f">${todasEmps.length}</div>
+      <div class="l">Empresas</div>
+    </div>
+    <div class="kpi">
+      <div class="v" style="color:#065f46">${totalPresent}</div>
+      <div class="l">Balances presentados</div>
+    </div>
+    <div class="kpi">
+      <div class="v" style="color:#991b1b">${totalFaltantes}</div>
+      <div class="l">Pendientes de presentación</div>
+    </div>
+    <div class="kpi">
+      <div class="v" style="color:${pct>=80?'#065f46':pct>=50?'#92400e':'#991b1b'}">${pct}%</div>
+      <div class="l">Cobertura total</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Detalle por empresa y año</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          ${thAnios}
+          <th style="text-align:left;padding-left:10px">Cobertura</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filas}
+        <tr style="background:#f0f4ff;font-weight:700">
+          <td style="padding:6px 10px;font-size:9px;font-weight:700;color:#1a3a8f">TOTAL POR AÑO</td>
+          ${totalesPorAno}
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="leyenda">
+      <span><span style="color:#065f46;font-weight:700;font-size:13px">✓</span> Balance presentado</span>
+      <span><span style="color:#991b1b;font-weight:700;font-size:13px">✗</span> Pendiente / no presentado</span>
+      <span><span style="color:#d1d5db;font-size:11px">—</span> Período no aplicable</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; ${fecha}
+  </div>
+</div>
+</body>
+</html>`;
+
+  var overlay = document.getElementById('_rpt_overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = '_rpt_overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:#000;display:flex;flex-direction:column';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = '';
+  overlay.style.display = 'flex';
+  var bar = document.createElement('div');
+  bar.style.cssText = 'background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #333';
+  bar.innerHTML = '<span style="color:#47e8ff;font-family:monospace;font-size:11px;flex:1">📋 Estado de Presentación de Balances</span>'
+    + '<button onclick="window.frames[\'_rpt_frame2\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
+    + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
+  var iframe = document.createElement('iframe');
+  iframe.name = '_rpt_frame2';
+  iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
 }
 
 // ══════════════════════════════════════════════════
