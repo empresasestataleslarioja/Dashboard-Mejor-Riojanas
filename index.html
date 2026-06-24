@@ -1508,39 +1508,7 @@ self.onmessage = async (e) => {
 <!-- Encabezado superior en impresión -->
 <div id="print-header" style="display:none">
   <div style="width:100%;border-bottom:1.5px solid #333;padding-bottom:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-    <!-- Logos institucionales -->
-    <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:44px">
-        <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
-        <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
-        <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
-        <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
-        <text x="95" y="190" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
-        <text x="95" y="211" font-family="Arial,sans-serif" font-weight="400" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
-      </svg>
-      <div style="width:1px;height:36px;background:#ccc"></div>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:38px">
-        <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
-        <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/>
-        <rect x="12" y="13" width="5" height="21" fill="#9aaac8"/>
-        <rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
-        <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
-        <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
-        <circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>
-        <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
-        <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
-        <polygon points="0,34 34,34 0,68" fill="#C62828"/>
-        <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
-        <circle cx="46" cy="48" r="3" fill="#F9A825"/>
-        <circle cx="56" cy="54" r="3" fill="#F9A825"/>
-        <circle cx="46" cy="61" r="3" fill="#F9A825"/>
-        <circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
-        <text x="80" y="36" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
-        <text x="80" y="63" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
-        <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
-      </svg>
-    </div>
-    <!-- Título del panel -->
+    <div id="print-header-logos" style="display:flex;align-items:center;gap:14px;flex-shrink:0"></div>
     <div style="text-align:right">
       <div style="font-size:13pt;font-weight:700;color:#111" id="print-titulo">Dashboard BI La Rioja</div>
       <div style="font-size:8.5pt;color:#555;margin-top:2px" id="print-subtitulo"></div>
@@ -1761,39 +1729,38 @@ self.onmessage = async (e) => {
         </button>
 
         <!-- Logos institucionales topbar -->
-        <div style="display:flex;align-items:center;gap:8px;padding-left:8px;border-left:1px solid var(--bd);flex-shrink:0">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:30px;opacity:.9" title="La Rioja Gobierno">
-            <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
-            <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
-            <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
-            <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
-            <text x="95" y="190" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
-            <text x="95" y="211" font-family="Arial,sans-serif" font-weight="400" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
-          </svg>
-          <div style="width:1px;height:22px;background:var(--bd)"></div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:28px;opacity:.9" title="Mejor Riojanas">
-            <!-- Escudo cuadrante -->
-            <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
-            <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/>
-            <rect x="12" y="13" width="5" height="21" fill="#9aaac8"/>
-            <rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
-            <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
-            <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
-            <circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>
-            <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
-            <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
-            <polygon points="0,34 34,34 0,68" fill="#C62828"/>
-            <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
-            <circle cx="46" cy="48" r="3" fill="#F9A825"/>
-            <circle cx="56" cy="54" r="3" fill="#F9A825"/>
-            <circle cx="46" cy="61" r="3" fill="#F9A825"/>
-            <circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
-            <!-- Texto -->
-            <text x="80" y="36" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
-            <text x="80" y="63" font-family="'Arial Black',Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
-            <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
-          </svg>
-        </div>
+        <div id="topbar-logos" style="display:flex;align-items:center;gap:8px;padding-left:8px;border-left:1px solid var(--bd);flex-shrink:0;opacity:.92"></div>
+        <script>
+          (function(){
+            var el=document.getElementById('topbar-logos');
+            if(el){el.innerHTML=
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:30px;display:block">'
+              +'<path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>'
+              +'<polygon points="65,32 158,82 92,148" fill="#2E7D32"/>'
+              +'<path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>'
+              +'<path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>'
+              +'<text x="95" y="190" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>'
+              +'<text x="95" y="211" font-family="Arial,sans-serif" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>'
+              +'</svg>'
+              +'<div style="width:1px;height:24px;background:var(--bd)"></div>'
+              +'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:26px;display:block">'
+              +'<rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>'
+              +'<rect x="2" y="18" width="7" height="16" fill="#9aaac8"/><rect x="12" y="13" width="5" height="21" fill="#9aaac8"/><rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>'
+              +'<rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>'
+              +'<circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>'
+              +'<circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>'
+              +'<polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>'
+              +'<polygon points="68,4 62,10 70,13" fill="#7CB342"/>'
+              +'<polygon points="0,34 34,34 0,68" fill="#C62828"/>'
+              +'<rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>'
+              +'<circle cx="46" cy="48" r="3" fill="#F9A825"/><circle cx="56" cy="54" r="3" fill="#F9A825"/><circle cx="46" cy="61" r="3" fill="#F9A825"/><circle cx="62" cy="46" r="2.5" fill="#F9A825"/>'
+              +'<text x="80" y="36" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>'
+              +'<text x="80" y="63" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>'
+              +'<text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>'
+              +'</svg>';
+            }
+          })();
+        </script>
       </div>
 
     </div><!-- /topbar-row1 -->
@@ -5670,6 +5637,48 @@ function imprimirPanelActivo() {
   overlay.style.display = 'flex';
 }
 
+// ── SVGs institucionales — usados en todos los reportes ──────────
+function _svgLaRioja(h) {
+  h = h || 46;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:${h}px;display:block">
+    <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
+    <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
+    <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
+    <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
+    <text x="95" y="190" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
+    <text x="95" y="211" font-family="Arial,sans-serif" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
+  </svg>`;
+}
+function _svgMejorRiojanas(h) {
+  h = h || 42;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:${h}px;display:block">
+    <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
+    <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/><rect x="12" y="13" width="5" height="21" fill="#9aaac8"/><rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
+    <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
+    <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
+    <circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>
+    <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
+    <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
+    <polygon points="0,34 34,34 0,68" fill="#C62828"/>
+    <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
+    <circle cx="46" cy="48" r="3" fill="#F9A825"/><circle cx="56" cy="54" r="3" fill="#F9A825"/><circle cx="46" cy="61" r="3" fill="#F9A825"/><circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
+    <text x="80" y="36" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
+    <text x="80" y="63" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
+    <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
+  </svg>`;
+}
+function _membrete(opts) {
+  // opts: { height, sep, sepColor, wrapStyle }
+  const h1 = (opts && opts.height) || 46;
+  const h2 = Math.round(h1 * 0.91);
+  const sepC = (opts && opts.sepColor) || '#ccc';
+  return `<div style="display:flex;align-items:center;gap:14px;${opts && opts.wrapStyle || ''}">
+    ${_svgLaRioja(h1)}
+    <div style="width:1px;height:${h1}px;background:${sepC}"></div>
+    ${_svgMejorRiojanas(h2)}
+  </div>`;
+}
+
 function _rptCSS() {
   return `<style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -5724,34 +5733,8 @@ function _rptCSS() {
 function _rptHeader(titulo, subtitulo) {
   const fecha = new Date().toLocaleDateString('es-AR',
     {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  const svgLaRioja = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:46px">
-    <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
-    <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
-    <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
-    <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
-    <text x="95" y="190" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="21" fill="#5a5a5a" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
-    <text x="95" y="211" font-family="Arial,sans-serif" font-size="12" fill="#888" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
-  </svg>`;
-  const svgMejor = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:42px">
-    <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
-    <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/><rect x="12" y="13" width="5" height="21" fill="#9aaac8"/><rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
-    <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
-    <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
-    <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
-    <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
-    <polygon points="0,34 34,34 0,68" fill="#C62828"/>
-    <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
-    <circle cx="46" cy="48" r="3" fill="#F9A825"/><circle cx="56" cy="54" r="3" fill="#F9A825"/><circle cx="46" cy="61" r="3" fill="#F9A825"/><circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
-    <text x="80" y="36" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">MEJOR</text>
-    <text x="80" y="63" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#333" letter-spacing=".5">RIOJANAS</text>
-    <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="#777" letter-spacing="2">EMPRESAS ESTATALES</text>
-  </svg>`;
   return `<div class="hdr">
-    <div style="display:flex;align-items:center;gap:14px">
-      ${svgLaRioja}
-      <div style="width:1px;height:38px;background:#ccc"></div>
-      ${svgMejor}
-    </div>
+    ${_membrete({height:46})}
     <div style="text-align:right">
       <div class="ht">BI La Rioja — ${titulo}</div>
       <div class="hs">${subtitulo}</div>
@@ -6375,13 +6358,22 @@ function _rptBalance(autoPrint) {
 <div class="page">
 
   <div class="header">
-    <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
-    <h1>${b.empresa}</h1>
-    <div class="sub">ANÁLISIS DE BALANCE${comparativos.length>1?' · COMPARATIVO '+comparativos.length+' EJERCICIOS':''}</div>
-    <div class="periods">
-      <span class="period-tag">▶ Ejercicio ${b.periodo}</span>
-      ${anterior?`<span style="color:rgba(255,255,255,.4);font-size:10px">vs</span><span class="period-tag" style="opacity:.7">${anterior.periodo}</span>`:''}
-      <span style="margin-left:auto;color:rgba(255,255,255,.45);font-size:9px;font-family:monospace">${fecha}</span>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+      <div style="flex:1">
+        <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
+        <h1>${b.empresa}</h1>
+        <div class="sub">ANÁLISIS DE BALANCE${comparativos.length>1?' · COMPARATIVO '+comparativos.length+' EJERCICIOS':''}</div>
+        <div class="periods">
+          <span class="period-tag">▶ Ejercicio ${b.periodo}</span>
+          ${anterior?`<span style="color:rgba(255,255,255,.4);font-size:10px">vs</span><span class="period-tag" style="opacity:.7">${anterior.periodo}</span>`:''}
+          <span style="margin-left:auto;color:rgba(255,255,255,.45);font-size:9px;font-family:monospace">${fecha}</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;opacity:.88;filter:brightness(1.8) saturate(.4) contrast(.85)">
+        ${_svgLaRioja(44)}
+        <div style="width:1px;height:38px;background:rgba(255,255,255,.3)"></div>
+        ${_svgMejorRiojanas(38)}
+      </div>
     </div>
   </div>
 
@@ -12785,8 +12777,17 @@ function _informeEjecutivoRender(emp) {
     <style>${css}</style>
   </head><body>
   <div class="ie-portada">
-    <h1>${emp}</h1>
-    <div class="ie-sub">${ruboLbl} · Informe Ejecutivo · ${hoy}</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+      <div>
+        <h1>${emp}</h1>
+        <div class="ie-sub">${ruboLbl} · Informe Ejecutivo · ${hoy}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;opacity:.85;filter:brightness(2) saturate(.3) contrast(.8)">
+        ${_svgLaRioja(42)}
+        <div style="width:1px;height:36px;background:rgba(255,255,255,.3)"></div>
+        ${_svgMejorRiojanas(36)}
+      </div>
+    </div>
   </div>
   ${htmlKPIs}
   <div class="ie-body">
@@ -28370,6 +28371,10 @@ setTimeout(() => {
     setTimeout(checkAlerts, 300);
     setTimeout(loadStateFromHash, 100);
   }
+
+  // Inyectar logos en print-header usando las funciones centralizadas
+  const _phLogos = document.getElementById('print-header-logos');
+  if (_phLogos) _phLogos.innerHTML = _membrete({height:44,sepColor:'#ccc'});
 
   // Cargar datos locales primero para mostrar algo de inmediato
   loadDataFromLocalCache();
