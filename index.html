@@ -1523,9 +1523,10 @@ self.onmessage = async (e) => {
 
 <!-- SIDEBAR -->
 <aside class="sidebar">
-  <div class="brand">
-    <div class="brand-title">Estado de<br>Resultados<br><em>Comparativo</em></div>
-    <div class="brand-sub">2020 · 2021 · 2022 · 2023 · 2024 · 2025 · 2026</div>
+  <div class="brand" id="sidebar-brand">
+    <div id="sidebar-logos" style="margin-bottom:10px"></div>
+    <div class="brand-title">Dashboard<br><em>Mejor Riojanas</em></div>
+    <div class="brand-sub">Empresas Estatales · La Rioja</div>
   </div>
 
   <nav class="nav">
@@ -28371,6 +28372,10 @@ setTimeout(() => {
     setTimeout(checkAlerts, 300);
     setTimeout(loadStateFromHash, 100);
   }
+
+  // Inyectar logos en sidebar (ángulo superior izquierdo)
+  const _sbLogos = document.getElementById('sidebar-logos');
+  if (_sbLogos) _sbLogos.innerHTML = _membrete({height:36, sepColor:'var(--bd)', wrapStyle:'flex-wrap:wrap;gap:8px 10px'});
 
   // Inyectar logos en print-header usando las funciones centralizadas
   const _phLogos = document.getElementById('print-header-logos');
