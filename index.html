@@ -2384,9 +2384,12 @@ self.onmessage = async (e) => {
 
       <!-- Gráfico detalle mensual — visible solo cuando hay datos mensuales -->
       <div id="pers-mensual-wrap" class="card" style="display:none;margin-top:12px">
-        <div class="card-hd">
+        <div class="card-hd" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="card-hd-title" id="pers-mensual-lbl">Detalle mensual</span>
           <span class="card-hd-unit">empleados por mes</span>
+          <select id="sel-pers-anio-mens" onchange="buildPersonal()"
+            style="margin-left:auto;padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px"></select>
         </div>
         <canvas id="ch-p-mensual" style="max-height:180px"></canvas>
       </div>
@@ -6015,7 +6018,13 @@ function _rptResultado() {
     // Construir tabla ER consolidada para el reporte
     const erEmps = [...new Set([...Object.keys(DATA.er), ...Object.keys(DATA.er_mensual || {})])];
     const erResuelto = {};
-    erEmps.forEach(e => { const er = DATA.er[e] || _erDesdeMonthly(e); if (er) erResuelto[e] = er; });
+    erEmps.forEach(e => {
+      const erM = DATA.er[e] || {}, erP = _erDesdeMonthly(e) || {}, merged = {};
+      [...new Set([...Object.keys(erM), ...Object.keys(erP)])].forEach(yr => {
+        merged[yr] = Object.assign({}, erP[yr] || {}, erM[yr] || {});
+      });
+      if (Object.keys(merged).length) erResuelto[e] = merged;
+    });
     const erEmpsConDatos = Object.keys(erResuelto);
     const totals = {};
     ER_ORDER.forEach(k => {
@@ -10866,11 +10875,17 @@ function buildResDesglose() {
       ...Object.keys(DATA.er),
       ...Object.keys(DATA.er_mensual || {}),
     ])];
-    // Resolver el ER de cada empresa (matricial o derivado de mensual)
+    // Mergear ER formal (matricial) + provisorio (er_mensual) por año:
+    // si la empresa tiene formal 2021-2022 y provisorio 2023-2024, ambos contribuyen al consolidado.
     const erResuelto = {};
     erEmps.forEach(e => {
-      const er = DATA.er[e] || _erDesdeMonthly(e);
-      if (er) erResuelto[e] = er;
+      const erM = DATA.er[e] || {};
+      const erP = _erDesdeMonthly(e) || {};
+      const merged = {};
+      [...new Set([...Object.keys(erM), ...Object.keys(erP)])].forEach(yr => {
+        merged[yr] = Object.assign({}, erP[yr] || {}, erM[yr] || {}); // formal prevalece por partida
+      });
+      if (Object.keys(merged).length) erResuelto[e] = merged;
     });
     const erEmpsConDatos = Object.keys(erResuelto);
     if (!erEmpsConDatos.length) {
@@ -11207,15 +11222,13 @@ function buildPersonal() {
   const pYrs = allPYrs.length ? allPYrs : ['2020','2021','2022','2023','2024','2025','2026'];
   const lastY = pYrs[pYrs.length - 1];
 
-  // ── Poblar selector de año base ──
+  // ── Poblar selector de año base (siempre repoblar para reflejar nuevos años importados) ──
   const selBase = document.getElementById('sel-pers-base');
-  if (selBase && !selBase.options.length) {
-    pYrs.forEach(y => {
-      const o = document.createElement('option');
-      o.value = y; o.textContent = y;
-      if (y === '2020') o.selected = true;
-      selBase.appendChild(o);
-    });
+  if (selBase) {
+    const prevBase = selBase.value;
+    selBase.innerHTML = '';
+    pYrs.forEach(y => { const o = document.createElement('option'); o.value=y; o.textContent=y; selBase.appendChild(o); });
+    selBase.value = (prevBase && pYrs.includes(prevBase)) ? prevBase : (pYrs.includes('2020') ? '2020' : pYrs[0]);
   }
   const baseYear = selBase?.value || pYrs[0] || '2020';
 
@@ -11235,7 +11248,7 @@ function buildPersonal() {
     document.getElementById('kpi-pers').innerHTML = pYrs.map((y,i) => {
       const v = _persGetTotal(pd, y), prev = _persGetTotal(pd, pYrs[i-1]);
       const delta = i>0&&prev ? `<div class="kpi-sub ${v>=prev?'up':'dn'}">${v>=prev?'▲':'▼'} ${Math.abs(pctNum(v,prev))}% vs ${pYrs[i-1]}</div>` : '<div class="kpi-sub">Base</div>';
-      const ac = ['#4a5268','#e8ff47','#47e8ff','#ff8c47','#c447ff'][i];
+      const ac = YC[y] || '#888';
       return `<div class="kpi"><div class="kpi-accent" style="background:${ac}"></div><div class="kpi-label">${selEmp} · ${y}</div><div class="kpi-value">${v ? fn(v) : '—'}</div>${delta}</div>`;
     }).join('');
 
@@ -11244,12 +11257,11 @@ function buildPersonal() {
     document.getElementById('pers-growth-lbl').textContent = `${selEmp} — Variación anual %`;
 
     const vals = pYrs.map(y => _persGetTotal(pd, y));
-    const pColors = ['#4a526899','#e8ff4799','#47e8ff99','#ff8c4799','#c447ff99'];
 
     // Gráfico 1: barras por año de esa empresa
     mkChart('ch-p-multi','bar',{
       labels: pYrs,
-      datasets:[{ label:'Empleados', data:vals, backgroundColor:pColors, borderRadius:5 }]
+      datasets:[{ label:'Empleados', data:vals, backgroundColor:pYrs.map(y=>YCa(y)), borderRadius:5 }]
     },{plugins:{legend:{display:false}}});
 
     // Gráfico 2: línea temporal
@@ -11265,8 +11277,16 @@ function buildPersonal() {
       labels: pYrs.slice(1).map((y,i)=>`${pYrs[i]}→${y}`),
       datasets:[{label:'Variación %', data:varData, backgroundColor:varData.map(v=>v==null?'transparent':v>=0?'#e8ff4799':'#ff476699'), borderRadius:3}]
     },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}});
-    // Gráfico 4: detalle mensual si existe para algún año
-    const selAñoMens = document.getElementById('sel-pers-base')?.value || pYrs[pYrs.length-1];
+    // Gráfico 4: detalle mensual — usa selector propio (independiente del año base)
+    const selMensEl = document.getElementById('sel-pers-anio-mens');
+    const añosMensDisp = pYrs.filter(y => _persGetMeses(pd, y).some(v => v != null));
+    if (selMensEl) {
+      const prevMens = selMensEl.value;
+      selMensEl.innerHTML = '';
+      añosMensDisp.forEach(y => { const o=document.createElement('option'); o.value=y; o.textContent=y; selMensEl.appendChild(o); });
+      selMensEl.value = (prevMens && añosMensDisp.includes(prevMens)) ? prevMens : (añosMensDisp[añosMensDisp.length-1] || '');
+    }
+    const selAñoMens = selMensEl?.value || pYrs[pYrs.length-1];
     const meses = _persGetMeses(pd, selAñoMens);
     const teneMeses = meses.some(v => v != null);
     const wrapMensual = document.getElementById('pers-mensual-wrap');
@@ -11282,7 +11302,7 @@ function buildPersonal() {
           datasets:[{
             label: 'Empleados ' + selAñoMens,
             data: mesData,
-            backgroundColor: mesData.map((v,i) => v === 0 ? '#47e8ff22' : '#47e8ff99'),
+            backgroundColor: mesData.map(v => v === 0 ? '#47e8ff22' : '#47e8ff99'),
             borderRadius: 3,
           }]
         },{
@@ -11292,6 +11312,15 @@ function buildPersonal() {
       } else {
         wrapMensual.style.display = 'none';
       }
+    }
+    // KPI: costo laboral estimado desde ER mensual si hay datos
+    const costoLab = _costoLaboralDesdeER(selEmp, lastY);
+    if (costoLab != null) {
+      const kpiEl = document.getElementById('kpi-pers');
+      if (kpiEl) kpiEl.innerHTML += `<div class="kpi"><div class="kpi-accent" style="background:#ff8c47"></div>
+        <div class="kpi-label">Costo laboral est. ${lastY}</div>
+        <div class="kpi-value" style="font-size:15px">${fv(costoLab)}</div>
+        <div class="kpi-sub">desde ER mensual provisorio</div></div>`;
     }
 
     // Ocultar tabla en modo empresa
@@ -11332,22 +11361,29 @@ function buildPersonal() {
       <div class="kpi-value" style="font-size:${k.val.length>10?'16px':'22px'}">${k.val}</div>
       <div class="kpi-sub ${k.cls}">${k.sub}</div></div>`).join('');
 
-    // Poblar selectores del gráfico multi
+    // Poblar selectores del gráfico multi (siempre repoblar para reflejar años importados)
     ['sel-multi-desde','sel-multi-hasta'].forEach((id, isHasta) => {
       const sel = document.getElementById(id);
-      if (!sel || sel.options.length) return;
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '';
       pYrs.forEach(y => sel.innerHTML += `<option value="${y}">${y}</option>`);
-      sel.value = isHasta ? pYrs[pYrs.length-1] : pYrs[0];
+      sel.value = (prev && pYrs.includes(prev)) ? prev : (isHasta ? pYrs[pYrs.length-1] : pYrs[0]);
     });
     const selMultiEmp = document.getElementById('sel-multi-empresa');
-    if (selMultiEmp && selMultiEmp.options.length <= 1) {
-      const emps = DATA.personal.map(d=>d.e).sort();
-      emps.forEach(e2 => selMultiEmp.innerHTML += `<option value="${e2}">${e2}</option>`);
+    if (selMultiEmp) {
+      const prevEmp = selMultiEmp.value;
+      selMultiEmp.innerHTML = '<option value="">Todas las empresas</option>';
+      DATA.personal.map(d=>d.e).sort().forEach(e2 => selMultiEmp.innerHTML += `<option value="${e2}">${e2}</option>`);
+      if (prevEmp) selMultiEmp.value = prevEmp;
     }
     const multiDesde  = document.getElementById('sel-multi-desde')?.value || pYrs[0];
     const multiHasta  = document.getElementById('sel-multi-hasta')?.value || pYrs[pYrs.length-1];
     const multiEmpFil = document.getElementById('sel-multi-empresa')?.value || '';
     const pYrsMulti   = pYrs.filter(y => y >= multiDesde && y <= multiHasta);
+    // Sincronizar filtro de empresa del gráfico con la búsqueda de la tabla
+    const tSearch = document.getElementById('pers-tabla-search');
+    if (tSearch && multiEmpFil !== tSearch.value) tSearch.value = multiEmpFil;
 
     document.getElementById('pers-multi-lbl').textContent = multiEmpFil
       ? multiEmpFil + ' — Evolución de plantilla'
@@ -11363,13 +11399,12 @@ function buildPersonal() {
       .sort((a,b) => _persGetTotal(b,lastYMulti) - _persGetTotal(a,lastYMulti))
       .slice(0, multiEmpFil ? 100 : 14);
 
-    const pColors = ['#2a2f40','#e8ff4777','#47e8ff77','#ff8c4799','#c447ff99'];
     mkChart('ch-p-multi','bar',{
       labels: top14.map(d => d.e.length>14 ? d.e.slice(0,12)+'…' : d.e),
-      datasets: pYrsMulti.map((y,i) => ({
+      datasets: pYrsMulti.map(y => ({
         label: y,
         data: top14.map(d => _persGetTotal(d,y)),
-        backgroundColor: pColors[i % pColors.length],
+        backgroundColor: YCa(y),
         borderRadius: 2
       }))
     });
@@ -11380,19 +11415,23 @@ function buildPersonal() {
         borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.45, pointRadius:5 }]
     },{ plugins:{ legend:{ display:false } }, scales:{ y:{ ticks:{ callback: v => Number(v).toLocaleString('es-AR') } } } });
 
-    // Mayor crecimiento baseYear → lastY
-    const grw = DATA.personal
-      .filter(d => _persGetTotal(d,baseYear) > 3 && _persGetTotal(d,lastY) > 0)
-      .map(d => ({ e: d.e, g: pctNum(_persGetTotal(d,lastY), _persGetTotal(d,baseYear)||1) }))
-      .sort((a,b) => b.g - a.g)
-      .slice(0, 10);
+    // Crecimiento baseYear → lastY: top 7 crec. + top 4 decrecimiento (barras negativas)
+    const allGrw = DATA.personal
+      .filter(d => _persGetTotal(d, baseYear) > 3)
+      .map(d => ({ e: d.e, g: pctNum(_persGetTotal(d,lastY), _persGetTotal(d,baseYear)||1) }));
+    const topPos = [...allGrw].sort((a,b)=>b.g-a.g).slice(0,7);
+    const topNeg = [...allGrw].sort((a,b)=>a.g-b.g).slice(0,4).filter(d=>d.g<0);
+    const grwMap = new Map();
+    [...topNeg, ...topPos].forEach(d => grwMap.set(d.e, d)); // positivos sobreescriben si hay duplicado
+    const grw = [...grwMap.values()].sort((a,b) => a.g-b.g); // ascendente: neg abajo, pos arriba
 
     mkChart('ch-p-growth','bar',{
       labels: grw.map(d => d.e.length>14 ? d.e.slice(0,12)+'…' : d.e),
       datasets:[{ label:'Variación %', data: grw.map(d=>d.g),
         backgroundColor: grw.map(d => d.g>=0 ? '#e8ff4799' : '#ff476699'), borderRadius:3 }]
     },{ indexAxis:'y', plugins:{ legend:{ display:false } },
-       scales:{ y:{ ticks:{ font:{ size:9 } } }, x:{ ticks:{ callback: v => v+'%' } } } });
+       scales:{ y:{ ticks:{ font:{ size:9 } } }, x:{ ticks:{ callback: v => v+'%' },
+         grid:{ color: ctx => ctx.tick.value===0 ? '#888' : 'rgba(128,128,128,.12)', lineWidth: ctx => ctx.tick.value===0?1.5:1 } } } });
 
     // Tabla de detalle
     renderTablaPersonal();
@@ -11896,12 +11935,14 @@ function renderTablaPersonal() {
   wrap.style.display = '';
 
   const todosYrs = ys().map(String);
-  // Poblar selectores de rango
+  // Poblar selectores de rango (siempre repoblar para reflejar años importados)
   ['sel-tabla-desde','sel-tabla-hasta'].forEach((id, isHasta) => {
     const sel = document.getElementById(id);
-    if (!sel || sel.options.length) return;
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
     todosYrs.forEach(y => sel.innerHTML += `<option value="${y}">${y}</option>`);
-    sel.value = isHasta ? todosYrs[todosYrs.length-1] : todosYrs[0];
+    sel.value = (prev && todosYrs.includes(prev)) ? prev : (isHasta ? todosYrs[todosYrs.length-1] : todosYrs[0]);
   });
   const desdeY = document.getElementById('sel-tabla-desde')?.value || todosYrs[0];
   const hastaY = document.getElementById('sel-tabla-hasta')?.value || todosYrs[todosYrs.length-1];
