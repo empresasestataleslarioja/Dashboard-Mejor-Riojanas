@@ -12730,168 +12730,223 @@ function _informeEjecutivoRender(emp) {
   // ── Sección 1: Diagnóstico general — cuadro comparativo por categoría ────────
   let htmlDiag = '';
   if (bals.length > 0 || yearsConDatos.length > 0) {
-    // Definición de grupos y métricas
+
+    // Extrae el año de 4 dígitos de un periodo (ej: "2023", "2022-2023" → "2023")
+    const yearOf = (periodo) => {
+      const hits = String(periodo).match(/\d{4}/g);
+      return hits ? hits[hits.length - 1] : String(periodo);
+    };
+
+    // Datos operativos por año para cada balance
+    const transTotal = (y) => {
+      try { const tr = DATA?.transferencias?.[emp]; return tr ? Object.values(tr).reduce((a,v)=>a+(v[y]||0),0) : 0; } catch(e){return 0;}
+    };
+
+    // Definición de grupos y métricas (sin columna Ref — va al pie)
     const diagGrupos = [
       {
-        cat: 'Liquidez', color: '#1565c0', bg: '#e3f0fd',
+        cat: 'Liquidez', color: '#1565c0', bg: '#e3f0fd', icon: '💧',
+        refs: ['Liquidez corriente ≥ 1.0', 'Capital de trabajo > 0'],
         metricas: [
-          { lbl:'Liquidez corriente', ref:'≥ 1.0', get: b => b.indicadores?.liquidez?.liquidez_corriente,
+          { lbl:'Liquidez corriente', get: b => b.indicadores?.liquidez?.liquidez_corriente,
             fmt: r2, ok: v => v >= 1.5, warn: v => v >= 1, inv: false },
-          { lbl:'Capital de trabajo', ref:'> 0', get: b => b.indicadores?.liquidez?.capital_trabajo,
+          { lbl:'Capital de trabajo', get: b => b.indicadores?.liquidez?.capital_trabajo,
             fmt: m, ok: v => v > 0, warn: v => v === 0, inv: false },
         ]
       },
       {
-        cat: 'Solvencia', color: '#6a1b9a', bg: '#f3e5f5',
+        cat: 'Solvencia', color: '#6a1b9a', bg: '#f3e5f5', icon: '🏛',
+        refs: ['Patrimonio Neto > 0', 'Endeudamiento < 60%', 'Deuda/Patrimonio < 1.0'],
         metricas: [
-          { lbl:'Patrimonio Neto', ref:'> 0', get: b => b.indicadores?.solvencia?.patrimonio_neto,
+          { lbl:'Patrimonio Neto', get: b => b.indicadores?.solvencia?.patrimonio_neto,
             fmt: m, ok: v => v > 0, warn: v => v === 0, inv: false },
-          { lbl:'Endeudamiento', ref:'< 60%', get: b => b.indicadores?.solvencia?.razon_endeudamiento,
+          { lbl:'Endeudamiento', get: b => b.indicadores?.solvencia?.razon_endeudamiento,
             fmt: p, ok: v => v < 0.4, warn: v => v < 0.6, inv: true },
-          { lbl:'Deuda / Patrimonio', ref:'< 1.0', get: b => b.indicadores?.solvencia?.deuda_patrimonio,
+          { lbl:'Deuda / Patrimonio', get: b => b.indicadores?.solvencia?.deuda_patrimonio,
             fmt: r2, ok: v => v < 0.5, warn: v => v < 1, inv: true },
         ]
       },
       {
-        cat: 'Rentabilidad', color: '#1a7a4a', bg: '#e8f5e9',
+        cat: 'Rentabilidad', color: '#1a7a4a', bg: '#e8f5e9', icon: '📈',
+        refs: ['ROE > 0%', 'ROA > 0%', 'Margen operativo > 0%', 'Margen neto > 0%'],
         metricas: [
-          { lbl:'ROE', ref:'> 0%', get: b => b.indicadores?.rentabilidad?.roe,
+          { lbl:'ROE', get: b => b.indicadores?.rentabilidad?.roe,
             fmt: p, ok: v => v > 0.08, warn: v => v > 0, inv: false },
-          { lbl:'ROA', ref:'> 0%', get: b => b.indicadores?.rentabilidad?.roa,
+          { lbl:'ROA', get: b => b.indicadores?.rentabilidad?.roa,
             fmt: p, ok: v => v > 0.05, warn: v => v > 0, inv: false },
-          { lbl:'Margen operativo', ref:'> 0%', get: b => b.indicadores?.rentabilidad?.margen_operativo,
+          { lbl:'Margen operativo', get: b => b.indicadores?.rentabilidad?.margen_operativo,
             fmt: p, ok: v => v > 0.05, warn: v => v > 0, inv: false },
-          { lbl:'Margen neto', ref:'> 0%', get: b => b.indicadores?.rentabilidad?.margen_neto,
+          { lbl:'Margen neto', get: b => b.indicadores?.rentabilidad?.margen_neto,
             fmt: p, ok: v => v > 0.05, warn: v => v > 0, inv: false },
         ]
       },
       {
-        cat: 'Eficiencia', color: '#b7770d', bg: '#fff8e1',
+        cat: 'Eficiencia', color: '#b7770d', bg: '#fff8e1', icon: '⚙',
+        refs: ['Rotación activos ≥ 0.5'],
         metricas: [
-          { lbl:'Rotación activos', ref:'≥ 0.5', get: b => b.indicadores?.eficiencia?.rotacion_activos,
+          { lbl:'Rotación activos', get: b => b.indicadores?.eficiencia?.rotacion_activos,
             fmt: r2, ok: v => v >= 1, warn: v => v >= 0.5, inv: false },
         ]
       },
     ];
-    // Añadir grupo operativo (facturación + resultado + transferencias) si hay datos
-    const operRows = [];
-    yearsConDatos.forEach(y => {
-      const f = fact[y], s = sit[y];
-      const t = (() => { try { const tr = DATA?.transferencias?.[emp]; return tr ? Object.values(tr).reduce((a,v)=>a+(v[y]||0),0) : 0; } catch(e){return 0;} })();
-      if (f == null && s == null) return;
-      let pctT = (f && t > 0) ? t / f * 100 : null;
-      let varReal = null;
-      const yPrev = String(parseInt(y)-1);
-      const fPrev = fact[yPrev];
-      if (f && fPrev && fPrev !== 0) {
-        const varNom = (f - fPrev) / Math.abs(fPrev) * 100;
-        const ipcPer = _ipcAcumEntrePeriodos(String(y), yPrev);
-        if (ipcPer) varReal = ((1 + varNom / 100) / (1 + ipcPer / 100) - 1) * 100;
-      }
-      operRows.push({ y, f, s, pctT, varReal });
-    });
 
-    // Helper: semáforo de celda
+    // Métricas operativas integradas (columnas = años de cada balance)
+    const operMetricas = [
+      {
+        lbl: 'Facturación',
+        get: b => fact[yearOf(b.periodo)] ?? null,
+        fmt: m,
+        ok: v => v > 0, warn: v => false, inv: false,
+        trendOk: (v0,v1) => v1 > v0,
+      },
+      {
+        lbl: 'Resultado del ejercicio',
+        get: b => sit[yearOf(b.periodo)] ?? null,
+        fmt: m,
+        ok: v => v > 0, warn: v => false, inv: false,
+        trendOk: (v0,v1) => v1 > v0,
+      },
+      {
+        lbl: '% Transferencias / Facturación',
+        get: b => {
+          const y = yearOf(b.periodo); const f = fact[y]; const t = transTotal(y);
+          return (f && t > 0) ? t / f * 100 : null;
+        },
+        fmt: v => v.toFixed(1) + '%',
+        ok: v => v < 30, warn: v => v < 60, inv: true,
+        trendOk: (v0,v1) => v1 < v0,
+      },
+    ];
+
+    // ── Helper: estado global de un grupo (para chips) ─────────────────────────
+    const grpStatus = (grp) => {
+      const vals = grp.metricas.flatMap(met => bals.map(b => met.get(b)).filter(v => v != null));
+      if (!vals.length) return null;
+      const allOk = grp.metricas.every(met => bals.every(b => { const v=met.get(b); return v==null||met.ok(v); }));
+      const anyBad = grp.metricas.some(met => bals.some(b => { const v=met.get(b); return v!=null&&!met.ok(v)&&!met.warn(v); }));
+      return allOk ? 'ok' : anyBad ? 'bad' : 'warn';
+    };
+
+    // ── Helper: semáforo de celda ──────────────────────────────────────────────
     const semCell = (v, met) => {
       if (v == null) return `<td style="text-align:right;color:#bbb;padding:4px 8px">—</td>`;
       const isOk = met.ok(v), isWarn = !isOk && met.warn(v);
-      const bg   = isOk ? '#e8f5e9' : isWarn ? '#fff8e1' : '#fdecea';
-      const col  = isOk ? '#1a7a4a' : isWarn ? '#b7770d' : '#c0392b';
+      const bg  = isOk ? '#e8f5e9' : isWarn ? '#fff8e1' : '#fdecea';
+      const col = isOk ? '#1a7a4a' : isWarn ? '#b7770d' : '#c0392b';
       const icon = isOk ? '✓' : isWarn ? '△' : '✗';
-      return `<td style="text-align:right;padding:4px 8px;background:${bg};color:${col};font-weight:600">${met.fmt(v)} <span style="font-size:7pt;opacity:.8">${icon}</span></td>`;
+      return `<td style="text-align:right;padding:4px 8px;background:${bg};color:${col};font-weight:600">${met.fmt(v)}&thinsp;<span style="font-size:7pt;opacity:.8">${icon}</span></td>`;
     };
-    // Helper: flecha de tendencia
-    const tendCell = (met) => {
-      if (bals.length < 2) return '';
-      const v0 = met.get(bals[0]), v1 = met.get(bals[bals.length-1]);
+
+    // ── Helper: flecha de tendencia ────────────────────────────────────────────
+    const tendCell = (met, arr) => {
+      if ((arr||bals).length < 2) return '';
+      const src = arr || bals;
+      const v0 = met.get(src[0]), v1 = met.get(src[src.length-1]);
       if (v0 == null || v1 == null) return '<td style="text-align:center;padding:4px 6px;color:#bbb">—</td>';
-      const igual = Math.abs(v1 - v0) < 0.001;
+      const igual = Math.abs(v1 - v0) < (Math.abs(v0) * 0.001 + 0.0001);
       if (igual) return '<td style="text-align:center;padding:4px 6px;color:#888">→</td>';
-      const mejor = met.inv ? v1 < v0 : v1 > v0;
+      const tFn = met.trendOk || (met.inv ? (a,b)=>b<a : (a,b)=>b>a);
+      const mejor = tFn(v0, v1);
       return mejor
         ? '<td style="text-align:center;padding:4px 6px;color:#1a7a4a;font-weight:700">▲</td>'
         : '<td style="text-align:center;padding:4px 6px;color:#c0392b;font-weight:700">▼</td>';
     };
 
-    const thStyle = 'style="background:#2c3e50;color:#fff;padding:5px 8px;text-align:right;font-size:8pt;white-space:nowrap"';
-    const thStyleC = 'style="background:#2c3e50;color:#fff;padding:5px 8px;text-align:center;font-size:8pt;white-space:nowrap"';
-    const thStyleL = 'style="background:#2c3e50;color:#fff;padding:5px 8px;text-align:left;font-size:8pt"';
+    const nCols = 1 + bals.length + (bals.length > 1 ? 1 : 0);
+    const thL = `style="background:#2c3e50;color:#fff;padding:5px 8px;text-align:left;font-size:8pt"`;
+    const thR = `style="background:#2c3e50;color:#fff;padding:5px 8px;text-align:right;font-size:8pt;white-space:nowrap"`;
+    const thC = `style="background:#2c3e50;color:#fff;padding:5px 8px;text-align:center;font-size:8pt;white-space:nowrap"`;
 
+    // ── Chips de resumen ejecutivo ─────────────────────────────────────────────
+    const chipDefs = [
+      ...diagGrupos.map(grp => ({ lbl: grp.cat, color: grp.color, bg: grp.bg, status: grpStatus(grp), icon: grp.icon })),
+      (() => {
+        // Chip operativo: basado en resultado (positivo=ok) y % transf (<60%=warn, ≥60%=bad)
+        const resultados = bals.map(b => sit[yearOf(b.periodo)]).filter(v => v != null);
+        const pctTs = bals.map(b => { const y=yearOf(b.periodo),f=fact[y],t=transTotal(y); return (f&&t>0)?t/f*100:null; }).filter(v=>v!=null);
+        if (!resultados.length && !pctTs.length) return null;
+        const allResPos = resultados.length && resultados.every(v => v > 0);
+        const anyResBad = resultados.some(v => v < 0);
+        const anyTransBad = pctTs.some(v => v >= 60);
+        const anyTransWarn = pctTs.some(v => v >= 30);
+        const status = (anyResBad || anyTransBad) ? 'bad' : (!allResPos || anyTransWarn) ? 'warn' : 'ok';
+        return { lbl: 'Operativo', color: '#37474f', bg: '#eceff1', status, icon: '🏭' };
+      })(),
+    ].filter(Boolean);
+
+    const chipColors = {
+      ok:   { border: '#1a7a4a', bg: '#e8f5e9', col: '#1a7a4a', icon: '✓', lbl: 'Normal' },
+      warn: { border: '#b7770d', bg: '#fff8e1', col: '#b7770d', icon: '△', lbl: 'Atención' },
+      bad:  { border: '#c0392b', bg: '#fdecea', col: '#c0392b', icon: '✗', lbl: 'Crítico'  },
+    };
+
+    const chipsHtml = chipDefs.filter(c => c.status).map(c => {
+      const cs = chipColors[c.status];
+      return `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;
+                min-width:80px;padding:8px 12px;border-radius:8px;border:2px solid ${cs.border};
+                background:${cs.bg};margin:4px">
+        <span style="font-size:15pt;line-height:1">${c.icon}</span>
+        <span style="font-size:8pt;font-weight:700;color:#333">${c.lbl}</span>
+        <span style="font-size:9pt;font-weight:700;color:${cs.col}">${cs.icon} ${cs.lbl}</span>
+      </div>`;
+    }).join('');
+
+    // ── Filas de grupos de indicadores ────────────────────────────────────────
     let tablaGrupos = diagGrupos.map(grp => {
-      const metsFiltradas = grp.metricas.filter(met => bals.some(b => met.get(b) != null));
-      if (!metsFiltradas.length) return '';
-      const filas = metsFiltradas.map(met => `
+      const metsFilt = grp.metricas.filter(met => bals.some(b => met.get(b) != null));
+      if (!metsFilt.length) return '';
+      const filas = metsFilt.map(met => `
         <tr style="border-bottom:1px solid #f0f0f0">
           <td style="padding:4px 8px 4px 16px;color:#444;font-size:8.5pt">${met.lbl}</td>
-          <td style="text-align:center;padding:4px 6px;color:#888;font-size:7.5pt">${met.ref}</td>
           ${bals.map(b => semCell(met.get(b), met)).join('')}
           ${bals.length > 1 ? tendCell(met) : ''}
         </tr>`).join('');
       return `
-        <tr><td colspan="${2 + bals.length + (bals.length>1?1:0)}"
-          style="background:${grp.bg};color:${grp.color};font-weight:700;font-size:8.5pt;padding:5px 8px;letter-spacing:.5px;border-top:2px solid ${grp.color}">
-          ${grp.cat.toUpperCase()}
+        <tr><td colspan="${nCols}"
+          style="background:${grp.bg};color:${grp.color};font-weight:700;font-size:8.5pt;
+                 padding:5px 8px;letter-spacing:.5px;border-top:2px solid ${grp.color}">
+          ${grp.icon}&nbsp; ${grp.cat.toUpperCase()}
+          <span style="font-weight:400;font-size:7.5pt;margin-left:8px;opacity:.7">${grp.refs.join(' · ')}</span>
         </td></tr>
         ${filas}`;
     }).join('');
 
-    // Grupo operativo como bloque aparte
-    let tablaOper = '';
-    if (operRows.length) {
-      tablaOper = operRows.map(row => {
-        const sCol = row.s == null ? '#bbb' : row.s >= 0 ? '#1a7a4a' : '#c0392b';
-        const sBg  = row.s == null ? '' : row.s >= 0 ? '#e8f5e9' : '#fdecea';
-        const sIcon = row.s == null ? '—' : row.s >= 0 ? '✓' : '✗';
-        const varCell = row.varReal != null
-          ? `<td colspan="2" style="text-align:right;padding:4px 8px;font-size:8pt;color:${row.varReal>=0?'#1a7a4a':'#c0392b'}">${row.varReal>=0?'▲':'▼'} ${Math.abs(row.varReal).toFixed(1)}% real</td>`
-          : `<td colspan="2" style="padding:4px 8px;color:#bbb;text-align:right">—</td>`;
-        const pctTCell = row.pctT != null
-          ? `<td style="text-align:right;padding:4px 8px;color:${row.pctT>50?'#c0392b':'#b7770d'};font-size:8pt">${row.pctT.toFixed(1)}%</td>`
-          : `<td style="padding:4px 8px;color:#bbb;text-align:right">—</td>`;
-        return `
+    // ── Filas de métricas operativas (integradas en la misma tabla) ───────────
+    const operFilt = operMetricas.filter(met => bals.some(b => met.get(b) != null));
+    const tablaOper = operFilt.length ? `
+      <tr><td colspan="${nCols}"
+        style="background:#eceff1;color:#37474f;font-weight:700;font-size:8.5pt;
+               padding:5px 8px;letter-spacing:.5px;border-top:2px solid #37474f">
+        🏭&nbsp; OPERATIVO
+        <span style="font-weight:400;font-size:7.5pt;margin-left:8px;opacity:.7">Facturación · Resultado · % Transferencias (verde &lt;30%, amarillo &lt;60%, rojo ≥60%)</span>
+      </td></tr>
+      ${operFilt.map(met => `
         <tr style="border-bottom:1px solid #f0f0f0">
-          <td style="padding:4px 8px 4px 16px;color:#444;font-size:8.5pt;font-weight:600">${row.y}</td>
-          <td style="text-align:right;padding:4px 8px;font-size:8pt;color:#555">${row.f != null ? m(row.f) : '—'}</td>
-          <td style="text-align:right;padding:4px 8px;background:${sBg};color:${sCol};font-weight:600;font-size:8pt">${row.s != null ? m(row.s) : '—'} <span style="font-size:7pt">${sIcon}</span></td>
-          ${pctTCell}
-          ${varCell}
-        </tr>`;
-      }).join('');
-    }
+          <td style="padding:4px 8px 4px 16px;color:#444;font-size:8.5pt">${met.lbl}</td>
+          ${bals.map(b => semCell(met.get(b), met)).join('')}
+          ${bals.length > 1 ? tendCell(met, bals) : ''}
+        </tr>`).join('')}` : '';
 
-    const colCount = 2 + bals.length + (bals.length > 1 ? 1 : 0);
     htmlDiag = `
     <h2 class="ie-h2">Diagnóstico General</h2>
-    <div style="overflow-x:auto;margin-top:10px">
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 14px">
+      ${chipsHtml}
+    </div>
+    <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:8.5pt;font-family:inherit">
       <thead>
         <tr>
-          <th ${thStyleL}>Indicador</th>
-          <th ${thStyleC}>Ref.</th>
-          ${bals.map(b => `<th ${thStyle}>${b.periodo}</th>`).join('')}
-          ${bals.length > 1 ? `<th ${thStyleC}>Tendencia</th>` : ''}
+          <th ${thL}>Indicador</th>
+          ${bals.map(b => `<th ${thR}>${b.periodo}</th>`).join('')}
+          ${bals.length > 1 ? `<th ${thC}>Tendencia</th>` : ''}
         </tr>
       </thead>
       <tbody>
         ${tablaGrupos}
+        ${tablaOper}
       </tbody>
     </table>
-    </div>
-    ${operRows.length ? `
-    <div style="overflow-x:auto;margin-top:14px">
-    <table style="width:100%;border-collapse:collapse;font-size:8.5pt;font-family:inherit">
-      <thead>
-        <tr>
-          <th style="background:#37474f;color:#fff;padding:5px 8px;text-align:left;font-size:8pt">OPERATIVO</th>
-          <th style="background:#37474f;color:#fff;padding:5px 8px;text-align:right;font-size:8pt">Facturación</th>
-          <th style="background:#37474f;color:#fff;padding:5px 8px;text-align:right;font-size:8pt">Resultado</th>
-          <th style="background:#37474f;color:#fff;padding:5px 8px;text-align:right;font-size:8pt">% Transfer.</th>
-          <th colspan="2" style="background:#37474f;color:#fff;padding:5px 8px;text-align:right;font-size:8pt">Var. Real Facturación</th>
-        </tr>
-      </thead>
-      <tbody>${tablaOper}</tbody>
-    </table>
-    </div>` : ''}`;
+    </div>`;
   }
 
   // ── Sección 2: Facturación, resultado y transferencias ────────────────────────
