@@ -2244,7 +2244,7 @@ self.onmessage = async (e) => {
         </div>
         <div class="row2">
           <div class="card">
-            <div class="card-hd"><span class="card-hd-title" id="res-sup-lbl">Superávit agregado por año</span><span class="card-hd-unit">$ millones</span></div>
+            <div class="card-hd"><span class="card-hd-title" id="res-sup-lbl">Resultado neto consolidado por año</span><span class="card-hd-unit">$ millones</span></div>
             <canvas id="ch-rs-sup"></canvas>
           </div>
           <div class="card">
@@ -6008,10 +6008,48 @@ function _rptResultado() {
   }
 
   // ── MODO CONSOLIDADO ──
+  // Desglose ER cuando está activa esa vista
+  const vista = (typeof _resVista !== 'undefined') ? _resVista : 'resumen';
+
+  if (vista === 'desglose' || vista === 'auditoria') {
+    // Construir tabla ER consolidada para el reporte
+    const erEmps = [...new Set([...Object.keys(DATA.er), ...Object.keys(DATA.er_mensual || {})])];
+    const erResuelto = {};
+    erEmps.forEach(e => { const er = DATA.er[e] || _erDesdeMonthly(e); if (er) erResuelto[e] = er; });
+    const erEmpsConDatos = Object.keys(erResuelto);
+    const totals = {};
+    ER_ORDER.forEach(k => {
+      totals[k] = {};
+      years.forEach(y => { totals[k][y] = erEmpsConDatos.reduce((s,e)=>s+(erResuelto[e]?.[y]?.[k]||0),0); });
+    });
+    const fmtER = v => { if (!v) return '—'; const s=v<0?'−':''; return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR'); };
+    const ths2 = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+    const tablaER = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
+      <thead><tr><th style="text-align:left">Partida</th>${ths2}<th style="text-align:right">% ventas (${lastY})</th></tr></thead>
+      <tbody>${ER_ORDER.map(k=>{
+        const isSep = ER_SEPARATORS.includes(k);
+        const bg = isSep ? 'background:#f0f0e8;font-weight:700;border-top:1px solid #ccc' : '';
+        const ventas = totals['ventas_netas']?.[lastY] || 0;
+        const pct = ventas && totals[k]?.[lastY] != null ? (totals[k][lastY]/ventas*100).toFixed(1)+'%' : '—';
+        const celdas = years.map(y=>{
+          const v=totals[k]?.[y]; const col=v<0?'color:#c0392b':(isSep&&v>0?'color:#0f6e56':'');
+          return `<td style="text-align:right;${bg};${col}">${fmtER(v)}</td>`;
+        }).join('');
+        return `<tr><td style="${bg}">${ER_LABELS[k]}</td>${celdas}<td style="text-align:right;${bg};color:#555">${pct}</td></tr>`;
+      }).join('')}</tbody></table>`;
+    const subtit = selEmp ? selEmp+' · '+years[0]+'–'+years[years.length-1] : 'Consolidado · '+erEmpsConDatos.length+' empresas';
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+      + _rptHeader('Estado de Resultados — Desglose', subtit)
+      + charts
+      + '<div class="st">Estado de Resultados por partida</div><div class="tw">'+tablaER+'</div></div>'
+      + _rptFooter()
+      + '</div></body></html>';
+  }
+
   const emps = Object.keys(DATA.sit)
     .map(e=>({e, v: DATA.sit[e]?.[lastY] ?? null, serie: years.map(y=>DATA.sit[e]?.[y])}))
     .filter(x=>x.v!=null)
-    .sort((a,b)=>(b.v||0)-(a.v||0));
+    .sort((a,b)=>(a.v||0)-(b.v||0)); // déficits primero
 
   const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
   const filas = emps.map(x=>{
@@ -6023,15 +6061,15 @@ function _rptResultado() {
     <thead><tr><th style="text-align:left">Empresa</th>${ths}</tr></thead>
     <tbody>${filas}</tbody></table>`;
 
-  const mejores = emps.slice(0,8).map(x=>({label:x.e, value:x.v}));
-  const peores  = emps.slice(-8).reverse().map(x=>({label:x.e, value:x.v}));
+  const superavit = emps.filter(x=>x.v>0).reverse().slice(0,8).map(x=>({label:x.e, value:x.v}));
+  const deficit   = emps.filter(x=>x.v<0).slice(0,8).map(x=>({label:x.e, value:x.v}));
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Resultado Operativo', 'Superávit / Déficit · '+lastY)
     + charts
-    + '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(mejores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
-    + '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(peores, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>'
-    + '<div class="st">Detalle por año</div><div class="tw">'+tabla+'</div></div>'
+    + (deficit.length ? '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(deficit, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>' : '')
+    + (superavit.length ? '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(superavit, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>' : '')
+    + '<div class="st">Detalle por año (déficits primero)</div><div class="tw">'+tabla+'</div></div>'
     + _rptFooter()
     + '</div></body></html>';
 }
@@ -10870,14 +10908,22 @@ function buildResDesglose() {
           <thead><tr>
             <th style="text-align:left;width:220px">Partida</th>
             ${years.map(y=>`<th style="text-align:right">${y}<br><span style="font-size:9px;color:var(--dim)">${coverageByYear[y]} emp.</span></th>`).join('')}
+            <th style="text-align:right;color:var(--dim);font-size:10px">% ventas<br>${years[years.length-1]}</th>
           </tr></thead>
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
               const tdBg = isSep ? 'background:rgba(100,100,80,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              const lastY = years[years.length-1];
+              const ventasLastY = totals['ventas_netas']?.[lastY] || 0;
+              const valLastY = totals[k]?.[lastY];
+              const pct = ventasLastY && valLastY != null && valLastY !== 0
+                ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(1)}%</span>`
+                : '<span style="color:var(--dim)">—</span>';
               return `<tr>
                 <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
                 ${years.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(totals[k][y], k)}</td>`).join('')}
+                <td style="text-align:right;${tdBg}">${pct}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -10918,14 +10964,22 @@ function buildResDesglose() {
           <thead><tr>
             <th style="text-align:left;width:220px">Partida</th>
             ${yearsWithEr.map(y=>`<th style="text-align:right">${y}</th>`).join('')}
+            <th style="text-align:right;color:var(--dim);font-size:10px">% ventas<br>${yearsWithEr[yearsWithEr.length-1]}</th>
           </tr></thead>
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
               const tdBg = isSep ? 'background:rgba(100,100,80,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              const lastY = yearsWithEr[yearsWithEr.length-1];
+              const ventasLastY = empEr[lastY]?.['ventas_netas'] || 0;
+              const valLastY = empEr[lastY]?.[k];
+              const pct = ventasLastY && valLastY != null && valLastY !== 0
+                ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(1)}%</span>`
+                : '<span style="color:var(--dim)">—</span>';
               return `<tr>
                 <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
                 ${yearsWithEr.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(empEr[y]?.[k]??null, k)}</td>`).join('')}
+                <td style="text-align:right;${tdBg}">${pct}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -11016,6 +11070,7 @@ function buildErWaterfallSection(emp, years, empEr) {
 function buildResultado() {
   const allYears = ys(), ts = DATA.totals_sup, td = DATA.totals_def;
   const selEmp = document.getElementById('sel-res-emp')?.value || '';
+  const last   = allYears[allYears.length - 1];
 
   // Poblar selector de año (una vez / si cambió)
   const selAnio = document.getElementById('sel-res-anio');
@@ -11023,71 +11078,91 @@ function buildResultado() {
     selAnio.innerHTML = '<option value="">Todos</option>' +
       allYears.map(y => `<option value="${y}"${String(_resAnioSel)===String(y)?' selected':''}>${y}</option>`).join('');
   }
-  // Si hay año filtrado, restringir los años a ese
-  const years = _resAnioSel ? allYears.filter(y => String(y) === String(_resAnioSel)) : allYears;
+
+  // Filtro año solo aplica en modo consolidado; en modo empresa siempre todos los años
+  const years = (selEmp || !_resAnioSel)
+    ? allYears
+    : allYears.filter(y => String(y) === String(_resAnioSel));
 
   if (selEmp) {
     // ── MODO EMPRESA ─────────────────────────────────────
     const fact = DATA.fact[selEmp] || {};
     const sit  = DATA.sit[selEmp]  || {};
 
-    document.getElementById('kpi-res2').innerHTML = years.map(y => {
-      const f=fact[y]||0, s=sit[y];
-      const m = f>0&&s!=null ? parseFloat((s/f*100).toFixed(1)) : null;
+    // KPI: resultado neto por año con color semáforo + margen
+    document.getElementById('kpi-res2').innerHTML = allYears.map(y => {
+      const f = fact[y]||0, s = sit[y];
+      const m = f > 0 && s != null ? parseFloat((s/f*100).toFixed(1)) : null;
+      const col = s > 0 ? 'var(--pos)' : s < 0 ? 'var(--neg)' : 'var(--text)';
+      const margenTag = m !== null
+        ? `<div class="kpi-sub" style="color:${m>=0?'#1a9e68':'var(--neg)'}">Margen: ${m}%</div>` : '';
       return `<div class="kpi"><div class="kpi-accent" style="background:${YC[y]}"></div>
         <div class="kpi-label">${selEmp} · ${y}</div>
-        <div class="kpi-value" style="color:${s>0?'var(--pos)':s<0?'var(--neg)':'var(--text)'}">${s!=null&&s!==0?fv(s):'N/D'}</div>
-        <div class="kpi-sub">${m!==null?'Margen: '+m+'%':''}</div></div>`;
+        <div class="kpi-value" style="color:${col}">${s!=null&&s!==0?fv(s):'N/D'}</div>
+        <div class="kpi-sub">${f>0?'Fact: '+fv(f):''}</div>
+        ${margenTag}</div>`;
     }).join('');
 
     document.getElementById('res-multi-lbl').textContent = `${selEmp} — Resultado operativo anual`;
     document.getElementById('res-sup-lbl').textContent   = `${selEmp} — Facturación vs Resultado`;
-    document.getElementById('res-cnt-lbl').textContent   = `${selEmp} — Gastos estimados (fact − resultado)`;
+    document.getElementById('res-cnt-lbl').textContent   = `${selEmp} — Estructura ingresos y gastos`;
 
-    // Gráfico 1: resultado por año de la empresa
-    const sitYrs = years.filter(y=>sit[y]!=null&&sit[y]!==0);
+    // Gráfico 1: resultado por año
     mkChart('ch-rs-multi','bar',{
-      labels: years.map(String),
-      datasets:[{ label:'Resultado operativo', data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null),
-        backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:5 }]
-    },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
+      labels: allYears.map(String),
+      datasets:[{ label:'Resultado operativo', data:allYears.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null),
+        backgroundColor:allYears.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'),
+        borderColor:allYears.map(y=>(sit[y]||0)>=0?'#2ecc8aee':'#ff4766ee'),
+        borderWidth:1.5, borderRadius:5 }]
+    },{
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{callback:v=>fvShort(v*1e6)},
+        grid:{color:ctx=>ctx.tick.value===0?'#888':'rgba(128,128,128,.12)',lineWidth:ctx=>ctx.tick.value===0?1.5:1}}}
+    });
 
     // Gráfico 2: facturación vs resultado
     mkChart('ch-rs-sup','bar',{
-      labels: years.map(String),
+      labels: allYears.map(String),
       datasets:[
-        { label:'Facturación', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:4 },
-        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
+        { label:'Facturación', data:allYears.map(y=>(fact[y]||0)/1e6), backgroundColor:allYears.map(y=>YCa(y)), borderRadius:4 },
+        { label:'Resultado',   data:allYears.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null),
+          backgroundColor:allYears.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-    // Gráfico 3: gastos estimados = facturación − resultado
+    // Gráfico 3: estructura ingresos/gastos/resultado
     mkChart('ch-rs-cnt','bar',{
-      labels: years.map(String),
+      labels: allYears.map(String),
       datasets:[
-        { label:'Ingresos (fact.)', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:'#47e8ff55', borderRadius:3 },
-        { label:'Gastos estimados', data:years.map(y=>{ const f=fact[y]||0,s=sit[y]; return (f>0&&s!=null)?((f-s)/1e6):null; }), backgroundColor:'#ff476655', borderRadius:3 },
-        { label:'Resultado neto',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:3 },
+        { label:'Ingresos',        data:allYears.map(y=>(fact[y]||0)/1e6), backgroundColor:'#47e8ff44', borderRadius:3 },
+        { label:'Gastos estimados',data:allYears.map(y=>{ const f=fact[y]||0,s=sit[y]; return (f>0&&s!=null)?(f-s)/1e6:null; }), backgroundColor:'#ff476644', borderRadius:3 },
+        { label:'Resultado',       data:allYears.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null),
+          backgroundColor:allYears.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:3 },
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
   } else {
-    // ── MODO CONSOLIDADO (original) ───────────────────────
-    document.getElementById('kpi-res2').innerHTML = years.map((y,i)=>{
-      return `<div class="kpi"><div class="kpi-accent" style="background:${YC[y]}"></div>
-        <div class="kpi-label">Superávit total ${y}</div>
-        <div class="kpi-value">${fv(ts[y])}</div>
-        <div class="kpi-sub">${DATA.sup_count[y]} super / ${DATA.def_count[y]} déficit</div></div>`;
+    // ── MODO CONSOLIDADO ─────────────────────────────────
+    // KPI: resultado neto (sup+def) por año — no solo superávit bruto
+    document.getElementById('kpi-res2').innerHTML = years.map(y => {
+      const rNeto = (ts[y]||0) + (td[y]||0);
+      const col = rNeto > 0 ? 'var(--pos)' : rNeto < 0 ? 'var(--neg)' : 'var(--text)';
+      const acC = rNeto >= 0 ? '#47ffb4' : '#ff4766';
+      return `<div class="kpi"><div class="kpi-accent" style="background:${acC}"></div>
+        <div class="kpi-label">Resultado neto ${y}</div>
+        <div class="kpi-value" style="color:${col}">${fv(rNeto)}</div>
+        <div class="kpi-sub">${DATA.sup_count[y]||0} sup · ${DATA.def_count[y]||0} déf</div></div>`;
     }).join('');
 
-    document.getElementById('res-multi-lbl').textContent = 'Resultado operativo por empresa — top 12 con datos';
-    document.getElementById('res-sup-lbl').textContent   = 'Superávit agregado por año';
+    document.getElementById('res-multi-lbl').textContent = `Resultado operativo por empresa — top 12 (${last})`;
+    document.getElementById('res-sup-lbl').textContent   = 'Resultado neto consolidado por año';
     document.getElementById('res-cnt-lbl').textContent   = 'Empresas superavitarias vs deficitarias';
 
+    // Top 12: ordenar por valor absoluto del año más reciente
     const sitEmps = Object.entries(DATA.sit)
-      .filter(([,s])=>years.some(y=>s[y]!=null&&s[y]!==0))
-      .sort((a,b)=>Math.max(...years.map(y=>Math.abs(b[1][y]||0)))-Math.max(...years.map(y=>Math.abs(a[1][y]||0))))
-      .slice(0,12);
+      .filter(([,s]) => years.some(y => s[y] != null && s[y] !== 0))
+      .sort((a,b) => Math.abs(b[1][last]||0) - Math.abs(a[1][last]||0))
+      .slice(0, 12);
 
     mkChart('ch-rs-multi','bar',{
       labels: sitEmps.map(([n])=>n.length>16?n.slice(0,14)+'…':n),
@@ -11096,23 +11171,31 @@ function buildResultado() {
         data: sitEmps.map(([,s])=>s[y]!=null?s[y]/1e6:null),
         backgroundColor:YCa(y), borderRadius:3
       }))
-    },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
+    },{plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-    mkChart('ch-rs-sup','line',{
+    // Resultado neto consolidado como barras +/- con línea de cero
+    mkChart('ch-rs-sup','bar',{
       labels: years.map(String),
-      datasets:[
-        {label:'Superávit', data:years.map(y=>(ts[y]||0)/1e6), borderColor:'#2ecc8a', backgroundColor:'#47ffb418', fill:true, tension:.4, pointRadius:5},
-        {label:'Déficit',   data:years.map(y=>(td[y]||0)/1e6), borderColor:'#ff4766', backgroundColor:'#ff476618', fill:true, tension:.4, pointRadius:5},
-      ]
-    },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
+      datasets:[{
+        label:'Resultado neto',
+        data: years.map(y=>((ts[y]||0)+(td[y]||0))/1e6),
+        backgroundColor: years.map(y=>(ts[y]||0)+(td[y]||0)>=0?'#2ecc8a99':'#ff476699'),
+        borderColor:     years.map(y=>(ts[y]||0)+(td[y]||0)>=0?'#2ecc8aee':'#ff4766ee'),
+        borderWidth:1.5, borderRadius:3
+      }]
+    },{
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{callback:v=>fvShort(v*1e6)},
+        grid:{color:ctx=>ctx.tick.value===0?'#888':'rgba(128,128,128,.12)',lineWidth:ctx=>ctx.tick.value===0?1.5:1}}}
+    });
 
     mkChart('ch-rs-cnt','bar',{
       labels: years.map(String),
       datasets:[
-        {label:'Superavitarias', data:years.map(y=>DATA.sup_count[y]), backgroundColor:'#47ffb499', borderRadius:4},
-        {label:'Deficitarias',   data:years.map(y=>DATA.def_count[y]), backgroundColor:'#ff476699', borderRadius:4},
+        {label:'Superavitarias', data:years.map(y=>DATA.sup_count[y]||0), backgroundColor:'#47ffb499', borderRadius:4},
+        {label:'Deficitarias',   data:years.map(y=>DATA.def_count[y]||0), backgroundColor:'#ff476699', borderRadius:4},
       ]
-    });
+    },{plugins:{legend:{position:'bottom'}}});
   }
 }
 
