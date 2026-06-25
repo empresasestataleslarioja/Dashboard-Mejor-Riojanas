@@ -6015,16 +6015,10 @@ function _rptResultado() {
   const vista = (typeof _resVista !== 'undefined') ? _resVista : 'resumen';
 
   if (vista === 'desglose' || vista === 'auditoria') {
-    // Construir tabla ER consolidada para el reporte
-    const erEmps = [...new Set([...Object.keys(DATA.er), ...Object.keys(DATA.er_mensual || {})])];
+    // Reporte desglose: solo ER provisorios (er_mensual), igual que la vista interactiva
+    const erEmps = Object.keys(DATA.er_mensual || {});
     const erResuelto = {};
-    erEmps.forEach(e => {
-      const erM = DATA.er[e] || {}, erP = _erDesdeMonthly(e) || {}, merged = {};
-      [...new Set([...Object.keys(erM), ...Object.keys(erP)])].forEach(yr => {
-        merged[yr] = Object.assign({}, erP[yr] || {}, erM[yr] || {});
-      });
-      if (Object.keys(merged).length) erResuelto[e] = merged;
-    });
+    erEmps.forEach(e => { const er = _erDesdeMonthly(e); if (er) erResuelto[e] = er; });
     const erEmpsConDatos = Object.keys(erResuelto);
     const totals = {};
     ER_ORDER.forEach(k => {
@@ -10869,31 +10863,22 @@ function buildResDesglose() {
   };
 
   if (!selEmp) {
-    // ── Consolidado: tabla por partida × año, sumando todas las empresas con ER ──
-    // Incluye empresas con DATA.er (Excel matricial) y con er_mensual (fallback)
-    const erEmps = [...new Set([
-      ...Object.keys(DATA.er),
-      ...Object.keys(DATA.er_mensual || {}),
-    ])];
-    // Mergear ER formal (matricial) + provisorio (er_mensual) por año:
-    // si la empresa tiene formal 2021-2022 y provisorio 2023-2024, ambos contribuyen al consolidado.
+    // ── Consolidado: solo ER provisorios (DATA.er_mensual) ──
+    // El ER formal (DATA.er desde balances) vive en Análisis de Balances, no aquí.
+    const erEmps = Object.keys(DATA.er_mensual || {});
     const erResuelto = {};
     erEmps.forEach(e => {
-      const erM = DATA.er[e] || {};
-      const erP = _erDesdeMonthly(e) || {};
-      const merged = {};
-      [...new Set([...Object.keys(erM), ...Object.keys(erP)])].forEach(yr => {
-        merged[yr] = Object.assign({}, erP[yr] || {}, erM[yr] || {}); // formal prevalece por partida
-      });
-      if (Object.keys(merged).length) erResuelto[e] = merged;
+      const er = _erDesdeMonthly(e);
+      if (er) erResuelto[e] = er;
     });
     const erEmpsConDatos = Object.keys(erResuelto);
     if (!erEmpsConDatos.length) {
       cont.innerHTML = `<div style="padding:32px;text-align:center;color:var(--dim)">
-        <div style="font-size:32px;margin-bottom:12px">📂</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">Sin datos de desglose</div>
-        <div style="font-size:11px;line-height:1.6">Para ver el Estado de Resultados completo,<br>importá el archivo <strong>ER_20XX.xlsx</strong> desde el módulo <strong>Importar Datos</strong>.<br>
-        El sistema detecta automáticamente la hoja RESUMEN.</div>
+        <div style="font-size:32px;margin-bottom:12px">📋</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">Sin ER provisorios cargados</div>
+        <div style="font-size:11px;line-height:1.6">Este panel refleja los <strong>Estados de Resultados provisorios</strong> cargados mes a mes.<br>
+        Importá el ER mensual desde el módulo <strong>Estado de Resultados</strong> de cada empresa.<br>
+        Los ER formales de balances aprobados se ven en <strong>Análisis de Balances</strong>.</div>
       </div>`;
       return;
     }
@@ -10917,7 +10902,7 @@ function buildResDesglose() {
       <div class="rowfull card" style="overflow-x:auto">
         <div class="card-hd">
           <span class="card-hd-title">Estado de Resultados consolidado — todas las empresas con ER cargado</span>
-          <span class="card-hd-unit">${erEmps.length} empresas · $ millones</span>
+          <span class="card-hd-unit">${erEmpsConDatos.length} empresas · ER provisorio · $ millones</span>
         </div>
         <table class="tbl" style="min-width:600px;font-size:11px">
           <thead><tr>
@@ -10947,24 +10932,17 @@ function buildResDesglose() {
       ${buildErChartSection(erEmps, years)}
     `;
   } else {
-    // ── Vista empresa: tabla partida × año para esa empresa + gráfico cascada ──
-    // Combinar DATA.er (matricial) con el desglose mensual/derivado.
-    // Si DATA.er existe pero está vacío o incompleto, completar con el fallback.
-    const erMatricial = DATA.er[selEmp] || {};
-    const erFallback = _erDesdeMonthly(selEmp) || {};
-    const empEr = {};
-    [...new Set([...Object.keys(erMatricial), ...Object.keys(erFallback)])].forEach(yr => {
-      // Preferir el matricial (más detallado); completar con fallback lo que falte
-      empEr[yr] = Object.assign({}, erFallback[yr] || {}, erMatricial[yr] || {});
-    });
+    // ── Vista empresa: solo ER provisorio (er_mensual) ──
+    const empEr = _erDesdeMonthly(selEmp) || {};
     const yearsWithEr = years.filter(y => empEr?.[y] && Object.keys(empEr[y]).length);
     const hasEr = yearsWithEr.length > 0;
 
     if (!hasEr) {
       cont.innerHTML = `<div style="padding:24px;text-align:center;color:var(--dim)">
-        <div style="font-size:24px;margin-bottom:8px">📭</div>
-        <div style="font-size:12px">No hay datos de desglose ER para <strong style="color:var(--text)">${selEmp}</strong>.<br>
-        Importá el ER_20XX.xlsx o cargá el ER mensual para ver el detalle.</div>
+        <div style="font-size:24px;margin-bottom:8px">📋</div>
+        <div style="font-size:12px">No hay ER provisorio cargado para <strong style="color:var(--text)">${selEmp}</strong>.<br>
+        Importá el ER mensual desde el módulo <strong>Estado de Resultados</strong>.<br>
+        <span style="font-size:10px;color:var(--dim)">El ER formal del balance se ve en Análisis de Balances.</span></div>
       </div>`;
       return;
     }
@@ -10972,7 +10950,7 @@ function buildResDesglose() {
     cont.innerHTML = `
       <div class="rowfull card" style="overflow-x:auto">
         <div class="card-hd">
-          <span class="card-hd-title">Estado de Resultados — ${selEmp}</span>
+          <span class="card-hd-title">ER Provisorio — ${selEmp}</span>
           <span class="card-hd-unit">$ completos</span>
         </div>
         <table class="tbl" style="min-width:520px;font-size:11px">
