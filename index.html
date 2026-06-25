@@ -2436,6 +2436,10 @@ self.onmessage = async (e) => {
           style="background:#1a5fb4;color:#fff;border:none;padding:6px 14px;font-size:9pt;font-family:var(--mono);border-radius:3px;cursor:pointer;white-space:nowrap">
           📋 Informe Ejecutivo
         </button>
+        <button onclick="informeEstadoERProvisorio(document.getElementById('sel-emp').value)"
+          style="background:#6d3a9c;color:#fff;border:none;padding:6px 14px;font-size:9pt;font-family:var(--mono);border-radius:3px;cursor:pointer;white-space:nowrap">
+          📊 ER Provisorio — Estado por Año
+        </button>
       </div>
       <div class="evo-row" id="evo-cards"></div>
 
@@ -12755,30 +12759,32 @@ function _informeEjecutivoRender(emp) {
         ? `✓ Margen operativo positivo (${p(dren.margen_operativo)})${balRef}`
         : `✗ Margen operativo negativo (${p(dren.margen_operativo)})${balRef} — la operación no genera excedente`);
   }
-  // Crecimiento real de facturación
-  const uyrs = yearsConDatos.slice(-2);
-  if (uyrs.length === 2) {
-    const f1 = fact[uyrs[0]], f2 = fact[uyrs[1]];
+  // Crecimiento real: todos los años con datos (no solo últimos 2)
+  for (let i = 1; i < yearsConDatos.length; i++) {
+    const yA = yearsConDatos[i-1], yB = yearsConDatos[i];
+    const f1 = fact[yA], f2 = fact[yB];
     if (f1 && f2 && f1 !== 0) {
       const varNom = (f2 - f1) / Math.abs(f1) * 100;
-      const ipcPer = _ipcAcumEntrePeriodos(String(uyrs[1]), String(uyrs[0]));
+      const ipcPer = _ipcAcumEntrePeriodos(String(yB), String(yA));
       if (ipcPer) {
         const varReal = ((1 + varNom / 100) / (1 + ipcPer / 100) - 1) * 100;
         diag.push(varReal >= 0
-          ? `✓ Facturación ${uyrs[0]}→${uyrs[1]}: crecimiento real +${varReal.toFixed(1)}% (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`
-          : `△ Facturación ${uyrs[0]}→${uyrs[1]}: caída real ${varReal.toFixed(1)}% (nominal ${pct(varNom)}, IPC acum. ${ipcPer.toFixed(1)}%)`);
+          ? `✓ Facturación ${yA}→${yB}: crecimiento real +${varReal.toFixed(1)}% (nominal ${pct(varNom)}, IPC ${ipcPer.toFixed(1)}%)`
+          : `△ Facturación ${yA}→${yB}: caída real ${varReal.toFixed(1)}% (nominal ${pct(varNom)}, IPC ${ipcPer.toFixed(1)}%)`);
       } else {
-        diag.push(`△ Facturación ${uyrs[0]}→${uyrs[1]}: variación nominal ${pct(varNom)} (IPC no disponible para calcular variación real)`);
+        diag.push(`△ Facturación ${yA}→${yB}: variación nominal ${pct(varNom)} (IPC no disponible)`);
       }
     }
   }
-  // Resultado del último año con datos
-  if (lastY && sit[lastY] != null) {
-    const s = sit[lastY];
-    diag.push(s >= 0
-      ? `✓ Resultado operativo positivo en ${lastY}: ${m(s)}`
-      : `✗ Resultado operativo negativo en ${lastY}: ${m(s)}`);
-  }
+  // Resultado de todos los años con datos
+  yearsConDatos.forEach(y => {
+    if (sit[y] != null) {
+      const s = sit[y];
+      diag.push(s >= 0
+        ? `✓ Resultado operativo positivo en ${y}: ${m(s)}`
+        : `✗ Resultado operativo negativo en ${y}: ${m(s)}`);
+    }
+  });
   // Dependencia de transferencias
   if (lastT && lastF && lastT > 0) {
     const pctTrans = lastT / lastF * 100;
@@ -12787,9 +12793,81 @@ function _informeEjecutivoRender(emp) {
       : `△ Transferencias estatales en ${lastY}: ${m(lastT)} (${pctTrans.toFixed(1)}% de la facturación)`);
   }
 
-  const htmlDiag = diag.length ? `
+  // ── Tabla comparativa de indicadores por año (todos los balances) ─────────────
+  let htmlDiagTabla = '';
+  if (bals.length > 0) {
+    const diagMetrics = [
+      { lbl:'Liquidez corriente', get: b => b.indicadores?.liquidez?.liquidez_corriente,
+        fmt: r2, ok: v => v >= 1.5, warn: v => v >= 1, ref:'≥ 1.0' },
+      { lbl:'Capital de trabajo', get: b => b.indicadores?.liquidez?.capital_trabajo,
+        fmt: m, ok: v => v > 0, warn: v => v === 0, ref:'> 0' },
+      { lbl:'Endeudamiento', get: b => b.indicadores?.solvencia?.razon_endeudamiento,
+        fmt: p, ok: v => v < 0.4, warn: v => v < 0.6, ref:'< 60%' },
+      { lbl:'Deuda / Patrimonio', get: b => b.indicadores?.solvencia?.deuda_patrimonio,
+        fmt: r2, ok: v => v < 0.5, warn: v => v < 1, ref:'< 1.0' },
+      { lbl:'Patrimonio Neto', get: b => b.indicadores?.solvencia?.patrimonio_neto,
+        fmt: m, ok: v => v > 0, warn: v => v === 0, ref:'> 0' },
+      { lbl:'ROE', get: b => b.indicadores?.rentabilidad?.roe,
+        fmt: p, ok: v => v > 0.08, warn: v => v > 0, ref:'> 0%' },
+      { lbl:'ROA', get: b => b.indicadores?.rentabilidad?.roa,
+        fmt: p, ok: v => v > 0.05, warn: v => v > 0, ref:'> 0%' },
+      { lbl:'Margen operativo', get: b => b.indicadores?.rentabilidad?.margen_operativo,
+        fmt: p, ok: v => v > 0.05, warn: v => v > 0, ref:'> 0%' },
+      { lbl:'Margen neto', get: b => b.indicadores?.rentabilidad?.margen_neto,
+        fmt: p, ok: v => v > 0.05, warn: v => v > 0, ref:'> 0%' },
+      { lbl:'Rotación activos', get: b => b.indicadores?.eficiencia?.rotacion_activos,
+        fmt: r2, ok: v => v >= 1, warn: v => v >= 0.5, ref:'≥ 0.5' },
+    ];
+    // Filtrar métricas que tengan al menos un valor
+    const metricsConDatos = diagMetrics.filter(met => bals.some(b => met.get(b) != null));
+    if (metricsConDatos.length) {
+      // Calcular tendencia: comparar primer y último balance
+      const trendIcon = (met) => {
+        if (bals.length < 2) return '';
+        const v0 = met.get(bals[0]), v1 = met.get(bals[bals.length-1]);
+        if (v0 == null || v1 == null) return '';
+        // Para endeudamiento y D/P, bajar es mejor
+        const invertida = met.lbl.includes('Endeudamiento') || met.lbl.includes('Deuda /');
+        const mejor = invertida ? v1 < v0 : v1 > v0;
+        const igual = Math.abs(v1 - v0) < 0.001;
+        if (igual) return '<span style="color:#888">→</span>';
+        return mejor
+          ? '<span style="color:#1a7a4a;font-weight:700">▲</span>'
+          : '<span style="color:#c0392b;font-weight:700">▼</span>';
+      };
+      htmlDiagTabla = `
+      <div style="margin-top:14px;overflow-x:auto">
+      <table class="ie-tabla" style="font-size:8.5pt">
+        <thead><tr>
+          <th>Indicador</th><th style="text-align:center">Ref.</th>
+          ${bals.map(b => `<th style="text-align:right">${b.periodo}</th>`).join('')}
+          ${bals.length > 1 ? '<th style="text-align:center">Tendencia</th>' : ''}
+        </tr></thead>
+        <tbody>${metricsConDatos.map(met => `
+          <tr>
+            <td>${met.lbl}</td>
+            <td style="text-align:center;color:#888;font-size:7.5pt">${met.ref}</td>
+            ${bals.map(b => {
+              const v = met.get(b);
+              if (v == null) return `<td style="text-align:right;color:#ccc">—</td>`;
+              const isOk   = met.ok(v);
+              const isWarn = !isOk && met.warn(v);
+              const col    = isOk ? '#1a7a4a' : isWarn ? '#b7770d' : '#c0392b';
+              const icon   = isOk ? '✓' : isWarn ? '△' : '✗';
+              return `<td style="text-align:right;color:${col};font-weight:${isOk?'600':'400'}">${met.fmt(v)} <span style="font-size:7pt">${icon}</span></td>`;
+            }).join('')}
+            ${bals.length > 1 ? `<td style="text-align:center">${trendIcon(met)}</td>` : ''}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>`;
+    }
+  }
+
+  const htmlDiag = (diag.length || htmlDiagTabla) ? `
   <h2 class="ie-h2">Diagnóstico General</h2>
-  <div class="ie-diag">${diag.join('<br>')}</div>` : '';
+  ${diag.length ? `<div class="ie-diag">${diag.join('<br>')}</div>` : ''}
+  ${htmlDiagTabla}` : '';
 
   // ── Sección 2: Facturación, resultado y transferencias ────────────────────────
   // Normalizar a string para evitar duplicados por tipo (number vs string)
@@ -13145,7 +13223,7 @@ function _informeEjecutivoRender(emp) {
         <h1>${emp}</h1>
         <div class="ie-sub">${ruboLbl} · Informe Ejecutivo · ${hoy}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;opacity:.85;filter:brightness(2) saturate(.3) contrast(.8)">
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;color:#fff">
         ${_svgLaRioja(42)}
         <div style="width:1px;height:36px;background:rgba(255,255,255,.3)"></div>
         ${_svgMejorRiojanas(36)}
@@ -13193,6 +13271,241 @@ function _informeEjecutivoRender(emp) {
   iframe.contentDocument.open();
   iframe.contentDocument.write(html);
   iframe.contentDocument.close();
+}
+
+// ── INFORME: ESTADO DE PRESENTACIÓN DE ER PROVISORIO ────────────────────────
+function informeEstadoERProvisorio(empFiltro) {
+  const hoy = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
+
+  // Recolectar todas las empresas con ER mensual cargado
+  const erM = DATA.er_mensual || {};
+  const allEmps = empFiltro
+    ? (erM[empFiltro] ? [empFiltro] : [])
+    : Object.keys(erM).sort();
+
+  // Todos los años presentes en el conjunto
+  const todosAnios = [...new Set(
+    allEmps.flatMap(e => Object.keys(erM[e] || {}))
+  )].sort();
+
+  const fv2 = v => v == null ? '—' : (v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('es-AR');
+
+  // Función para calcular total de un rubro en un año
+  const calcRubro = (emp, yr, std) => {
+    const filas = (erM[emp]?.[yr]?.filas) || [];
+    const fila  = filas.find(f => f.conceptoStd === std);
+    if (!fila) return null;
+    const tot = Object.values(fila.valores || {}).reduce((s, v) => s + (v || 0), 0);
+    return tot === 0 ? null : tot;
+  };
+
+  // Para cada empresa×año: estado y métricas clave
+  const rows = allEmps.flatMap(emp => {
+    return todosAnios.map(yr => {
+      const datos = erM[emp]?.[yr];
+      if (!datos) return { emp, yr, estado: 'sin_datos', meses: 0, ventas: null, resultado: null, margen: null };
+      const filas = datos.filas || [];
+      // Contar meses con al menos un valor
+      const mesesConDatos = new Set();
+      filas.forEach(f => {
+        Object.entries(f.valores || {}).forEach(([mes, v]) => {
+          if (v != null && v !== 0) mesesConDatos.add(mes);
+        });
+      });
+      const nMeses = mesesConDatos.size;
+      const ventas    = calcRubro(emp, yr, 'ventas');
+      const resultado = calcRubro(emp, yr, 'resEjercicio') ?? calcRubro(emp, yr, 'resOperativo');
+      const margen    = (ventas && ventas !== 0 && resultado != null) ? resultado / ventas * 100 : null;
+      const estado = nMeses >= 12 ? 'completo' : nMeses >= 6 ? 'parcial' : nMeses > 0 ? 'inicio' : 'sin_datos';
+      return { emp, yr, estado, meses: nMeses, ventas, resultado, margen };
+    }).filter(r => r.estado !== 'sin_datos');
+  });
+
+  // Agrupar por empresa para la tabla
+  const porEmp = {};
+  rows.forEach(r => {
+    if (!porEmp[r.emp]) porEmp[r.emp] = {};
+    porEmp[r.emp][r.yr] = r;
+  });
+  const empsConDatos = Object.keys(porEmp).sort();
+
+  const estadoChip = (r) => {
+    if (!r) return '<span style="color:#ccc;font-size:8pt">—</span>';
+    const cfg = {
+      completo: { bg:'#1a7a4a', txt:'✓ Completo',  sub: `12 meses` },
+      parcial:  { bg:'#b7770d', txt:'△ Parcial',   sub: `${r.meses} meses` },
+      inicio:   { bg:'#c0392b', txt:'⚠ Inicio',    sub: `${r.meses} mes${r.meses>1?'es':''}` },
+    };
+    const c = cfg[r.estado] || cfg.inicio;
+    return `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">
+      <span style="background:${c.bg};color:#fff;padding:2px 7px;border-radius:3px;font-size:7.5pt;font-weight:600;white-space:nowrap">${c.txt}</span>
+      <span style="font-size:6.5pt;color:#888">${c.sub}</span>
+    </div>`;
+  };
+
+  // Resumen global
+  const totalCeldas = rows.length;
+  const completos   = rows.filter(r => r.estado === 'completo').length;
+  const parciales   = rows.filter(r => r.estado === 'parcial').length;
+  const inicios     = rows.filter(r => r.estado === 'inicio').length;
+  const pctCumpl    = totalCeldas > 0 ? (completos / totalCeldas * 100).toFixed(0) : 0;
+
+  const css2 = `
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Segoe UI',Arial,sans-serif; font-size:9.5pt; color:#1a1a2e; background:#fff; }
+    .portada { background:#6d3a9c; color:#fff; padding:22px 36px 18px; }
+    .portada h1 { font-size:18pt; margin:0 0 4px; }
+    .portada .sub { font-size:9pt; opacity:.8; }
+    .body { padding:0 28px 28px; }
+    .resumen { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:14px 0; }
+    .rk { border-radius:5px; padding:10px 14px; }
+    .rk-v { font-size:18pt; font-weight:700; line-height:1; }
+    .rk-l { font-size:7pt; text-transform:uppercase; letter-spacing:.06em; margin-top:3px; }
+    h2.sec { font-size:10pt; color:#6d3a9c; border-bottom:2px solid #6d3a9c; padding-bottom:3px; margin:22px 0 8px; text-transform:uppercase; letter-spacing:.06em; }
+    table.t { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:12px; }
+    table.t th { background:#6d3a9c; color:#fff; padding:5px 8px; text-align:left; font-size:7.5pt; text-transform:uppercase; letter-spacing:.04em; }
+    table.t th.r { text-align:center; }
+    table.t td { padding:5px 8px; border-bottom:1px solid #eee; vertical-align:middle; }
+    table.t tr:nth-child(even) td { background:#f9f5ff; }
+    .emp-row td { font-weight:700; background:#f0eaff !important; font-size:8pt; color:#6d3a9c; }
+    .ft { margin-top:24px; font-size:7pt; color:#aaa; border-top:1px solid #eee; padding-top:6px; }
+    @media print {
+      .portada, table.t th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }
+  `;
+
+  // Tabla principal: empresa × año
+  let tablaHtml = '';
+  if (empsConDatos.length) {
+    tablaHtml = `<h2 class="sec">Estado por Empresa y Año</h2>
+    <table class="t">
+      <thead><tr>
+        <th>Empresa</th><th class="r">Año</th><th class="r">Estado</th><th class="r">Meses c/datos</th>
+        <th class="r">Ventas / Ingresos</th><th class="r">Resultado</th><th class="r">Margen</th>
+      </tr></thead>
+      <tbody>`;
+    empsConDatos.forEach(emp => {
+      const aniosEmp = todosAnios.filter(yr => porEmp[emp]?.[yr]);
+      aniosEmp.forEach((yr, idx) => {
+        const r = porEmp[emp][yr];
+        const colRes = r.resultado != null ? (r.resultado >= 0 ? '#1a7a4a' : '#c0392b') : '#888';
+        const colMrg = r.margen   != null ? (r.margen   >= 0 ? '#1a7a4a' : '#c0392b') : '#888';
+        tablaHtml += `<tr>
+          <td>${idx === 0 ? `<strong>${emp}</strong>` : ''}</td>
+          <td style="text-align:center;font-weight:600">${yr}</td>
+          <td style="text-align:center">${estadoChip(r)}</td>
+          <td style="text-align:center">${r.meses}</td>
+          <td style="text-align:right">${fv2(r.ventas)}</td>
+          <td style="text-align:right;color:${colRes};font-weight:600">${fv2(r.resultado)}</td>
+          <td style="text-align:right;color:${colMrg}">${r.margen != null ? r.margen.toFixed(1)+'%' : '—'}</td>
+        </tr>`;
+      });
+    });
+    tablaHtml += `</tbody></table>`;
+  } else {
+    tablaHtml = `<p style="color:#888;padding:16px 0">No hay datos de ER Provisorio cargados${empFiltro ? ' para ' + empFiltro : ''}.</p>`;
+  }
+
+  // Tabla resumen por año (cobertura)
+  let tablaAnualHtml = '';
+  if (todosAnios.length && empsConDatos.length) {
+    tablaAnualHtml = `<h2 class="sec">Cobertura por Año</h2>
+    <table class="t">
+      <thead><tr>
+        <th>Año</th><th class="r">Empresas c/datos</th><th class="r">Completos</th>
+        <th class="r">Parciales</th><th class="r">En inicio</th><th class="r">% Cumplimiento</th>
+      </tr></thead>
+      <tbody>`;
+    todosAnios.forEach(yr => {
+      const rowsYr = rows.filter(r => r.yr === yr);
+      if (!rowsYr.length) return;
+      const nComp = rowsYr.filter(r=>r.estado==='completo').length;
+      const nParc = rowsYr.filter(r=>r.estado==='parcial').length;
+      const nInic = rowsYr.filter(r=>r.estado==='inicio').length;
+      const pct   = (nComp / rowsYr.length * 100).toFixed(0);
+      const col   = pct >= 80 ? '#1a7a4a' : pct >= 50 ? '#b7770d' : '#c0392b';
+      tablaAnualHtml += `<tr>
+        <td><strong>${yr}</strong></td>
+        <td style="text-align:center">${rowsYr.length}</td>
+        <td style="text-align:center;color:#1a7a4a;font-weight:600">${nComp}</td>
+        <td style="text-align:center;color:#b7770d">${nParc}</td>
+        <td style="text-align:center;color:#c0392b">${nInic}</td>
+        <td style="text-align:center;color:${col};font-weight:700">${pct}%</td>
+      </tr>`;
+    });
+    tablaAnualHtml += `</tbody></table>`;
+  }
+
+  const html2 = `<!DOCTYPE html><html lang="es"><head>
+    <meta charset="utf-8">
+    <title>ER Provisorio — Estado de Presentación</title>
+    <style>${css2}</style>
+  </head><body>
+  <div class="portada">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+      <div>
+        <h1>ER Provisorio — Estado de Presentación</h1>
+        <div class="sub">${empFiltro ? empFiltro + ' · ' : 'Todas las empresas · '}${hoy}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;color:#fff">
+        ${_svgLaRioja(38)}
+        <div style="width:1px;height:32px;background:rgba(255,255,255,.3)"></div>
+        ${_svgMejorRiojanas(32)}
+      </div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="resumen">
+      <div class="rk" style="background:#e8f5e9">
+        <div class="rk-v" style="color:#1a7a4a">${completos}</div>
+        <div class="rk-l" style="color:#1a7a4a">Completos (12 meses)</div>
+      </div>
+      <div class="rk" style="background:#fff8e1">
+        <div class="rk-v" style="color:#b7770d">${parciales}</div>
+        <div class="rk-l" style="color:#b7770d">Parciales (6–11 meses)</div>
+      </div>
+      <div class="rk" style="background:#fdecea">
+        <div class="rk-v" style="color:#c0392b">${inicios}</div>
+        <div class="rk-l" style="color:#c0392b">En inicio (&lt; 6 meses)</div>
+      </div>
+      <div class="rk" style="background:#f0eaff">
+        <div class="rk-v" style="color:#6d3a9c">${pctCumpl}%</div>
+        <div class="rk-l" style="color:#6d3a9c">Tasa de cumplimiento</div>
+      </div>
+    </div>
+    ${tablaAnualHtml}
+    ${tablaHtml}
+    <div class="ft">Dashboard Mejor Riojanas · ${hoy} · ER Provisorio: datos de facturación y resultado mensual acumulado cargados por empresa</div>
+  </div>
+  </body></html>`;
+
+  // Mostrar en overlay
+  let ov = document.getElementById('_er_prov_overlay');
+  if (ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = '_er_prov_overlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;flex-direction:column;background:#2a1550';
+  const bar2 = document.createElement('div');
+  bar2.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#2a1550;border-bottom:1px solid #4a2a7a;flex-shrink:0';
+  const tit2 = document.createElement('span');
+  tit2.style.cssText = 'color:#cbb8e8;font-size:9pt;font-family:monospace;flex:1';
+  tit2.textContent = 'ER Provisorio — Estado de Presentación' + (empFiltro ? ' · ' + empFiltro : '');
+  const bP2 = document.createElement('button');
+  bP2.textContent = '🖨 Imprimir';
+  bP2.style.cssText = 'background:#6d3a9c;color:#fff;border:none;padding:5px 14px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
+  const bC2 = document.createElement('button');
+  bC2.textContent = '✕ Cerrar';
+  bC2.style.cssText = 'background:#3d2060;color:#ccc;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
+  const ifr2 = document.createElement('iframe');
+  ifr2.style.cssText = 'flex:1;border:none;width:100%;background:#fff';
+  bP2.onclick = () => ifr2.contentWindow.print();
+  bC2.onclick = () => ov.remove();
+  bar2.appendChild(tit2); bar2.appendChild(bP2); bar2.appendChild(bC2);
+  ov.appendChild(bar2); ov.appendChild(ifr2);
+  document.body.appendChild(ov);
+  ifr2.contentDocument.open();
+  ifr2.contentDocument.write(html2);
+  ifr2.contentDocument.close();
 }
 
 function buildEvolucionMensual(emp) {
