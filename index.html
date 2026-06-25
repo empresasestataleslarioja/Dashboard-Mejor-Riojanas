@@ -26585,6 +26585,264 @@ function buildTransMensual() {
       y: { stacked: true, ticks: { callback: v => fv(v * 1e6) } }
     }
   });
+
+  // ── Click interactivo: detectar barra (mes + categoría) y abrir detalle ──────
+  canvas.onclick = function(e) {
+    const ch = charts['ch-trans-mensual'];
+    if (!ch) return;
+    // Intentar hit sobre barra específica
+    const hits = ch.getElementsAtEventForMode(e, 'nearest', { intersect: true }, false);
+    if (hits.length) {
+      const hit     = hits[0];
+      const mesIdx  = hit.index;          // 0-based → mes 1-based = mesIdx+1
+      const catLabel = ch.data.datasets[hit.datasetIndex]?.label || null;
+      _transMensualDrillMes(mesIdx + 1, catLabel, yr, rows);
+    } else {
+      // Click fuera de barras → abrir drill general con resumen del año
+      _transMensualDrillAnio(yr, rows, cats, byMes);
+    }
+  };
+  // Cursor pointer al pasar por encima de las barras
+  canvas.style.cursor = 'pointer';
+}
+
+// ── Popup detalle: mes específico (con filtro opcional por categoría) ──────────
+function _transMensualDrillMes(mes, catFiltro, yr, rows) {
+  const NM = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mesNombre = NM[mes] || `Mes ${mes}`;
+
+  // Transferencias del mes (y categoría si se hizo click en una barra coloreada)
+  const rowsMes = rows.filter(t => parseInt(t.mes) === mes);
+  const rowsCat = catFiltro ? rowsMes.filter(t => (t.categoria||'Sin Clasificar') === catFiltro) : rowsMes;
+
+  const total       = rowsMes.reduce((s, t) => s + (parseFloat(t.importe) || 0), 0);
+  const totalCat    = rowsCat.reduce((s, t) => s + (parseFloat(t.importe) || 0), 0);
+  const nTrans      = rowsMes.length;
+
+  // ── Tabla detallada del mes ───────────────────────────────────────────────────
+  const filasMes = [...rowsMes].sort((a, b) => (parseFloat(b.importe)||0) - (parseFloat(a.importe)||0));
+
+  const tblMes = dTbl(
+    ['Beneficiario / Empresa', 'Organismo (SAF)', 'Categoría', 'Importe'],
+    filasMes.map(t => ({
+      cells: [
+        dc(t.empresa || t.beneficiario || '—'),
+        dc(t.organismo || '—', 'dd'),
+        dc(t.categoria || 'Sin Clasificar', 'dd'),
+        dc(fvd(parseFloat(t.importe)||0), 'dr'),
+      ]
+    }))
+  );
+
+  // ── Tabla solo de la categoría clickeada ─────────────────────────────────────
+  const tblCat = catFiltro && rowsCat.length < rowsMes.length ? dTbl(
+    ['Beneficiario / Empresa', 'Organismo (SAF)', 'Importe'],
+    [...rowsCat]
+      .sort((a, b) => (parseFloat(b.importe)||0) - (parseFloat(a.importe)||0))
+      .map(t => ({
+        cells: [
+          dc(t.empresa || t.beneficiario || '—'),
+          dc(t.organismo || '—', 'dd'),
+          dc(fvd(parseFloat(t.importe)||0), 'dr'),
+        ]
+      }))
+  ) : null;
+
+  // ── Por empresa (agrupado) ────────────────────────────────────────────────────
+  const porEmp = {};
+  rowsMes.forEach(t => {
+    const k = t.empresa || t.beneficiario || '—';
+    porEmp[k] = (porEmp[k] || 0) + (parseFloat(t.importe) || 0);
+  });
+  const tblEmp = dTbl(
+    ['Empresa / Beneficiario', 'Total mes'],
+    Object.entries(porEmp)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => ({ cells: [dc(k), dc(fvd(v), 'dr')] }))
+  );
+
+  // ── Por organismo (agrupado) ──────────────────────────────────────────────────
+  const porSAF = {};
+  rowsMes.forEach(t => {
+    const k = t.organismo || '—';
+    porSAF[k] = (porSAF[k] || 0) + (parseFloat(t.importe) || 0);
+  });
+  const tblSAF = dTbl(
+    ['Organismo emisor (SAF)', 'Total mes'],
+    Object.entries(porSAF)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => ({ cells: [dc(k), dc(fvd(v), 'dr')] }))
+  );
+
+  const cfg = {
+    title: `${mesNombre} ${yr}${catFiltro ? ' · ' + catFiltro : ''} — Detalle de Transferencias`,
+    sub:   `${nTrans} transferencia${nTrans !== 1 ? 's' : ''} · Total mes: ${fvd(total)}${catFiltro ? ` · ${catFiltro}: ${fvd(totalCat)}` : ''}`,
+    tabs: [
+      {
+        label: '📋 Todas las transferencias',
+        stats: [
+          { l: 'Total del mes',       v: fvd(total),  cls: 'dc' },
+          { l: 'Cantidad',            v: nTrans,       cls: '' },
+          { l: 'Categorías distintas',v: [...new Set(rowsMes.map(t=>t.categoria||'Sin Clasificar'))].length, cls: '' },
+          { l: 'Organismos (SAF)',     v: [...new Set(rowsMes.map(t=>t.organismo||'—'))].length, cls: '' },
+        ],
+        html: tblMes
+      },
+      ...(tblCat ? [{
+        label: `🏷 Solo ${catFiltro}`,
+        stats: [
+          { l: `Total ${catFiltro}`, v: fvd(totalCat), cls: 'dc' },
+          { l: 'Transferencias',     v: rowsCat.length, cls: '' },
+          { l: '% del mes',          v: total > 0 ? (totalCat/total*100).toFixed(1)+'%' : '—', cls: '' },
+        ],
+        html: tblCat
+      }] : []),
+      {
+        label: '🏢 Por empresa',
+        html: tblEmp
+      },
+      {
+        label: '🏛 Por organismo (SAF)',
+        html: tblSAF
+      },
+      {
+        label: '📈 Composición',
+        chart: (() => {
+          const porCat = {};
+          rowsMes.forEach(t => {
+            const k = t.categoria || 'Sin Clasificar';
+            porCat[k] = (porCat[k] || 0) + (parseFloat(t.importe)||0);
+          });
+          const catKeys = Object.keys(porCat).sort((a,b)=>porCat[b]-porCat[a]);
+          return {
+            type: 'doughnut',
+            data: {
+              labels: catKeys,
+              datasets: [{ data: catKeys.map(k=>porCat[k]/1e6),
+                backgroundColor: catKeys.map(k=>TRANS_COLORS[k]||'#94a3b8'),
+                borderWidth: 1 }]
+            },
+            opts: { plugins: { legend: { position:'right', labels:{ font:{size:9}, padding:8 } },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fvd(ctx.raw*1e6)}` } } } }
+          };
+        })()
+      },
+    ]
+  };
+
+  // Usar la infraestructura de drill existente
+  document.getElementById('dm-title').textContent = cfg.title;
+  document.getElementById('dm-sub').textContent   = cfg.sub || '';
+  const tabsEl = document.getElementById('drill-tabs');
+  const bodyEl = document.getElementById('drill-body');
+  tabsEl.innerHTML = '';
+  cfg.tabs.forEach((tab, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dt-tab' + (i === 0 ? ' on' : '');
+    btn.textContent = tab.label;
+    btn.onclick = () => {
+      tabsEl.querySelectorAll('.dt-tab').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      renderDrillTab(tab, bodyEl);
+    };
+    tabsEl.appendChild(btn);
+  });
+  renderDrillTab(cfg.tabs[0], bodyEl);
+  document.getElementById('drill-overlay').classList.add('open');
+}
+
+// ── Popup general: resumen del año (click fuera de barras) ───────────────────
+function _transMensualDrillAnio(yr, rows, cats, byMes) {
+  const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const totalAnio = rows.reduce((s, t) => s + (parseFloat(t.importe)||0), 0);
+
+  // Tabla resumen por mes
+  const tblMeses = dTbl(
+    ['Mes', 'Transferencias', 'Total', '% del año'],
+    Array.from({length:12}, (_,i)=>i+1).map(m => {
+      const rowsM  = rows.filter(t => parseInt(t.mes) === m);
+      const totM   = rowsM.reduce((s,t) => s+(parseFloat(t.importe)||0), 0);
+      return {
+        cells: [
+          dc(NM[m]),
+          dc(rowsM.length, 'dd'),
+          dc(totM > 0 ? fvd(totM) : '—', totM > 0 ? 'dc' : ''),
+          dc(totalAnio > 0 && totM > 0 ? (totM/totalAnio*100).toFixed(1)+'%' : '—', 'dd'),
+        ],
+        _cls: totM === 0 ? 'dd' : ''
+      };
+    })
+  );
+
+  // Tabla por categoría
+  const porCat = {};
+  rows.forEach(t => {
+    const k = t.categoria || 'Sin Clasificar';
+    porCat[k] = (porCat[k]||0) + (parseFloat(t.importe)||0);
+  });
+  const tblCats = dTbl(
+    ['Categoría', 'Transferencias', 'Total'],
+    Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([k,v]) => ({
+      cells: [dc(k), dc(rows.filter(t=>(t.categoria||'Sin Clasificar')===k).length,'dd'), dc(fvd(v),'dc')]
+    }))
+  );
+
+  const cfg = {
+    title: `Evolución Mensual de Transferencias — ${yr}`,
+    sub:   `${rows.length} transferencias · Total: ${fvd(totalAnio)}`,
+    tabs: [
+      {
+        label: '📅 Por mes',
+        stats: [
+          { l:'Total año',        v: fvd(totalAnio), cls:'dc' },
+          { l:'Transferencias',   v: rows.length,    cls:'' },
+          { l:'Categorías',       v: cats.length,    cls:'' },
+        ],
+        html: tblMeses
+      },
+      { label: '🏷 Por categoría', html: tblCats },
+      {
+        label: '📈 Evolución mensual',
+        chart: {
+          type: 'bar',
+          data: {
+            labels: NM.slice(1),
+            datasets: cats.map(c => ({
+              label:           c,
+              data:            byMes[c].map(v=>v/1e6),
+              backgroundColor: TRANS_COLORS[c]||'#94a3b8cc',
+              borderRadius:    2,
+              stack:           'mes',
+            }))
+          },
+          opts: {
+            plugins: { legend:{ position:'bottom', labels:{ font:{size:9}, padding:8 } } },
+            scales: { x:{ stacked:true }, y:{ stacked:true, ticks:{ callback: v=>fv(v*1e6) } } }
+          }
+        }
+      },
+    ]
+  };
+
+  document.getElementById('dm-title').textContent = cfg.title;
+  document.getElementById('dm-sub').textContent   = cfg.sub || '';
+  const tabsEl = document.getElementById('drill-tabs');
+  const bodyEl = document.getElementById('drill-body');
+  tabsEl.innerHTML = '';
+  cfg.tabs.forEach((tab, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dt-tab' + (i === 0 ? ' on' : '');
+    btn.textContent = tab.label;
+    btn.onclick = () => {
+      tabsEl.querySelectorAll('.dt-tab').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      renderDrillTab(tab, bodyEl);
+    };
+    tabsEl.appendChild(btn);
+  });
+  renderDrillTab(cfg.tabs[0], bodyEl);
+  document.getElementById('drill-overlay').classList.add('open');
 }
 
 // ═══════════════════════════════════════════════════════════
