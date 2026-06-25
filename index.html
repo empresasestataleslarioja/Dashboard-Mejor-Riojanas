@@ -2200,8 +2200,18 @@ self.onmessage = async (e) => {
           <canvas id="ch-f-crec"></canvas>
         </div>
         <div class="card">
-          <div class="card-hd"><span class="card-hd-title" id="pie-yr-title">Composición último año</span><span class="card-hd-unit">% participación</span></div>
-          <canvas id="ch-f-pie"></canvas>
+          <div class="card-hd"><span class="card-hd-title" id="fact-comp-title">Composición último año</span><span class="card-hd-unit" id="fact-comp-unit">% participación</span></div>
+          <canvas id="ch-f-comp"></canvas>
+        </div>
+      </div>
+      <div class="row2" id="fact-empresa-extra" style="display:none">
+        <div class="card">
+          <div class="card-hd"><span class="card-hd-title" id="fact-margen-lbl">Margen operativo</span><span class="card-hd-unit">%</span></div>
+          <canvas id="ch-f-margen"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-hd"><span class="card-hd-title" id="fact-ranking-lbl">Resultado por empresa</span><span class="card-hd-unit" id="fact-ranking-yr"></span></div>
+          <div id="fact-sit-ranking" style="overflow-y:auto;max-height:220px;font-size:10px"></div>
         </div>
       </div>
     </div>
@@ -5376,6 +5386,7 @@ function imprimirPanelActivo() {
   if      (panelId === 'personal')       reportHTML = _rptPersonal();
   else if (panelId === 'balances')       reportHTML = _rptBalance();
   else if (panelId === 'resumen')        reportHTML = _rptResumen();
+  else if (panelId === 'facturacion')    reportHTML = _rptFacturacion();
   else if (panelId === 'resultado')      reportHTML = _rptResultado();
   else if (panelId === 'empresa')        reportHTML = _rptERMensual();
   else if (panelId === 'transferencias') {
@@ -5452,6 +5463,7 @@ function imprimirPanelActivo() {
           else if (pid3==='balances')       html3 = _rptBalance();
           else if (pid3==='transferencias') html3 = _rptTransferencias();
           else if (pid3==='resumen')        html3 = _rptResumen();
+          else if (pid3==='facturacion')    html3 = _rptFacturacion();
           else if (pid3==='resultado')      html3 = _rptResultado();
           else if (pid3==='empresa')        html3 = _rptERMensual();
           if (html3) html3 = html3.replace('</head>', autoprintScript+'</head>');
@@ -5881,6 +5893,74 @@ function _rptResumen() {
     + _rptBarH(topDef.map(x=>({label:x.e, value:x.v, fmt:fmt(x.v)})), v=>v>=0?'#0f6e56':'#c0392b') + '</div>' : '')
     + _rptFooter()
     + '</div></body></html>';
+}
+
+// ── Reporte: Facturación ──
+function _rptFacturacion() {
+  const years = ys().map(String);
+  const last  = years[years.length-1];
+  const fmt = v => { if(v==null)return'—'; return(v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':''); };
+  const selEmp = document.getElementById('sel-fact-emp')?.value || '';
+
+  if (selEmp) {
+    // ── Modo empresa ──
+    const fact = DATA.fact[selEmp] || {};
+    const sit  = DATA.sit[selEmp]  || {};
+    const kpis = '<div class="kg">' + years.map(y => {
+      const f=fact[y]||0, s=sit[y];
+      const margen = f>0&&s!=null ? (s/f*100).toFixed(1)+'%' : '—';
+      return _rptKpi(selEmp+' · '+y, fmt(f), 'Resultado: '+fmt(s)+(margen!=='—'?' · '+margen:''), s>0?'#0f6e56':s<0?'#c0392b':'#888');
+    }).join('') + '</div>';
+    const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+    const filaFact   = years.map(y=>`<td style="text-align:right">${fmt(fact[y]||0)}</td>`).join('');
+    const filaRes    = years.map(y=>`<td style="text-align:right;font-weight:700;color:${(sit[y]||0)<0?'#c0392b':'#0f6e56'}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
+    const filaMargen = years.map(y=>{ const f=fact[y]||0,s=sit[y]; const m=f>0&&s!=null?(s/f*100).toFixed(1)+'%':'—'; return `<td style="text-align:right;color:${(s||0)<0?'#c0392b':'#0f6e56'}">${m}</td>`; }).join('');
+    const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9.5pt">
+      <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Concepto</th>${ths}</tr></thead>
+      <tbody>
+        <tr><td style="padding:4px 8px">Facturación</td>${filaFact}</tr>
+        <tr><td style="padding:4px 8px">Resultado operativo</td>${filaRes}</tr>
+        <tr style="background:#f8f9fa"><td style="padding:4px 8px">Margen operativo %</td>${filaMargen}</tr>
+      </tbody></table>`;
+    const charts = '<div class="r2">'
+      + _rptChartCard('Facturación anual', '$ millones', _rptCanvasPng('ch-f-multi'))
+      + _rptChartCard('Crecimiento interanual', '%', _rptCanvasPng('ch-f-crec'))
+      + '</div><div class="r2">'
+      + _rptChartCard('Facturación vs Resultado', '$ millones', _rptCanvasPng('ch-f-comp'))
+      + _rptChartCard('Margen operativo', '%', _rptCanvasPng('ch-f-margen'))
+      + '</div>';
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+      + _rptHeader('Facturación', selEmp+' · '+years[0]+'–'+last)
+      + kpis + charts
+      + '<div class="st">Detalle por año</div><div class="tw">'+tabla+'</div>'
+      + _rptFooter() + '</div></body></html>';
+  }
+
+  // ── Modo consolidado ──
+  const top10 = Object.entries(DATA.fact).sort((a,b)=>(b[1][last]||0)-(a[1][last]||0)).slice(0,10);
+  const kpis = '<div class="kg">' + years.map(y=>
+    _rptKpi('Facturación '+y, fmt(DATA.totals_fact[y]||0), '', '#185fa5')
+  ).join('') + '</div>';
+  const ths  = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+  const filas = top10.map(([e,f])=>`<tr><td style="padding:3px 8px">${e}</td>${years.map(y=>`<td style="text-align:right">${fmt(f[y]||0)}</td>`).join('')}</tr>`).join('');
+  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9pt">
+    <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Empresa</th>${ths}</tr></thead>
+    <tbody>${filas}</tbody></table>`;
+  const sitRanking = Object.entries(DATA.sit||{}).map(([e,s])=>({e,v:s[last]})).filter(x=>x.v!=null&&x.v!==0).sort((a,b)=>a.v-b.v);
+  const charts = '<div class="r2">'
+    + _rptChartCard('Facturación top 10 ('+last+')', '$ millones', _rptCanvasPng('ch-f-multi'))
+    + _rptChartCard('Crecimiento interanual', '%', _rptCanvasPng('ch-f-crec'))
+    + '</div><div class="r2">'
+    + _rptChartCard('Composición '+last, '% participación', _rptCanvasPng('ch-f-comp'))
+    + _rptChartCard('Margen operativo por empresa', '%', _rptCanvasPng('ch-f-margen'))
+    + '</div>';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+    + _rptHeader('Facturación', 'Consolidado Empresas Estatales · '+last)
+    + kpis + charts
+    + '<div class="st">Top 10 por facturación '+last+'</div><div class="tw">'+tabla+'</div>'
+    + (sitRanking.length ? '<div class="st">Ranking resultado neto '+last+'</div><div class="tw">'
+      + _rptBarH(sitRanking.map(x=>({label:x.e,value:x.v})),v=>v>=0?'#0f6e56':'#c0392b')+'</div>' : '')
+    + _rptFooter() + '</div></body></html>';
 }
 
 // ── Reporte: Resultado (superávit / déficit) ──
@@ -10328,92 +10408,207 @@ function buildResumen() {
 function buildFacturacion() {
   _inyectarBannerAñosSinDatos('panel-facturacion');
   const years = ys(), tf = DATA.totals_fact;
+  const last  = years[years.length - 1];
   const selEmp = document.getElementById('sel-fact-emp')?.value || '';
+  const extraRow = document.getElementById('fact-empresa-extra');
 
   if (selEmp) {
     // ── MODO EMPRESA ─────────────────────────────────────
     const fact = DATA.fact[selEmp] || {};
     const sit  = DATA.sit[selEmp]  || {};
+    if (extraRow) extraRow.style.display = '';
 
+    // KPIs: facturación + resultado destacado como KPI propio por año
     document.getElementById('kpi-fact').innerHTML = years.map((y,i) => {
       const prev = years[i-1];
-      const f = fact[y]||0, fp = fact[prev]||0;
-      const delta = prev ? `<div class="kpi-sub ${f>=fp?'up':'dn'}">${f>=fp?'▲':'▼'} ${Math.abs(pctNum(f,fp))}% vs ${prev}</div>` : '<div class="kpi-sub">Base</div>';
-      const res = sit[y]; const resStr = res!=null&&res!==0 ? `<div class="kpi-sub" style="color:${res>0?'var(--pos)':'var(--neg)'}">${res>0?'Sup':'Déf'}: ${fv(res)}</div>` : '';
-      return `<div class="kpi"><div class="kpi-accent" style="background:${YC[y]}"></div><div class="kpi-label">${selEmp} · ${y}</div><div class="kpi-value">${f>0?fv(f):'N/D'}</div>${delta}${resStr}</div>`;
+      const f  = fact[y]||0, fp = fact[prev]||0;
+      const res = sit[y];
+      const margen = f > 0 && res != null ? (res/f*100).toFixed(1)+'%' : null;
+      const deltaFact = prev
+        ? `<div class="kpi-sub ${f>=fp?'up':'dn'}">${f>=fp?'▲':'▼'} ${Math.abs(pctNum(f,fp))}% fact. vs ${prev}</div>`
+        : '<div class="kpi-sub">Base</div>';
+      const resBlock = res != null && res !== 0
+        ? `<div class="kpi-sub" style="font-weight:600;color:${res>0?'var(--pos)':'var(--neg)'}">${res>0?'Superávit':'Déficit'}: ${fv(res)}${margen?' ('+margen+')':''}</div>`
+        : '';
+      return `<div class="kpi"><div class="kpi-accent" style="background:${YC[y]}"></div>
+        <div class="kpi-label">${selEmp} · ${y}</div>
+        <div class="kpi-value">${f>0?fv(f):'N/D'}</div>
+        ${deltaFact}${resBlock}</div>`;
     }).join('');
 
     document.getElementById('banner-fact').innerHTML = inflBanner(years);
     document.getElementById('fact-multi-lbl').textContent = `${selEmp} — Facturación anual`;
     document.getElementById('fact-crec-lbl').textContent  = `${selEmp} — Crecimiento interanual`;
-    document.getElementById('pie-yr-title').textContent   = `${selEmp} — Facturación vs Resultado`;
+    document.getElementById('fact-comp-title').textContent = `${selEmp} — Facturación vs Resultado`;
+    document.getElementById('fact-comp-unit').textContent  = '$ millones';
+    document.getElementById('fact-margen-lbl').textContent = `${selEmp} — Margen operativo`;
 
-    // Gráfico 1: barras de facturación de esa empresa
+    // Gráfico 1: barras de facturación
     mkChart('ch-f-multi','bar',{
       labels: years.map(String),
       datasets:[{ label:'Facturación', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:5 }]
     },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-    // Gráfico 2: crecimiento año a año para la empresa
-    const growths = years.slice(1).map((y,i)=>({ lbl:`${years[i]}→${y}`, v:fact[years[i]]?pctNum(fact[y]||0,fact[years[i]]):null, infl:INFL.anual[y], real:fact[years[i]]?realGrowthPct(fact[y]||0,y,fact[years[i]],years[i]):null }));
+    // Gráfico 2: crecimiento interanual con inflación/real
+    const growths = years.slice(1).map((y,i)=>({
+      lbl:`${years[i]}→${y}`,
+      v:   fact[years[i]] ? pctNum(fact[y]||0, fact[years[i]]) : null,
+      infl: INFL.anual[y],
+      real: fact[years[i]] ? realGrowthPct(fact[y]||0,y,fact[years[i]],years[i]) : null
+    }));
     mkChart('ch-f-crec','bar',{
       labels: growths.map(g=>g.lbl),
       datasets:[
         {label:'Crecimiento nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v!=null?(g.v>=0?'#2ecc8a99':'#ff476699'):'transparent'), borderRadius:4},
-        ...(showInflation ? [{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4}] : []),
-        ...(showInflation&&growths.some(g=>g.real!=null) ? [{type:'line', label:'Crecimiento real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3, spanGaps:true}] : []),
+        ...(showInflation?[{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4}]:[]),
+        ...(showInflation&&growths.some(g=>g.real!=null)?[{type:'line', label:'Crecimiento real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3, spanGaps:true}]:[]),
       ]
     },{scales:{y:{ticks:{callback:v=>v+'%'}}}});
 
-    // Gráfico 3: Facturación vs Resultado (lado a lado)
-    const sitYrs = years.filter(y=>sit[y]!=null&&sit[y]!==0);
-    mkChart('ch-f-pie','bar',{
+    // Gráfico 3: Facturación vs Resultado (barras lado a lado)
+    mkChart('ch-f-comp','bar',{
       labels: years.map(String),
       datasets:[
         { label:'Facturación', data:years.map(y=>(fact[y]||0)/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:4 },
-        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null), backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
+        { label:'Resultado',   data:years.map(y=>sit[y]!=null&&sit[y]!==0?sit[y]/1e6:null),
+          backgroundColor:years.map(y=>(sit[y]||0)>=0?'#2ecc8a99':'#ff476699'), borderRadius:4 },
       ]
     },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
+    // Gráfico 4 (nuevo): Margen operativo % por año
+    const margenes = years.map(y=>{
+      const f = fact[y]||0, s = sit[y];
+      return (f>0 && s!=null) ? parseFloat((s/f*100).toFixed(2)) : null;
+    });
+    mkChart('ch-f-margen','bar',{
+      labels: years.map(String),
+      datasets:[{
+        label:'Margen %',
+        data: margenes,
+        backgroundColor: margenes.map(v=>v==null?'transparent':v>=0?'#2ecc8a88':'#ff476688'),
+        borderColor:     margenes.map(v=>v==null?'transparent':v>=0?'#2ecc8aee':'#ff4766ee'),
+        borderWidth:1.5, borderRadius:3
+      }]
+    },{
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{
+          ticks:{callback:v=>v+'%'},
+          grid:{color:ctx=>ctx.tick.value===0?'#888':'rgba(128,128,128,.12)', lineWidth:ctx=>ctx.tick.value===0?1.5:1}
+        }
+      }
+    });
+
+    // Ranking resultado inline (sin datos de empresa, no mostrar)
+    const rankEl = document.getElementById('fact-sit-ranking');
+    const rankYrEl = document.getElementById('fact-ranking-yr');
+    if (rankYrEl) rankYrEl.textContent = '';
+    if (rankEl) rankEl.innerHTML = '<div style="padding:12px;color:var(--dim);font-size:9px">Seleccioná "Consolidado" para ver el ranking de todas las empresas</div>';
+
   } else {
-    // ── MODO CONSOLIDADO (original) ───────────────────────
+    // ── MODO CONSOLIDADO ─────────────────────────────────
+    if (extraRow) extraRow.style.display = '';
+
     document.getElementById('kpi-fact').innerHTML = years.map((y,i) => {
       const prev = years[i-1];
-      const delta = prev ? `<div class="kpi-sub ${tf[y]>=tf[prev]?'up':'dn'}">${tf[y]>=tf[prev]?'▲':'▼'} ${Math.abs(pctNum(tf[y],tf[prev]))}% nominal${showInflation?' · real: '+realGrowthPct(tf[y],y,tf[prev],prev)+'%':''}</div>` : '<div class="kpi-sub">Base</div>';
+      const delta = prev
+        ? `<div class="kpi-sub ${tf[y]>=tf[prev]?'up':'dn'}">${tf[y]>=tf[prev]?'▲':'▼'} ${Math.abs(pctNum(tf[y],tf[prev]))}% nominal${showInflation?' · real: '+realGrowthPct(tf[y],y,tf[prev],prev)+'%':''}</div>`
+        : '<div class="kpi-sub">Base</div>';
       return `<div class="kpi"><div class="kpi-accent" style="background:${YC[y]}"></div><div class="kpi-label">Total ${y}</div><div class="kpi-value">${fv(tf[y])}</div>${delta}</div>`;
     }).join('');
 
     document.getElementById('banner-fact').innerHTML = inflBanner(years);
-    document.getElementById('fact-multi-lbl').textContent = 'Facturación año a año — top 10 empresas';
+    document.getElementById('fact-multi-lbl').textContent = `Facturación año a año — top 10 empresas (${last})`;
     document.getElementById('fact-crec-lbl').textContent  = 'Crecimiento interanual total';
-    document.getElementById('pie-yr-title').textContent   = `Composición ${years[years.length-1]}`;
+    document.getElementById('fact-comp-title').textContent = `Composición ${last}`;
+    document.getElementById('fact-comp-unit').textContent  = '% participación';
+    document.getElementById('fact-margen-lbl').textContent = 'Margen operativo por empresa';
 
-    const top10 = Object.entries(DATA.fact).sort((a,b)=>Object.values(b[1]).reduce((s,v)=>s+v,0)-Object.values(a[1]).reduce((s,v)=>s+v,0)).slice(0,10);
+    // Top 10 ordenado por año más reciente
+    const top10 = Object.entries(DATA.fact)
+      .sort((a,b)=>(b[1][last]||0)-(a[1][last]||0))
+      .slice(0,10);
     mkChart('ch-f-multi','bar',{
-      labels: top10.map(([n])=>n.length>14?n.slice(0,12)+'…':n),
+      labels: top10.map(([n])=>n.length>14?n.slice(0,13)+'…':n),
       datasets: years.map(y=>({ label:String(y), data:top10.map(([,f])=>(f[y]||0)/1e6), backgroundColor:YCa(y), borderRadius:3 }))
-    });
+    },{plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
+    // Crecimiento interanual consolidado
     const growths = years.slice(1).map((y,i)=>({ lbl:`${years[i]}→${y}`, v:pctNum(tf[y],tf[years[i]]), infl:INFL.anual[y], real:realGrowthPct(tf[y],y,tf[years[i]],years[i]) }));
     mkChart('ch-f-crec','bar',{
       labels: growths.map(g=>g.lbl),
       datasets:[
         {label:'Crecimiento nominal %', data:growths.map(g=>g.v), backgroundColor:growths.map(g=>g.v>=0?'#2ecc8a99':'#ff476699'), borderRadius:4},
-        ...(showInflation ? [{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4}] : []),
-        ...(showInflation ? [{type:'line', label:'Crecimiento real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3}] : []),
+        ...(showInflation?[{label:'Inflación IPC %', data:growths.map(g=>g.infl), backgroundColor:'#c4d60044', borderColor:'#c4d600', borderWidth:1.5, borderRadius:4}]:[]),
+        ...(showInflation?[{type:'line', label:'Crecimiento real %', data:growths.map(g=>g.real), borderColor:'#47e8ff', borderDash:[5,3], backgroundColor:'transparent', pointRadius:5, tension:.3}]:[]),
       ]
     },{scales:{y:{ticks:{callback:v=>v+'%'}}}});
 
-    const lastY = years[years.length-1];
-    const sorted = Object.entries(DATA.fact).filter(([,f])=>f[lastY]>0).sort((a,b)=>b[1][lastY]-a[1][lastY]);
-    const top5 = sorted.slice(0,5);
-    const otros = sorted.slice(5).reduce((s,[,f])=>s+(f[lastY]||0),0);
-    mkChart('ch-f-pie','doughnut',{
-      labels:[...top5.map(([n])=>n.split(' ')[0]),'Otros'],
-      datasets:[{data:[...top5.map(([,f])=>f[lastY]/1e6),otros/1e6],
+    // Donut composición último año — nombres completos truncados correctamente
+    const sorted = Object.entries(DATA.fact).filter(([,f])=>f[last]>0).sort((a,b)=>b[1][last]-a[1][last]);
+    const top5   = sorted.slice(0,5);
+    const otros  = sorted.slice(5).reduce((s,[,f])=>s+(f[last]||0),0);
+    mkChart('ch-f-comp','doughnut',{
+      labels:[...top5.map(([n])=>n.length>18?n.slice(0,17)+'…':n),'Otros'],
+      datasets:[{data:[...top5.map(([,f])=>f[last]/1e6), otros/1e6],
         backgroundColor:['#c4d600cc','#47e8ffcc','#ff8c47cc','#c447ffcc','#47ffb4cc','#303640'],
         borderWidth:0}]
-    });
+    },{plugins:{legend:{position:'bottom',labels:{font:{size:9}}}}});
+
+    // Gráfico 4: margen operativo top empresas con resultado
+    const empConSit = Object.entries(DATA.sit||{})
+      .filter(([,s])=>s[last]!=null && (DATA.fact[last]||DATA.fact[_]||true))
+      .map(([e,s])=>({ e, margen: DATA.fact[e]?.[last] ? parseFloat((s[last]/DATA.fact[e][last]*100).toFixed(1)) : null }))
+      .filter(x=>x.margen!=null)
+      .sort((a,b)=>b.margen-a.margen)
+      .slice(0,12);
+    if (empConSit.length) {
+      mkChart('ch-f-margen','bar',{
+        labels: empConSit.map(x=>x.e.length>14?x.e.slice(0,13)+'…':x.e),
+        datasets:[{
+          label:'Margen %',
+          data: empConSit.map(x=>x.margen),
+          backgroundColor: empConSit.map(x=>x.margen>=0?'#2ecc8a88':'#ff476688'),
+          borderColor:     empConSit.map(x=>x.margen>=0?'#2ecc8aee':'#ff4766ee'),
+          borderWidth:1.5, borderRadius:3
+        }]
+      },{
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{font:{size:8},maxRotation:35,minRotation:25}},
+          y:{ticks:{callback:v=>v+'%'},
+             grid:{color:ctx=>ctx.tick.value===0?'#888':'rgba(128,128,128,.12)', lineWidth:ctx=>ctx.tick.value===0?1.5:1}}
+        }
+      });
+    }
+
+    // Ranking déficit/superávit inline consolidado
+    const rankEl   = document.getElementById('fact-sit-ranking');
+    const rankYrEl = document.getElementById('fact-ranking-yr');
+    if (rankYrEl) rankYrEl.textContent = last;
+    if (rankEl) {
+      const sitLast = Object.entries(DATA.sit||{})
+        .map(([e,s])=>({e, v:s[last]}))
+        .filter(x=>x.v!=null && x.v!==0)
+        .sort((a,b)=>a.v-b.v);
+      if (!sitLast.length) {
+        rankEl.innerHTML = '<div style="padding:12px;color:var(--dim);font-size:9px">Sin datos de resultado para '+last+'</div>';
+      } else {
+        const maxAbs = Math.max(...sitLast.map(x=>Math.abs(x.v)));
+        rankEl.innerHTML = sitLast.map(x=>{
+          const pct = maxAbs ? Math.abs(x.v)/maxAbs*100 : 0;
+          const col = x.v>=0?'#2ecc8a':'#ff4766';
+          const lbl = x.e.length>22 ? x.e.slice(0,21)+'…' : x.e;
+          return `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:1px solid var(--bd)">
+            <span style="flex:1;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${x.e}">${lbl}</span>
+            <div style="width:70px;height:6px;background:var(--s2);border-radius:3px;overflow:hidden;flex-shrink:0">
+              <div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div>
+            </div>
+            <span style="font-family:var(--mono);font-size:9px;font-weight:700;color:${col};white-space:nowrap;min-width:76px;text-align:right">${fv(x.v)}</span>
+          </div>`;
+        }).join('');
+      }
+    }
   }
 }
 
