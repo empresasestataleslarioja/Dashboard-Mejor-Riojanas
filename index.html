@@ -2099,13 +2099,13 @@ self.onmessage = async (e) => {
     <div class="panel on" id="panel-resumen">
       <div id="kpi-res-band" class="kpi-band"></div>
       <div id="banner-res"></div>
-      <div class="row3">
+      <div class="row2">
         <div class="card">
           <div class="card-hd"><span class="card-hd-title">Facturación total consolidada por año</span><span class="card-hd-unit">$ millones</span></div>
           <canvas id="ch-r-fact"></canvas>
         </div>
         <div class="card">
-          <div class="card-hd"><span class="card-hd-title">Superávit vs Déficit</span><span class="card-hd-unit">$ millones</span></div>
+          <div class="card-hd"><span class="card-hd-title">Resultado neto consolidado (Superávit − Déficit)</span><span class="card-hd-unit">$ millones</span></div>
           <canvas id="ch-r-supdef"></canvas>
         </div>
       </div>
@@ -2127,8 +2127,18 @@ self.onmessage = async (e) => {
           <canvas id="ch-r-top8" style="max-height:260px"></canvas>
         </div>
         <div class="card">
-          <div class="card-hd"><span class="card-hd-title">Evolución de nómina 2020–2026</span><span class="card-hd-unit">empleados</span></div>
+          <div class="card-hd"><span class="card-hd-title" id="res-pers-title">Evolución de nómina</span><span class="card-hd-unit">empleados</span></div>
           <canvas id="ch-r-pers"></canvas>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="card">
+          <div class="card-hd"><span class="card-hd-title">Transferencias del Estado por año</span><span class="card-hd-unit">$ millones</span></div>
+          <canvas id="ch-r-trans"></canvas>
+        </div>
+        <div class="card" id="res-deficit-ranking-card">
+          <div class="card-hd"><span class="card-hd-title" id="res-deficit-title">Ranking déficit / superávit</span><span class="card-hd-unit" id="res-deficit-yr"></span></div>
+          <div id="res-deficit-list" style="overflow-y:auto;max-height:220px;font-size:10px"></div>
         </div>
       </div>
     </div>
@@ -5794,59 +5804,81 @@ function _rptResumen() {
   const years = ys().map(String);
   const fmt = v => {
     if (v == null) return '—';
-    const s = v<0?'−':'';
-    return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
+    const s = v<0?'(':'';
+    return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
   };
   const lastY = (window._rptAnioFiltro && years.includes(String(window._rptAnioFiltro))) ? String(window._rptAnioFiltro) : years[years.length-1];
-  const totFact = DATA.totals_fact[lastY] || 0;
-  const totSup  = DATA.totals_sup[lastY] || 0;
-  const totDef  = DATA.totals_def[lastY] || 0;
-  const nSup    = DATA.sup_count[lastY] || 0;
-  const nDef    = DATA.def_count[lastY] || 0;
+  const totFact  = DATA.totals_fact[lastY] || 0;
+  const totSup   = DATA.totals_sup[lastY]  || 0;
+  const totDef   = DATA.totals_def[lastY]  || 0;
+  const rNeto    = totSup + totDef;
+  const nSup     = DATA.sup_count[lastY]   || 0;
+  const nDef     = DATA.def_count[lastY]   || 0;
+
+  // Transferencias último año
+  const transXanio = {};
+  (DATA.transferencias||[]).forEach(t => {
+    if (t.año) transXanio[String(t.año)] = (transXanio[String(t.año)]||0) + (t.importe||0);
+  });
+  const totTrans = transXanio[lastY] || 0;
+  const transPct = totFact ? (totTrans/totFact*100).toFixed(1)+'% de facturación' : '';
 
   const kpis = `<div class="kg">
-    ${_rptKpi('Facturación '+lastY, fmt(totFact), years.length+' años', '#185fa5')}
-    ${_rptKpi('Superávit '+lastY, fmt(totSup), nSup+' empresas', '#0f6e56')}
-    ${_rptKpi('Déficit '+lastY, fmt(totDef), nDef+' empresas', '#c0392b')}
-    ${_rptKpi('Resultado neto', fmt(totSup+totDef), (totSup+totDef)>=0?'positivo':'negativo', (totSup+totDef)>=0?'#0f6e56':'#c0392b')}
+    ${_rptKpi('Facturación '+lastY, fmt(totFact), years.length+' ejercicios', '#185fa5')}
+    ${_rptKpi('Resultado neto '+lastY, fmt(rNeto), rNeto>=0?'Consolidado positivo':'Consolidado negativo', rNeto>=0?'#0f6e56':'#c0392b')}
+    ${_rptKpi('Empresas positivas', nSup+' superávit', nDef+' con déficit', '#0f6e56')}
+    ${_rptKpi('Transferencias '+lastY, totTrans>0?fmt(totTrans):'Sin datos', transPct, '#1565c0')}
   </div>`;
 
-  // Tabla de facturación por año
-  const filaFact = years.map(y=>`<td style="text-align:right">${fmt(DATA.totals_fact[y]||0)}</td>`).join('');
-  const filaSup  = years.map(y=>`<td style="text-align:right;color:#0f6e56">${fmt(DATA.totals_sup[y]||0)}</td>`).join('');
-  const filaDef  = years.map(y=>`<td style="text-align:right;color:#c0392b">${fmt(DATA.totals_def[y]||0)}</td>`).join('');
+  // Tabla evolución consolidada por año
   const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+  const filaFact  = years.map(y=>`<td style="text-align:right">${fmt(DATA.totals_fact[y]||0)}</td>`).join('');
+  const filaSup   = years.map(y=>`<td style="text-align:right;color:#0f6e56">${fmt(DATA.totals_sup[y]||0)}</td>`).join('');
+  const filaDef   = years.map(y=>`<td style="text-align:right;color:#c0392b">${fmt(DATA.totals_def[y]||0)}</td>`).join('');
+  const filaRNeto = years.map(y=>{
+    const v=(DATA.totals_sup[y]||0)+(DATA.totals_def[y]||0);
+    return `<td style="text-align:right;font-weight:700;color:${v>=0?'#0f6e56':'#c0392b'}">${fmt(v)}</td>`;
+  }).join('');
+  const filaTrans = years.map(y=>`<td style="text-align:right;color:#1565c0">${transXanio[y]?fmt(transXanio[y]):'—'}</td>`).join('');
 
-  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:10pt;margin-top:8px">
-    <thead><tr><th style="text-align:left">Concepto</th>${ths}</tr></thead>
+  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9.5pt;margin-top:8px">
+    <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Concepto</th>${ths}</tr></thead>
     <tbody>
-      <tr><td>Facturación total</td>${filaFact}</tr>
-      <tr><td>Superávit acumulado</td>${filaSup}</tr>
-      <tr><td>Déficit acumulado</td>${filaDef}</tr>
+      <tr style="background:#fff"><td style="padding:4px 8px">Facturación total</td>${filaFact}</tr>
+      <tr style="background:#f9fff9"><td style="padding:4px 8px">Superávit acumulado</td>${filaSup}</tr>
+      <tr style="background:#fff9f9"><td style="padding:4px 8px">Déficit acumulado</td>${filaDef}</tr>
+      <tr style="background:#f0f4ff;font-weight:700"><td style="padding:4px 8px">Resultado neto</td>${filaRNeto}</tr>
+      <tr style="background:#f0f8ff"><td style="padding:4px 8px">Transferencias recibidas</td>${filaTrans}</tr>
     </tbody>
   </table>`;
 
-  // Top 10 empresas por facturación del último año
-  const topEmp = Object.entries(DATA.fact)
+  // Top 10 por facturación y Top 10 déficit — año más reciente
+  const topFact = Object.entries(DATA.fact)
     .map(([e,f])=>({e, v:f[lastY]||0}))
     .filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,10);
-  const topBars = _rptBarH(topEmp.map(x=>({label:x.e, value:x.v})), ()=>'#185fa5');
+  const topDef = Object.entries(DATA.sit||{})
+    .map(([e,s])=>({e, v:s[lastY]}))
+    .filter(x=>x.v!=null && x.v!==0)
+    .sort((a,b)=>a.v-b.v).slice(0,10);
 
   const chartsResumen = '<div class="r2">'
     + _rptChartCard('Facturación por año', '$ millones', _rptCanvasPng('ch-r-fact'))
-    + _rptChartCard('Superávit / Déficit', '$ millones', _rptCanvasPng('ch-r-supdef'))
+    + _rptChartCard('Resultado neto consolidado', '$ millones', _rptCanvasPng('ch-r-supdef'))
     + '</div>'
     + '<div class="r2">'
-    + _rptChartCard('Top 8 empresas', '$ millones', _rptCanvasPng('ch-r-top8'))
-    + _rptChartCard('Personal por año', 'empleados', _rptCanvasPng('ch-r-pers'))
+    + _rptChartCard('Top empresas por facturación', '$ millones', _rptCanvasPng('ch-r-top8'))
+    + _rptChartCard('Evolución de nómina', 'empleados', _rptCanvasPng('ch-r-pers'))
     + '</div>';
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Resumen Ejecutivo', 'Empresas estatales de La Rioja · '+lastY)
     + kpis
     + chartsResumen
-    + '<div class="st">Evolución consolidada</div><div class="tw">'+tabla+'</div></div>'
-    + '<div class="st">Top 10 empresas por facturación '+lastY+'</div><div class="tw">'+topBars+'</div></div>'
+    + '<div class="st">Evolución consolidada</div><div class="tw">'+tabla+'</div>'
+    + '<div class="st">Top 10 — facturación '+lastY+'</div><div class="tw">'
+    + _rptBarH(topFact.map(x=>({label:x.e, value:x.v})), ()=>'#185fa5') + '</div>'
+    + (topDef.length ? '<div class="st">Ranking resultado neto '+lastY+'</div><div class="tw">'
+    + _rptBarH(topDef.map(x=>({label:x.e, value:x.v, fmt:fmt(x.v)})), v=>v>=0?'#0f6e56':'#c0392b') + '</div>' : '')
     + _rptFooter()
     + '</div></body></html>';
 }
@@ -10144,22 +10176,43 @@ function buildResumen() {
 
   const years = ys();
   const first = years[0], last = years[years.length-1];
-  const tf = DATA.totals_fact, ts = DATA.totals_sup;
+  const tf = DATA.totals_fact, ts = DATA.totals_sup, td = DATA.totals_def;
 
-  // Concentración top 3 / top 5
+  // ── Resultado neto consolidado por año (superávit neto de déficit) ──
+  const rNeto = y => (ts[y]||0) + (td[y]||0);
+
+  // ── Concentración top 3 / top 5 por año más reciente ──
   const allFactSorted = Object.entries(DATA.fact)
     .filter(([,f])=>(f[last]||0)>0)
     .sort((a,b)=>(b[1][last]||0)-(a[1][last]||0));
   const total_last = tf[last]||1;
   const top3pct = allFactSorted.slice(0,3).reduce((s,[,f])=>s+(f[last]||0),0)/total_last*100;
   const top5pct = allFactSorted.slice(0,5).reduce((s,[,f])=>s+(f[last]||0),0)/total_last*100;
+  const concLabel = top3pct >= 60 ? '⚠ Alta concentración' : top3pct >= 40 ? '↑ Concentración media' : '✓ Concentración baja';
 
+  // ── Transferencias por año ──
+  const transXanio = {};
+  (DATA.transferencias||[]).forEach(t => {
+    if (t.año) transXanio[String(t.año)] = (transXanio[String(t.año)]||0) + (t.importe||0);
+  });
+  const totalTrans = transXanio[String(last)] || 0;
+  const transPctFact = tf[last] ? totalTrans / tf[last] * 100 : null;
+
+  // ── Nómina: usar años dinámicos de ys() ──
+  const persFirst = DATA.pers_totals[String(first)] || 0;
+  const persLast  = DATA.pers_totals[String(last)]  || 0;
+  const persSub   = persFirst > 0
+    ? `${persLast >= persFirst ? '+' : ''}${pctStr(persLast, persFirst)} vs ${first}`
+    : `${fn(persLast)} empleados`;
+
+  const rNetoLast = rNeto(last);
   const kpiItems = [
-    {lbl:`Facturación ${last}`,    val:fv(tf[last]),    sub:`×${(tf[last]/tf[first]).toFixed(1)} vs ${first}`, cls:'up', ac:'#c4d600'},
-    {lbl:'Ejercicios analizados',  val:years.length,    sub:years.join(' · '),                               cls:'',   ac:'#47e8ff'},
-    {lbl:`Superávit ${last}`,      val:fv(ts[last]),    sub:`${DATA.sup_count[last]} empresas positivas`,     cls:'up', ac:'#47ffb4'},
-    {lbl:`Nómina ${last}`,         val:fn(DATA.pers_totals[String(last)]||0), sub:`+${pctStr(DATA.pers_totals[String(last)]||0, DATA.pers_totals['2020']||0)} vs 2020`, cls:'up', ac:'#c447ff'},
-    {lbl:`Concentración top 3`,    val:top3pct.toFixed(1)+'%', sub:`Top 5: ${top5pct.toFixed(1)}% · ${allFactSorted.length} empresas`, cls:'', ac:'#ff8c47'},
+    { lbl:`Facturación ${last}`,      val:fv(tf[last]),    sub:`×${tf[first]?((tf[last]/tf[first]).toFixed(1)):'—'} vs ${first}`, cls:'up', ac:'#c4d600' },
+    { lbl:'Ejercicios analizados',    val:years.length,    sub:years.join(' · '), cls:'', ac:'#47e8ff' },
+    { lbl:`Resultado neto ${last}`,   val:fv(rNetoLast),   sub:`${DATA.sup_count[last]||0} pos · ${DATA.def_count[last]||0} neg`, cls: rNetoLast>=0?'up':'dn', ac: rNetoLast>=0?'#47ffb4':'#ff4766' },
+    { lbl:`Nómina ${last}`,           val:fn(persLast),    sub:persSub, cls:'up', ac:'#c447ff' },
+    { lbl:`Concentración top 3 ${last}`, val:top3pct.toFixed(1)+'%', sub:`${concLabel} · Top5: ${top5pct.toFixed(1)}%`, cls: top3pct>=60?'dn':'', ac:'#ff8c47' },
+    { lbl:`Transferencias ${last}`,   val:totalTrans>0?fv(totalTrans):'Sin datos', sub: transPctFact!=null?`${transPctFact.toFixed(1)}% de la facturación`:'', cls:'', ac:'#47b4ff' },
   ];
   const bandEl = document.getElementById('kpi-res-band');
   if (bandEl) {
@@ -10168,60 +10221,105 @@ function buildResumen() {
         <div class="kpi-band-accent" style="background:${k.ac}"></div>
         <div class="kpi-band-label">${k.lbl}</div>
         <div class="kpi-band-value">${k.val}</div>
-        <div class="kpi-band-sub ${k.cls}">${k.sub}</div>
+        <div class="kpi-band-sub ${k.cls||''}">${k.sub}</div>
       </div>`).join('');
   }
 
   document.getElementById('banner-res').innerHTML = inflBanner(years);
 
-  // Facturación consolidada por año
+  // ── Facturación consolidada por año ──
   mkChart('ch-r-fact','bar',{
     labels: years.map(String),
-    datasets:[{
-      label:'Facturación',
-      data: years.map(y=>tf[y]/1e6),
-      backgroundColor: years.map(y=>YCa(y)),
-      borderRadius: 4
-    }]
+    datasets:[{ label:'Facturación', data:years.map(y=>tf[y]/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:4 }]
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-  // Superávit vs Déficit
+  // ── Resultado neto consolidado (barras +/-) ──
   mkChart('ch-r-supdef','bar',{
     labels: years.map(String),
-    datasets:[
-      {label:'Superávit', data:years.map(y=>(DATA.totals_sup[y]||0)/1e6), backgroundColor:'#2ecc8a99', borderRadius:3},
-      {label:'Déficit',   data:years.map(y=>(DATA.totals_def[y]||0)/1e6), backgroundColor:'#ff476699', borderRadius:3},
-    ]
-  },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
+    datasets:[{
+      label:'Resultado neto',
+      data: years.map(y=>rNeto(y)/1e6),
+      backgroundColor: years.map(y=>rNeto(y)>=0?'#2ecc8a99':'#ff476699'),
+      borderColor:     years.map(y=>rNeto(y)>=0?'#2ecc8aee':'#ff4766ee'),
+      borderWidth: 1.5,
+      borderRadius: 3
+    }]
+  },{
+    plugins:{legend:{display:false}},
+    scales:{
+      y:{
+        ticks:{callback:v=>fvShort(v*1e6)},
+        grid:{color:ctx=>ctx.tick.value===0?'#888':'rgba(128,128,128,.12)', lineWidth:ctx=>ctx.tick.value===0?1.5:1}
+      }
+    }
+  });
 
-  // Top N / Todas las empresas (controlado por selector)
+  // ── Top N empresas — ordenado por año más reciente ──
   const nSel = parseInt(document.getElementById('top-n-sel')?.value ?? '8');
-  const allFact = Object.entries(DATA.fact).sort((a,b)=>
-    years.reduce((s,y)=>s+(b[1][y]||0),0) - years.reduce((s,y)=>s+(a[1][y]||0),0)
-  );
+  const allFact = Object.entries(DATA.fact).sort((a,b)=>(b[1][last]||0)-(a[1][last]||0));
   const topN = nSel === 0 ? allFact : allFact.slice(0, nSel);
   const maxLbl = nSel === 0 ? 9 : 16;
   mkChart('ch-r-top8','bar',{
     labels: topN.map(([n])=>n.length>maxLbl ? n.slice(0,maxLbl-1)+'…' : n),
-    datasets: years.map(y=>({
-      label:String(y), data:topN.map(([,f])=>(f[y]||0)/1e6),
-      backgroundColor:YCa(y), borderRadius:3
-    }))
+    datasets: years.map(y=>({ label:String(y), data:topN.map(([,f])=>(f[y]||0)/1e6), backgroundColor:YCa(y), borderRadius:3 }))
   },{
     plugins:{legend:{position:'bottom'}},
     scales:{
       y:{ticks:{callback:v=>fvShort(v*1e6)}},
-      x:{ticks:{font:{size: nSel===0 ? 7 : 8}, maxRotation: nSel===0 ? 45 : 0, minRotation: nSel===0 ? 35 : 0}}
+      x:{ticks:{font:{size: nSel===0?7:8}, maxRotation: nSel===0?45:0, minRotation: nSel===0?35:0}}
     }
   });
 
-  // Personal nómina 2020-2026
-  const pYears = ['2020','2021','2022','2023','2024','2025','2026'];
+  // ── Personal nómina — años dinámicos ──
+  const pYears = years.map(String);
+  const tituloNom = document.getElementById('res-pers-title');
+  if (tituloNom) tituloNom.textContent = `Evolución de nómina ${first}–${last}`;
   mkChart('ch-r-pers','line',{
     labels: pYears,
-    datasets:[{label:'Empleados', data:pYears.map(y=>DATA.pers_totals[y]||0),
-      borderColor:'#47e8ff', backgroundColor:'#47e8ff18', fill:true, tension:.45, pointRadius:5}]
+    datasets:[{label:'Empleados', data:pYears.map(y=>DATA.pers_totals[y]||null),
+      borderColor:'#47e8ff', backgroundColor:'#47e8ff18', fill:true, tension:.45, pointRadius:5, spanGaps:true}]
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>Number(v).toLocaleString('es-AR')}}}});
+
+  // ── Transferencias por año ──
+  const transYears = years.filter(y=>transXanio[String(y)]!=null);
+  if (transYears.length > 0) {
+    mkChart('ch-r-trans','bar',{
+      labels: years.map(String),
+      datasets:[{ label:'Transferencias', data:years.map(y=>(transXanio[String(y)]||0)/1e6), backgroundColor:'#47b4ff88', borderRadius:3 }]
+    },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
+  } else {
+    const ctx = document.getElementById('ch-r-trans');
+    if (ctx) { const p = ctx.parentElement; if (p) p.style.opacity='.4'; }
+  }
+
+  // ── Ranking déficit / superávit del año más reciente ──
+  const defEl = document.getElementById('res-deficit-list');
+  const defYrEl = document.getElementById('res-deficit-yr');
+  if (defYrEl) defYrEl.textContent = last;
+  if (defEl) {
+    const sitLast = Object.entries(DATA.sit||{})
+      .map(([e,s])=>({ e, v: s[last] }))
+      .filter(x=>x.v!=null && x.v!==0)
+      .sort((a,b)=>a.v-b.v);
+    if (!sitLast.length) {
+      defEl.innerHTML = '<div style="padding:12px;color:var(--dim);font-size:9px">Sin datos de resultado para '+last+'</div>';
+    } else {
+      const maxAbs = Math.max(...sitLast.map(x=>Math.abs(x.v)));
+      defEl.innerHTML = sitLast.map(x=>{
+        const pct = maxAbs ? Math.abs(x.v)/maxAbs*100 : 0;
+        const col = x.v>=0?'#2ecc8a':'#ff4766';
+        const bg  = x.v>=0?'#2ecc8a22':'#ff476622';
+        const lbl = x.e.length>22 ? x.e.slice(0,21)+'…' : x.e;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:1px solid var(--bd)">
+          <span style="flex:1;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${x.e}">${lbl}</span>
+          <div style="width:80px;height:7px;background:var(--s2);border-radius:3px;overflow:hidden;flex-shrink:0">
+            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px"></div>
+          </div>
+          <span style="font-family:var(--mono);font-size:9px;font-weight:700;color:${col};white-space:nowrap;min-width:80px;text-align:right">${fv(x.v)}</span>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
