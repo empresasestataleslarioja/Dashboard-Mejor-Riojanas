@@ -7748,13 +7748,10 @@ function getCambiosEmpresa(empresa) {
 //  ÍTEM 7D: Ocultar Presupuesto si sin datos
 // ══════════════════════════════════════════════════════════════════
 function _actualizarVisibilidadPresupuesto() {
-  const tieneDataPres = (DATA.presupuesto || []).length > 0;
+  // Siempre visible — el usuario puede entrar al módulo para cargar datos
   const btnPres = [...document.querySelectorAll('.nav-item')]
     .find(b => b.textContent.toLowerCase().includes('presupuesto'));
-  if (btnPres) {
-    // Ocultar completamente si no hay datos — no aporta valor visible
-    btnPres.style.display = tieneDataPres ? '' : 'none';
-  }
+  if (btnPres) btnPres.style.display = '';
 }
 
 // ══════════════════════════════════════════════════════════════════
