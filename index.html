@@ -4336,19 +4336,6 @@ async function initHashedUsers() {
   } catch(e) {}
 }
 initHashedUsers();
-
-// Inyectar logos institucionales en el login (las funciones SVG ya están definidas)
-(function() {
-  const area = document.getElementById('login-logos-area');
-  if (!area) return;
-  try {
-    area.innerHTML =
-      '<div style="opacity:.9">' + _svgLaRioja(52) + '</div>' +
-      '<div style="width:1px;height:44px;background:rgba(255,255,255,.2)"></div>' +
-      '<div style="opacity:.9">' + _svgMejorRiojanas(36) + '</div>';
-  } catch(e) {}
-})();
-
 // Sesión activa por 8 horas — no necesitan volver a loguearse durante el día
 const LOGIN_SESSION_HORAS = 8;
 const LOGIN_KEY = 'lr_auth_v1';
@@ -4368,6 +4355,16 @@ function checkAuth() {
   } catch(e) {}
   // Mostrar login
   document.getElementById('login-overlay').style.display = 'flex';
+  // Inyectar logos (SVG functions ya definidas en este punto)
+  try {
+    const area = document.getElementById('login-logos-area');
+    if (area && !area.hasChildNodes()) {
+      area.innerHTML =
+        '<div style="opacity:.9">' + _svgLaRioja(52) + '</div>' +
+        '<div style="width:1px;height:44px;background:rgba(255,255,255,.2)"></div>' +
+        '<div style="opacity:.9">' + _svgMejorRiojanas(36) + '</div>';
+    }
+  } catch(e) {}
   setTimeout(() => {
     const u = document.getElementById('login-user');
     if (u) u.focus();
