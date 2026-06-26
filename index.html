@@ -8589,7 +8589,13 @@ const FLUJO_RUBROS_STD = [
 
 // Clave única: empresa + periodo + tipo (proyectado/real)
 function _claveFlujo(empresa, periodo, tipo) {
-  return [empresa, periodo, tipo].join('_').replace(/\s+/g,'_').toUpperCase();
+  // FIX 5: normalizar eliminando tildes y caracteres especiales
+  const norm = s => (s || '').trim()
+    .toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // quitar tildes
+    .replace(/[^A-Z0-9\s]/g, '')  // solo letras, números, espacios
+    .replace(/\s+/g, '_');
+  return [norm(empresa), norm(periodo), norm(tipo || 'proyectado')].join('_');
 }
 
 // ── PARSER de Excel FLUJO X MES ─────────────────────────────────
@@ -8763,21 +8769,29 @@ function parsearFlujoExcel(wb, XLSX) {
   if (!rubros.length) return null;
 
   // ── PASO 5: Calcular necesidad de fondos ──────────────────────────
-  // Necesidad: prioridad a rubros con valor > 0
-  // Excluir items con valor 0 (ej: Rescate Fondos que existe pero es 0)
-  const fondosRubro = rubros.find(r2 => {
+  // FIX 3: detección más robusta respetando tipo semántico del rubro
+  // Prioridad 1: rubro explícitamente mapeado como necesidad_fondos
+  const fondosRubro = rubros.find(r2 => r2.key === 'necesidad_fondos' && r2.actual != null);
+  // Prioridad 2: label contiene FONDOS SOLICIT o NECESIDAD (cualquier valor, incluso 0)
+  const fondosLabel = !fondosRubro && rubros.find(r2 => {
     const u = r2.label.toUpperCase();
-    return (u.includes('FONDOS SOLICIT') || u.includes('NECESIDAD')) && Math.abs(r2.actual||0) > 0;
+    return u.includes('FONDOS SOLICIT') || u.includes('NECESIDAD');
   });
-  const defRubro = rubros.find(r2 =>
-    (r2.key === 'sup_def' || r2.label.toUpperCase().includes('SUPER') ||
-     r2.label.toUpperCase().includes('DÉF') || r2.label.toUpperCase().includes('DEFICIT')) &&
-    Math.abs(r2.actual||0) > 0
+  // Prioridad 3: rubro con key sup_def
+  const defRubro = !fondosRubro && !fondosLabel && rubros.find(r2 =>
+    r2.key === 'sup_def' && r2.actual != null
   );
-  const ultResultado = [...rubros].reverse().find(r2 =>
-    r2.tipo === 'resultado' && r2.actual != null && Math.abs(r2.actual) > 0
-  );
-  const rawNec = fondosRubro?.actual ?? defRubro?.actual ?? ultResultado?.actual ?? null;
+  // Prioridad 4: label SUPER o DÉF o DEFICIT — solo tipo resultado
+  const defLabel = !fondosRubro && !fondosLabel && !defRubro && rubros.find(r2 => {
+    const u = r2.label.toUpperCase();
+    return r2.tipo === 'resultado' &&
+      (u.includes('SUPER') || u.includes('DÉF') || u.includes('DEFICIT'));
+  });
+  // Prioridad 5: último rubro de tipo resultado con valor distinto de cero
+  const ultResultado = !fondosRubro && !fondosLabel && !defRubro && !defLabel &&
+    [...rubros].reverse().find(r2 => r2.tipo === 'resultado' && r2.actual != null && Math.abs(r2.actual) > 0);
+
+  const rawNec = (fondosRubro || fondosLabel || defRubro || defLabel || ultResultado)?.actual ?? null;
   const necFondos = rawNec != null ? Math.abs(rawNec) : null;
 
   return {
@@ -8868,14 +8882,15 @@ function _confirmarImportFlujo(res) {
   const ipc = document.getElementById('fc-ipc');
   if (per) per.value = mesesStr;
   if (ipc) {
-    ipc.value = ipcCalc > 0 ? ipcCalc : '';
+    // FIX 7: ipcCalc puede ser null si datos no disponibles
+    ipc.value = ipcCalc != null ? ipcCalc : '';
     // Mostrar origen del IPC
     const ipcInfo = document.getElementById('fc-ipc-info');
     if (ipcInfo) {
-      ipcInfo.textContent = ipcCalc > 0
+      ipcInfo.textContent = ipcCalc != null
         ? '✓ IPC calculado desde INDEC · ' + res.meses.join('/') + ' ' + añoDetect
-        : '— IPC no disponible para este período, ingresarlo manualmente';
-      ipcInfo.style.color = ipcCalc > 0 ? 'var(--pos)' : 'var(--dim)';
+        : '— IPC no disponible — ingresalo manualmente o abrí el módulo Inflación primero';
+      ipcInfo.style.color = ipcCalc != null ? 'var(--pos)' : 'var(--dim)';
     }
   }
 
@@ -9031,9 +9046,10 @@ function guardarFlujoManual() {
       return {
         key, label: orig?.label || key, tipo: orig?.tipo || 'egreso',
         actual: parseFloat(inp.value) || null,
-        anterior: null, var_pct: null, porMes: orig?.porMes || {}
+        anterior: orig?.anterior ?? null,  // FIX 4: preservar valor anterior si existe
+        var_pct: null, porMes: orig?.porMes || {}
       };
-    }).filter(r => r.actual !== null);
+    }).filter(r => r.actual !== null || r.anterior !== null);  // FIX 4: mantener rubros con anterior aunque actual sea null
     rubrosFinales = rubrosFinales.length ? rubrosFinales : rubros;
   }
 
@@ -9085,13 +9101,29 @@ function _guardarFlujoData(data) {
       if (!DATA.fact[empresa])  DATA.fact[empresa]  = {};
       if (!DATA.sit[empresa])   DATA.sit[empresa]   = {};
       saveRubros();
+      // FIX 6: refrescar todos los selectores al agregar empresa nueva
+      try {
+        if (typeof populateSelects === 'function') populateSelects();
+      } catch(e) {}
+    }
+  }
+
+  // FIX 2: completar necesidad_fondos_ant desde flujo anterior si no viene explícito
+  let necAnt = necesidad_fondos_ant;
+  if (necAnt == null) {
+    const prevFlujos = Object.values(DATA.flujos || {})
+      .filter(f => f.empresa === empresa && f.clave !== clave)
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    if (prevFlujos.length > 0) {
+      const nec = _flujoNecesidad(prevFlujos[0]);
+      if (nec != null) necAnt = nec;
     }
   }
 
   DATA.flujos[clave] = {
     clave, empresa, periodo, tipo, ipc,
     meses: data.meses || [],
-    rubros, necesidad_fondos, necesidad_fondos_ant,
+    rubros, necesidad_fondos, necesidad_fondos_ant: necAnt,
     timestamp: Date.now(),
     cargadoEl: nowAR(),
     fuente: data.fuente || 'manual',
@@ -9165,17 +9197,18 @@ function _poblarSelectoresFlujos() {
       }).join('');
   });
 
-  // Al cambiar sel-flujo-a, auto-cargar el IPC del flujo seleccionado
+  // FIX 10: Al cambiar sel-flujo-a, auto-cargar el IPC — usar función nombrada para poder remover
   const selA = document.getElementById('sel-flujo-a');
-  if (selA && !selA._ipcListenerAdded) {
-    selA._ipcListenerAdded = true;
-    selA.addEventListener('change', function() {
+  if (selA) {
+    if (selA._ipcListenerFn) selA.removeEventListener('change', selA._ipcListenerFn);
+    selA._ipcListenerFn = function() {
       const f = DATA.flujos[this.value];
       const ipcEl = document.getElementById('comp-flujo-ipc');
       if (f?.ipc && ipcEl && (!ipcEl.value || parseFloat(ipcEl.value) === 0)) {
         ipcEl.value = f.ipc;
       }
-    });
+    };
+    selA.addEventListener('change', selA._ipcListenerFn);
   }
 
   // Lbl de cantidad
@@ -9255,13 +9288,14 @@ function _eliminarFlujo(clave) {
 // ── COMPARACIÓN ───────────────────────────────────────────────────
 // ── Calcular IPC acumulado para un período de flujo ──────────────
 function calcularIPCFlujo(meses, anio) {
+  // FIX 7: retornar null cuando datos no disponibles, en lugar de 0
   const MESES_IDX = {
     ENERO:0,FEBRERO:1,MARZO:2,ABRIL:3,MAYO:4,JUNIO:5,
     JULIO:6,AGOSTO:7,SEPTIEMBRE:8,OCTUBRE:9,NOVIEMBRE:10,DICIEMBRE:11
   };
   const yr = parseInt(anio) || new Date().getFullYear();
-  const mensual = (INFL && INFL.mensual && INFL.mensual[yr]) || [];
-  if (!mensual.length || !meses || !meses.length) return 0;
+  const mensual = (typeof INFL !== 'undefined' && INFL?.mensual?.[yr]) || null;
+  if (!mensual || !meses?.length) return null;  // null = no disponible
   let acum = 1, encontrados = 0;
   meses.forEach(function(mes) {
     const idx = MESES_IDX[mes.toUpperCase()];
@@ -9270,7 +9304,7 @@ function calcularIPCFlujo(meses, anio) {
       encontrados++;
     }
   });
-  return encontrados ? parseFloat(((acum - 1) * 100).toFixed(2)) : 0;
+  return encontrados ? parseFloat(((acum - 1) * 100).toFixed(2)) : null;
 }
 
 // ── Matchear empresa del flujo con el portafolio ──────────────────
@@ -9291,18 +9325,16 @@ function _matchEmpresaFlujo(nombreEmpresa) {
 // ── Vista individual de flujo ────────────────────────────────────
 // ── Helpers para extraer valores clave de un flujo ────────────────
 function _flujoNecesidad(f) {
+  // FIX 11: necesidad_fondos ya se guarda como Math.abs(), no duplicar
   if (!f) return null;
-  // 1. campo necesidad_fondos explícito con valor > 0
-  const nec = f.necesidad_fondos && Math.abs(f.necesidad_fondos) > 0
-    ? f.necesidad_fondos : null;
-  if (nec) return Math.abs(nec);
-  // 2. rubro con key necesidad_fondos o tipo resultado con valor > 0
-  const rNec = f.rubros.find(r => r.key === 'necesidad_fondos' && Math.abs(r.actual||0) > 0);
+  // 1. campo necesidad_fondos explícito — ya es positivo (se guardó con Math.abs)
+  if (f.necesidad_fondos != null && f.necesidad_fondos > 0) return f.necesidad_fondos;
+  // 2. rubro con key necesidad_fondos
+  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null);
   if (rNec) return Math.abs(rNec.actual);
-  // 3. Superávit/Déficit — valor absoluto
-  const rDef = f.rubros.find(r => r.key === 'sup_def' ||
-    (r.tipo === 'resultado' && Math.abs(r.actual||0) > 0));
-  if (rDef) return Math.abs(rDef.actual || 0);
+  // 3. Superávit/Déficit o tipo resultado — valor absoluto
+  const rDef = (f.rubros||[]).find(r => (r.key === 'sup_def' || r.tipo === 'resultado') && r.actual != null);
+  if (rDef) return Math.abs(rDef.actual);
   return null;
 }
 
@@ -9385,13 +9417,22 @@ function buildVistaIndividualFlujo() {
     return { bg:'',bt:'',fw:'400',c:'var(--text)',tag:'' };
   };
 
+  // FIX 9: evitar rubros duplicados (sup_def y necesidad_fondos a la vez)
+  const necKey = f.rubros.find(r => r.key === 'necesidad_fondos') ? 'necesidad_fondos'
+               : f.rubros.find(r => r.key === 'sup_def') ? 'sup_def' : null;
+  const rubrosAMostrar = necKey === 'necesidad_fondos'
+    ? f.rubros.filter(r => r.key !== 'sup_def')
+    : necKey === 'sup_def'
+    ? f.rubros.filter(r => r.key !== 'necesidad_fondos')
+    : f.rubros;
+
   const tbl = document.getElementById('tbl-flujos');
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Rubro</th>
     ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
     <th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>
   </tr></thead><tbody>` +
-  f.rubros.map(r => {
+  rubrosAMostrar.map(r => {
     const st = _est(r.label, r.tipo);
     const tag = st.tag ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;
       background:${st.c}22;color:${st.c};font-family:var(--mono);margin-left:6px">${st.tag}</span>` : '';
@@ -9495,6 +9536,7 @@ function buildComparacionFlujos() {
     return { anio, tipo:'anio', num: 1 };
   };
   const _diffMesesFlujo = (pA, pB) => {
+    // FIX 13: gap = distancia entre inicios - duración del período B (el anterior)
     const a = _parsePeriodoFlujo(pA), b = _parsePeriodoFlujo(pB);
     if (!a || !b) return null;
     const duracion = { cuat:4, trim:3, mes:1, anio:12 };
@@ -9502,7 +9544,10 @@ function buildComparacionFlujos() {
     const mesInicioB = b.tipo === 'cuat' ? (b.num-1)*4+1 : b.tipo === 'trim' ? (b.num-1)*3+1 : b.num;
     const absA = a.anio * 12 + mesInicioA;
     const absB = b.anio * 12 + mesInicioB;
-    return Math.abs(absA - absB - (duracion[b.tipo] || 4));
+    const distancia = absA - absB;  // cuántos meses entre inicios
+    const durB = duracion[b.tipo] || 4;
+    const gap = distancia - durB;  // gap = 0 si son consecutivos
+    return Math.max(0, gap);
   };
   const gapMeses = _diffMesesFlujo(fA.periodo, fB.periodo);
   const durEsperada = (() => {
@@ -9771,7 +9816,13 @@ function buildComparacionFlujos() {
       .filter(f => f.empresa === empresa)
       .sort((a,b) => a.periodo < b.periodo ? -1 : a.periodo > b.periodo ? 1 : 0);
     if (allFlujos.length < 3) {
-      tendCanvas.style.display = 'none'; return;
+      // FIX 8: mostrar mensaje informativo en lugar de ocultar silenciosamente
+      const wrap = tendCanvas.parentElement;
+      if (wrap) wrap.innerHTML = `<div style="font-size:9px;color:var(--dim);padding:12px;text-align:center">
+        Necesitás al menos 3 períodos cargados para ${empresa} para ver la tendencia histórica<br>
+        <span style="opacity:.6">(actualmente: ${allFlujos.length} período${allFlujos.length!==1?'s':''})</span>
+      </div>`;
+      return;
     }
     tendCanvas.style.display = '';
     const periodos = allFlujos.map(f => f.periodo);
@@ -9839,6 +9890,15 @@ function exportarFlujoExcel() {
   const fA = DATA.flujos[claveA];
   const fB = DATA.flujos[claveB];
   if (!fA || !fB) return;
+  // FIX 12: validar que los flujos tengan rubros detallados
+  if (!fA?.rubros?.length) {
+    showStorageStatus('⚠ El flujo seleccionado (A) no tiene rubros detallados para exportar.', '#ff8c47');
+    return;
+  }
+  if (!fB?.rubros?.length) {
+    showStorageStatus('⚠ El flujo seleccionado (B) no tiene rubros detallados para exportar.', '#ff8c47');
+    return;
+  }
   // IPC: manual > auto-calculado entre períodos > guardado en flujo A
   const ipcManual = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
   const ipcAuto   = _ipcAcumEntrePeriodos(fA.periodo, fB.periodo);
@@ -10246,7 +10306,7 @@ async function generarInformeFlujo() {
     const necA = _flujoNecesidad(fA);
     const necB = _flujoNecesidad(fB);
     const varNom  = (necA!=null&&necB&&necB!==0) ? (necA-necB)/necB*100 : null;
-    const varReal = (varNom!=null&&ipc) ? varNom - ipc : null;
+    const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
     const ingA = _flujoIngTotal(fA);
     const ingB = _flujoIngTotal(fB);
     const varIng = (ingA!=null&&ingB&&ingB!==0) ? (ingA-ingB)/Math.abs(ingB)*100 : null;
@@ -14789,7 +14849,7 @@ function renderFlujosEmpresa(emp) {
     const varNom = (necA != null && necB && necB !== 0)
       ? (necA - necB) / Math.abs(necB) * 100 : null;
     const varReal = (varNom != null && f.ipc)
-      ? varNom - f.ipc : null;
+      ? ((1 + varNom/100) / (1 + f.ipc/100) - 1) * 100 : null;
     const cn  = varNom  == null ? 'var(--dim)' : varNom  > 0 ? 'var(--neg)' : 'var(--pos)';
     const cr  = varReal == null ? 'var(--dim)' : varReal > 0 ? 'var(--neg)' : 'var(--pos)';
     const fmtP = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
