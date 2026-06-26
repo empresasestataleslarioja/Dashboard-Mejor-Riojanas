@@ -4055,69 +4055,80 @@ self.onmessage = async (e) => {
   <div class="panel-inner">
 
     <!-- ── Toolbar ─────────────────────────────────────────────── -->
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;
-      padding:10px 16px;background:var(--s2);border:1px solid var(--bd);
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+      padding:10px 14px;background:var(--s2);border:1px solid var(--bd);
       border-radius:6px;margin-bottom:14px">
 
+      <!-- Grupo: Filtro empresa -->
       <select id="sel-flujo-empresa" onchange="buildFlujos()"
         style="padding:5px 10px;background:var(--s3);border:1px solid var(--bd2);
-        color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px">
+        color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;min-width:160px">
         <option value="">— Todas las empresas —</option>
       </select>
 
-      <label style="display:inline-flex;align-items:center;gap:6px;
-        padding:5px 14px;background:rgba(71,255,180,.12);
+      <!-- Separador -->
+      <div style="width:1px;height:22px;background:var(--bd2);margin:0 4px;flex-shrink:0"></div>
+
+      <!-- Grupo: Importar -->
+      <label style="display:inline-flex;align-items:center;gap:5px;
+        padding:5px 12px;background:rgba(71,255,180,.12);
         border:1.5px solid #2ecc8a;color:#1a9e68;border-radius:4px;
-        cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:600">
-        📥 Cargar Excel flujo
+        cursor:pointer;font-family:var(--mono);font-size:9.5px;font-weight:600;white-space:nowrap"
+        title="Cargar archivo Excel desde tu computadora">
+        📥 Cargar Excel
         <input type="file" accept=".xlsx,.xls" style="display:none"
           onchange="importarFlujoExcel(this.files[0]);this.value=''">
       </label>
-        <button onclick="descargarTemplateFlujo()"
-          style="padding:6px 12px;background:rgba(71,180,255,.08);border:1px solid #47b4ff44;
-          color:#47b4ff;font-family:var(--mono);font-size:9px;border-radius:4px;cursor:pointer"
-          title="Descarga un Excel con la estructura estándar que cualquier empresa puede completar">
-          📄 Template estándar
-        </button>
 
-      <div style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <input id="inp-drive-flujo" type="text" placeholder="Link o ID de archivo Drive…"
-          style="padding:5px 10px;background:var(--s2);border:1px solid var(--bd2);
-          color:var(--text);font-family:var(--mono);font-size:9px;border-radius:4px;
-          outline:none;width:280px"
+      <button onclick="descargarTemplateFlujo()"
+        style="padding:5px 10px;background:rgba(71,180,255,.08);border:1px solid #47b4ff55;
+        color:#47b4ff;font-family:var(--mono);font-size:9px;border-radius:4px;cursor:pointer;white-space:nowrap"
+        title="Descarga un Excel con la estructura estándar para completar">
+        📄 Template
+      </button>
+
+      <div style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--bd2);border-radius:4px;overflow:hidden;flex-shrink:1;min-width:0">
+        <input id="inp-drive-flujo" type="text" placeholder="Link o ID de Drive…"
+          style="padding:5px 9px;background:var(--s3);border:none;
+          color:var(--text);font-family:var(--mono);font-size:9px;
+          outline:none;width:170px;min-width:0"
           onkeydown="if(event.key==='Enter')importarFlujoDrive()">
         <button onclick="importarFlujoDrive()"
-          style="padding:5px 12px;background:rgba(71,255,180,.1);border:1.5px solid #2ecc8a44;
+          style="padding:5px 11px;background:rgba(71,255,180,.12);border:none;border-left:1px solid var(--bd2);
           color:#1a9e68;font-family:var(--mono);font-size:9px;font-weight:600;
-          border-radius:4px;cursor:pointer"
+          cursor:pointer;white-space:nowrap;flex-shrink:0"
           title="Cargar Excel desde Google Drive usando el bridge configurado">
-          📂 Desde Drive
+          📂 Drive
         </button>
       </div>
 
       <button onclick="toggleFlujoManual()"
-        style="padding:5px 14px;background:rgba(100,100,80,.1);
+        style="padding:5px 12px;background:rgba(100,100,80,.1);
         border:1.5px solid #47e8ff;color:var(--acc);border-radius:4px;
-        cursor:pointer;font-family:var(--mono);font-size:10px">
-        ✏ Carga manual
+        cursor:pointer;font-family:var(--mono);font-size:9.5px;white-space:nowrap">
+        ✏ Manual
       </button>
 
+      <!-- Separador -->
+      <div style="width:1px;height:22px;background:var(--bd2);margin:0 4px;flex-shrink:0"></div>
+
+      <!-- Grupo: Exportar -->
       <button onclick="generarInformeFlujo()"
-        style="padding:5px 14px;background:rgba(232,255,71,.08);
+        style="padding:5px 12px;background:rgba(232,255,71,.08);
         border:1.5px solid var(--y21);color:#b8a000;border-radius:4px;
-        cursor:pointer;font-family:var(--mono);font-size:10px">
-        📄 Generar informe Word
+        cursor:pointer;font-family:var(--mono);font-size:9.5px;white-space:nowrap">
+        📄 Informe Word
       </button>
 
       <button id="btn-export-excel" onclick="exportarFlujoExcel()"
-        style="padding:5px 14px;background:rgba(71,255,180,.08);
+        style="padding:5px 12px;background:rgba(71,255,180,.08);
         border:1.5px solid var(--pos);color:#1a9e68;border-radius:4px;
-        cursor:pointer;font-family:var(--mono);font-size:10px">
-        📊 Exportar Informe
+        cursor:pointer;font-family:var(--mono);font-size:9.5px;white-space:nowrap">
+        📊 Exportar Excel
       </button>
 
       <span id="flujo-msg" style="font-size:9px;font-family:var(--mono);
-        color:var(--dim);margin-left:4px"></span>
+        color:var(--dim);margin-left:2px"></span>
     </div>
 
     <!-- ── Panel confirmación import ──────────────────────────── -->
