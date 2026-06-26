@@ -1429,8 +1429,31 @@ self.onmessage = async (e) => {
   <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;padding:24px 16px">
 
     <!-- Logos institucionales -->
-    <div style="display:flex;align-items:center;gap:20px;margin-bottom:32px" id="login-logos-area">
-      <!-- Los logos se inyectan por JS después de definir las funciones SVG -->
+    <div style="display:flex;align-items:center;gap:20px;margin-bottom:32px;color:#fff" id="login-logos-area">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 220" style="height:52px;display:block;opacity:.92">
+        <path d="M52,8 Q98,-2 150,16 L137,36 Q96,20 65,32 Z" fill="#636363"/>
+        <polygon points="65,32 158,82 92,148" fill="#2E7D32"/>
+        <path d="M38,52 Q30,98 80,162 Q68,170 57,162 Q6,96 22,46 Z" fill="#C62828"/>
+        <path d="M158,82 Q178,122 162,160 L143,150 Q158,116 148,86 Z" fill="#F9A825"/>
+        <text x="95" y="190" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="21" fill="#fff" text-anchor="middle" letter-spacing="1">LA RIOJA</text>
+        <text x="95" y="211" font-family="Arial,sans-serif" font-size="12" fill="#fff" text-anchor="middle" letter-spacing="3.5">GOBIERNO</text>
+      </svg>
+      <div style="width:1px;height:44px;background:rgba(255,255,255,.2)"></div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" style="height:36px;display:block;opacity:.92">
+        <rect x="0" y="0" width="34" height="34" fill="#1B2B5E"/>
+        <rect x="2" y="18" width="7" height="16" fill="#9aaac8"/><rect x="12" y="13" width="5" height="21" fill="#9aaac8"/><rect x="21" y="22" width="4" height="12" fill="#9aaac8"/>
+        <rect x="34" y="0" width="34" height="34" fill="#6B6A2B"/>
+        <circle cx="48" cy="20" r="9" fill="none" stroke="#c8b86a" stroke-width="2"/>
+        <circle cx="55" cy="14" r="5" fill="none" stroke="#c8b86a" stroke-width="1.5"/>
+        <polyline points="34,28 52,14 68,4" fill="none" stroke="#7CB342" stroke-width="2.5" stroke-linecap="round"/>
+        <polygon points="68,4 62,10 70,13" fill="#7CB342"/>
+        <polygon points="0,34 34,34 0,68" fill="#C62828"/>
+        <rect x="34" y="34" width="34" height="34" fill="#1B2B5E"/>
+        <circle cx="46" cy="48" r="3" fill="#F9A825"/><circle cx="56" cy="54" r="3" fill="#F9A825"/><circle cx="46" cy="61" r="3" fill="#F9A825"/><circle cx="62" cy="46" r="2.5" fill="#F9A825"/>
+        <text x="80" y="36" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#fff" letter-spacing=".5">MEJOR</text>
+        <text x="80" y="63" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="27" fill="#fff" letter-spacing=".5">RIOJANAS</text>
+        <text x="81" y="71" font-family="Arial,sans-serif" font-size="9" fill="rgba(255,255,255,.6)" letter-spacing="2">EMPRESAS ESTATALES</text>
+      </svg>
     </div>
 
     <!-- Separador con texto -->
@@ -4355,16 +4378,6 @@ function checkAuth() {
   } catch(e) {}
   // Mostrar login
   document.getElementById('login-overlay').style.display = 'flex';
-  // Inyectar logos (SVG functions ya definidas en este punto)
-  try {
-    const area = document.getElementById('login-logos-area');
-    if (area && !area.hasChildNodes()) {
-      area.innerHTML =
-        '<div style="opacity:.9">' + _svgLaRioja(52) + '</div>' +
-        '<div style="width:1px;height:44px;background:rgba(255,255,255,.2)"></div>' +
-        '<div style="opacity:.9">' + _svgMejorRiojanas(36) + '</div>';
-    }
-  } catch(e) {}
   setTimeout(() => {
     const u = document.getElementById('login-user');
     if (u) u.focus();
