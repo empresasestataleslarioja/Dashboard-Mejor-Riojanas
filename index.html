@@ -10853,7 +10853,6 @@ function _erDesdeMonthly(emp) {
 }
 
 function buildResDesglose() {
-  const years   = ys();
   const selEmp  = document.getElementById('sel-res-emp')?.value || '';
   const cont    = document.getElementById('res-desglose-content');
   const fmtCell = (v, key) => {
@@ -10872,6 +10871,8 @@ function buildResDesglose() {
       if (er) erResuelto[e] = er;
     });
     const erEmpsConDatos = Object.keys(erResuelto);
+    // Años con datos reales en los provisorios (independiente del toggle global activeYears)
+    const years = [...new Set(erEmpsConDatos.flatMap(e => Object.keys(erResuelto[e])))].sort();
     if (!erEmpsConDatos.length) {
       cont.innerHTML = `<div style="padding:32px;text-align:center;color:var(--dim)">
         <div style="font-size:32px;margin-bottom:12px">📋</div>
@@ -10934,7 +10935,8 @@ function buildResDesglose() {
   } else {
     // ── Vista empresa: solo ER provisorio (er_mensual) ──
     const empEr = _erDesdeMonthly(selEmp) || {};
-    const yearsWithEr = years.filter(y => empEr?.[y] && Object.keys(empEr[y]).length);
+    // Años con datos en el provisorio (independiente del toggle global)
+    const yearsWithEr = Object.keys(empEr).filter(y => Object.keys(empEr[y] || {}).length).sort();
     const hasEr = yearsWithEr.length > 0;
 
     if (!hasEr) {
