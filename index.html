@@ -28896,6 +28896,24 @@ async function syncToCloud(nota) {
 
       // Publicar transferencias en un solo envío (Sheets manda)
       if (transferencias.length > 0) {
+        // ── Protección contra pérdida masiva de transferencias ────────
+        const _LS_TRANS_KEY = 'lr_trans_last_count';
+        const _lastCount = parseInt(localStorage.getItem(_LS_TRANS_KEY) || '0', 10);
+        if (_lastCount > 0 && transferencias.length < _lastCount * 0.5) {
+          const ok = window.confirm(
+            `⚠ ATENCIÓN — Posible pérdida de datos\n\n` +
+            `Última publicación: ${_lastCount.toLocaleString('es-AR')} transferencias\n` +
+            `Publicación actual: ${transferencias.length.toLocaleString('es-AR')} transferencias\n\n` +
+            `Esto sobreescribirá el Sheets con ${_lastCount - transferencias.length} registros menos.\n\n` +
+            `¿Estás seguro de que querés continuar?`
+          );
+          if (!ok) {
+            if (btn) { btn.disabled = false; btn.textContent = '↑'; }
+            updateCloudStatusBar('ok', 'Publicación cancelada');
+            showStorageStatus('⚠ Publicación cancelada — verificá que tengas todos los datos cargados', '#ff8c47');
+            return;
+          }
+        }
         showStorageStatus(`⏳ Publicando ${transferencias.length} transferencias…`, '#47e8ff');
         const tPayload = {
           token:     _cloudToken,
@@ -28905,6 +28923,7 @@ async function syncToCloud(nota) {
         };
         await postViaForm(_cloudUrl, tPayload);
         await new Promise(r => setTimeout(r, 4000));
+        localStorage.setItem(_LS_TRANS_KEY, String(transferencias.length));
       }
 
       try {
