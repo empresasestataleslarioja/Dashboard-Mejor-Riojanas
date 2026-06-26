@@ -16737,18 +16737,44 @@ function computeGaps() {
   const empsConBalance = new Set(
     Object.values(_balances || {}).map(b => (b.empresa || '').toUpperCase().trim())
   );
-  // Mapear nombre empresa del portafolio → tiene balance
-  const tieneBalance = emp => empsConBalance.has(emp.toUpperCase().trim()) ||
-    Object.values(_balances || {}).some(b =>
-      (b.empresa||'').toUpperCase().includes(emp.toUpperCase().substring(0,6)) ||
-      emp.toUpperCase().includes((b.empresa||'').toUpperCase().substring(0,6))
-    );
+  // Mapear nombre empresa del portafolio → tiene balance (FIX 3: matching más estricto)
+  const tieneBalance = emp => {
+    const empU = emp.toUpperCase().trim();
+    if (empsConBalance.has(empU)) return true;
+    return Object.values(_balances || {}).some(b => {
+      const bU = (b.empresa||'').toUpperCase().trim();
+      if (bU === empU) return true;
+      // fuzzy solo si ambos nombres son suficientemente largos
+      const minLen = Math.min(empU.length, bU.length);
+      if (minLen <= 8) return false;
+      const prefLen = Math.min(8, minLen);
+      return bU.includes(empU.substring(0, prefLen)) || empU.includes(bU.substring(0, prefLen));
+    });
+  };
 
   allEmps.forEach(emp => {
-    const missingFact = years.filter(y => !DATA.fact[emp] || !DATA.fact[emp][y] || DATA.fact[emp][y] === 0);
+    // FIX 5: descartar empresas sin ningún dato en años activos
+    const tieneAlgoEnAniosActivos = years.some(y =>
+      (DATA.fact[emp]?.[y] != null) ||
+      (DATA.sit[emp]?.[y] != null) ||
+      ((DATA.personal||[]).find(d=>d.e===emp) && _persGetTotal((DATA.personal||[]).find(d=>d.e===emp), String(y)) != null)
+    );
+    if (!tieneAlgoEnAniosActivos) return;
+
+    // FIX 1: tratar 0 como valor válido en facturación
+    const missingFact = years.filter(y => !DATA.fact[emp] || DATA.fact[emp][y] == null);
     const missingSit  = years.filter(y => !DATA.sit[emp]  || DATA.sit[emp][y] == null);
     const persEntry   = (DATA.personal||[]).find(d => d.e === emp);
-    const missingPers = years.filter(y => !persEntry || !(_persGetTotal(persEntry, String(y)) > 0 || (persEntry.m && persEntry.m[String(y)] && persEntry.m[String(y)].some(v => v != null && v > 0))));
+    // FIX 2: tratar 0 como valor válido en personal
+    const missingPers = years.filter(y => {
+      if (!persEntry) return true;
+      const total = _persGetTotal(persEntry, String(y));
+      if (total != null && total >= 0 && typeof total === 'number' && !isNaN(total) && persEntry.y && persEntry.y[String(y)] != null) return false;
+      // también verificar meses
+      const meses = persEntry.m && persEntry.m[String(y)];
+      if (meses && meses.some(v => v != null)) return false;
+      return true;
+    });
     const sinBalance  = !tieneBalance(emp); // true = no tiene balance cargado
     if (missingFact.length > 0 || missingSit.length > 0 || missingPers.length > 0 || sinBalance) {
       gaps.push({ emp, missingFact, missingSit, missingPers, sinBalance });
@@ -16777,11 +16803,18 @@ function updateGapBadge() {
 }
 
 function openGapModal() {
+  // FIX 6: validar años activos antes de continuar
+  const years = ys();
+  if (!years || years.length === 0) {
+    const body = document.getElementById('gap-body');
+    if (body) body.innerHTML = '<div style="padding:20px;color:var(--dim);font-size:11px;text-align:center">No hay años activos en el filtro. Seleccioná al menos un año desde los chips de la barra superior.</div>';
+    document.getElementById('gap-overlay').style.display = 'flex';
+    return;
+  }
   // Agregar tab de completitud si disponible
   const compEl = document.getElementById('gap-completitud');
   if (compEl) compEl.innerHTML = buildCompletitudPanel();
   const gaps = computeGaps();
-  const years = ys();
   const body = document.getElementById('gap-body');
   if (!body) return;
 
@@ -16789,9 +16822,10 @@ function openGapModal() {
     body.innerHTML = '<p style="color:#1a9e68;padding:10px 0">✓ No hay datos faltantes en los años activos.</p>';
   } else {
     // Estadísticas de gaps por dimensión
-    const nFact = gaps.filter(g=>g.missingFact.length>0).length;
-    const nRes  = gaps.filter(g=>g.missingSit.length>0).length;
-    const nPers = gaps.filter(g=>g.missingPers.length>0).length;
+    const nFact   = gaps.filter(g=>g.missingFact.length>0).length;
+    const nRes    = gaps.filter(g=>g.missingSit.length>0).length;
+    const nPers   = gaps.filter(g=>g.missingPers.length>0).length;
+    const nSinBal = gaps.filter(g=>g.sinBalance).length;
 
     // Construir encabezados agrupados por dimensión
     const thStyle = 'padding:5px 9px;text-align:center;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);white-space:nowrap;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:2';
@@ -16826,23 +16860,34 @@ function openGapModal() {
       const balEmp = Object.values(_balances || {}).filter(function(b) {
         var empU = (b.empresa||'').toUpperCase().trim();
         var gapU = emp.toUpperCase().trim();
-        return empU === gapU ||
-          empU.includes(gapU.substring(0,6)) ||
-          gapU.includes(empU.substring(0,6));
+        if (empU === gapU) return true;
+        var minLen = Math.min(empU.length, gapU.length);
+        if (minLen <= 8) return false;
+        var prefLen = Math.min(8, minLen);
+        return empU.includes(gapU.substring(0, prefLen)) || gapU.includes(empU.substring(0, prefLen));
       });
-      var nBal    = balEmp.length;
-      // Mostrar: año + tipo (PDF/Excel) de cada balance cargado
-      var perBal  = balEmp.map(function(b){
-        var per    = b.periodo || b.cierre || b.año || '?';
-        var metodo = b.metodo === 'excel' ? 'XLS' : b.metodo === 'pdf' ? 'PDF' : '';
-        return per + (metodo ? ' ('+metodo+')' : '');
-      }).join(' · ');
-      const aniosConBalU = [...new Set(balEmp.map(function(b){ return String(b.periodo || b.cierre || b.año || ''); }).filter(Boolean))].sort();
+      // FIX 7: detectar balances sin fecha
+      var balSinFecha = balEmp.filter(function(b){ return !b.periodo && !b.cierre && !b.año; });
+      // FIX 8: detectar duplicados por año
+      var balancesPorAnio = {};
+      balEmp.forEach(function(b){
+        var anio = String(b.periodo || b.cierre || b.año || '');
+        if (!anio) return;
+        balancesPorAnio[anio] = (balancesPorAnio[anio] || 0) + 1;
+      });
+      const aniosConBalU = Object.keys(balancesPorAnio).sort();
+      var aniosDuplicados = Object.entries(balancesPorAnio)
+        .filter(function(e){ return e[1] > 1; })
+        .map(function(e){ return e[0]+'(×'+e[1]+')'; });
       const aniosSinBal = years.filter(y => !aniosConBalU.includes(String(y)));
+      // Construir advertencias para la celda
+      var balWarnings = [];
+      if (balSinFecha.length > 0) balWarnings.push('<div style="font-size:7px;color:#ffaa00;margin-top:2px">⚠ '+balSinFecha.length+' balance'+(balSinFecha.length>1?'s':'')+' sin fecha</div>');
+      if (aniosDuplicados.length > 0) balWarnings.push('<div style="font-size:7px;color:#ffaa00;margin-top:1px">⚠ Duplic: '+aniosDuplicados.join(', ')+'</div>');
       const colPresentado = `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2);border-left:2px solid #2ecc8a22">
         ${aniosConBalU.length > 0
-          ? '<b style="font-size:11px;color:#2ecc8a">✓</b><div style="font-size:7.5px;color:#2ecc8a;margin-top:2px;line-height:1.4;white-space:nowrap">'+aniosConBalU.join(', ')+'</div>'
-          : '<span style="font-size:11px;color:var(--dim)">—</span>'}
+          ? '<b style="font-size:11px;color:#2ecc8a">✓</b><div style="font-size:7.5px;color:#2ecc8a;margin-top:2px;line-height:1.4;white-space:nowrap">'+aniosConBalU.join(', ')+'</div>'+balWarnings.join('')
+          : '<span style="font-size:11px;color:var(--dim)">—</span>'+balWarnings.join('')}
       </td>`;
       const colNoPresentado = `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid var(--bd2)">
         ${aniosSinBal.length > 0
@@ -16865,6 +16910,9 @@ function openGapModal() {
       </div>
       <div style="padding:5px 12px;background:rgba(100,100,80,.08);border:1px solid #47e8ff40;border-radius:3px;font-size:9.5px;color:var(--acc);font-family:var(--mono)">
         Personal faltante: <strong>${nPers}</strong>
+      </div>
+      <div style="padding:5px 12px;background:rgba(71,255,180,.08);border:1px solid #47ffb440;border-radius:3px;font-size:9.5px;color:#2ecc8a;font-family:var(--mono)">
+        Sin balance: <strong>${nSinBal}</strong>
       </div>
       <div style="padding:5px 12px;background:var(--s3);border:1px solid var(--bd);border-radius:3px;font-size:9.5px;color:var(--dim);font-family:var(--mono)">
         Total empresas: <strong>${gaps.length}</strong>
