@@ -16748,7 +16748,7 @@ function computeGaps() {
     const missingFact = years.filter(y => !DATA.fact[emp] || !DATA.fact[emp][y] || DATA.fact[emp][y] === 0);
     const missingSit  = years.filter(y => !DATA.sit[emp]  || DATA.sit[emp][y] == null);
     const persEntry   = (DATA.personal||[]).find(d => d.e === emp);
-    const missingPers = years.filter(y => !persEntry || !(persEntry.y[String(y)] > 0));
+    const missingPers = years.filter(y => !persEntry || !(_persGetTotal(persEntry, String(y)) > 0 || (persEntry.m && persEntry.m[String(y)] && persEntry.m[String(y)].some(v => v != null && v > 0))));
     const sinBalance  = !tieneBalance(emp); // true = no tiene balance cargado
     if (missingFact.length > 0 || missingSit.length > 0 || missingPers.length > 0 || sinBalance) {
       gaps.push({ emp, missingFact, missingSit, missingPers, sinBalance });
