@@ -1,0 +1,17 @@
+{
+  "name": "Dashboard Mejor Riojanas",
+  "short_name": "MejorRiojanas",
+  "description": "Panel BI de empresas estatales — La Rioja",
+  "start_url": "/Dashboard-Mejor-Riojanas/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#1a5ab4",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='24' fill='%231a5ab4'/><text x='96' y='130' font-size='100' text-anchor='middle' fill='white'>📊</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
