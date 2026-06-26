@@ -1714,6 +1714,9 @@ self.onmessage = async (e) => {
     <button class="nav-item" onclick="showPanel('flujos',this)" id="nav-flujos">
       <span class="nav-dot"></span>💰 <strong>Flujos de Fondos</strong>
     </button>
+    <button class="nav-item" onclick="showPanel('presupuesto',this)">
+      <span class="nav-dot"></span>🎯 <strong>Presupuesto vs real</strong>
+    </button>
     <button class="nav-item" onclick="showPanel('transferencias',this)">
       <span class="nav-dot"></span>💸 <strong>Transferencias</strong>
     </button>
@@ -1724,15 +1727,11 @@ self.onmessage = async (e) => {
       <span class="nav-dot"></span>🏷 <strong>Rubros comerciales</strong>
     </button>
 
-    <div class="nav-group"><strong>Análisis avanzado</strong></div>
     <button class="nav-item" onclick="showPanel('sostenibilidad',this)" style="display:none">
       <span class="nav-dot"></span>🟢 <strong>Sostenibilidad fiscal</strong>
     </button>
     <button class="nav-item" onclick="showPanel('heatmap',this)" style="display:none">
       <span class="nav-dot"></span>🔥 <strong>Mapa de calor</strong>
-    </button>
-    <button class="nav-item" onclick="showPanel('presupuesto',this)">
-      <span class="nav-dot"></span>🎯 <strong>Presupuesto vs real</strong>
     </button>
   </nav>
 
