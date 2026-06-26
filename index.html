@@ -10810,11 +10810,17 @@ function _erDesdeMonthly(emp) {
   let hayAlgo = false;
 
   if (erM) {
-    // Mapeo conceptoStd (mensual) → clave de DATA.er
+    // Mapeo conceptoStd → clave ER_LABELS (cubre todos los CONCEPTOS_STD posibles)
     const MAP = {
-      ventas: 'ventas_netas', costo: 'costo_ventas', utilBruta: 'utilidad_bruta',
-      gastoAdm: 'gastos_admin', gastoCom: 'gastos_comercializacion',
-      resOperativo: 'resultado_operativo',
+      ventas:        'ventas_netas',
+      costo:         'costo_ventas',
+      utilBruta:     'utilidad_bruta',
+      gastoAdm:      'gastos_admin',
+      gastoCom:      'gastos_comercializacion',
+      resOperativo:  'resultado_operativo',
+      resFinanciero: 'gastos_financieros',   // resultado financiero como partida
+      resAntesImp:   'resultado_operativo',  // antes de impuestos → aproximar como operativo
+      resEjercicio:  'resultado_operativo',  // resultado del ejercicio → idem
     };
     Object.entries(erM).forEach(([yr, data]) => {
       if (!data || !Array.isArray(data.filas)) return;
@@ -10822,15 +10828,24 @@ function _erDesdeMonthly(emp) {
       data.filas.forEach(f => {
         const clave = MAP[f.conceptoStd];
         if (!clave) return;
-        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (v || 0), 0);
+        const suma = Object.values(f.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
         if (suma !== 0) { acc[clave] = (acc[clave] || 0) + suma; }
       });
-      // Calcular subtotales faltantes desde las partidas disponibles
+      // Derivar subtotales si faltan
       if (acc.utilidad_bruta == null && acc.ventas_netas != null) {
         acc.utilidad_bruta = (acc.ventas_netas || 0) + (acc.costo_ventas || 0);
       }
       if (acc.resultado_operativo == null && acc.utilidad_bruta != null) {
         acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0);
+      }
+      // Fallback: si todavía no hay resultado_operativo, derivarlo de fact/sit de ese año
+      if (acc.resultado_operativo == null) {
+        const sv = DATA.sit?.[emp]?.[yr] ?? DATA.sit?.[emp]?.[Number(yr)];
+        if (sv != null) acc.resultado_operativo = sv;
+      }
+      if (acc.ventas_netas == null) {
+        const fv2 = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[Number(yr)];
+        if (fv2 != null) acc.ventas_netas = fv2;
       }
       if (Object.keys(acc).length) { out[yr] = acc; hayAlgo = true; }
     });
