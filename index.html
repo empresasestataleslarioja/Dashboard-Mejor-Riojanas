@@ -2459,7 +2459,7 @@ self.onmessage = async (e) => {
           style="background:#1a5fb4;color:#fff;border:none;padding:6px 14px;font-size:9pt;font-family:var(--mono);border-radius:3px;cursor:pointer;white-space:nowrap">
           📋 Informe Ejecutivo
         </button>
-        <button onclick="informeEstadoERProvisorio(document.getElementById('sel-emp').value)"
+        <button onclick="informeEstadoERProvisorio()"
           style="background:#6d3a9c;color:#fff;border:none;padding:6px 14px;font-size:9pt;font-family:var(--mono);border-radius:3px;cursor:pointer;white-space:nowrap">
           📊 ER Provisorio — Estado por Año
         </button>
@@ -12353,11 +12353,12 @@ function populateSelects() {
     try { loadRubros(); } catch(e) {}
   }
   const _rubros = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
-  // Fuente de verdad: rubros (portafolio registrado) unificado con datos reales
+  // Fuente de verdad: rubros + datos reales + empresas con ER mensual provisorio
   const companies = [...new Set([
     ...Object.keys(_rubros),
     ...Object.keys(DATA.fact || {}),
     ...Object.keys(DATA.sit  || {}),
+    ...Object.keys(DATA.er_mensual || {}),
   ])].sort();
   const opts = companies.map(c=>`<option value="${c}">${c}</option>`).join('');
   const optsWithBlank = `<option value="">— Consolidado (todas) —</option>` + opts;
