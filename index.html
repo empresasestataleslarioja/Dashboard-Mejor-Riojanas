@@ -472,6 +472,74 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 [data-theme="mineral"] .chip.on-sin { background: #0891B2; color: #FFFFFF; border-color: #0891B2; }
 [data-theme="mineral"] .nav-section { color: #5A7A96; }
 
+/* ══════════════════════════════════════════════════════════
+   TEMA — INSTITUCIONAL
+   Estética: Azul institucional oscuro (igual que pantalla de login)
+══════════════════════════════════════════════════════════ */
+[data-theme="institucional"] {
+  --bg:   #0b1220;
+  --s1:   #0f1e38;
+  --s2:   #132240;
+  --s3:   #172848;
+  --bd:   #1e3560;
+  --bd2:  #2a4878;
+  --y21:  #47b4ff;
+  --y22:  #b8a000;
+  --y23:  #56d1b2;
+  --y24:  #ff8c47;
+  --pos:  #56d1b2;
+  --neg:  #ff6b6b;
+  --text: #e8edf5;
+  --dim:  #5a7a96;
+  --dim2: #132240;
+  --acc:  #47b4ff;
+  --serif:  'Inter', 'Segoe UI', sans-serif;
+  --mono:   'IBM Plex Mono', 'Courier New', monospace;
+  --ui:     'Inter', 'Segoe UI', sans-serif;
+  --chart-tick: #5a7a96;
+  --chart-grid: #172848;
+  --radius-card: 8px;
+}
+[data-theme="institucional"] body { background-image: none; }
+[data-theme="institucional"] .sidebar {
+  background: linear-gradient(180deg,#0d1930 0%,#0b1628 100%);
+  border-right: 1px solid #1e3560;
+}
+[data-theme="institucional"] .topbar {
+  background: #0d1930;
+  border-bottom: 1px solid #1e3560;
+}
+[data-theme="institucional"] .nav-item { color: #5a7a96; }
+[data-theme="institucional"] .nav-item.active { color: #47b4ff; background: rgba(71,180,255,.08); }
+[data-theme="institucional"] .nav-item.active::before { background: #47b4ff; }
+[data-theme="institucional"] .nav-item:hover { color: #8ac8e8; background: rgba(71,180,255,.05); }
+[data-theme="institucional"] .brand-title { color: #e8edf5; }
+[data-theme="institucional"] .brand-title em { color: #47b4ff; }
+[data-theme="institucional"] .brand-sub { color: #5a7a96; }
+[data-theme="institucional"] .card {
+  background: rgba(255,255,255,.03) !important;
+  border: 1px solid #1e3560 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3) !important;
+}
+[data-theme="institucional"] .card-hd-title { color: #c8d8f0; font-weight: 600; }
+[data-theme="institucional"] .kpi {
+  background: rgba(255,255,255,.03) !important;
+  border: 1px solid #1e3560 !important;
+  border-top: 3px solid #47b4ff !important;
+  border-radius: 8px !important;
+}
+[data-theme="institucional"] .kpi-value { color: #e8edf5; font-size: 26px; font-weight: 700; }
+[data-theme="institucional"] .kpi-label { color: #5a7a96; }
+[data-theme="institucional"] .chip { border-color: #1e3560; color: #7a9ec0; background: #132240; }
+[data-theme="institucional"] .chip.on-lay,
+[data-theme="institucional"] .chip.on-ali,
+[data-theme="institucional"] .chip.on-ser,
+[data-theme="institucional"] .chip.on-ind,
+[data-theme="institucional"] .chip.on-pro,
+[data-theme="institucional"] .chip.on-sin { background: #1a5ab4; color: #fff; border-color: #2568cc; }
+[data-theme="institucional"] .nav-section { color: #2a4878; }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
@@ -2071,6 +2139,9 @@ self.onmessage = async (e) => {
           </div>
           <div class="chip" data-tema="ft" onclick="setTheme('ft',this)" title="Financial Times — papel salmón, serif">
             <span style="display:inline-block;width:7px;height:7px;border-radius:0;background:#990F3D;margin-right:4px;vertical-align:middle"></span>FT Papel
+          </div>
+          <div class="chip" data-tema="institucional" onclick="setTheme('institucional',this)" title="Institucional — azul oscuro, estilo pantalla de login">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:#1a5ab4;margin-right:4px;vertical-align:middle"></span>Institucional
           </div>
           <button class="imp-ctrl-btn" id="btn-fix-tema" onclick="fixDefaultTheme()" title="Fijar tema predeterminado" style="margin-left:4px;font-size:9px;padding:3px 8px">☆ Fijar</button>
         </div>
@@ -28408,6 +28479,9 @@ async function syncToCloud(nota) {
     const pubDate = (result.savedAt||'').slice(0,16).replace('T',' ');
     updateCloudStatusBar('ok', 'Publicado ' + pubDate);
     showStorageStatus('✓ Datos publicados al servidor', '#47ffb4');
+    try { limpiarPendienteGuardar(); } catch(ex) {}
+    // Quitar banner de cierre si estaba visible
+    try { const b = document.getElementById('_banner_cierre'); if (b) b.remove(); } catch(ex) {}
     const nEmps  = Object.keys(DATA.fact||{}).length;
     const nTrans = (DATA.transferencias||[]).length;
     mostrarResultadoSync(true, '↑ Datos publicados a Google Sheets',
@@ -29455,7 +29529,11 @@ function _dispararAutoSync() {
   }, AUTOSYNC_DELAY);
 }
 
+// Flag global: true solo cuando el usuario cargó datos nuevos no publicados en Sheets
+var _hayCambiosSinPublicar = false;
+
 function marcarPendienteGuardar() {
+  _hayCambiosSinPublicar = true;
   const btn = document.getElementById('btn-guardar');
   const ind = document.getElementById('save-indicator');
   if (btn && !btn.disabled) {
@@ -29469,6 +29547,10 @@ function marcarPendienteGuardar() {
   }
   // Disparar auto-sync después de inactividad
   try { if (typeof _dispararAutoSync === 'function') _dispararAutoSync(); } catch(e) {}
+}
+
+function limpiarPendienteGuardar() {
+  _hayCambiosSinPublicar = false;
 }
 
 // ── guardarDatos: alias para compatibilidad ───────────────────────
@@ -29890,17 +29972,24 @@ setTimeout(() => {
     });
   }
 
-  // Advertir al usuario si cierra/recarga con cambios sin guardar en Sheets
+  // Advertir al usuario si cierra/recarga con cambios reales sin publicar en Sheets
   window.addEventListener('beforeunload', function(e) {
-    const ind = document.getElementById('save-indicator');
-    const hayPendiente = (ind && ind.textContent && ind.textContent.includes('sin guardar'))
-                      || (typeof _autoSyncTimer !== 'undefined' && _autoSyncTimer != null);
-    if (hayPendiente) {
+    if (_hayCambiosSinPublicar) {
+      // Persistir flag para mostrar banner al volver
+      try { sessionStorage.setItem('lr_cambios_perdidos', '1'); } catch(ex) {}
       e.preventDefault();
       e.returnValue = '¿Salir? Tenés datos sin publicar en Google Sheets. Usá "↑ Publicar ahora" antes de cerrar para no perder información.';
       try { _mostrarBannerCierre(); } catch(ex) {}
     }
   });
+
+  // Si hubo cambios sin publicar antes de recargar, mostrar banner al volver
+  try {
+    if (sessionStorage.getItem('lr_cambios_perdidos') === '1') {
+      sessionStorage.removeItem('lr_cambios_perdidos');
+      setTimeout(() => _mostrarBannerCierre(), 1500);
+    }
+  } catch(ex) {}
 
   function _mostrarBannerCierre() {
     let b = document.getElementById('_banner_cierre');
