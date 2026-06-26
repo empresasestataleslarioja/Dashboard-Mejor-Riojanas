@@ -29132,6 +29132,14 @@ function applyCloudData(cloud, opts) {
   // TRANSFERENCIAS: nunca tocar en sync automático (skipTransferencias=true)
   // Solo sincronizar cuando el usuario lo pide explícitamente desde el menú
   if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
+    // PROTECCIÓN: si Sheets trae menos registros que los que hay localmente,
+    // no reemplazar — puede ser un dato desactualizado por latencia del POST no-cors
+    const _localCount = (DATA.transferencias || []).length;
+    const _cloudCount = cloud.transferencias.length;
+    if (_localCount > 0 && _cloudCount < _localCount * 0.8) {
+      console.warn(`[LR] applyCloudData: Sheets tiene ${_cloudCount} transferencias vs ${_localCount} locales — se mantienen los datos locales`);
+      // No reemplazar — conservar datos locales más completos
+    } else {
     // SHEETS MANDA: reemplazar completamente las transferencias locales
     DATA.transferencias = cloud.transferencias.map(r => ({
       saf:          r.saf          || '',
@@ -29156,6 +29164,7 @@ function applyCloudData(cloud, opts) {
       if (a && !DATA.years.includes(a)) DATA.years.push(a);
     });
     DATA.years.sort();
+    } // fin else (Sheets tiene datos válidos)
   }
 
   // notas
