@@ -4073,6 +4073,12 @@ self.onmessage = async (e) => {
         <input type="file" accept=".xlsx,.xls" style="display:none"
           onchange="importarFlujoExcel(this.files[0]);this.value=''">
       </label>
+        <button onclick="descargarTemplateFlujo()"
+          style="padding:6px 12px;background:rgba(71,180,255,.08);border:1px solid #47b4ff44;
+          color:#47b4ff;font-family:var(--mono);font-size:9px;border-radius:4px;cursor:pointer"
+          title="Descarga un Excel con la estructura estándar que cualquier empresa puede completar">
+          📄 Template estándar
+        </button>
 
       <button onclick="toggleFlujoManual()"
         style="padding:5px 14px;background:rgba(100,100,80,.1);
@@ -4153,6 +4159,40 @@ self.onmessage = async (e) => {
           style="padding:6px 12px;background:none;border:1px solid var(--bd2);
           color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:4px;cursor:pointer">
           ✕ Cancelar</button>
+      </div>
+    </div>
+
+    <!-- ── Wizard de mapeo de rubros ──────────────────────────── -->
+    <div id="panel-flujo-wizard" style="display:none;margin-bottom:14px;
+      padding:16px 18px;background:rgba(71,180,255,.04);
+      border:1px solid rgba(71,180,255,.35);border-radius:6px">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.12em;
+        color:#47b4ff;font-family:var(--mono);margin-bottom:6px;font-weight:600">
+        ⚙ Mapear rubros — estructura no estándar
+      </div>
+      <div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-bottom:14px;line-height:1.6">
+        Asigná cada fila del Excel al rubro estándar correspondiente. Las filas marcadas en rojo no fueron reconocidas automáticamente.
+        El mapeo se guardará como perfil de la empresa para futuras cargas.
+      </div>
+      <div id="wizard-rows-container" style="overflow-x:auto;margin-bottom:12px;
+        border:1px solid var(--bd);border-radius:4px;max-height:320px;overflow-y:auto"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--text);font-family:var(--mono);cursor:pointer">
+          <input type="checkbox" id="wizard-guardar-perfil" checked style="accent-color:var(--acc)">
+          Guardar perfil para futuras cargas de esta empresa
+        </label>
+        <span id="wizard-perfil-info" style="font-size:8.5px;color:var(--dim);font-family:var(--mono)"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button onclick="_aplicarMapeadoWizard()"
+          style="padding:6px 18px;background:rgba(71,180,255,.15);border:1.5px solid #47b4ff;
+          color:#47b4ff;font-family:var(--mono);font-size:10px;font-weight:700;
+          border-radius:4px;cursor:pointer">✓ Aplicar mapeo</button>
+        <button onclick="_cerrarWizardFlujo()"
+          style="padding:6px 12px;background:none;border:1px solid var(--bd2);
+          color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:4px;cursor:pointer">
+          ✕ Cancelar</button>
+        <span id="wizard-msg" style="font-size:9px;font-family:var(--mono);color:var(--dim)"></span>
       </div>
     </div>
 
@@ -8587,6 +8627,195 @@ const FLUJO_RUBROS_STD = [
   { key:'necesidad_fondos',    label:'Necesidad de Fondos Total',          tipo:'resultado'},
 ];
 
+// ── Wizard de mapeo + perfiles por empresa ─────────────────────────────────
+
+function _necesitaWizard(res) {
+  return res.rubros.some(r => !FLUJO_RUBROS_STD.find(s => s.key === r.key));
+}
+
+function _empKeyPerfil(empresa) {
+  return (empresa || '').trim().toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+function _aplicarPerfilEmpresa(res) {
+  if (!res.empresa) return res;
+  const key = _empKeyPerfil(res.empresa);
+  const perfil = (DATA.flujos_config && DATA.flujos_config.perfiles) ? DATA.flujos_config.perfiles[key] : null;
+  if (!perfil || !perfil.rowMappings) return res;
+  const mappings = perfil.rowMappings;
+  const rubrosConPerfil = res.rubros.map(function(r) {
+    const lUP = r.label.toUpperCase().trim();
+    const stdKey = mappings[lUP];
+    if (!stdKey) return r;
+    const std = FLUJO_RUBROS_STD.find(function(s){ return s.key === stdKey; });
+    if (!std) return r;
+    return Object.assign({}, r, { key: std.key, tipo: std.tipo });
+  });
+  return Object.assign({}, res, { rubros: rubrosConPerfil, _perfilAplicado: key });
+}
+
+function _guardarPerfilEmpresa(empresa, mappings) {
+  if (!empresa || !mappings || !Object.keys(mappings).length) return;
+  if (!DATA.flujos_config) DATA.flujos_config = {};
+  if (!DATA.flujos_config.perfiles) DATA.flujos_config.perfiles = {};
+  const key = _empKeyPerfil(empresa);
+  DATA.flujos_config.perfiles[key] = { empresa: empresa, rowMappings: mappings, updatedAt: nowAR() };
+  saveDataToLocalCache();
+}
+
+function _mostrarWizardMapeado(res) {
+  _flujoExcelPendiente = res;
+  var container = document.getElementById('wizard-rows-container');
+  if (!container) return;
+
+  var fmtV = function(v) {
+    if (v == null) return '—';
+    return (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+  };
+
+  var stdOpts = FLUJO_RUBROS_STD.map(function(s) {
+    return '<option value="' + s.key + '">' + s.label + '</option>';
+  }).join('');
+
+  var rows = res.rubros.map(function(r, i) {
+    var isKnown = FLUJO_RUBROS_STD.find(function(s){ return s.key === r.key; });
+    var rowBg = isKnown ? '' : 'background:rgba(255,71,102,.06)';
+    var selBorder = isKnown ? 'var(--bd2)' : '#ff4766';
+    var opts = '<option value="">— ignorar —</option>' + stdOpts;
+    if (isKnown) opts = opts.replace('value="' + r.key + '"', 'value="' + r.key + '" selected');
+    return '<tr style="border-bottom:1px solid var(--bd2);' + rowBg + '">' +
+      '<td style="padding:5px 8px;font-size:9px;font-family:var(--mono);color:var(--text);white-space:nowrap;min-width:190px">' +
+        r.label + (!isKnown ? ' <span style="font-size:7.5px;color:#ff4766;margin-left:4px">● sin mapear</span>' : '') +
+      '</td>' +
+      '<td style="padding:5px 8px;font-size:9px;font-family:var(--mono);color:var(--dim);text-align:right;white-space:nowrap">' +
+        fmtV(r.actual) +
+      '</td>' +
+      '<td style="padding:5px 8px;min-width:210px">' +
+        '<select data-rubro-idx="' + i + '" style="width:100%;padding:3px 7px;background:var(--s2);border:1px solid ' + selBorder + ';color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">' +
+          opts +
+        '</select>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  container.innerHTML =
+    '<table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr>' +
+      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Fila en Excel</th>' +
+      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:right;border-bottom:1px solid var(--bd)">Valor total</th>' +
+      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Rubro estándar</th>' +
+    '</tr></thead>' +
+    '<tbody>' + rows + '</tbody>' +
+    '</table>';
+
+  // Show profile status
+  var infoEl = document.getElementById('wizard-perfil-info');
+  if (infoEl && res._perfilAplicado) {
+    infoEl.textContent = '↩ Se aplicó perfil guardado — revisá y confirmá';
+    infoEl.style.color = '#47b4ff';
+  } else if (infoEl) {
+    infoEl.textContent = '';
+  }
+
+  document.getElementById('panel-flujo-confirm').style.display = 'none';
+  document.getElementById('panel-flujo-manual').style.display = 'none';
+  document.getElementById('panel-flujo-wizard').style.display = '';
+  var el = document.getElementById('panel-flujo-wizard');
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function _cerrarWizardFlujo() {
+  var el = document.getElementById('panel-flujo-wizard');
+  if (el) el.style.display = 'none';
+  _flujoExcelPendiente = null;
+}
+
+function _aplicarMapeadoWizard() {
+  var res = _flujoExcelPendiente;
+  if (!res) return;
+  var msgEl = document.getElementById('wizard-msg');
+
+  var selects = document.querySelectorAll('#wizard-rows-container [data-rubro-idx]');
+  var mappings = {};
+  var rubroAssign = {};
+
+  selects.forEach(function(sel) {
+    var idx = parseInt(sel.dataset.rubroIdx);
+    var rubro = res.rubros[idx];
+    var stdKey = sel.value;
+    if (stdKey) {
+      var lUP = rubro.label.toUpperCase().trim();
+      mappings[lUP] = stdKey;
+      rubroAssign[idx] = stdKey;
+    }
+  });
+
+  var rubrosNuevos = res.rubros.map(function(r, i) {
+    var stdKey = rubroAssign[i];
+    if (!stdKey) return null;
+    var std = FLUJO_RUBROS_STD.find(function(s){ return s.key === stdKey; });
+    if (!std) return r;
+    return Object.assign({}, r, { key: std.key, tipo: std.tipo });
+  }).filter(Boolean);
+
+  if (!rubrosNuevos.length) {
+    if (msgEl) { msgEl.textContent = '⚠ Asigná al menos un rubro antes de continuar'; msgEl.style.color = 'var(--neg)'; }
+    return;
+  }
+
+  // Save profile if checkbox checked
+  var guardar = document.getElementById('wizard-guardar-perfil');
+  if (guardar && guardar.checked && res.empresa && Object.keys(mappings).length) {
+    _guardarPerfilEmpresa(res.empresa, mappings);
+    if (msgEl) { msgEl.textContent = '✓ Perfil guardado'; msgEl.style.color = 'var(--pos)'; }
+  }
+
+  // Recalculate necesidad_fondos
+  var fondosR = rubrosNuevos.find(function(r){ return r.key === 'necesidad_fondos' && r.actual != null; });
+  var defR    = rubrosNuevos.find(function(r){ return r.key === 'sup_def' && r.actual != null; });
+  var rawNec  = (fondosR || defR) ? (fondosR || defR).actual : null;
+  var necFondos = rawNec != null ? Math.abs(rawNec) : res.necesidad_fondos;
+
+  var resMaped = Object.assign({}, res, { rubros: rubrosNuevos, necesidad_fondos: necFondos });
+  delete resMaped._perfilAplicado;
+
+  document.getElementById('panel-flujo-wizard').style.display = 'none';
+  _confirmarImportFlujo(resMaped);
+}
+
+function descargarTemplateFlujo() {
+  var _xlsxInst = window.XLSX || (typeof XLSX !== 'undefined' ? XLSX : null);
+  var msgEl = document.getElementById('flujo-msg');
+  if (!_xlsxInst) {
+    if (msgEl) { msgEl.textContent = '✗ Librería Excel no disponible. Recargá la página.'; msgEl.style.color = 'var(--neg)'; }
+    return;
+  }
+
+  var MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+               'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  var header = ['RUBRO'].concat(MESES).concat(['TOTAL']);
+  var dataRows = FLUJO_RUBROS_STD.map(function(s) {
+    return [s.label].concat(MESES.map(function(){ return 0; })).concat([0]);
+  });
+
+  var aoa = [
+    ['NOMBRE DE LA EMPRESA'],
+    ['FLUJO DE FONDOS'],
+    header
+  ].concat(dataRows);
+
+  var ws = _xlsxInst.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 36 }].concat(MESES.map(function(){ return { wch: 13 }; })).concat([{ wch: 14 }]);
+
+  var wb = _xlsxInst.utils.book_new();
+  _xlsxInst.utils.book_append_sheet(wb, ws, 'FLUJO DE FONDOS');
+  _xlsxInst.writeFile(wb, 'template_flujo_fondos.xlsx');
+
+  if (msgEl) { msgEl.textContent = '✓ Template descargado'; msgEl.style.color = 'var(--pos)'; setTimeout(function(){ if (msgEl) msgEl.textContent = ''; }, 3000); }
+}
+
 // Clave única: empresa + periodo + tipo (proyectado/real)
 function _claveFlujo(empresa, periodo, tipo) {
   // FIX 5: normalizar eliminando tildes y caracteres especiales
@@ -8823,8 +9052,15 @@ function importarFlujoExcel(file) {
         if (!res || !res.rubros.length)
           throw new Error('No se pudo leer la estructura del flujo. Verificá que tenga hoja FLUJO X MES.');
 
-        // Mostrar diálogo de confirmación con datos detectados
-        _confirmarImportFlujo(res);
+        // Intentar aplicar perfil guardado para esta empresa
+        const resConPerfil = _aplicarPerfilEmpresa(res);
+        // Si quedan rubros sin mapear, abrir wizard; si no, confirmar directamente
+        if (_necesitaWizard(resConPerfil)) {
+          setMsg('⚙ Rubros no reconocidos — revisá el mapeo', '#47b4ff');
+          _mostrarWizardMapeado(resConPerfil);
+        } else {
+          _confirmarImportFlujo(resConPerfil);
+        }
       } catch(err) {
         setMsg('✗ ' + err.message, 'var(--neg)');
       }
