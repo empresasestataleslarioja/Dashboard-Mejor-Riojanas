@@ -285,6 +285,15 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 .card { border-radius: var(--radius-card, 4px); }
 
 /* Power BI: bordered structured cards */
+/* Logos en sidebar claro: forzar texto oscuro */
+[data-theme="powerbi"] #sidebar-logos,
+[data-theme="gobierno"] #sidebar-logos,
+[data-theme="ft"] #sidebar-logos { color: #1a2332 !important; }
+/* Logos en sidebar oscuro (fondo navy): forzar texto claro */
+[data-theme="atlas"] #sidebar-logos,
+[data-theme="mineral"] #sidebar-logos,
+[data-theme="institucional"] #sidebar-logos { color: #e8edf5 !important; }
+
 [data-theme="powerbi"] .card { border-top: 2px solid var(--y21); border-left: none; border-right: none; border-bottom: none; border-radius: 0; padding: 14px 16px; }
 [data-theme="powerbi"] .kpi  { border-top: 2px solid var(--y21); border-radius: 0; }
 [data-theme="powerbi"] .sidebar { border-right: 2px solid var(--y21); }
@@ -29947,7 +29956,7 @@ setTimeout(() => {
 
   // Inyectar logos en sidebar (ángulo superior izquierdo)
   const _sbLogos = document.getElementById('sidebar-logos');
-  if (_sbLogos) _sbLogos.innerHTML = _membrete({height:36, sepColor:'rgba(255,255,255,.3)', color:'#fff', wrapStyle:'flex-wrap:nowrap;gap:8px 10px'});
+  if (_sbLogos) _sbLogos.innerHTML = _membrete({height:36, sepColor:'rgba(128,128,128,.35)', color:'currentColor', wrapStyle:'flex-wrap:nowrap;gap:8px 10px'});
 
   // Inyectar logos en print-header usando las funciones centralizadas
   const _phLogos = document.getElementById('print-header-logos');
