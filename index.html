@@ -17891,21 +17891,24 @@ function eliminarSinAño() {
 // ── Deduplicar balances en memoria ────────────────────────────────
 // Conserva solo el más reciente por empresa+período
 function deduplicarBalances() {
+  const normEmp = e => (e||'').toLowerCase().trim();
   const dedup = {};
   let total = 0, eliminados = 0;
   Object.entries(_balances).forEach(([k, b]) => {
     total++;
     if (!b.empresa || !b.periodo) return;
-    const canon = b.empresa + '_' + b.periodo;
+    // Clave case-insensitive para detectar duplicados
+    const canon = normEmp(b.empresa) + '_' + b.periodo;
     if (!dedup[canon] || (b.timestamp||0) > (dedup[canon].timestamp||0)) {
       dedup[canon] = { ...b, _oldKey: k };
     }
   });
-  // Reconstruir _balances con claves canónicas
+  // Reconstruir _balances con claves canónicas (empresa original + periodo, no lowercase)
   Object.keys(_balances).forEach(k => delete _balances[k]);
-  Object.entries(dedup).forEach(([canon, b]) => {
+  Object.entries(dedup).forEach(([, b]) => {
     delete b._oldKey;
-    _balances[canon] = b;
+    const finalKey = (b.empresa||'').trim() + '_' + b.periodo;
+    _balances[finalKey] = b;
   });
   eliminados = total - Object.keys(_balances).length;
   return { total, eliminados, restantes: Object.keys(_balances).length };
@@ -20944,7 +20947,7 @@ function parsearExcelBalance(wb, XLSX) {
 
   // Calcular ratios
   const ren = ind.rentabilidad, sol = ind.solvencia, liq = ind.liquidez;
-  const safe = (n,d) => (n!=null&&d!=null&&d!==0) ? n/d : null;
+  const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
   if (liq.activo_corriente && liq.pasivo_corriente)
     liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
   if (sol.pasivo_total && sol.activo_total)
@@ -21107,6 +21110,10 @@ async function loadBalanceExcel(file) {
     _balActivo        = _balKey;
     _balEmpresaActiva = _balances[_balKey].empresa;
     setBalProgress(false);
+    // FIX 8 — Advertencia si el Excel no tiene hoja de ER
+    if (!estructura_er || estructura_er.length === 0) {
+      showStorageStatus('⚠ Balance cargado sin Estado de Resultados — no se encontró hoja de ER en el Excel. Podés ingresarlo manualmente en el editor.', '#ff8c47');
+    }
     // Poblar selectores con el universo completo antes de renderizar
     populateSelects();
     renderBalanceUI();
@@ -21182,7 +21189,10 @@ async function loadBalancePDF(file) {
         );
       }
       setBalProgress(true, 'OCR en curso — puede tardar unos minutos…', 50);
-      textoFinal = await extraerTextoOCR(pdf, total, tesseract);
+      const _OCR_TIMEOUT = 45000;
+      const _ocrPromise  = extraerTextoOCR(pdf, total, tesseract);
+      const _ocrTimeout  = new Promise((_,rej) => setTimeout(() => rej(new Error('OCR timeout — el procesamiento tardó demasiado')), _OCR_TIMEOUT));
+      textoFinal = await Promise.race([_ocrPromise, _ocrTimeout]);
       metodo     = 'OCR — Tesseract.js ('+Math.min(total,20)+' páginas)';
       if (!esPDFConTexto(textoFinal)) throw new Error(
         'El OCR no pudo extraer texto suficiente.\n\nPosibles causas:\n'+
@@ -21233,7 +21243,11 @@ function guardarBalance(filename, texto, metodo) {
   const guardar = (empresaFinal) => {
     // Clave canónica empresa_periodo — eliminar duplicados previos
     const _gPeriodo = result.periodo;
-    const _gKey     = empresaFinal + '_' + _gPeriodo;
+    // Normalizar empresa para la clave interna (trim, lowercase solo para key)
+    const _gEmpKey  = (empresaFinal || '').trim();
+    const _gKey     = (_gEmpKey && _gPeriodo && _gPeriodo !== '?')
+      ? _gEmpKey + '_' + _gPeriodo
+      : filename;
     if (_balances[filename] && filename !== _gKey) delete _balances[filename];
     Object.keys(_balances).forEach(k => {
       if (_balances[k] && _balances[k].empresa === empresaFinal &&
@@ -21874,7 +21888,7 @@ function analizarBalanceLocal(filename, texto) {
   ]);
 
   // ── 9. Calcular ratios ────────────────────────────────────
-  const safe = (n,d) => (n != null && d != null && d !== 0) ? n/d : null;
+  const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
 
   const liqCorr  = safe(activoC, pasivoC);
   // ── Estructura real del ER detectado (para el Editor de Datos dinámico) ──────
@@ -22457,9 +22471,10 @@ function actualizarPeriodos() {
 
   selPer.disabled  = false;
   selPer.innerHTML = bals.map(([key, b]) => {
-    const nc  = b.esCierreNoCal ? ' ✦' : '';
-    const met = b.metodo ? ` · ${b.metodo.split(' ')[0]}` : '';
-    return `<option value="${key}">${b.periodo}${nc}${met}</option>`;
+    const nc      = b.esCierreNoCal ? ' ✦' : '';
+    const met     = b.metodo ? ` · ${b.metodo.split(' ')[0]}` : '';
+    const mesLbl  = (b.cierreMes && b.cierreMes !== 12) ? ` (cierre ${b.cierreMes}m)` : '';
+    return `<option value="${key}">${b.periodo}${mesLbl}${nc}${met}</option>`;
   }).join('');
 
   // Mantener período activo si corresponde a esta empresa
@@ -23407,7 +23422,10 @@ function showBalanceResult() {
   const pct       = Math.round(conDatos / totalRubros * 100);
 
   let cobertura = '';
-  if (sinDatos.length > 0) {
+  if (sinDatos.length === 0) {
+    // FIX 12 — Cobertura completa: mostrar mensaje compacto en lugar de card vacía
+    cobertura = '<div style="font-size:9px;color:var(--pos);padding:6px 0">✓ Cobertura completa</div>';
+  } else if (sinDatos.length > 0) {
     const colorBarra = pct >= 80 ? '#2ecc8a' : pct >= 50 ? '#e8ff47' : '#ff8c47';
     cobertura = `
     <div style="margin-bottom:12px;padding:12px 14px;background:var(--s3);border:1px solid var(--bd);
@@ -23452,16 +23470,18 @@ function showBalanceResult() {
       </div>` : ''}
     </div>`;
 
-    // ── Log de diagnóstico OCR ──────────────────────────────
-    if (b._diagLog && b._diagLog.length && b.metodo?.includes('OCR')) {
+    // ── Log de diagnóstico (OCR y PDF nativo) ──────────────────────────────
+    // FIX 13 — Mostrar log para todos los balances (no solo OCR)
+    if (b._diagLog && b._diagLog.length) {
       const fallos  = b._diagLog.filter(d => !d.ok);
       const aciertos= b._diagLog.filter(d =>  d.ok);
+      const esOCR   = b.metodo?.includes('OCR');
       cobertura += `
       <details style="margin-top:6px;border:1px solid var(--bd);border-radius:4px;overflow:hidden">
         <summary style="padding:8px 12px;cursor:pointer;font-size:9px;
           letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
           background:var(--s3);user-select:none">
-          🔍 Log de diagnóstico OCR — ${aciertos.length} encontrados · ${fallos.length} sin extraer
+          🔍 Log de diagnóstico${esOCR ? ' OCR' : ''} — ${aciertos.length} encontrados · ${fallos.length} sin extraer
         </summary>
         <div style="padding:10px 12px;max-height:220px;overflow-y:auto;font-family:var(--mono)">
           ${aciertos.length ? `
@@ -24768,7 +24788,7 @@ function _balEditorGuardarInterno() {
   const sol = ind.solvencia    || {};
   const ren = ind.rentabilidad || {};
   const efi = ind.eficiencia   || {};  // ← necesario para rotacion_activos
-  const safe = (n,d) => (n!=null&&d!=null&&d!==0) ? n/d : null;
+  const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
 
   if (liq.activo_corriente!=null && liq.pasivo_corriente!=null) {
     liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
@@ -24789,6 +24809,12 @@ function _balEditorGuardarInterno() {
     ren.margen_neto = safe(ren.resultado_neto, ren.ventas_ingresos);
   if (ren.utilidad_bruta!=null && ren.ventas_ingresos!=null)
     ren.margen_bruto = safe(ren.utilidad_bruta, ren.ventas_ingresos);
+  // FIX 10 — Fallback: calcular margen_bruto si utilidad_bruta no fue detectada
+  if (ren.margen_bruto == null && ren.ventas_ingresos != null && ren.costo_ventas != null) {
+    const _utilBruta = ren.ventas_ingresos - Math.abs(ren.costo_ventas);
+    ren.utilidad_bruta = ren.utilidad_bruta ?? _utilBruta;
+    ren.margen_bruto   = safe(_utilBruta, ren.ventas_ingresos);
+  }
   if (ren.resultado_operativo!=null && ren.ventas_ingresos!=null)
     ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
   if (ren.ventas_ingresos!=null && sol.activo_total!=null) {
@@ -24796,6 +24822,14 @@ function _balEditorGuardarInterno() {
     ren.rotacion_activos = rot; // compatibilidad
     efi.rotacion_activos = rot; // usado por diagnóstico y radar
   }
+
+  // FIX 4 — Calcular campos de eficiencia faltantes
+  if (efi.rotacion_inventarios == null && ren.ventas_ingresos && liq.inventarios)
+    efi.rotacion_inventarios = safe(ren.ventas_ingresos, liq.inventarios);
+  if (efi.dias_cobro == null && efi.cuentas_cobrar && ren.ventas_ingresos)
+    efi.dias_cobro = safe(efi.cuentas_cobrar * 365, ren.ventas_ingresos);
+  if (efi.dias_pago == null && efi.cuentas_pagar && ren.costo_ventas)
+    efi.dias_pago = safe(efi.cuentas_pagar * 365, ren.costo_ventas);
 
   if (msg) {
     msg.style.color = '#47ffb4';
