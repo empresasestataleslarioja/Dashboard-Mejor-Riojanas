@@ -6889,49 +6889,117 @@ function _rptBalance(autoPrint) {
   </div>`:''}
 
   ${comparativos.length > 1 ? (() => {
-    const hdrs = comparativos.map(bx => `<th style="text-align:right;padding:8px 12px;color:rgba(255,255,255,.85);font-family:monospace;font-size:8.5px;letter-spacing:.06em;font-weight:${bx===b?'700':'400'}">${bx.periodo}${bx===b?' ◀':''}</th>`).join('');
-    const row = (lbl, fn) => {
-      const cells = comparativos.map(bx => {
-        const d = getInd(bx); const v = fn(d);
-        const pv = fn(getInd(comparativos[Math.max(0,comparativos.indexOf(bx)-1)]));
-        const trend = comparativos.indexOf(bx)>0 && v!=null && pv!=null ? (v>pv?' ↑':v<pv?' ↓':'') : '';
-        const tCol = trend===' ↑'?'#1a9e68':trend===' ↓'?'#d93025':'#aaa';
-        return `<td style="padding:5px 12px;text-align:right;border-bottom:1px solid #f0f0f0;font-family:monospace;font-size:10px;font-weight:${bx===b?'700':'400'}">${v??'—'}<span style="font-size:8px;color:${tCol}">${trend}</span></td>`;
-      }).join('');
-      return `<tr><td style="padding:5px 12px;border-bottom:1px solid #f0f0f0;font-size:10px;color:#555">${lbl}</td>${cells}</tr>`;
+    // ── IPC INDEC anual acumulado dic-dic ────────────────────────────
+    const IPC = {
+      '2017':0.248,'2018':0.476,'2019':0.538,'2020':0.361,
+      '2021':0.509,'2022':0.948,'2023':2.114,'2024':1.178,'2025':0.36
     };
-    const rowM = (lbl, fn) => row(lbl, d => { const v = fn(d); return v!=null?fM(v):null; });
-    const rowR = (lbl, fn) => row(lbl, d => { const v = fn(d); return v!=null?fR(v):null; });
-    const rowP = (lbl, fn) => row(lbl, d => { const v = fn(d); return v!=null?fP(v):null; });
-    const thead = `<thead><tr style="background:linear-gradient(135deg,#0d1b4b,#1a3a8f)"><th style="text-align:left;padding:8px 12px;color:rgba(255,255,255,.85);font-size:8.5px;font-family:monospace;letter-spacing:.06em">CONCEPTO</th>${hdrs}</tr></thead>`;
+    const IPC_EST = new Set(['2025']); // tasa estimada, sin dato oficial cerrado
+
+    const yearOf = s => parseInt(String(s||'').match(/\d{4}/)?.[0]||'0');
+    const baseYear = yearOf(comparativos[comparativos.length-1].periodo);
+
+    // Convierte pesos de `fromYear` a pesos constantes de `baseYear`
+    const defl = fromYear => {
+      let f = 1;
+      for (let y = fromYear+1; y <= baseYear; y++) {
+        const ipc = IPC[String(y)]; if (ipc != null) f *= (1+ipc);
+      }
+      return f;
+    };
+
+    const nCols = 1 + comparativos.length;
+    const isLast = bx => bx === comparativos[comparativos.length-1];
+    const tdStyle = bx => `padding:5px 10px;text-align:right;border-bottom:1px solid #f0f0f0;font-family:monospace;font-size:9.5px;font-weight:${isLast(bx)?'700':'400'}`;
+
+    // Fila monetaria reexpresada: muestra $ constantes + variación real bajo el valor
+    const rowMR = (lbl, fn) => {
+      const cells = comparativos.map((bx, i) => {
+        const d = getInd(bx), v = fn(d);
+        const yr = yearOf(bx.periodo);
+        const vR = v != null ? v * defl(yr) : null;
+        let varHtml = '';
+        if (i > 0 && vR != null) {
+          const prev = comparativos[i-1];
+          const vPrev = fn(getInd(prev));
+          const vPrevR = vPrev != null ? vPrev * defl(yearOf(prev.periodo)) : null;
+          if (vPrevR != null && vPrevR !== 0) {
+            const vr = (vR/vPrevR - 1)*100;
+            const col = vr>0?'#1a9e68':'#d93025';
+            varHtml = `<div style="font-size:7.5px;color:${col};margin-top:1px">${vr>0?'▲':'▼'} ${Math.abs(vr).toFixed(1)}% real</div>`;
+          }
+        }
+        return `<td style="${tdStyle(bx)}">${vR!=null?fM(vR):'—'}${varHtml}</td>`;
+      }).join('');
+      return `<tr><td style="padding:5px 10px;border-bottom:1px solid #f0f0f0;font-size:10px;color:#555">${lbl}</td>${cells}</tr>`;
+    };
+
+    // Fila de ratio (inflation-neutral): valor + flecha tendencia
+    const rowRT = (lbl, fn, fmt) => {
+      const cells = comparativos.map((bx, i) => {
+        const d = getInd(bx), v = fn(d);
+        let varHtml = '';
+        if (i > 0 && v != null) {
+          const vPrev = fn(getInd(comparativos[i-1]));
+          if (vPrev != null && vPrev !== 0) {
+            const tr2 = v > vPrev ? '↑' : v < vPrev ? '↓' : '';
+            if (tr2) varHtml = `<span style="font-size:8px;color:${tr2==='↑'?'#1a9e68':'#d93025'};margin-left:3px">${tr2}</span>`;
+          }
+        }
+        const disp = v==null?'—':fmt==='pct'?fP(v):fmt==='ratio'?fR(v):fmt==='dias'?(Math.round(v)+'d'):fM(v);
+        return `<td style="${tdStyle(bx)}">${disp}${varHtml}</td>`;
+      }).join('');
+      return `<tr><td style="padding:5px 10px;border-bottom:1px solid #f0f0f0;font-size:10px;color:#555">${lbl}</td>${cells}</tr>`;
+    };
+
+    const secRow = txt => `<tr style="background:#f0f4ff"><td colspan="${nCols}" style="padding:5px 10px;font-size:7.5px;font-weight:700;color:#1a3a8f;letter-spacing:.1em;text-transform:uppercase">${txt}</td></tr>`;
+
+    const hdrs = comparativos.map(bx => {
+      const yr = String(yearOf(bx.periodo));
+      const est = IPC_EST.has(yr) ? '<sup style="font-size:6px;opacity:.65">*</sup>' : '';
+      return `<th style="text-align:right;padding:8px 10px;color:rgba(255,255,255,${isLast(bx)?'.95':'.7'});font-family:monospace;font-size:8px;letter-spacing:.05em;font-weight:${isLast(bx)?'700':'400'}">${bx.periodo}${isLast(bx)?' ◀':''}${est}</th>`;
+    }).join('');
+
+    const thead = `<thead><tr style="background:linear-gradient(135deg,#0d1b4b,#1a3a8f)">
+      <th style="text-align:left;padding:8px 10px;color:rgba(255,255,255,.85);font-size:8px;font-family:monospace;letter-spacing:.06em">CONCEPTO</th>${hdrs}
+    </tr></thead>`;
+
     return `
-  <div class="section-title">Comparativo de ejercicios (${comparativos.length} años)</div>
+  <div class="section-title">Evolución ${comparativos.length} ejercicios — $ constantes ${baseYear}</div>
   <div class="card" style="padding:0;overflow:hidden">
     <table class="comp" style="width:100%">
       ${thead}
       <tbody>
-        <tr style="background:#f5f8ff"><td colspan="${1+comparativos.length}" style="padding:6px 12px;font-size:8px;font-weight:700;color:#1a3a8f;letter-spacing:.08em;text-transform:uppercase">SITUACIÓN PATRIMONIAL</td></tr>
-        ${rowM('Activo corriente',    d => d.aC)}
-        ${rowM('Activo no corriente', d => d.aNC)}
-        ${rowM('Activo total',        d => d.aT)}
-        ${rowM('Pasivo corriente',    d => d.pC)}
-        ${rowM('Pasivo no corriente', d => d.pNC)}
-        ${rowM('Pasivo total',        d => d.pT)}
-        ${rowM('Patrimonio neto',     d => d.pn)}
-        <tr style="background:#f5f8ff"><td colspan="${1+comparativos.length}" style="padding:6px 12px;font-size:8px;font-weight:700;color:#1a3a8f;letter-spacing:.08em;text-transform:uppercase">ESTADO DE RESULTADOS</td></tr>
-        ${rowM('Ventas / ingresos',    d => d.rx.ventas_ingresos)}
-        ${rowM('Resultado operativo',  d => d.rx.resultado_operativo)}
-        ${rowM('Resultado neto',       d => d.rx.resultado_neto)}
-        <tr style="background:#f5f8ff"><td colspan="${1+comparativos.length}" style="padding:6px 12px;font-size:8px;font-weight:700;color:#1a3a8f;letter-spacing:.08em;text-transform:uppercase">INDICADORES FINANCIEROS</td></tr>
-        ${rowR('Liquidez corriente',   d => d.lx.liquidez_corriente)}
-        ${rowR('Liquidez seca',        d => d.lx.liquidez_seca)}
-        ${rowM('Capital de trabajo',   d => d.lx.capital_trabajo)}
-        ${rowR('Endeudamiento',        d => d.sx.endeudamiento ?? (d.pT!=null&&d.aT!=null&&d.aT?d.pT/d.aT:null))}
-        ${rowP('ROE',                  d => d.rx.roe!=null ? d.rx.roe*100 : null)}
-        ${rowP('ROA',                  d => d.rx.roa!=null ? d.rx.roa*100 : null)}
-        ${rowP('Margen neto',          d => d.rx.margen_neto!=null ? d.rx.margen_neto*100 : (d.rx.ventas_ingresos&&d.rx.resultado_neto!=null?d.rx.resultado_neto/d.rx.ventas_ingresos*100:null))}
+        ${secRow('SITUACIÓN PATRIMONIAL — $ constantes ' + baseYear)}
+        ${rowMR('Activo corriente',    d => d.aC)}
+        ${rowMR('Activo no corriente', d => d.aNC)}
+        ${rowMR('Activo total',        d => d.aT)}
+        ${rowMR('Pasivo corriente',    d => d.pC)}
+        ${rowMR('Pasivo no corriente', d => d.pNC)}
+        ${rowMR('Pasivo total',        d => d.pT)}
+        ${rowMR('Patrimonio neto',     d => d.pn)}
+        ${secRow('ESTADO DE RESULTADOS — $ constantes ' + baseYear)}
+        ${rowMR('Ventas / ingresos',   d => d.rx.ventas_ingresos)}
+        ${rowMR('Costo de ventas',     d => d.rx.costo_ventas)}
+        ${rowMR('Resultado operativo', d => d.rx.resultado_operativo)}
+        ${rowMR('Resultado neto',      d => d.rx.resultado_neto)}
+        ${secRow('INDICADORES FINANCIEROS — sin ajuste inflacionario')}
+        ${rowRT('Liquidez corriente',   d => d.lx.liquidez_corriente,  'ratio')}
+        ${rowRT('Liquidez seca',        d => d.lx.liquidez_seca,        'ratio')}
+        ${rowRT('Capital de trabajo',   d => d.lx.capital_trabajo,      'monto')}
+        ${rowRT('Endeudamiento',        d => d.sx.razon_endeudamiento ?? (d.pT!=null&&d.aT?d.pT/d.aT:null), 'ratio')}
+        ${rowRT('Deuda / Patrimonio',   d => d.sx.deuda_patrimonio,     'ratio')}
+        ${rowRT('ROE',                  d => d.rx.roe!=null?d.rx.roe*100:null,  'pct')}
+        ${rowRT('ROA',                  d => d.rx.roa!=null?d.rx.roa*100:null,  'pct')}
+        ${rowRT('Margen operativo',     d => d.rx.resultado_operativo!=null&&d.rx.ventas_ingresos?d.rx.resultado_operativo/d.rx.ventas_ingresos*100:null, 'pct')}
+        ${rowRT('Margen neto',          d => d.rx.margen_neto!=null?d.rx.margen_neto*100:(d.rx.ventas_ingresos&&d.rx.resultado_neto!=null?d.rx.resultado_neto/d.rx.ventas_ingresos*100:null), 'pct')}
+        ${rowRT('Rotación activos',     d => d.rx.ventas_ingresos&&d.aT?d.rx.ventas_ingresos/d.aT:null, 'ratio')}
+        ${rowRT('Cobertura intereses',  d => d.sx.cobertura_intereses,  'ratio')}
       </tbody>
     </table>
+    <div style="padding:7px 12px;font-size:8px;color:#aaa;border-top:1px solid #f0f0f0">
+      📌 Valores monetarios reexpresados a <strong>pesos constantes de ${baseYear}</strong> aplicando IPC INDEC acumulado (variación dic-dic).${IPC_EST.size>0?' <sup>*</sup>Tasa ${baseYear} estimada, sin dato oficial cerrado.':''} Las variaciones porcentuales reflejan crecimiento o caída real descontada la inflación. Los indicadores financieros son comparables entre ejercicios sin ajuste adicional.
+    </div>
   </div>`;
   })() : ''}
 
