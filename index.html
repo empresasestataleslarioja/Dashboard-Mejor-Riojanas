@@ -8015,6 +8015,8 @@ function _poblarGestionSelects() {
     ...Object.keys(DATA.fact_mensual||{}), ...Object.keys(DATA.res_mensual||{}),
     ...Object.keys(DATA.er_mensual||{}),
     ...(DATA.personal||[]).map(d=>d.e),
+    ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
+    ...Object.keys(DATA.notas||{}),
   ].filter(Boolean))].sort();
 
   const selFrom = document.getElementById('gest-rename-from');
