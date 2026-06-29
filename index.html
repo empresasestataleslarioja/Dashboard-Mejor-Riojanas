@@ -6810,7 +6810,7 @@ function _rptBalance(autoPrint) {
   </div>
 
   <div class="section-title">Indicadores financieros</div>
-  <div class="grid3">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:14px">
     <div class="ind-block">
       <div class="ind-title">Liquidez</div>
       <div class="ind-row"><span class="ind-lbl">Corriente</span><span class="ind-val">${fR(liq.liquidez_corriente)}<span class="pill ${liq.liquidez_corriente!=null&&liq.liquidez_corriente>=1?'pill-ok':'pill-bad'}">${liq.liquidez_corriente!=null&&liq.liquidez_corriente>=1?'ok':'bajo'}</span></span></div>
@@ -6819,15 +6819,23 @@ function _rptBalance(autoPrint) {
     </div>
     <div class="ind-block">
       <div class="ind-title">Solvencia</div>
-      <div class="ind-row"><span class="ind-lbl">Endeudamiento</span><span class="ind-val">${fR(sol.endeudamiento)}<span class="pill ${sol.endeudamiento!=null&&sol.endeudamiento<=0.8?'pill-ok':'pill-bad'}">${sol.endeudamiento!=null&&sol.endeudamiento<=0.8?'bajo':'alto'}</span></span></div>
-      <div class="ind-row"><span class="ind-lbl">Autonomía financiera</span><span class="ind-val">${fP(sol.autonomia_financiera)}</span></div>
-      <div class="ind-row"><span class="ind-lbl">Cobertura de deuda</span><span class="ind-val">${fR(sol.cobertura_deuda)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Endeudamiento</span><span class="ind-val">${fR(sol.razon_endeudamiento ?? (pasivoT!=null&&activoT?pasivoT/activoT:null))}<span class="pill ${(sol.razon_endeudamiento??0)<=0.7?'pill-ok':'pill-bad'}">${(sol.razon_endeudamiento??1)<=0.7?'bajo':'alto'}</span></span></div>
+      <div class="ind-row"><span class="ind-lbl">Deuda / Patrimonio</span><span class="ind-val">${fR(sol.deuda_patrimonio)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Cobertura de intereses</span><span class="ind-val">${fR(sol.cobertura_intereses)}</span></div>
     </div>
     <div class="ind-block">
       <div class="ind-title">Rentabilidad</div>
       <div class="ind-row"><span class="ind-lbl">ROE</span><span class="ind-val" style="color:${pColor(ren.roe)}">${fP(ren.roe)}</span></div>
       <div class="ind-row"><span class="ind-lbl">ROA</span><span class="ind-val" style="color:${pColor(ren.roa)}">${fP(ren.roa)}</span></div>
       <div class="ind-row"><span class="ind-lbl">Margen bruto</span><span class="ind-val">${ren.ventas_ingresos&&ren.utilidad_bruta!=null?fP(ren.utilidad_bruta/ren.ventas_ingresos*100):'—'}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Margen neto</span><span class="ind-val">${fR(ren.margen_neto)!=null?fP((ren.margen_neto??0)*100):'—'}</span></div>
+    </div>
+    <div class="ind-block">
+      <div class="ind-title">Eficiencia operativa</div>
+      <div class="ind-row"><span class="ind-lbl">Rotación activos</span><span class="ind-val">${fR(efi.rotacion_activos)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Rotación inventarios</span><span class="ind-val">${fR(efi.rotacion_inventarios)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Días de cobro</span><span class="ind-val">${efi.dias_cobro!=null?Math.round(efi.dias_cobro)+' d':'—'}</span></div>
+      <div class="ind-row"><span class="ind-lbl">Días de pago</span><span class="ind-val">${efi.dias_pago!=null?Math.round(efi.dias_pago)+' d':'—'}</span></div>
     </div>
   </div>
 
@@ -25635,6 +25643,10 @@ const BAL_EDITOR_FIELDS = {
     },
     // ── Patrimonio ────────────────────────────────────────────
     { key:'solvencia.patrimonio_neto',        lbl:'Patrimonio neto',          tipo:'monto' },
+    // ── Eficiencia (partidas de balance) ──────────────────────
+    { key:'liq.inventarios',                  lbl:'Bienes de cambio / Inventarios', tipo:'monto' },
+    { key:'eficiencia.cuentas_cobrar',        lbl:'Créditos por ventas (CxC)',      tipo:'monto' },
+    { key:'eficiencia.cuentas_pagar',         lbl:'Deudas comerciales (CxP)',       tipo:'monto' },
     // Hidden sync
     { key:'solvencia.activo_corriente',       lbl:'Activo corriente (solv)',  tipo:'monto', hidden:true },
   ],
@@ -26618,13 +26630,23 @@ function _balEditorGuardarInterno() {
     efi.rotacion_activos = rot; // usado por diagnóstico y radar
   }
 
-  // FIX 4 — Calcular campos de eficiencia faltantes
-  if (efi.rotacion_inventarios == null && ren.ventas_ingresos && liq.inventarios)
-    efi.rotacion_inventarios = safe(ren.ventas_ingresos, liq.inventarios);
-  if (efi.dias_cobro == null && efi.cuentas_cobrar && ren.ventas_ingresos)
-    efi.dias_cobro = safe(efi.cuentas_cobrar * 365, ren.ventas_ingresos);
-  if (efi.dias_pago == null && efi.cuentas_pagar && ren.costo_ventas)
-    efi.dias_pago = safe(efi.cuentas_pagar * 365, ren.costo_ventas);
+  // Calcular campos de eficiencia desde datos del editor
+  if (ren.ventas_ingresos != null && sol.activo_total != null) {
+    const rot = safe(ren.ventas_ingresos, sol.activo_total);
+    efi.rotacion_activos = rot;
+    ren.rotacion_activos = rot;
+  }
+  // Rotación inventarios: costo_ventas / inventarios (fórmula estándar)
+  if (liq.inventarios != null) {
+    const costoRot = ren.costo_ventas != null ? Math.abs(ren.costo_ventas) : null;
+    if (costoRot != null)
+      efi.rotacion_inventarios = safe(costoRot, liq.inventarios);
+    liq.liquidez_seca = safe(liq.activo_corriente - liq.inventarios, liq.pasivo_corriente);
+  }
+  if (efi.cuentas_cobrar != null && ren.ventas_ingresos != null && ren.ventas_ingresos !== 0)
+    efi.dias_cobro = Math.abs(efi.cuentas_cobrar) / Math.abs(ren.ventas_ingresos) * 365;
+  if (efi.cuentas_pagar != null && ren.costo_ventas != null && ren.costo_ventas !== 0)
+    efi.dias_pago = Math.abs(efi.cuentas_pagar) / Math.abs(ren.costo_ventas) * 365;
 
   if (msg) {
     msg.style.color = '#47ffb4';
