@@ -17080,46 +17080,54 @@ function updateFixBtn(currentTheme, isDefault) {
 function computeGaps() {
   const years = ys();
   const gaps = [];
-  const allEmps = [...new Set([...Object.keys(DATA.fact), ...Object.keys(DATA.sit)])];
+  const allEmps = [...new Set([
+    ...Object.keys(DATA.fact),
+    ...Object.keys(DATA.sit),
+    ...(DATA.personal||[]).map(p => p.e).filter(Boolean)
+  ])];
+
+  // Normalizar texto para comparación fuzzy (elimina acentos)
+  const _norm = s => (s||'').toUpperCase().trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   // Empresas con al menos un balance cargado
   const empsConBalance = new Set(
-    Object.values(_balances || {}).map(b => (b.empresa || '').toUpperCase().trim())
+    Object.values(_balances || {}).map(b => _norm(b.empresa || ''))
   );
-  // Mapear nombre empresa del portafolio → tiene balance (FIX 3: matching más estricto)
+  // Mapear nombre empresa del portafolio → tiene balance
   const tieneBalance = emp => {
-    const empU = emp.toUpperCase().trim();
+    const empU = _norm(emp);
     if (empsConBalance.has(empU)) return true;
     return Object.values(_balances || {}).some(b => {
-      const bU = (b.empresa||'').toUpperCase().trim();
+      const bU = _norm(b.empresa||'');
       if (bU === empU) return true;
-      // fuzzy solo si ambos nombres son suficientemente largos
+      // fuzzy: usar prefijo más largo posible, mínimo 5 chars
       const minLen = Math.min(empU.length, bU.length);
-      if (minLen <= 8) return false;
-      const prefLen = Math.min(8, minLen);
+      if (minLen < 5) return false;
+      const prefLen = Math.min(10, minLen);
       return bU.includes(empU.substring(0, prefLen)) || empU.includes(bU.substring(0, prefLen));
     });
   };
 
   allEmps.forEach(emp => {
-    // FIX 5: descartar empresas sin ningún dato en años activos
+    // Descartar empresas sin ningún dato en años activos
+    const persEntryCheck = (DATA.personal||[]).find(d => d.e === emp);
     const tieneAlgoEnAniosActivos = years.some(y =>
       (DATA.fact[emp]?.[y] != null) ||
       (DATA.sit[emp]?.[y] != null) ||
-      ((DATA.personal||[]).find(d=>d.e===emp) && _persGetTotal((DATA.personal||[]).find(d=>d.e===emp), String(y)) != null)
+      (persEntryCheck && persEntryCheck.y && persEntryCheck.y[String(y)] != null)
     );
     if (!tieneAlgoEnAniosActivos) return;
 
-    // FIX 1: tratar 0 como valor válido en facturación
     const missingFact = years.filter(y => !DATA.fact[emp] || DATA.fact[emp][y] == null);
     const missingSit  = years.filter(y => !DATA.sit[emp]  || DATA.sit[emp][y] == null);
     const persEntry   = (DATA.personal||[]).find(d => d.e === emp);
-    // FIX 2: tratar 0 como valor válido en personal
+    // Personal faltante: solo cuando el año no existe en persEntry.y
     const missingPers = years.filter(y => {
       if (!persEntry) return true;
-      const total = _persGetTotal(persEntry, String(y));
-      if (total != null && total >= 0 && typeof total === 'number' && !isNaN(total) && persEntry.y && persEntry.y[String(y)] != null) return false;
-      // también verificar meses
+      // Dato presente si el año existe en .y (incluso valor 0 es válido)
+      if (persEntry.y && persEntry.y[String(y)] != null) return false;
+      // O si tiene meses cargados
       const meses = persEntry.m && persEntry.m[String(y)];
       if (meses && meses.some(v => v != null)) return false;
       return true;
