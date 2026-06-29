@@ -5990,7 +5990,7 @@ function _rptFooter() {
   const fecha = new Date().toLocaleDateString('es-AR',
     {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   return `<div class="ft">
-    <span class="fx">Secretaría de Inversiones Público-Privada · La Rioja</span>
+    <span class="fx">SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span>
     <span class="fx">${fecha}</span>
   </div>`;
 }
@@ -7811,7 +7811,7 @@ function _imprimirPanelFallback(panelId, panelActivo) {
   if (elTit) elTit.textContent = 'BI La Rioja — ' + tituloPanel;
   if (elSub) elSub.textContent = subtitStr;
   if (elFooter) elFooter.textContent = 'BI La Rioja — '+tituloPanel+(subtitStr?' · '+subtitStr:'')+
-    '  |  Secretaría de Inversiones Público-Privada · La Rioja  |  '+fechaStr;
+    '  |  SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete  |  '+fechaStr;
   if (!panelActivo.classList.contains('on')) panelActivo.classList.add('on');
   _prepararPanelParaPrint(panelId, panelActivo);
   const tituloOrig = document.title;
@@ -14599,7 +14599,7 @@ function _informeEjecutivoRender(emp) {
     ${sec('Flujos de Fondos', htmlFlujos)}
     ${sec('Transferencias del Estado', htmlTrans)}
     ${sec('Personal', htmlPersonal)}
-    <div class="ie-footer">Dashboard Mejor Riojanas · Generado el ${hoy} · Todos los importes en moneda corriente de cada ejercicio</div>
+    <div class="ie-footer">Dashboard Mejor Riojanas · Generado el ${hoy} · Todos los importes en moneda corriente de cada ejercicio &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
   </div>
   </body></html>`;
 
@@ -14835,7 +14835,7 @@ function informeEstadoERProvisorio(empFiltro) {
     </div>
     ${tablaAnualHtml}
     ${tablaHtml}
-    <div class="ft">Dashboard Mejor Riojanas · ${hoy} · ER Provisorio: datos de facturación y resultado mensual acumulado cargados por empresa</div>
+    <div class="ft">Dashboard Mejor Riojanas · ${hoy} · ER Provisorio: datos de facturación y resultado mensual acumulado cargados por empresa &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
   </div>
   </body></html>`;
 
