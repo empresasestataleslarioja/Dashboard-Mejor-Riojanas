@@ -22931,13 +22931,18 @@ function parsearExcelBalance(wb, XLSX) {
     };
 
     const g = (...k) => buscarFilaMultiCol(ws, maxR, maxC, ...k);
-    ind.liquidez.activo_corriente     = g('total activo corriente');
-    ind.liquidez.pasivo_corriente     = g('total pasivo corriente');
-    ind.solvencia.activo_total        = g('total activo','total del activo');
-    ind.solvencia.activo_no_corriente = g('total activo no corriente');
-    ind.solvencia.pasivo_total        = g('total pasivo','total del pasivo');
-    ind.solvencia.pasivo_no_corriente = g('total pasivo no corriente');
-    ind.solvencia.patrimonio_neto     = g('total patrimonio','patrimonio neto');
+    ind.liquidez.activo_corriente     = g('total activo corriente','subtotal activo corriente','total activos corrientes');
+    ind.liquidez.pasivo_corriente     = g('total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes');
+    ind.solvencia.activo_total        = g('total activo','total del activo','activo total');
+    ind.solvencia.activo_no_corriente = g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total');
+    ind.solvencia.pasivo_total        = g('total pasivo','total del pasivo','pasivo total');
+    ind.solvencia.pasivo_no_corriente = g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total');
+    ind.solvencia.patrimonio_neto     = g('total patrimonio','patrimonio neto','total patrimonio neto');
+    // Derivar no corriente desde totales si no se encontró explícitamente
+    if (ind.solvencia.activo_no_corriente == null && ind.solvencia.activo_total != null && ind.liquidez.activo_corriente != null)
+      ind.solvencia.activo_no_corriente = ind.solvencia.activo_total - ind.liquidez.activo_corriente;
+    if (ind.solvencia.pasivo_no_corriente == null && ind.solvencia.pasivo_total != null && ind.liquidez.pasivo_corriente != null)
+      ind.solvencia.pasivo_no_corriente = ind.solvencia.pasivo_total - ind.liquidez.pasivo_corriente;
   }
 
   // Mapear rubros del ER a ind.rentabilidad usando labels conocidos
@@ -23625,6 +23630,9 @@ function analizarBalanceLocal(filename, texto) {
     '[Aa]ctivos?\\s+[Cc]orrientes?\\s+[Tt]otales?',
     'TOTAL\\s+ACTIVO\\s+CORRIENTE',
     'SUBTOTAL\\s+ACTIVO\\s+CORRIENTE',
+    '[Ss]ubtotal\\s+[Aa]ctivo\\s+[Cc]orriente',
+    '[Tt]otal\\s+[Aa]ctivos?\\s+[Cc]orrientes?',
+    'TOTAL\\s+A\\.?C\\.?(?!\\s+NO)',
   ]);
   const pasivoC  = buscar([
     '[Tt]otal\\s+[Pp]asivo\\s+[Cc]orriente',
@@ -23632,16 +23640,28 @@ function analizarBalanceLocal(filename, texto) {
     '[Pp]asivos?\\s+[Cc]orrientes?\\s+[Tt]otales?',
     'TOTAL\\s+PASIVO\\s+CORRIENTE',
     'SUBTOTAL\\s+PASIVO\\s+CORRIENTE',
+    '[Ss]ubtotal\\s+[Pp]asivo\\s+[Cc]orriente',
+    '[Tt]otal\\s+[Pp]asivos?\\s+[Cc]orrientes?',
+    'TOTAL\\s+P\\.?C\\.?(?!\\s+NO)',
   ]);
   const activoNC = buscar([
     '[Tt]otal\\s+[Aa]ctivo\\s+[Nn]o\\s+[Cc]orriente',
     '[Aa]ctivos?\\s+[Nn]o\\s+[Cc]orrientes?\\s+[Tt]otales?',
     'TOTAL\\s+ACTIVO\\s+NO\\s+CORRIENTE',
+    'SUBTOTAL\\s+ACTIVO\\s+NO\\s+CORRIENTE',
+    '[Ss]ubtotal\\s+[Aa]ctivo\\s+[Nn]o\\s+[Cc]orriente',
+    'TOTAL\\s+A\\.?N\\.?C\\.?',
+    '[Tt]otal\\s+[Aa]\\.?[Nn]\\.?[Cc]\\.?',
+    '[Tt]otal\\s+[Aa]ctivos?\\s+[Nn]o\\s+[Cc]orrientes?',
   ]);
   const pasivoNC = buscar([
     '[Tt]otal\\s+[Pp]asivo\\s+[Nn]o\\s+[Cc]orriente',
     '[Pp]asivos?\\s+[Nn]o\\s+[Cc]orrientes?\\s+[Tt]otales?',
     'TOTAL\\s+PASIVO\\s+NO\\s+CORRIENTE',
+    'SUBTOTAL\\s+PASIVO\\s+NO\\s+CORRIENTE',
+    '[Ss]ubtotal\\s+[Pp]asivo\\s+[Nn]o\\s+[Cc]orriente',
+    'TOTAL\\s+P\\.?N\\.?C\\.?',
+    '[Tt]otal\\s+[Pp]asivos?\\s+[Nn]o\\s+[Cc]orrientes?',
   ]);
   const activoT  = activoCPCE ?? buscar([
     '[Tt]otal\\s+(?:del\\s+)?[Aa]ctivo(?!\\s+[Cc]orr)(?!\\s+[Nn]o)',
