@@ -5569,6 +5569,7 @@ function saveRubros() {
       setTimeout(() => { st.textContent = ''; }, 2500); }
   } catch(e) {}
   rebuildActive();
+  try { marcarPendienteGuardar(); } catch(e) {}
 }
 function resetRubros() {
   rubros = Object.assign({}, RUBROS_DEFAULT);
@@ -8191,6 +8192,8 @@ function gestionRenombrarRapido(emp) {
   computeTotals();
   rebuildActive();
   populateSelects();
+  try { saveDataToLocalCache(); } catch(e) {}
+  try { marcarPendienteGuardar(); } catch(e) {}
 }
 
 function gestionFusionar() {
@@ -8706,6 +8709,7 @@ function _guardarPerfilEmpresa(empresa, mappings) {
   const key = _empKeyPerfil(empresa);
   DATA.flujos_config.perfiles[key] = { empresa: empresa, rowMappings: mappings, updatedAt: nowAR() };
   saveDataToLocalCache();
+  try { marcarPendienteGuardar(); } catch(e) {}
 }
 
 function _mostrarWizardMapeado(res) {
@@ -21618,6 +21622,7 @@ function importPresupuesto(file) {
         }
       });
       saveDataToLocalCache();
+      try { marcarPendienteGuardar(); } catch(e) {}
       buildPresupuesto();
       setCtrlMsg('✓ Presupuesto importado: '+Object.keys(DATA.presupuesto).length+' empresas');
     } catch(err) { alert('Error al leer archivo: '+err.message); }
@@ -27551,6 +27556,7 @@ function cambiarCategoriaTrans(idx, nuevaCat) {
   // Reconstruir KPIs + gráficos sin tocar la tabla
   _rebuildTransSoloGraficos();
   saveDataToLocalCache();
+  try { marcarPendienteGuardar(); } catch(e) {}
 }
 
 function _rebuildTransSoloGraficos() {
