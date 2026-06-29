@@ -6722,7 +6722,13 @@ function _rptBalance(autoPrint) {
   .pat-pn{background:#e8f5e9;font-weight:700;font-size:11px;border-top:2px solid #1a9e68}
   .footer{display:flex;justify-content:space-between;align-items:center;padding:12px 0;
     border-top:1px solid #e3e6f0;color:#aaa;font-size:8px;font-family:monospace;margin-top:10px}
-  @media print{body{background:#fff}.page{padding:10px}.grid2,.grid3{break-inside:avoid}}
+  @media print{
+    body{background:#fff}
+    .page{padding:10px}
+    .grid2,.grid3{break-inside:avoid}
+    .header{background:#1a3a8f !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .rpt-logos{color:#fff !important}
+  }
 </style>
 </head>
 <body>
@@ -6740,7 +6746,7 @@ function _rptBalance(autoPrint) {
           <span style="margin-left:auto;color:rgba(255,255,255,.45);font-size:9px;font-family:monospace">${fecha}</span>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;opacity:.88;filter:brightness(1.8) saturate(.4) contrast(.85)">
+      <div class="rpt-logos" style="display:flex;align-items:center;gap:10px;flex-shrink:0;color:#fff">
         ${_svgLaRioja(44)}
         <div style="width:1px;height:38px;background:rgba(255,255,255,.3)"></div>
         ${_svgMejorRiojanas(38)}
@@ -7161,7 +7167,11 @@ function _rptClasificacionBalances() {
     font-size:9.5px;color:#7a5f00}
   .footer{display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid #e3e6f0;
     color:#aaa;font-size:8px;font-family:monospace;margin-top:16px}
-  @media print{body{background:#fff}.page{padding:10px}}
+  @media print{
+    body{background:#fff}.page{padding:10px}
+    .header{background:#1a3a8f !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .logos-area{color:#fff !important}
+  }
 </style>
 </head>
 <body>
@@ -7351,7 +7361,11 @@ function _rptBalanceEstado() {
   .leyenda{display:flex;gap:16px;padding:10px 16px;font-size:9px;color:#6b7280;
     border-top:1px solid #f0f0f0;background:#fafafa}
   .footer{text-align:center;margin-top:20px;font-size:8px;color:#bbb;font-family:monospace}
-  @media print{body{background:#fff}.page{padding:8px 10px}.card{break-inside:avoid}}
+  @media print{
+    body{background:#fff}.page{padding:8px 10px}.card{break-inside:avoid}
+    .header{background:#1a3a8f !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .logos-area{color:#fff !important}
+  }
 </style>
 </head>
 <body>
@@ -7557,7 +7571,11 @@ function _rptBalanceIntegral() {
   tr:last-child td{border-bottom:none}
   tr:hover td{background:#f8faff}
   .footer{text-align:center;margin-top:24px;font-size:8px;color:#bbb;font-family:monospace;padding-bottom:10px}
-  @media print{body{background:#fff}.page{padding:10px 12px}.emp-block{break-inside:avoid}}
+  @media print{
+    body{background:#fff}.page{padding:10px 12px}.emp-block{break-inside:avoid}
+    .header{background:#1a3a8f !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .logos-area{color:#fff !important}
+  }
 </style>
 </head>
 <body>
