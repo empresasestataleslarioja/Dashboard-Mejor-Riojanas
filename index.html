@@ -6784,11 +6784,11 @@ function _rptBalance(autoPrint) {
     </div>
     <div class="kpi-card" style="border-top-color:#b36a00">
       <div class="lbl">ROE</div>
-      <div class="val" style="color:${pColor(ren.roe)}">${fP(ren.roe)}</div>
+      <div class="val" style="color:${pColor(ren.roe)}">${ren.roe!=null?fP(ren.roe*100):'—'}</div>
     </div>
     <div class="kpi-card" style="border-top-color:#555">
       <div class="lbl">ROA</div>
-      <div class="val" style="color:${pColor(ren.roa)}">${fP(ren.roa)}</div>
+      <div class="val" style="color:${pColor(ren.roa)}">${ren.roa!=null?fP(ren.roa*100):'—'}</div>
     </div>
   </div>
 
@@ -6805,6 +6805,7 @@ function _rptBalance(autoPrint) {
         <div class="pat-row"><span style="font-size:10px">Pasivo no corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(pasivoNC)}</span></div>
         <div class="pat-row pat-total"><span style="font-size:10px">Pasivo total</span><span style="font-family:monospace;font-size:11px;color:#d93025">${fM(pasivoT)}</span></div>
         <div class="pat-row pat-pn"><span>Patrimonio neto</span><span style="font-family:monospace;font-size:13px;color:${pColor(patrimon)}">${fM(patrimon)}</span></div>
+        <div class="pat-row pat-total" style="border-top:2px solid #1a3a8f"><span style="font-size:10px">Total Pasivo + PN</span><span style="font-family:monospace;font-size:11px;color:#1a3a8f">${fM(pasivoT!=null&&patrimon!=null?pasivoT+patrimon:null)}</span></div>
       </div>
     </div>
     <div class="card">
@@ -6829,8 +6830,8 @@ function _rptBalance(autoPrint) {
     </div>
     <div class="ind-block">
       <div class="ind-title">Rentabilidad</div>
-      <div class="ind-row"><span class="ind-lbl">ROE</span><span class="ind-val" style="color:${pColor(ren.roe)}">${fP(ren.roe)}</span></div>
-      <div class="ind-row"><span class="ind-lbl">ROA</span><span class="ind-val" style="color:${pColor(ren.roa)}">${fP(ren.roa)}</span></div>
+      <div class="ind-row"><span class="ind-lbl">ROE</span><span class="ind-val" style="color:${pColor(ren.roe)}">${ren.roe!=null?fP(ren.roe*100):'—'}</span></div>
+      <div class="ind-row"><span class="ind-lbl">ROA</span><span class="ind-val" style="color:${pColor(ren.roa)}">${ren.roa!=null?fP(ren.roa*100):'—'}</span></div>
       <div class="ind-row"><span class="ind-lbl">Margen bruto</span><span class="ind-val">${ren.ventas_ingresos&&ren.utilidad_bruta!=null?fP(ren.utilidad_bruta/ren.ventas_ingresos*100):'—'}</span></div>
       <div class="ind-row"><span class="ind-lbl">Margen neto</span><span class="ind-val">${fR(ren.margen_neto)!=null?fP((ren.margen_neto??0)*100):'—'}</span></div>
     </div>
@@ -6875,7 +6876,7 @@ function _rptBalance(autoPrint) {
   </div>`;
   })()}
 
-  ${er.length?`<div class="section-title">Estado de resultados</div>
+  ${er.length && !er.some(r=>r.valComp!=null&&r.valComp!==0)?`<div class="section-title">Estado de resultados</div>
   <div class="card" style="padding:0;overflow:hidden">
     <table class="comp">
       <thead><tr>
@@ -6926,9 +6927,9 @@ function _rptBalance(autoPrint) {
         ${rowR('Liquidez seca',        d => d.lx.liquidez_seca)}
         ${rowM('Capital de trabajo',   d => d.lx.capital_trabajo)}
         ${rowR('Endeudamiento',        d => d.sx.endeudamiento ?? (d.pT!=null&&d.aT!=null&&d.aT?d.pT/d.aT:null))}
-        ${rowP('ROE',                  d => d.rx.roe)}
-        ${rowP('ROA',                  d => d.rx.roa)}
-        ${rowP('Margen neto',          d => d.rx.margen_neto ?? (d.rx.ventas_ingresos&&d.rx.resultado_neto!=null?d.rx.resultado_neto/d.rx.ventas_ingresos*100:null))}
+        ${rowP('ROE',                  d => d.rx.roe!=null ? d.rx.roe*100 : null)}
+        ${rowP('ROA',                  d => d.rx.roa!=null ? d.rx.roa*100 : null)}
+        ${rowP('Margen neto',          d => d.rx.margen_neto!=null ? d.rx.margen_neto*100 : (d.rx.ventas_ingresos&&d.rx.resultado_neto!=null?d.rx.resultado_neto/d.rx.ventas_ingresos*100:null))}
       </tbody>
     </table>
   </div>`;
