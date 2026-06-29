@@ -22621,15 +22621,28 @@ function parsearExcelBalance(wb, XLSX) {
 
   // ── Leer Estado de Resultados ───────────────────────────────────────────
   const MAP_RUBROS = {
-    'produccion_agro':         ['ingresos por producción','ingresos producción','producción '],
-    'medicion_razonable':      ['medición al valor razonable','valor razonable','medicion al valor'],
-    'costo_produccion':        ['costo de producción','costo producción'],
-    'res_neto_produccion':     ['resultado de producción agropecuaria','resultado producción agropecuaria','resultado agropecuario'],
+    'produccion_agro':         ['ingresos por producción','ingresos producción','producción ',
+                               'producción'],                                // CERDO: "Producción" sola
+    'medicion_razonable':      ['medición al valor razonable','valor razonable','medicion al valor',
+                               'resultado por medición a valor razonable'],  // CERDO
+    'costo_produccion':        ['costo de producción','costo producción',
+                               'costo de la producción'],                    // CERDO: "Costo de la Producción de Carne Porcina"
+    'res_neto_produccion':     ['resultado de producción agropecuaria','resultado producción agropecuaria',
+                               'resultado agropecuario','resultado neto de producción agropecuaria'], // CERDO
     'venta_hacienda':          ['venta de hacienda','venta hacienda'],
+    'costo_venta_hacienda':    ['costo de venta de hacienda','costo venta hacienda'],                // CERDO
     'venta_frigorifico':       ['venta frigorífico','ventas frigorífico'],
-    'venta_locales':           ['venta productos agropecuarios','ventas locales','ventas productos agropecuarios'],
-    'costo_venta_locales':     ['costo de productos vendidos','costo productos vendidos','costo venta locales'],
-    'res_bruto_locales':       ['resultado bruto venta productos','resultado bruto venta'],
+    'costo_venta_frigorifico': ['costo de venta frigorífico','costo venta frigorífico'],             // CERDO
+    'venta_semillas':          ['venta al por mayor de semillas','venta semillas y granos',
+                               'ventas semillas','venta de semillas'],                               // CERDO
+    'costo_venta_semillas':    ['costo de venta semillas','costo venta semillas y granos',
+                               'costo de venta de semillas'],                                        // CERDO
+    'venta_locales':           ['venta productos agropecuarios','ventas locales','ventas productos agropecuarios',
+                               'ventas locales comerciales'],                // CERDO
+    'costo_venta_locales':     ['costo de productos vendidos','costo productos vendidos','costo venta locales',
+                               'costo de venta locales comerciales'],        // CERDO
+    'res_bruto_locales':       ['resultado bruto venta productos','resultado bruto venta',
+                               'resultado bruto locales comerciales'],       // CERDO
     'sub_total_agro':          ['resultado bruto de explotación','resultado bruto explotación'],
     'ventas_ingresos':         ['ventas ','ingresos por ventas',
                                'ingresos por ventas de servicios',
@@ -22654,14 +22667,16 @@ function parsearExcelBalance(wb, XLSX) {
                                'otros ingresos y egresos netos',       // KALLPA
                                'total otros resultados netos'],         // VALLESOL
     'gastos_ejecucion_obras':  ['gastos de ejecución de obras','gastos ejecución obras'],
-    'otros_ingresos':          ['otros ingresos','otros egresos e ingresos'],  // EMSE
+    'otros_ingresos':          ['otros ingresos','otros egresos e ingresos',   // EMSE
+                               'otros ingresos y egresos'],                  // CERDO
     'ingresos_obras_subsidios':['ingresos por obras y subsidios','ingresos obras'],
     'ingresos_financieros':    ['ingresos financieros'],               // KALLPA línea separada
     'egresos_financieros':     ['egresos financieros'],                // KALLPA línea separada
     'resultado_financiero':    ['resultados financieros','resultados financieros y por tenencia',
                                'resultado financiero neto','resultado financiero',
                                'resultado financiero y por tenencia (incl. recpam)',  // EMSE
-                               'resultado financiero y por tenencia'],
+                               'resultado financiero y por tenencia',
+                               'resultados financieros y por tenencia incl. recpam'], // CERDO
     'recpam':                  ['recpam','resultado por exposición',
                                'diferencias de cambio netas','diferencia de cambio'],
     'resultado_tenencia':      ['resultado por tenencia','egresos financieros'],
@@ -22809,8 +22824,9 @@ function parsearExcelBalance(wb, XLSX) {
 
       // Sin valor numérico ni fórmula → encabezado de sección, ignorar
       if (valor === null) continue;
-      // Valor 0 sin fórmula → campo vacío, ignorar
-      if (valor === 0 && !formula) continue;
+      // Valor 0 sin fórmula Y sin dato comparativo → campo vacío, ignorar
+      // Conservar si hay dato en columna comparativa (ej: semillas en 2025 vs 2024)
+      if (valor === 0 && !formula && (valorComp === null || valorComp === 0)) continue;
       // Valor 0 CON fórmula → subtotal cero (ej: ventas = costos), incluir
 
       const lbl  = _limpiarLabelExcel(labelRaw);
