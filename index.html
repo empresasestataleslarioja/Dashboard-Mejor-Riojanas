@@ -17112,25 +17112,36 @@ function computeGaps() {
   allEmps.forEach(emp => {
     // Descartar empresas sin ningún dato en años activos
     const persEntryCheck = (DATA.personal||[]).find(d => d.e === emp);
-    const tieneAlgoEnAniosActivos = years.some(y =>
-      (DATA.fact[emp]?.[y] != null) ||
-      (DATA.sit[emp]?.[y] != null) ||
-      (persEntryCheck && persEntryCheck.y && persEntryCheck.y[String(y)] != null)
-    );
+    const tieneAlgoEnAniosActivos = years.some(y => {
+      if (DATA.fact[emp]?.[y] != null && DATA.fact[emp][y] !== 0) return true;
+      if (DATA.sit[emp]?.[y] != null) return true;
+      if (persEntryCheck) {
+        const meses = persEntryCheck.m && persEntryCheck.m[String(y)];
+        if (meses && meses.some(v => v != null && v !== 0)) return true;
+        const tot = persEntryCheck.y && persEntryCheck.y[String(y)];
+        if (tot != null && tot !== 0) return true;
+      }
+      return false;
+    });
     if (!tieneAlgoEnAniosActivos) return;
 
-    const missingFact = years.filter(y => !DATA.fact[emp] || DATA.fact[emp][y] == null);
-    const missingSit  = years.filter(y => !DATA.sit[emp]  || DATA.sit[emp][y] == null);
+    // Facturación faltante: null o 0 se trata como "sin dato"
+    // (cloud sync guarda 0 cuando la celda está vacía en Sheets)
+    const missingFact = years.filter(y => {
+      const v = DATA.fact[emp]?.[y];
+      return v == null || v === 0;
+    });
+    const missingSit  = years.filter(y => DATA.sit[emp]?.[y] == null);
     const persEntry   = (DATA.personal||[]).find(d => d.e === emp);
-    // Personal faltante: solo cuando el año no existe en persEntry.y
+    // Personal faltante: null, 0 o año ausente = sin dato
     const missingPers = years.filter(y => {
       if (!persEntry) return true;
-      // Dato presente si el año existe en .y (incluso valor 0 es válido)
-      if (persEntry.y && persEntry.y[String(y)] != null) return false;
-      // O si tiene meses cargados
+      // Meses cargados tienen prioridad
       const meses = persEntry.m && persEntry.m[String(y)];
-      if (meses && meses.some(v => v != null)) return false;
-      return true;
+      if (meses && meses.some(v => v != null && v !== 0)) return false;
+      // Total anual: 0 o ausente = sin dato (cloud sync escribe 0 para vacíos)
+      const total = persEntry.y && persEntry.y[String(y)];
+      return total == null || total === 0;
     });
     const sinBalance  = !tieneBalance(emp); // true = no tiene balance cargado
     if (missingFact.length > 0 || missingSit.length > 0 || missingPers.length > 0 || sinBalance) {
