@@ -22822,11 +22822,9 @@ function parsearExcelBalance(wb, XLSX) {
         if (typeof calculado === 'number') valor = calculado;
       }
 
-      // Sin valor numérico ni fórmula → encabezado de sección, ignorar
+      // Sin valor numérico en celda → encabezado de sección vacío, ignorar
+      // Los ceros explícitos (valor===0) son datos reales y deben conservarse
       if (valor === null) continue;
-      // Valor 0 sin fórmula Y sin dato comparativo → campo vacío, ignorar
-      // Conservar si hay dato en columna comparativa (ej: semillas en 2025 vs 2024)
-      if (valor === 0 && !formula && (valorComp === null || valorComp === 0)) continue;
       // Valor 0 CON fórmula → subtotal cero (ej: ventas = costos), incluir
 
       const lbl  = _limpiarLabelExcel(labelRaw);
@@ -22999,10 +22997,37 @@ function parsearExcelBalance(wb, XLSX) {
       const ult = [...estructura_er].reverse().find(r => r.val !== 0 && r.val != null);
       if (ult) ind.rentabilidad.resultado_neto = ult.val;
     }
-    // Derivar ventas_ingresos: primer dato positivo no calculado
+    // Derivar ventas_ingresos: suma de rubros de ingreso anteriores al primer costo
     if (!ind.rentabilidad.ventas_ingresos) {
-      const prim = estructura_er.find(r => !r.calc && r.val > 0);
-      if (prim) ind.rentabilidad.ventas_ingresos = prim.val;
+      const primerCostoIdx = estructura_er.findIndex(r =>
+        !r.calc && r.val != null && /costo/i.test(r.lbl)
+      );
+      const ingrRows = estructura_er.filter((r, i) =>
+        !r.calc && r.val != null && r.val > 0 &&
+        (primerCostoIdx < 0 || i < primerCostoIdx) &&
+        !/^(resultado|total|sub.?total|utilidad|ganancia|p[eé]rdida|menos)/i.test(r.lbl)
+      );
+      if (ingrRows.length > 1) {
+        // Múltiples rubros de ingreso (ej: CERDO con Producción + Hacienda + Frigorífico + Locales + Semillas)
+        ind.rentabilidad.ventas_ingresos = ingrRows.reduce((s, r) => s + r.val, 0);
+      } else if (ingrRows.length === 1) {
+        ind.rentabilidad.ventas_ingresos = ingrRows[0].val;
+      } else {
+        // Fallback: primer dato positivo no calculado
+        const prim = estructura_er.find(r => !r.calc && r.val > 0);
+        if (prim) ind.rentabilidad.ventas_ingresos = prim.val;
+      }
+    }
+    // Derivar costo_ventas: suma de todos los rubros con "costo" en el label
+    if (!ind.rentabilidad.costo_ventas) {
+      const costoRows = estructura_er.filter(r =>
+        !r.calc && r.val != null && /costo/i.test(r.lbl)
+      );
+      if (costoRows.length > 1) {
+        ind.rentabilidad.costo_ventas = costoRows.reduce((s, r) => s + r.val, 0);
+      } else if (costoRows.length === 1) {
+        ind.rentabilidad.costo_ventas = costoRows[0].val;
+      }
     }
     // Fallback resultado neto desde estructura_er
     if (!ind.rentabilidad.resultado_neto && estructura_er.length > 0) {
