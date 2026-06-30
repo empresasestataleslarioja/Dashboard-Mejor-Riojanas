@@ -8985,7 +8985,9 @@ const FLUJO_RUBROS_STD = [
 // ── Wizard de mapeo + perfiles por empresa ─────────────────────────────────
 
 function _necesitaWizard(res) {
-  return res.rubros.some(r => !FLUJO_RUBROS_STD.find(s => s.key === r.key));
+  // Mostrar wizard si no se aplicó perfil, o si algún rubro quedó sin confirmar
+  if (!res._perfilAplicado) return true;
+  return res.rubros.some(r => !r._tipoConfirmado);
 }
 
 function _empKeyPerfil(empresa) {
@@ -9000,13 +9002,25 @@ function _aplicarPerfilEmpresa(res) {
   const perfil = (DATA.flujos_config && DATA.flujos_config.perfiles) ? DATA.flujos_config.perfiles[key] : null;
   if (!perfil || !perfil.rowMappings) return res;
   const mappings = perfil.rowMappings;
+  const TIPO_DEC = {
+    'ingreso':     { tipo:'ingreso', esTotal:false, nivel:1 },
+    'ingreso|tot': { tipo:'ingreso', esTotal:true,  nivel:0 },
+    'egreso':      { tipo:'egreso',  esTotal:false, nivel:1 },
+    'egreso|sub':  { tipo:'egreso',  esTotal:true,  nivel:0 },
+    'total':       { tipo:'total',   esTotal:true,  nivel:0 },
+    'resultado':   { tipo:'resultado',esTotal:true, nivel:0 },
+  };
   const rubrosConPerfil = res.rubros.map(function(r) {
     const lUP = r.label.toUpperCase().trim();
-    const stdKey = mappings[lUP];
-    if (!stdKey) return r;
-    const std = FLUJO_RUBROS_STD.find(function(s){ return s.key === stdKey; });
-    if (!std) return r;
-    return Object.assign({}, r, { key: std.key, tipo: std.tipo });
+    const tipoVal = mappings[lUP];
+    if (!tipoVal) return r;
+    // Soportar formato nuevo (tipo val) y formato viejo (std key como egreso_personal)
+    const dec = TIPO_DEC[tipoVal];
+    if (dec) return Object.assign({}, r, dec, { _tipoConfirmado: true });
+    // Formato viejo: mapear std key a tipo
+    const std = FLUJO_RUBROS_STD.find(function(s){ return s.key === tipoVal; });
+    if (std) return Object.assign({}, r, { tipo: std.tipo, esTotal: std.tipo==='total'||std.tipo==='resultado', nivel: (std.tipo==='egreso'||std.tipo==='ingreso')&&!std.key.startsWith('total')?1:0, _tipoConfirmado: true });
+    return r;
   });
   return Object.assign({}, res, { rubros: rubrosConPerfil, _perfilAplicado: key });
 }
@@ -9031,25 +9045,47 @@ function _mostrarWizardMapeado(res) {
     return (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
   };
 
-  var stdOpts = FLUJO_RUBROS_STD.map(function(s) {
-    return '<option value="' + s.key + '">' + s.label + '</option>';
-  }).join('');
+  // Opciones de tipo: qué rol cumple esta fila en el flujo
+  var TIPO_OPTS = [
+    { val:'',            lbl:'— ignorar fila —' },
+    { val:'ingreso',     lbl:'Concepto de Ingreso' },
+    { val:'egreso',      lbl:'Concepto de Egreso' },
+    { val:'ingreso|tot', lbl:'Total / Subtotal Ingresos' },
+    { val:'total',       lbl:'Total Egresos' },
+    { val:'egreso|sub',  lbl:'Subtotal Egresos' },
+    { val:'resultado',   lbl:'Resultado / Superávit / Fondos' },
+  ];
+  var stdOpts = TIPO_OPTS.map(function(o){ return '<option value="'+o.val+'">'+o.lbl+'</option>'; }).join('');
+
+  // Determinar valor actual del dropdown desde tipo/esTotal del rubro
+  function _rubroToTipoVal(r) {
+    if (r.tipo === 'resultado') return 'resultado';
+    if (r.tipo === 'ingreso' && r.esTotal) return 'ingreso|tot';
+    if (r.tipo === 'ingreso')  return 'ingreso';
+    if (r.tipo === 'total')    return 'total';
+    if (r.tipo === 'egreso' && r.esTotal) return 'egreso|sub';
+    if (r.tipo === 'egreso')   return 'egreso';
+    return '';
+  }
 
   var rows = res.rubros.map(function(r, i) {
-    var isKnown = FLUJO_RUBROS_STD.find(function(s){ return s.key === r.key; });
-    var rowBg = isKnown ? '' : 'background:rgba(255,71,102,.06)';
-    var selBorder = isKnown ? 'var(--bd2)' : '#ff4766';
-    var opts = '<option value="">— ignorar —</option>' + stdOpts;
-    if (isKnown) opts = opts.replace('value="' + r.key + '"', 'value="' + r.key + '" selected');
-    return '<tr style="border-bottom:1px solid var(--bd2);' + rowBg + '">' +
-      '<td style="padding:5px 8px;font-size:9px;font-family:var(--mono);color:var(--text);white-space:nowrap;min-width:190px">' +
-        r.label + (!isKnown ? ' <span style="font-size:7.5px;color:#ff4766;margin-left:4px">● sin mapear</span>' : '') +
+    var curVal = r._tipoConfirmado ? _rubroToTipoVal(r) : _rubroToTipoVal(r);
+    var opts = TIPO_OPTS.map(function(o){
+      return '<option value="'+o.val+'"'+(o.val===curVal?' selected':'')+'>'+o.lbl+'</option>';
+    }).join('');
+    var tipoColor = r.tipo==='ingreso'?'#2ecc8a':r.tipo==='total'?'var(--neg)':r.tipo==='resultado'?'var(--y21)':'var(--dim)';
+    return '<tr style="border-bottom:1px solid var(--bd2)">' +
+      '<td style="padding:5px 8px;font-size:9px;font-family:var(--mono);color:var(--text);white-space:nowrap;min-width:200px">' +
+        r.label +
+        '<span style="font-size:7.5px;padding:1px 4px;border-radius:2px;background:'+tipoColor+'22;color:'+tipoColor+';font-family:var(--mono);margin-left:6px">'+
+          (r.tipo||'?')+(r.esTotal?' TOTAL':'')+
+        '</span>' +
       '</td>' +
       '<td style="padding:5px 8px;font-size:9px;font-family:var(--mono);color:var(--dim);text-align:right;white-space:nowrap">' +
         fmtV(r.actual) +
       '</td>' +
-      '<td style="padding:5px 8px;min-width:210px">' +
-        '<select data-rubro-idx="' + i + '" style="width:100%;padding:3px 7px;background:var(--s2);border:1px solid ' + selBorder + ';color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">' +
+      '<td style="padding:5px 8px;min-width:220px">' +
+        '<select data-rubro-idx="'+i+'" style="width:100%;padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">' +
           opts +
         '</select>' +
       '</td>' +
@@ -9059,9 +9095,9 @@ function _mostrarWizardMapeado(res) {
   container.innerHTML =
     '<table style="width:100%;border-collapse:collapse">' +
     '<thead><tr>' +
-      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Fila en Excel</th>' +
+      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Concepto en Excel</th>' +
       '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:right;border-bottom:1px solid var(--bd)">Valor total</th>' +
-      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Rubro estándar</th>' +
+      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Tipo de fila</th>' +
     '</tr></thead>' +
     '<tbody>' + rows + '</tbody>' +
     '</table>';
@@ -9097,27 +9133,38 @@ function _aplicarMapeadoWizard() {
   var mappings = {};
   var rubroAssign = {};
 
+  // Decodificar tipoVal → { tipo, esTotal }
+  function _decodeTipoVal(v) {
+    if (v === 'ingreso')     return { tipo:'ingreso', esTotal:false, nivel:1 };
+    if (v === 'ingreso|tot') return { tipo:'ingreso', esTotal:true,  nivel:0 };
+    if (v === 'egreso')      return { tipo:'egreso',  esTotal:false, nivel:1 };
+    if (v === 'egreso|sub')  return { tipo:'egreso',  esTotal:true,  nivel:0 };
+    if (v === 'total')       return { tipo:'total',   esTotal:true,  nivel:0 };
+    if (v === 'resultado')   return { tipo:'resultado',esTotal:true, nivel:0 };
+    return null;
+  }
+
   selects.forEach(function(sel) {
     var idx = parseInt(sel.dataset.rubroIdx);
     var rubro = res.rubros[idx];
-    var stdKey = sel.value;
-    if (stdKey) {
+    var tipoVal = sel.value;
+    if (tipoVal) {
       var lUP = rubro.label.toUpperCase().trim();
-      mappings[lUP] = stdKey;
-      rubroAssign[idx] = stdKey;
+      mappings[lUP] = tipoVal;
+      rubroAssign[idx] = tipoVal;
     }
   });
 
   var rubrosNuevos = res.rubros.map(function(r, i) {
-    var stdKey = rubroAssign[i];
-    if (!stdKey) return null;
-    var std = FLUJO_RUBROS_STD.find(function(s){ return s.key === stdKey; });
-    if (!std) return r;
-    return Object.assign({}, r, { key: std.key, tipo: std.tipo });
+    var tipoVal = rubroAssign[i];
+    if (!tipoVal) return null; // ignorar
+    var dec = _decodeTipoVal(tipoVal);
+    if (!dec) return r;
+    return Object.assign({}, r, dec, { _tipoConfirmado: true });
   }).filter(Boolean);
 
   if (!rubrosNuevos.length) {
-    if (msgEl) { msgEl.textContent = '⚠ Asigná al menos un rubro antes de continuar'; msgEl.style.color = 'var(--neg)'; }
+    if (msgEl) { msgEl.textContent = '⚠ Asigná al menos un concepto antes de continuar'; msgEl.style.color = 'var(--neg)'; }
     return;
   }
 
@@ -9129,9 +9176,8 @@ function _aplicarMapeadoWizard() {
   }
 
   // Recalculate necesidad_fondos
-  var fondosR = rubrosNuevos.find(function(r){ return r.key === 'necesidad_fondos' && r.actual != null; });
-  var defR    = rubrosNuevos.find(function(r){ return r.key === 'sup_def' && r.actual != null; });
-  var rawNec  = (fondosR || defR) ? (fondosR || defR).actual : null;
+  var fondosR = rubrosNuevos.find(function(r){ return r.tipo === 'resultado' && r.actual != null; });
+  var rawNec  = fondosR ? fondosR.actual : null;
   var necFondos = rawNec != null ? Math.abs(rawNec) : res.necesidad_fondos;
 
   var resMaped = Object.assign({}, res, { rubros: rubrosNuevos, necesidad_fondos: necFondos });
@@ -9325,25 +9371,33 @@ function parsearFlujoExcel(wb, XLSX) {
       if (typeof v === 'number') porMes[m] = v;
     });
 
+    // Detectar si es fila totalizadora (TOTAL, SUBTOTAL en el label)
+    const esResultadoLbl = (lUP.includes('SUPER') && (lUP.includes('DÉF') || lUP.includes('DEF'))) ||
+      lUP.includes('SUPERÁVIT') || lUP.includes('SUPERAVIT') ||
+      lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD');
+    const esTotalizador = /^(TOTAL|SUBTOTAL|SUB-TOTAL|SUB TOTAL)/i.test(lbl) ||
+      (lUP.includes('TOTAL') && (lUP.includes('ING') || lUP.includes('EGR')));
+    const esTotal = esTotalizador || esResultadoLbl;
+    const nivel   = esTotal ? 0 : 1; // 0=totalizador, 1=concepto detalle
+
     // Detectar tipo — usa _seccion para rubros sin pista en el label
-    const tipo = (lUP.includes('TOTAL') && (lUP.includes('ING') || _seccion==='ingreso' && !lUP.includes('EGR') && lUP.startsWith('TOTAL'))) ? 'ingreso'
-      : (lUP.includes('SUPER') && lUP.includes('DÉF')) || lUP.includes('SUPERÁVIT/DÉFICIT') ||
-        lUP.includes('SUPERAVIT/DEFICIT') ? 'resultado'
-      : (lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD')) ? 'resultado'
-      : (lUP.includes('TOTAL') && (lUP.includes('EGR') || !lUP.includes('ING'))) ? 'total'
+    const tipo = esResultadoLbl ? 'resultado'
+      : (esTotalizador && (lUP.includes('ING') || (_seccion==='ingreso' && !lUP.includes('EGR')))) ? 'ingreso'
+      : (esTotalizador && (lUP.includes('EGR') || _seccion==='egreso')) ? 'total'
       : _seccion === 'ingreso' ? 'ingreso'
       : 'egreso';
-    // Actualizar sección si el rubro es un total de sección
-    if (tipo === 'ingreso' && lUP.startsWith('TOTAL')) _seccion = 'egreso'; // después de total ingresos viene egresos
+    // Actualizar sección después de total de ingresos
+    if (tipo === 'ingreso' && esTotalizador) _seccion = 'egreso';
 
     const key = lUP.includes('TOTAL ING') ? 'total_ingresos'
       : lUP.includes('TOTAL EGR') ? 'total_egresos'
-      : lUP.includes('SUPER') || lUP.includes('DÉF') || lUP.includes('DEF') ? 'sup_def'
-      : lUP.includes('FONDOS') ? 'necesidad_fondos'
-      : lbl.toLowerCase().replace(/[^a-z0-9]/g,'_').substring(0, 30);
+      : esResultadoLbl && (lUP.includes('FONDOS') || lUP.includes('NECESIDAD')) ? 'necesidad_fondos'
+      : esResultadoLbl ? 'sup_def'
+      : lbl.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+            .replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').substring(0, 40);
 
     rubros.push({
-      key, label: lbl, tipo,
+      key, label: lbl, tipo, esTotal, nivel,
       actual:    valTotalCalc,
       anterior:  null,
       var_pct:   null,
@@ -10002,17 +10056,25 @@ function _flujoNecesidad(f) {
 
 function _flujoIngTotal(f) {
   if (!f) return null;
-  // Buscar Total Ingresos (tipo ingreso o label con TOTAL ING)
-  const r = f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.label?.toUpperCase().includes('TOTAL'))
-         ?? f.rubros.find(r2 => r2.tipo === 'ingreso')
-         ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL ING'));
+  // Prioridad: totalizador de ingresos explícito
+  const r = f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.esTotal)
+         ?? f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.label?.toUpperCase().includes('TOTAL'))
+         ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL ING'))
+         ?? f.rubros.find(r2 => r2.tipo === 'ingreso');
   return r?.actual ?? null;
 }
 
 function _flujoEgrTotal(f) {
   if (!f) return null;
-  const r = f.rubros.find(r2 => r2.tipo === 'total')
+  // Prioridad: totalizador de egresos explícito
+  const r = f.rubros.find(r2 => r2.tipo === 'total' && r2.esTotal)
+         ?? f.rubros.find(r2 => r2.tipo === 'total')
          ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL EGR'));
+  // Fallback: sumar todos los conceptos de egreso
+  if (!r) {
+    const egrRows = (f.rubros||[]).filter(r2 => r2.tipo === 'egreso' && !r2.esTotal && r2.actual != null);
+    if (egrRows.length) return egrRows.reduce((s, r2) => s + r2.actual, 0);
+  }
   return r?.actual ?? null;
 }
 
@@ -10068,40 +10130,32 @@ function buildVistaIndividualFlujo() {
     ? f.meses
     : [...new Set(f.rubros.flatMap(r => Object.keys(r.porMes || {})))];
 
-  // Función de estilo por tipo de rubro
-  const _est = (lbl, tipo) => {
-    const lUP = (lbl || '').toUpperCase();
-    if (tipo === 'ingreso' && lUP.includes('TOTAL')) return { bg:'rgba(71,255,180,.09)',bt:'border-top:2px solid #2ecc8a',fw:'700',c:'#47ffb4',tag:'TOTAL ING' };
-    if (tipo === 'ingreso')                          return { bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#47ffb4',tag:'' };
-    if (tipo === 'total')                            return { bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)',tag:'TOTAL EGR' };
-    if (tipo === 'resultado')                        return { bg:'rgba(232,255,71,.07)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)',tag:'RESULTADO' };
-    if (lUP.includes('TOTAL'))                       return { bg:'rgba(100,100,80,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff',tag:'SUBTOTAL' };
-    return { bg:'',bt:'',fw:'400',c:'var(--text)',tag:'' };
+  // Estilo por tipo y jerarquía
+  const _est = (r) => {
+    const lUP = (r.label || '').toUpperCase();
+    const esT = r.esTotal ?? (lUP.includes('TOTAL') || lUP.includes('SUBTOTAL'));
+    const niv = r.nivel ?? (esT ? 0 : 1);
+    if (r.tipo === 'resultado')                     return { bg:'rgba(232,255,71,.08)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)',indent:0 };
+    if (r.tipo === 'total')                         return { bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)',indent:0 };
+    if (r.tipo === 'ingreso' && esT)                return { bg:'rgba(71,255,180,.09)',bt:'border-top:2px solid #2ecc8a',fw:'700',c:'#47ffb4',indent:0 };
+    if (r.tipo === 'ingreso')                       return { bg:'rgba(71,255,180,.02)',bt:'',fw:'400',c:'#c3fff0',indent:niv===1?20:0 };
+    if (esT)                                        return { bg:'rgba(100,100,80,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff',indent:0 };
+    return { bg:'',bt:'',fw:'400',c:'var(--text)',indent:niv===1?20:0 };
   };
-
-  // FIX 9: evitar rubros duplicados (sup_def y necesidad_fondos a la vez)
-  const necKey = f.rubros.find(r => r.key === 'necesidad_fondos') ? 'necesidad_fondos'
-               : f.rubros.find(r => r.key === 'sup_def') ? 'sup_def' : null;
-  const rubrosAMostrar = necKey === 'necesidad_fondos'
-    ? f.rubros.filter(r => r.key !== 'sup_def')
-    : necKey === 'sup_def'
-    ? f.rubros.filter(r => r.key !== 'necesidad_fondos')
-    : f.rubros;
 
   const tbl = document.getElementById('tbl-flujos');
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
-    <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Rubro</th>
+    <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Concepto</th>
     ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
     <th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>
   </tr></thead><tbody>` +
-  rubrosAMostrar.map(r => {
-    const st = _est(r.label, r.tipo);
-    const tag = st.tag ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;
-      background:${st.c}22;color:${st.c};font-family:var(--mono);margin-left:6px">${st.tag}</span>` : '';
+  f.rubros.map(r => {
+    const st = _est(r);
+    const ind = st.indent ? `padding-left:${12+st.indent}px` : 'padding:6px 12px';
     return `<tr style="background:${st.bg};${st.bt}">
-      <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}${tag}</td>
-      ${meses.map(m => `<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${r.porMes?.[m] != null ? fmt(r.porMes[m]) : '—'}</td>`).join('')}
-      <td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>
+      <td style="${ind};padding-top:5px;padding-bottom:5px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}</td>
+      ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${r.porMes?.[m] != null ? fmt(r.porMes[m]) : '—'}</td>`).join('')}
+      <td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>
     </tr>`;
   }).join('') + '</tbody>';
 }
