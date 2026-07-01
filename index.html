@@ -9882,6 +9882,18 @@ function confirmarGuardarFlujo() {
   const tipo    = document.getElementById('fc-tipo')?.value || 'proyectado';
   const ipc     = parseFloat(document.getElementById('fc-ipc')?.value || '0') || 0;
 
+  // Verificar si ya existe un flujo con la misma clave
+  const claveNueva = _claveFlujo(empresa, periodo, tipo);
+  if (empresa && periodo && DATA.flujos[claveNueva]) {
+    const f = DATA.flujos[claveNueva];
+    const ok = confirm(
+      `⚠ Ya existe un flujo cargado para:\n\n` +
+      `Empresa: ${f.empresa}\nPeríodo: ${f.periodo}\nTipo: ${f.tipo}\n\n` +
+      `¿Reemplazarlo con el archivo recién cargado?`
+    );
+    if (!ok) return;
+  }
+
   if (!empresa || !periodo) {
     const msg = document.getElementById('flujo-msg');
     if (msg) { msg.textContent = '⚠ Empresa y período son obligatorios.'; msg.style.color='var(--neg)'; }
