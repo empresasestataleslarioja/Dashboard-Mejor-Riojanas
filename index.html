@@ -9280,13 +9280,36 @@ function parsearFlujoExcel(wb, XLSX) {
 
   const MESES_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
                     'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  const MESES_ABREV = ['ENE','FEB','MAR','ABR','MAY','JUN',
+                       'JUL','AGO','SEP','OCT','NOV','DIC'];
+  // Normaliza encabezado de columna a nombre canónico de período o null
+  const normHeader = h => {
+    const u = h.toUpperCase().trim();
+    if (MESES_ES.includes(u)) return u;
+    const iAbr = MESES_ABREV.indexOf(u);
+    if (iAbr >= 0) return MESES_ES[iAbr];
+    // Cuatrimestres: "1° CUATRIMESTRE", "2DO CUATR", "1er C", "1°C", "PRIMER CUATRIMESTRE", etc.
+    const mC = u.match(/^(\d)[°ºERSTNDO°\.]*\s*(CUAT|C\b)/);
+    if (mC) return `${mC[1]}°CUAT`;
+    if (u.match(/^PRIMER\s+CUAT/)) return '1°CUAT';
+    if (u.match(/^SEGUNDO\s+CUAT/)) return '2°CUAT';
+    if (u.match(/^TERCER\s+CUAT/)) return '3°CUAT';
+    // Trimestres: "1° TRIMESTRE", "1T", "1°T", etc.
+    const mT = u.match(/^(\d)[°ºERSTNDO°\.]*\s*(TRIM|T\b)/);
+    if (mT) return `${mT[1]}°TRIM`;
+    if (u.match(/^PRIMER\s+TRIM/)) return '1°TRIM';
+    if (u.match(/^SEGUNDO\s+TRIM/)) return '2°TRIM';
+    if (u.match(/^TERCER\s+TRIM/)) return '3°TRIM';
+    if (u.match(/^CUARTO\s+TRIM/)) return '4°TRIM';
+    return null;
+  };
 
-  // ── PASO 1: Detectar fila de header (tiene ≥2 meses) ─────────────
+  // ── PASO 1: Detectar fila de header (tiene ≥2 períodos reconocibles) ──
   let resumenRow = -1;
   for (let r = 0; r <= Math.min(rng.e.r, 70); r++) {
     let n = 0;
     for (let c = 0; c <= Math.min(14, rng.e.c); c++) {
-      if (MESES_ES.includes(str(r, c).toUpperCase())) n++;
+      if (normHeader(str(r, c))) n++;
     }
     if (n >= 2) { resumenRow = r; break; }
     // También aceptar sección RESUMEN de RIODECO
@@ -9297,12 +9320,13 @@ function parsearFlujoExcel(wb, XLSX) {
   // ── PASO 2: Detectar columnas desde el header ─────────────────────
   let colLabel  = -1; // columna de labels de rubros
   let colTotal  = -1; // columna TOTAL/TOTALES del período
-  const colM    = {}; // { 'ENERO': 3, 'FEBRERO': 4, ... }
+  const colM    = {}; // { 'ENERO': 3, 'FEBRERO': 4, ... } o { '1°CUAT': 3, ... }
 
   for (let c = 0; c <= Math.min(14, rng.e.c); c++) {
     const h = str(resumenRow, c).toUpperCase().trim();
-    if (MESES_ES.includes(h)) {
-      colM[h] = c;
+    const per = normHeader(h);
+    if (per) {
+      colM[per] = c;
       continue;
     }
     // TOTAL exacto (no TOTAL ANTERIOR, no TOTAL CUATRIMESTRE ANTERIOR)
@@ -9524,7 +9548,7 @@ function importarFlujoDrive() {
       var wb = _xlsxInst.read(ab, { type: 'array', cellFormula: true, cellDates: true });
       var parsed = parsearFlujoExcel(wb, _xlsxInst);
       if (!parsed || !parsed.rubros.length)
-        throw new Error('No se pudo leer la estructura del flujo desde Drive. Verificá que tenga hoja FLUJO X MES.');
+        throw new Error('No se pudo leer la estructura del flujo desde Drive. Hojas encontradas: ' + wb.SheetNames.join(', '));
 
       setMsg('✓ Archivo leído desde Drive: ' + (res.filename || fileId), 'var(--pos)');
       if (input) input.value = '';
@@ -9558,7 +9582,7 @@ function importarFlujoExcel(file) {
         const wb  = _xlsxInst.read(e.target.result, { type:'array', cellFormula:true, cellDates:true });
         const res = parsearFlujoExcel(wb, _xlsxInst);
         if (!res || !res.rubros.length)
-          throw new Error('No se pudo leer la estructura del flujo. Verificá que tenga hoja FLUJO X MES.');
+          throw new Error('No se pudo leer la estructura del flujo. Hojas encontradas: ' + wb.SheetNames.join(', '));
 
         // Intentar aplicar perfil guardado para esta empresa
         const resConPerfil = _aplicarPerfilEmpresa(res);
