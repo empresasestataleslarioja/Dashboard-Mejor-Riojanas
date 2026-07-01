@@ -4138,6 +4138,14 @@ self.onmessage = async (e) => {
       <div style="width:1px;height:22px;background:var(--bd2);margin:0 4px;flex-shrink:0"></div>
 
       <!-- Grupo: Exportar -->
+      <button onclick="_editarFlujoDesdeToolbar()"
+        title="Editar importes y tipos de rubros del período actual seleccionado"
+        style="padding:5px 12px;background:rgba(71,232,255,.08);
+        border:1.5px solid #47e8ff;color:var(--acc);border-radius:4px;
+        cursor:pointer;font-family:var(--mono);font-size:9.5px;white-space:nowrap">
+        ✏ Editar flujo
+      </button>
+
       <button onclick="generarInformeFlujo()"
         style="padding:5px 12px;background:rgba(232,255,71,.08);
         border:1.5px solid var(--y21);color:#b8a000;border-radius:4px;
@@ -4145,11 +4153,11 @@ self.onmessage = async (e) => {
         📄 Informe Word
       </button>
 
-      <button id="btn-export-excel" onclick="exportarFlujoExcel()"
+      <button id="btn-export-excel" onclick="_exportarFlujoSmartBtn()"
         style="padding:5px 12px;background:rgba(71,255,180,.08);
         border:1.5px solid var(--pos);color:#1a9e68;border-radius:4px;
         cursor:pointer;font-family:var(--mono);font-size:9.5px;white-space:nowrap">
-        📊 Exportar Excel
+        📊 Exportar / Reporte
       </button>
 
       <span id="flujo-msg" style="font-size:9px;font-family:var(--mono);
@@ -11064,6 +11072,32 @@ function _ipcAcumEntrePeriodos(pA, pB) {
 }
 
 // ── EXPORTAR FLUJO A EXCEL ────────────────────────────────────────
+function _editarFlujoDesdeToolbar() {
+  const clave = document.getElementById('sel-flujo-a')?.value;
+  if (!clave) { alert('Seleccioná un período en "Período actual" primero.'); return; }
+  if (!DATA.flujos[clave]) { alert('No se encontró el flujo seleccionado.'); return; }
+  const pm = document.getElementById('panel-flujo-manual');
+  if (pm) pm.style.display = '';
+  editarFlujo(clave);
+  pm?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function _exportarFlujoSmartBtn() {
+  const claveA = document.getElementById('sel-flujo-a')?.value;
+  const claveB = document.getElementById('sel-flujo-b')?.value;
+  if (claveA && claveB && DATA.flujos[claveA] && DATA.flujos[claveB]) {
+    exportarFlujoExcel(); // comparativo
+  } else if (claveA && DATA.flujos[claveA]) {
+    // Solo un período: mostrar reporte individual
+    buildVistaIndividualFlujo();
+    setTimeout(() => {
+      _rptFlujoIndividual();
+    }, 100);
+  } else {
+    alert('Seleccioná al menos el "Período actual" para exportar.');
+  }
+}
+
 function exportarFlujoExcel() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
