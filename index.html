@@ -9291,7 +9291,8 @@ function parsearFlujoExcel(wb, XLSX) {
                        'JUL','AGO','SEP','OCT','NOV','DIC'];
   // Normaliza encabezado de columna a nombre canónico de período o null
   const normHeader = h => {
-    const u = h.toUpperCase().trim();
+    // Eliminar año (ej. "ENERO 2026" → "ENERO", "ENERO-26" → "ENERO")
+    const u = h.toUpperCase().trim().replace(/[\s\-\/]+20\d\d$/, '').replace(/[\s\-\/]+\d{2}$/, '').trim();
     if (MESES_ES.includes(u)) return u;
     const iAbr = MESES_ABREV.indexOf(u);
     if (iAbr >= 0) return MESES_ES[iAbr];
@@ -9906,7 +9907,7 @@ function guardarFlujoManual() {
       return Object.assign(
         { key, label: orig?.label || key, tipo: orig?.tipo || 'egreso',
           esTotal: orig?.esTotal ?? false, nivel: orig?.nivel ?? 1,
-          actual: parseFloat(inp.value) || null,
+          actual: parseFloat(inp.value.replace(/\./g,'').replace(/,/g,'')) || null,
           anterior: orig?.anterior ?? null, var_pct: null, porMes: orig?.porMes || {} },
         tipoDec || {}
       );
@@ -10117,7 +10118,11 @@ function _renderListaFlujos() {
       : `<span style="color:#ff8c47;font-size:8px">REAL</span>`;
     return `<tr>
       <td style="font-weight:600">${f.empresa}</td>
-      <td style="font-family:var(--mono)">${f.periodo}</td>
+      <td style="font-family:var(--mono)">${f.periodo}
+        <button onclick="_editarPeriodoFlujo('${f.clave}')" title="Editar período"
+          style="padding:1px 4px;background:none;border:1px solid var(--dim);
+          color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
+      </td>
       <td>${tipoTag}</td>
       <td style="font-family:var(--mono);text-align:right">${fmt(f.necesidad_fondos)}</td>
       <td style="font-family:var(--mono);text-align:right">${fmt(f.necesidad_fondos_ant)}</td>
@@ -10138,6 +10143,24 @@ function _renderListaFlujos() {
       </td>
     </tr>`;
   }).join('') + '</tbody>';
+}
+
+function _editarPeriodoFlujo(clave) {
+  const f = DATA.flujos[clave];
+  if (!f) return;
+  const nuevo = prompt(`Editar período de "${f.empresa}":\n\nActual: ${f.periodo}\n\nIngresá el nuevo período:`, f.periodo);
+  if (!nuevo || nuevo.trim() === f.periodo) return;
+  DATA.flujos[clave].periodo = nuevo.trim();
+  // Regenerar clave si cambió el período
+  const nuevaClave = [f.empresa, nuevo.trim(), f.tipo || 'proyectado']
+    .map(s => String(s).toUpperCase().replace(/[^A-Z0-9\s]/g,'').replace(/\s+/g,'_')).join('_');
+  if (nuevaClave !== clave) {
+    DATA.flujos[nuevaClave] = DATA.flujos[clave];
+    delete DATA.flujos[clave];
+  }
+  _renderFlujosList();
+  const msg = document.getElementById('flujo-msg');
+  if (msg) { msg.textContent = `✓ Período actualizado a "${nuevo.trim()}"`; msg.style.color = 'var(--pos)'; }
 }
 
 function _eliminarFlujo(clave) {
@@ -10367,10 +10390,13 @@ function editarFlujo(clave) {
       return `<div style="display:flex;flex-direction:column;gap:2px;border-left:2px solid ${tipoColor};padding-left:6px">
         <label style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px" title="${r.label}">${r.label}</label>
         <div style="display:flex;gap:4px;align-items:center">
-          <input data-key="${r.key}" type="number" step="1" value="${r.actual != null ? Math.round(r.actual) : ''}"
+          <input data-key="${r.key}" type="text" inputmode="numeric"
+            value="${r.actual != null ? Math.round(r.actual).toLocaleString('es-AR') : ''}"
             placeholder="Importe"
-            style="width:100px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
-            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">
+            style="width:110px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none"
+            oninput="const n=this.value.replace(/\./g,'').replace(/,/g,'').replace(/[^\d-]/g,'');
+              if(!isNaN(n)&&n!=='')this.value=parseInt(n).toLocaleString('es-AR');">
           <select data-tipo-key="${r.key}"
             style="flex:1;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px">
