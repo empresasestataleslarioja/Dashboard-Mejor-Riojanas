@@ -4375,7 +4375,7 @@ self.onmessage = async (e) => {
           font-family:var(--mono)"></span>
         <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
           <button id="btn-editar-flujo-ind"
-            onclick="const c=document.getElementById('flujo-comp-wrap').dataset.clave;if(c){editarFlujo(c);document.getElementById('panel-flujo-manual').scrollIntoView({behavior:'smooth',block:'nearest'});}"
+            onclick="const c=document.getElementById('flujo-comp-wrap').dataset.clave;if(c){const _pm=document.getElementById('panel-flujo-manual');if(_pm)_pm.style.display='';editarFlujo(c);_pm&&_pm.scrollIntoView({behavior:'smooth',block:'nearest'});}"
             title="Editar importes y tipos de rubros de este flujo"
             style="display:none;padding:4px 11px;background:rgba(71,232,255,.08);
             border:1px solid #47e8ff55;color:var(--acc);font-family:var(--mono);
@@ -10029,26 +10029,39 @@ function guardarFlujoManual() {
     return;
   }
 
+  // Preservar meses y necesidad_fondos_ant del flujo original cuando editamos
+  const _fOrig = claveEditando ? DATA.flujos[claveEditando] : null;
   const nec = rubrosFinales.find(r => r.key === 'necesidad_fondos');
   const defRub = rubrosFinales.find(r => r.tipo === 'resultado' && r.actual != null);
+  const necValor = nec?.actual ?? defRub?.actual ?? _flujoNecesidad({ rubros: rubrosFinales }) ?? null;
   _guardarFlujoData({
     empresa, periodo, tipo, ipc, rubros: rubrosFinales,
-    meses: [],
-    necesidad_fondos:     nec?.actual ?? defRub?.actual ?? null,
-    necesidad_fondos_ant: null,
-    fuente: 'manual',
+    meses: _fOrig?.meses || [],
+    necesidad_fondos:     necValor,
+    necesidad_fondos_ant: _fOrig?.necesidad_fondos_ant ?? null,
+    fuente: _fOrig?.fuente || 'manual',
   });
   if (msg) { msg.textContent = '✓ Guardado'; msg.style.color='var(--pos)';
     setTimeout(() => { if(msg) msg.textContent=''; }, 3000); }
+  // Cerrar el panel después de guardar en modo edición
+  const pmFin = document.getElementById('panel-flujo-manual');
+  if (pmFin && !pmFin.dataset.editandoClave) {
+    pmFin.style.display = 'none';
+  }
   limpiarFlujoManual();
 }
 
 function cerrarFlujoManual() {
   const pm = document.getElementById('panel-flujo-manual');
-  if (pm) {
-    pm.style.display = 'none';
-    delete pm.dataset.editandoClave;
+  // Si hay una edición en curso con cambios en el grid, guardar antes de cerrar
+  if (pm && pm.dataset.editandoClave) {
+    const grid = document.getElementById('fm-rubros-grid');
+    if (grid && grid.querySelectorAll('input[data-key]').length > 0) {
+      guardarFlujoManual();
+      return; // guardarFlujoManual llama limpiarFlujoManual que no cierra — cerramos acá
+    }
   }
+  if (pm) { pm.style.display = 'none'; delete pm.dataset.editandoClave; }
   const msg = document.getElementById('flujo-msg');
   if (msg) msg.textContent = '';
 }
