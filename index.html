@@ -4328,10 +4328,16 @@ self.onmessage = async (e) => {
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="Inflación acumulada entre ambos períodos. Se usa fórmula Fisher para calcular la variación real de cada rubro. También muestra el equivalente del período anterior a precios actuales.">Inflación acum. % <span style="color:var(--y21)">ℹ</span></label>
+          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="Inflación acumulada entre el período anterior y el actual. Permite calcular la variación real (Fisher) y el equivalente del período anterior a precios actuales.">IPC acumulado % <span style="color:var(--y21)">ℹ</span></label>
           <input id="comp-flujo-ipc" type="number" step="0.1" placeholder="auto"
-            style="width:80px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
+            style="width:75px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:4px;outline:none">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:8px;color:var(--y21);font-family:var(--mono)" title="Inflación esperada para el próximo período. Se aplica sobre los valores actuales para proyectar la necesidad de fondos del siguiente período.">IPC proyectado % <span style="color:var(--y21)">↗</span></label>
+          <input id="comp-flujo-ipc-proy" type="number" step="0.1" placeholder="ej: 15"
+            style="width:75px;padding:5px 9px;background:var(--s2);border:1px solid #e8c84a44;
+            color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:4px;outline:none">
         </div>
       </div>
       <!-- Botones siempre visibles -->
@@ -10296,8 +10302,10 @@ function remapearFlujo(clave) {
 function buildComparacionFlujos() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
-  // IPC: manual > auto-calculado entre períodos (INDEC) > guardado en flujo A
+  // IPC acumulado entre períodos: manual > INDEC auto > guardado en flujo A
   const ipcInput = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
+  // IPC proyectado para el siguiente período (ingresado manualmente)
+  const ipcProy  = parseFloat(document.getElementById('comp-flujo-ipc-proy')?.value || '0') || 0;
   const fA_prev  = DATA.flujos[claveA];
   const fB_prev  = DATA.flujos[claveB];
   const ipcAuto  = (fA_prev && fB_prev) ? _ipcAcumEntrePeriodos(fA_prev.periodo, fB_prev.periodo) : null;
@@ -10362,11 +10370,17 @@ function buildComparacionFlujos() {
     alertaGapEl.style.cssText = 'margin:6px 0 10px';
     wrap.insertBefore(alertaGapEl, wrap.firstChild);
   }
-  // No advertir si es comparación año anterior (mismo período, año anterior)
-  // ni si los períodos son consecutivos (gap=0)
+  // No advertir si es comparación anual (distancia entre inicios ≈ 12 meses)
+  // Usar distancia absoluta en meses para evitar falsos positivos por nombres distintos
   const pA2 = _parsePeriodoFlujo(fA.periodo), pB2 = _parsePeriodoFlujo(fB.periodo);
-  const esAnioAnterior = pA2 && pB2 && pA2.tipo === pB2.tipo && pA2.num === pB2.num && Math.abs(pA2.anio - pB2.anio) === 1;
-  if (gapMeses != null && gapMeses > 0 && !esAnioAnterior) {
+  const _absInicio = p => {
+    if (!p) return null;
+    const m = p.tipo==='cuat'?(p.num-1)*4+1 : p.tipo==='trim'?(p.num-1)*3+1 : p.num;
+    return p.anio * 12 + m;
+  };
+  const distanciaAbsInicio = (pA2 && pB2) ? Math.abs(_absInicio(pA2) - _absInicio(pB2)) : null;
+  const esComparacionAnual = distanciaAbsInicio != null && distanciaAbsInicio >= 10 && distanciaAbsInicio <= 14;
+  if (gapMeses != null && gapMeses > 0 && !esComparacionAnual) {
     alertaGapEl.innerHTML = `
       <div style="background:#1a0f2a;border:1px solid #7c3aed;border-radius:4px;padding:7px 12px;
         font-size:8.5pt;font-family:var(--mono);color:#c4b5fd">
@@ -10382,7 +10396,7 @@ function buildComparacionFlujos() {
   document.getElementById('flujo-comp-titulo').textContent =
     `${fA.empresa} — ${fA.periodo} vs ${fB.periodo}`;
   document.getElementById('flujo-comp-sub').textContent =
-    `${fA.tipo} · IPC ${ipc}%`;
+    `${fA.tipo} · IPC acum. ${ipc}%${ipcProy ? '  ·  IPC proy. ' + ipcProy + '%' : ''}`;
   // Mostrar botón reporte comparativo, ocultar individual
   const _btnInd  = document.getElementById('btn-rpt-flujo-ind');
   const _btnComp = document.getElementById('btn-rpt-flujo-comp');
@@ -10422,12 +10436,14 @@ function buildComparacionFlujos() {
     { l:'Var. real (−IPC)',     v:fmtP(varReal),                                                 c:colVar(varReal) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
-    ...(ipc&&necB ? [{ l:`Necesidad ant. + IPC`, v:fmtM(necB*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del período anterior en pesos actuales' }] : []),
-  ].map(k => `<div style="padding:${k.big?'10px 18px':'8px 14px'};background:var(--s2);
-    border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':'110px'};
-    ${k.big?'border-left:3px solid var(--neg)':''}">
-    <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">${k.l}</div>
-    <div style="font-size:${k.big?'16px':'14px'};font-weight:700;color:${k.c};font-family:var(--mono)">${k.v}</div>
+    ...(ipc&&necB ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(necB*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del período anterior en pesos actuales' }] : []),
+    ...(ipcProy&&necA ? [{ l:`Proyección siguiente período`, v:fmtM(necA*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el período actual` }] : []),
+  ].map(k => `<div style="padding:${k.big||k.big2?'10px 18px':'8px 14px'};background:var(--s2);
+    border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':k.big2?'200px':'110px'};
+    ${k.big?'border-left:3px solid var(--neg)':k.big2?'border-left:3px solid var(--y21)':''}"
+    ${k.title?`title="${k.title}"`:''}">
+    <div style="font-size:8px;color:${k.big2?'var(--y21)':'var(--dim)'};font-family:var(--mono);margin-bottom:4px">${k.l}</div>
+    <div style="font-size:${k.big?'16px':k.big2?'15px':'14px'};font-weight:700;color:${k.c};font-family:var(--mono)">${k.v}</div>
   </div>`).join('') +
   (() => {
     // Bloque comparativo costo laboral
@@ -10486,9 +10502,10 @@ function buildComparacionFlujos() {
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Rubro</th>
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${fA.periodo}</th>
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">${fB.periodo}</th>
-    ${ipc?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Valor de ${fB.periodo} actualizado por IPC ${ipc}%">${fB.periodo} + IPC</th>`:''}
+    ${ipc?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Valor de ${fB.periodo} actualizado por IPC ${ipc}%">${fB.periodo} +IPC</th>`:''}
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Var. nominal</th>
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:#e8c84a;font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Variación real usando fórmula Fisher: (1+nom)/(1+ipc)−1">Var. real</th>
+    ${ipcProy?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Proyección del período siguiente aplicando IPC ${ipcProy}% sobre el período actual">Proyec. +${ipcProy}%</th>`:''}
   </tr></thead><tbody>` +
   allKeys.map(k => {
     const rA = labelsA.get(k);
@@ -10514,6 +10531,7 @@ function buildComparacionFlujos() {
       ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtMEq(vBEq)}</td>`:''}
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${fmtP(vn)}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${fmtP(vr)}</td>
+      ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd2)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
     </tr>`;
   }).join('') + '</tbody>';
 
