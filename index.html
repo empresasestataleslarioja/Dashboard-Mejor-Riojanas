@@ -4367,7 +4367,14 @@ self.onmessage = async (e) => {
           color:var(--text);font-family:var(--mono)">Flujo</span>
         <span id="flujo-comp-sub" style="font-size:10px;color:var(--dim);
           font-family:var(--mono)"></span>
-        <div style="margin-left:auto;display:flex;gap:6px">
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <button onclick="document.getElementById('flujo-comp-wrap').style.display='none'"
+            title="Cerrar panel"
+            style="padding:4px 9px;background:none;border:1px solid var(--bd2);
+            color:var(--dim);font-family:var(--mono);font-size:11px;border-radius:3px;
+            cursor:pointer;line-height:1"
+            onmouseover="this.style.borderColor='var(--neg)';this.style.color='var(--neg)'"
+            onmouseout="this.style.borderColor='var(--bd2)';this.style.color='var(--dim)'">✕</button>
           <button id="btn-rpt-flujo-ind" onclick="_rptFlujoIndividual()"
             style="display:none;padding:4px 11px;background:rgba(71,232,255,.08);
             border:1px solid #47e8ff55;color:var(--acc);font-family:var(--mono);
