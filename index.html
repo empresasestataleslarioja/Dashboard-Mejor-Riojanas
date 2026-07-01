@@ -9328,7 +9328,9 @@ function parsearFlujoExcel(wb, XLSX) {
     const v = getV(r, c);
     if (typeof v === 'number') return true;
     if (typeof v === 'string' && v.trim()) {
-      const cleaned = v.trim().replace(/^-/, '').replace(/\./g,'').replace(',','.');
+      let s = v.trim().replace(/^\$\s*/, '').replace(/\s/g, '');
+      if (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1);
+      const cleaned = s.replace(/^-/, '').replace(/\./g,'').replace(',','.');
       return cleaned !== '' && !isNaN(parseFloat(cleaned));
     }
     return false;
@@ -9338,8 +9340,11 @@ function parsearFlujoExcel(wb, XLSX) {
     const v = getV(r, c);
     if (typeof v === 'number') return v;
     if (typeof v === 'string' && v.trim()) {
-      const n = parseFloat(v.trim().replace(/\./g,'').replace(',','.'));
-      return isNaN(n) ? null : n;
+      let s = v.trim().replace(/^\$\s*/, '').replace(/\s/g, '');
+      const neg = s.startsWith('(') && s.endsWith(')');
+      if (neg) s = s.slice(1, -1);
+      const n = parseFloat(s.replace(/\./g,'').replace(',','.'));
+      return isNaN(n) ? null : (neg ? -n : n);
     }
     return null;
   };
@@ -9937,11 +9942,6 @@ function guardarFlujoManual() {
     return { ...r, actual, anterior, var_pct, porMes: {} };
   }).filter(r => r.actual !== null || r.anterior !== null);
 
-  if (!rubros.length) {
-    if (msg) { msg.textContent = '⚠ Ingresá al menos un valor.'; msg.style.color='var(--neg)'; }
-    return;
-  }
-
   // Si estamos editando un flujo existente, eliminar el original
   const pm = document.getElementById('panel-flujo-manual');
   const claveEditando = pm?.dataset?.editandoClave;
@@ -9979,6 +9979,11 @@ function guardarFlujoManual() {
       );
     }).filter(r => r.actual !== null || r.anterior !== null);
     rubrosFinales = rubrosFinales.length ? rubrosFinales : rubros;
+  }
+
+  if (!rubrosFinales.length) {
+    if (msg) { msg.textContent = '⚠ Ingresá al menos un valor.'; msg.style.color='var(--neg)'; }
+    return;
   }
 
   const nec = rubrosFinales.find(r => r.key === 'necesidad_fondos');
@@ -10287,14 +10292,24 @@ function _flujoNecesidad(f) {
   // 3. Superávit/Déficit/Resultado o tipo resultado
   const rDef = (f.rubros||[]).find(r => (r.key === 'sup_def' || r.tipo === 'resultado') && r.actual != null);
   if (rDef) return Math.abs(rDef.actual);
-  // 4. Cualquier rubro cuyo label contenga DEFICIT, SUPERAVIT, RESULTADO, FONDOS
+  // 4. Cualquier rubro cuyo label contenga palabras clave de necesidad/resultado
   const rLbl = (f.rubros||[]).find(r => {
     const u = (r.label||'').toUpperCase();
-    return r.actual != null && (u.includes('DÉFICIT') || u.includes('DEFICIT') ||
+    return r.actual != null && (
+      u.includes('DÉFICIT') || u.includes('DEFICIT') ||
       u.includes('SUPERÁVIT') || u.includes('SUPERAVIT') ||
-      u.includes('RESULTADO') || (u.includes('FONDOS') && u.includes('SOLICITA')));
+      u.includes('RESULTADO') ||
+      u.includes('NECESIDAD') ||
+      u.includes('REQUERIMIENTO') ||
+      u.includes('FONDOS')
+    );
   });
   if (rLbl) return Math.abs(rLbl.actual);
+  // 5. Último rubro esTotal del flujo como último recurso
+  const rubros = f.rubros || [];
+  for (let i = rubros.length - 1; i >= 0; i--) {
+    if (rubros[i].esTotal && rubros[i].actual != null) return Math.abs(rubros[i].actual);
+  }
   return null;
 }
 
