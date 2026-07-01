@@ -9259,13 +9259,20 @@ function _claveFlujo(empresa, periodo, tipo) {
 
 // ── PARSER de Excel FLUJO X MES ─────────────────────────────────
 function parsearFlujoExcel(wb, XLSX) {
-  // Acepta: FLUJO X MES (RIODECO), FLUJO (EMSE), Hoja1 (Aguas Riojanas), etc.
-  const findSheet = (...kws) => wb.SheetNames.find(sn =>
-    kws.some(kw => sn.toLowerCase().replace(/\s+/g,'').includes(kw))
-  ) || wb.SheetNames[0]; // fallback: primera hoja
+  const MESES_NOMBRES = ['enero','febrero','marzo','abril','mayo','junio',
+                         'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const _snNorm = sn => sn.toLowerCase().replace(/\s+/g,'').replace(/[áéíóú]/g, c =>
+    ({á:'a',é:'e',í:'i',ó:'o',ú:'u'}[c]||c));
+  // Busca por keywords explícitos; si no, busca hoja cuyo nombre contenga un mes; si no, primera hoja
+  const findSheet = (...kws) => {
+    const byKw = wb.SheetNames.find(sn => kws.some(kw => _snNorm(sn).includes(kw)));
+    if (byKw) return byKw;
+    const byMes = wb.SheetNames.find(sn => MESES_NOMBRES.some(m => _snNorm(sn).includes(m)));
+    if (byMes) return byMes;
+    return wb.SheetNames[0];
+  };
 
-  const snFlujo = findSheet('flujoxmes','flujo x mes','flujofondos',
-                             'flujo de fondos','flujo','hoja1','resumen','sheet1');
+  const snFlujo = findSheet('flujoxmes','flujofondos','flujodefondo','flujo','hoja1','resumen','sheet1','proyecc','proyec');
   if (!snFlujo) return null;
 
   const ws  = wb.Sheets[snFlujo];
@@ -9311,7 +9318,7 @@ function parsearFlujoExcel(wb, XLSX) {
     for (let c = 0; c <= Math.min(14, rng.e.c); c++) {
       if (normHeader(str(r, c))) n++;
     }
-    if (n >= 2) { resumenRow = r; break; }
+    if (n >= 1) { resumenRow = r; break; }
     // También aceptar sección RESUMEN de RIODECO
     if (str(r, 1).toUpperCase() === 'RESUMEN') { resumenRow = r; break; }
   }
