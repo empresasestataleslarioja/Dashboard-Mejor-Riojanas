@@ -9596,7 +9596,9 @@ function parsearFlujoExcel(wb, XLSX) {
     // Detectar si es fila totalizadora (TOTAL, SUBTOTAL en el label)
     const esResultadoLbl = (lUP.includes('SUPER') && (lUP.includes('DÉF') || lUP.includes('DEF'))) ||
       lUP.includes('SUPERÁVIT') || lUP.includes('SUPERAVIT') ||
-      lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD');
+      lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD') ||
+      lUP.includes('RESULTADO') || lUP.includes('DÉFICIT') || lUP.includes('DEFICIT') ||
+      (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO')));
     const esTotalizador = /^(TOTAL|SUBTOTAL|SUB-TOTAL|SUB TOTAL)/i.test(lbl) ||
       (lUP.includes('TOTAL') && (lUP.includes('ING') || lUP.includes('EGR')));
     const esTotal = esTotalizador || esResultadoLbl;
@@ -10117,17 +10119,9 @@ function _guardarFlujoData(data) {
     }
   }
 
-  // FIX 2: completar necesidad_fondos_ant desde flujo anterior si no viene explícito
-  let necAnt = necesidad_fondos_ant;
-  if (necAnt == null) {
-    const prevFlujos = Object.values(DATA.flujos || {})
-      .filter(f => f.empresa === empresa && f.clave !== clave)
-      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    if (prevFlujos.length > 0) {
-      const nec = _flujoNecesidad(prevFlujos[0]);
-      if (nec != null) necAnt = nec;
-    }
-  }
+  // necesidad_fondos_ant: solo usar si viene explícito del archivo (columna "Anterior" en Excel)
+  // No auto-poblar desde otros flujos — evita mostrar datos de períodos no relacionados
+  const necAnt = necesidad_fondos_ant ?? null;
 
   DATA.flujos[clave] = {
     clave, empresa, periodo, tipo, ipc,
@@ -10529,8 +10523,13 @@ function buildVistaIndividualFlujo(claveOverride) {
 
   const sinDesglose = mesesData.length === 0 && meses.length > 0;
   // Convención de signos: egresos y total egresos se muestran en negativo
+  // resultado: preserva el signo original del archivo (déficit = negativo, superávit = positivo)
   const _sgn = r => (r.tipo === 'egreso' || r.tipo === 'total') ? -1 : 1;
-  const _fmtSgn = (r, v) => v == null ? null : fmt(_sgn(r) * Math.abs(v));
+  const _fmtSgn = (r, v) => {
+    if (v == null) return null;
+    if (r.tipo === 'resultado') return fmt(v); // sin modificar el signo
+    return fmt(_sgn(r) * Math.abs(v));
+  };
   const fmt2 = (r, m) => {
     if (r.porMes?.[m] != null) return _fmtSgn(r, r.porMes[m]);
     if (sinDesglose && meses.length === 1 && r.actual != null) return _fmtSgn(r, r.actual);
