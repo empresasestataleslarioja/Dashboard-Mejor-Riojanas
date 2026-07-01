@@ -10251,10 +10251,11 @@ function _renderListaFlujos() {
     const tipoTag = f.tipo === 'proyectado'
       ? `<span style="color:var(--acc);font-size:8px">PROY</span>`
       : `<span style="color:#ff8c47;font-size:8px">REAL</span>`;
-    return `<tr>
+    return `<tr ondblclick="_verFlujoIndividual('${f.clave}')" title="Doble clic para ver flujo individual"
+      style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.04)'" onmouseout="this.style.background=''">
       <td style="font-weight:600">${f.empresa}</td>
       <td style="font-family:var(--mono)">${f.periodo}
-        <button onclick="_editarPeriodoFlujo('${f.clave}')" title="Editar período"
+        <button onclick="event.stopPropagation();_editarPeriodoFlujo('${f.clave}')" title="Editar período"
           style="padding:1px 4px;background:none;border:1px solid var(--dim);
           color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
       </td>
@@ -10266,18 +10267,30 @@ function _renderListaFlujos() {
       </td>
       <td style="font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
       <td>
-        <button onclick="editarFlujo('${f.clave}')" title="Editar importes"
+        <button onclick="event.stopPropagation();_verFlujoIndividual('${f.clave}')" title="Ver flujo individual"
+          style="padding:2px 6px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
+          color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">📋</button>
+        <button onclick="event.stopPropagation();editarFlujo('${f.clave}')" title="Editar importes"
           style="padding:2px 6px;background:none;border:1px solid #47e8ff;
           color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">✏</button>
-        <button onclick="remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
+        <button onclick="event.stopPropagation();remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
           style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
           color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">⇄</button>
-        <button onclick="_eliminarFlujo('${f.clave}')" title="Eliminar"
+        <button onclick="event.stopPropagation();_eliminarFlujo('${f.clave}')" title="Eliminar"
           style="padding:2px 6px;background:none;border:1px solid var(--neg);
           color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
       </td>
     </tr>`;
   }).join('') + '</tbody>';
+}
+
+function _verFlujoIndividual(clave) {
+  const sel = document.getElementById('sel-flujo-a');
+  if (sel) { sel.value = clave; sel.dispatchEvent(new Event('change')); }
+  buildVistaIndividualFlujo(clave);
+  setTimeout(() => {
+    document.getElementById('flujo-comp-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 80);
 }
 
 function _editarPeriodoFlujo(clave) {
@@ -10414,9 +10427,12 @@ function _flujoLaboral(f) {
 }
 
 
-function buildVistaIndividualFlujo() {
-  const claveA = document.getElementById('sel-flujo-a')?.value;
+function buildVistaIndividualFlujo(claveOverride) {
+  const claveA = claveOverride || document.getElementById('sel-flujo-a')?.value;
   if (!claveA) { alert('Seleccioná un período en "Período actual".'); return; }
+  // Sincronizar el selector si vino desde la lista
+  const selA = document.getElementById('sel-flujo-a');
+  if (selA && claveOverride && selA.value !== claveOverride) selA.value = claveOverride;
   const f = DATA.flujos[claveA];
   if (!f) return;
 
@@ -10499,11 +10515,13 @@ function buildVistaIndividualFlujo() {
     return { bg:'',bt:'',fw:'400',c:'var(--text)',indent:niv===1?20:0 };
   };
 
-  const sinDesglose = mesesData.length === 0 && meses.length > 0; // meses inferidos, sin datos reales por mes
+  const sinDesglose = mesesData.length === 0 && meses.length > 0;
+  // Convención de signos: egresos y total egresos se muestran en negativo
+  const _sgn = r => (r.tipo === 'egreso' || r.tipo === 'total') ? -1 : 1;
+  const _fmtSgn = (r, v) => v == null ? null : fmt(_sgn(r) * Math.abs(v));
   const fmt2 = (r, m) => {
-    if (r.porMes?.[m] != null) return fmt(r.porMes[m]);
-    // Si no hay desglose pero hay total y es un período de 1 mes, mostrar el total
-    if (sinDesglose && meses.length === 1 && r.actual != null) return fmt(r.actual);
+    if (r.porMes?.[m] != null) return _fmtSgn(r, r.porMes[m]);
+    if (sinDesglose && meses.length === 1 && r.actual != null) return _fmtSgn(r, r.actual);
     return '<span style="color:var(--bd2)">—</span>';
   };
 
@@ -10513,8 +10531,8 @@ function buildVistaIndividualFlujo() {
     ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
     ${meses.length !== 1 ? `<th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>` : ''}
   </tr></thead><tbody>` +
-  (sinDesglose ? `<tr><td colspan="${meses.length+2}" style="padding:5px 12px;font-size:8px;color:var(--dim);font-family:var(--mono);font-style:italic">
-    * Sin desglose mensual en el archivo — se muestra el total del período
+  (sinDesglose ? `<tr><td colspan="${meses.length+2}" style="padding:5px 12px;font-size:8px;color:#ff8c47;font-family:var(--mono);font-style:italic">
+    ⚠ Sin desglose mensual disponible — recargá el archivo Excel original para ver datos por mes
   </td></tr>` : '') +
   f.rubros.map(r => {
     const st = _est(r);
@@ -10522,7 +10540,7 @@ function buildVistaIndividualFlujo() {
     return `<tr style="background:${st.bg};${st.bt}">
       <td style="${ind};padding-top:5px;padding-bottom:5px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}</td>
       ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${fmt2(r,m)}</td>`).join('')}
-      ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>` : ''}
+      ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, r.actual) ?? '—'}</td>` : ''}
     </tr>`;
   }).join('') + '</tbody>';
 }
