@@ -10124,13 +10124,14 @@ function _flujoEgrTotal(f) {
 
 function _flujoLaboral(f) {
   if (!f) return null;
-  const r = f.rubros.find(r2 => {
+  const matches = (f.rubros || []).filter(r2 => {
+    if (r2.esTotal) return false;
     const u = (r2.label || '').toUpperCase();
-    return u.includes('SUELDO') || u.includes('PERSONAL') ||
-           u.includes('GASTO') && u.includes('PERSONAL') ||
-           u.includes('REMUNER') || u.includes('SALARIO');
+    return u.includes('SUELDO') || u.includes('SALARIO') || u.includes('REMUNER') ||
+           u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB');
   });
-  return r?.actual ?? null;
+  if (!matches.length) return null;
+  return matches.reduce((s, r2) => s + (r2.actual ?? 0), 0);
 }
 
 
