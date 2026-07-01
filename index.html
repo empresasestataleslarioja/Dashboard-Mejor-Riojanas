@@ -10338,7 +10338,7 @@ function buildVistaIndividualFlujo() {
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Fondos solicitados',       v:fmt(necA),   c:'var(--neg)', big:true },
-    { l:'Total ingresos',           v:fmt(ingA),   c:'#2ecc8a' },
+    { l:'Total ingresos',           v:fmt(ingA),   c:'#1a9e68' },
     { l:'Total egresos',            v:fmt(egrA),   c:'var(--neg)' },
     { l:'Cobertura ing / egresos',  v:covA,        c:'var(--text)' },
     ...(covLabA ? [{ l:'Cobertura ing / costo laboral', v:covLabA, c:'#e8c84a' }] : []),
@@ -10363,8 +10363,8 @@ function buildVistaIndividualFlujo() {
     const niv = r.nivel ?? (esT ? 0 : 1);
     if (r.tipo === 'resultado')                     return { bg:'rgba(232,255,71,.08)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)',indent:0 };
     if (r.tipo === 'total')                         return { bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)',indent:0 };
-    if (r.tipo === 'ingreso' && esT)                return { bg:'rgba(71,255,180,.09)',bt:'border-top:2px solid #2ecc8a',fw:'700',c:'#47ffb4',indent:0 };
-    if (r.tipo === 'ingreso')                       return { bg:'rgba(71,255,180,.02)',bt:'',fw:'400',c:'#c3fff0',indent:niv===1?20:0 };
+    if (r.tipo === 'ingreso' && esT)                return { bg:'rgba(71,255,180,.09)',bt:'border-top:2px solid #1a9e68',fw:'700',c:'#1a9e68',indent:0 };
+    if (r.tipo === 'ingreso')                       return { bg:'rgba(71,255,180,.02)',bt:'',fw:'400',c:'#2ecc8a',indent:niv===1?20:0 };
     if (esT)                                        return { bg:'rgba(100,100,80,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff',indent:0 };
     return { bg:'',bt:'',fw:'400',c:'var(--text)',indent:niv===1?20:0 };
   };
@@ -10708,8 +10708,8 @@ function buildComparacionFlujos() {
   const tbl = document.getElementById('tbl-flujos');
   const _estComp = (lbl, tipo) => {
     const lUP = (lbl||'').toUpperCase();
-    if (tipo==='ingreso'&&lUP.includes('TOTAL')) return {bg:'rgba(71,255,180,.08)',bt:'border-top:2px solid #2ecc8a',fw:'700',c:'#47ffb4'};
-    if (tipo==='ingreso') return {bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#47ffb4'};
+    if (tipo==='ingreso'&&lUP.includes('TOTAL')) return {bg:'rgba(71,255,180,.08)',bt:'border-top:2px solid #1a9e68',fw:'700',c:'#1a9e68'};
+    if (tipo==='ingreso') return {bg:'rgba(71,255,180,.03)',bt:'',fw:'400',c:'#2ecc8a'};
     if (tipo==='total'||lUP.includes('TOTAL EGRES')) return {bg:'rgba(255,71,102,.08)',bt:'border-top:2px solid var(--neg)',fw:'700',c:'var(--neg)'};
     if (tipo==='resultado'||lUP.includes('FONDOS')||lUP.includes('SUBTOTAL')||lUP.includes('DÉF')) return {bg:'rgba(232,255,71,.07)',bt:'border-top:2px solid var(--y21)',fw:'700',c:'var(--y21)'};
     if (lUP.includes('TOTAL')) return {bg:'rgba(100,100,80,.06)',bt:'border-top:1px solid #47e8ff44',fw:'600',c:'#47e8ff'};
