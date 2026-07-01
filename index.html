@@ -4355,12 +4355,28 @@ self.onmessage = async (e) => {
     <div id="flujo-comp-wrap" style="display:none">
 
       <!-- Encabezado del resultado -->
-      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px;
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;
         padding:0 2px;flex-wrap:wrap">
         <span id="flujo-comp-titulo" style="font-size:15px;font-weight:700;
           color:var(--text);font-family:var(--mono)">Flujo</span>
         <span id="flujo-comp-sub" style="font-size:10px;color:var(--dim);
           font-family:var(--mono)"></span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button id="btn-rpt-flujo-ind" onclick="_rptFlujoIndividual()"
+            style="display:none;padding:4px 11px;background:rgba(71,232,255,.08);
+            border:1px solid #47e8ff55;color:var(--acc);font-family:var(--mono);
+            font-size:8.5px;border-radius:3px;cursor:pointer"
+            title="Reporte imprimible del flujo individual">
+            🖨 Reporte individual
+          </button>
+          <button id="btn-rpt-flujo-comp" onclick="generarInformeFlujo()"
+            style="display:none;padding:4px 11px;background:rgba(21,101,192,.12);
+            border:1px solid #185fa5;color:#47b4ff;font-family:var(--mono);
+            font-size:8.5px;border-radius:3px;cursor:pointer"
+            title="Reporte imprimible del análisis comparativo">
+            🖨 Reporte comparativo
+          </button>
+        </div>
       </div>
 
       <!-- KPIs -->
@@ -10123,6 +10139,11 @@ function buildVistaIndividualFlujo() {
   document.getElementById('flujo-comp-titulo').textContent = f.empresa + ' · ' + f.periodo;
   document.getElementById('flujo-comp-sub').textContent =
     (f.tipo || '').toUpperCase() + (f.ipc ? '  ·  IPC ' + f.ipc + '%' : '');
+  // Mostrar botón reporte individual, ocultar comparativo
+  const btnInd  = document.getElementById('btn-rpt-flujo-ind');
+  const btnComp = document.getElementById('btn-rpt-flujo-comp');
+  if (btnInd)  btnInd.style.display  = '';
+  if (btnComp) btnComp.style.display = 'none';
 
   const fmt = v => v == null ? '—' :
     (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
@@ -10362,6 +10383,11 @@ function buildComparacionFlujos() {
     `${fA.empresa} — ${fA.periodo} vs ${fB.periodo}`;
   document.getElementById('flujo-comp-sub').textContent =
     `${fA.tipo} · IPC ${ipc}%`;
+  // Mostrar botón reporte comparativo, ocultar individual
+  const _btnInd  = document.getElementById('btn-rpt-flujo-ind');
+  const _btnComp = document.getElementById('btn-rpt-flujo-comp');
+  if (_btnInd)  _btnInd.style.display  = 'none';
+  if (_btnComp) _btnComp.style.display = '';
 
   // Combinar rubros de ambos períodos
   const labelsA = new Map(fA.rubros.map(r => [r.key, r]));
@@ -11060,6 +11086,164 @@ function exportarFlujoExcel() {
   overlay.appendChild(iframe);
   document.body.appendChild(overlay);
 
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+}
+
+// ── REPORTE IMPRIMIBLE FLUJO INDIVIDUAL ──────────────────────────
+function _rptFlujoIndividual() {
+  const claveA = document.getElementById('sel-flujo-a')?.value;
+  if (!claveA) { alert('Seleccioná un período primero.'); return; }
+  const f = DATA.flujos[claveA];
+  if (!f) return;
+
+  const hoy = new Date();
+  const fecha = hoy.toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+
+  const C = v => v==null?'—':(v<0?'($ ':' $ ')+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
+  const meses = (f.meses && f.meses.length)
+    ? f.meses
+    : [...new Set(f.rubros.flatMap(r => Object.keys(r.porMes || {})))];
+
+  const necA = _flujoNecesidad(f);
+  const ingA = _flujoIngTotal(f);
+  const egrA = _flujoEgrTotal(f);
+  const labA = _flujoLaboral(f);
+  const covA = (ingA && egrA) ? (ingA / Math.abs(egrA) * 100) : null;
+
+  // colores por tipo de rubro
+  const _rowStyle = r => {
+    if (r.tipo === 'resultado')            return { bg:'#fff3cd', fw:'700', c:'#7a5900', bt:'2px solid #e8c84a' };
+    if (r.tipo === 'total')                return { bg:'#fce8e6', fw:'700', c:'#c00',    bt:'2px solid #d93025' };
+    if (r.tipo === 'ingreso' && r.esTotal) return { bg:'#e8f5e9', fw:'700', c:'#1a7a45', bt:'2px solid #1a9e68' };
+    if (r.tipo === 'ingreso')              return { bg:'#f6fffb', fw:'400', c:'#1a5c33', bt:'none' };
+    if (r.esTotal)                         return { bg:'#f0f4ff', fw:'600', c:'#1a3a8f', bt:'1px solid #c5cfe8' };
+    return { bg:'#fff', fw:'400', c:'#222', bt:'none' };
+  };
+
+  const mesHeaders = meses.map(m => `<th style="padding:5px 8px;text-align:right;font-size:8px;color:#555;background:#f0f4ff;border:1px solid #ddd">${m}</th>`).join('');
+  const filas = f.rubros.map(r => {
+    const s = _rowStyle(r);
+    const indent = (!r.esTotal && r.nivel === 1) ? 'padding-left:20px' : '';
+    const mesCells = meses.map(m =>
+      `<td style="padding:4px 8px;text-align:right;font-size:8.5px;border:1px solid #eee;color:${s.c};font-weight:${s.fw}">${r.porMes?.[m] != null ? C(r.porMes[m]) : '—'}</td>`
+    ).join('');
+    return `<tr style="background:${s.bg};border-top:${s.bt}">
+      <td style="padding:5px 10px;${indent};font-size:9px;font-weight:${s.fw};color:${s.c};border:1px solid #eee">${r.label}</td>
+      ${mesCells}
+      <td style="padding:5px 10px;text-align:right;font-size:9px;font-weight:700;color:${s.c};border:1px solid #ddd;background:#f8f8f8">${C(r.actual)}</td>
+    </tr>`;
+  }).join('');
+
+  const semColor = covA == null ? '#888' : covA >= 90 ? '#1a9e68' : covA >= 70 ? '#b36a00' : '#d93025';
+  const semText  = covA == null ? '—' : covA >= 90 ? 'Cobertura adecuada' : covA >= 70 ? 'Cobertura parcial' : 'Cobertura insuficiente';
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Flujo de Fondos — ${f.empresa} ${f.periodo}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#eef0f5;color:#222}
+  .page{max-width:960px;margin:0 auto;padding:24px;background:#fff}
+  .header{background:#1a3a8f;color:#fff;padding:20px 24px;border-radius:4px;margin-bottom:18px}
+  .header h1{font-size:18px;font-family:monospace;margin-bottom:4px}
+  .header .sub{font-size:10px;opacity:.75;font-family:monospace;letter-spacing:.08em}
+  .header .period{margin-top:10px;display:inline-block;background:rgba(255,255,255,.18);
+    padding:4px 12px;border-radius:3px;font-size:11px;font-family:monospace}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{padding:10px 14px;border:1px solid #e0e0e0;border-radius:4px;border-top:3px solid #ccc}
+  .kpi .lbl{font-size:7.5px;color:#777;font-family:monospace;letter-spacing:.08em;margin-bottom:4px;text-transform:uppercase}
+  .kpi .val{font-size:14px;font-weight:700;font-family:monospace}
+  table{width:100%;border-collapse:collapse}
+  .sec{font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:#555;
+    font-family:monospace;margin:14px 0 6px;font-weight:600;border-bottom:1px solid #ddd;padding-bottom:4px}
+  .footer{margin-top:18px;padding-top:10px;border-top:1px solid #ddd;
+    display:flex;justify-content:space-between;font-size:7.5px;color:#999;font-family:monospace}
+  @media print{body{background:#fff}.page{padding:10px}
+    .header{-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#fff !important}}
+</style></head><body><div class="page">
+  <div class="header">
+    <div style="font-size:8px;opacity:.6;font-family:monospace;letter-spacing:.1em;margin-bottom:8px">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
+    <h1>${f.empresa}</h1>
+    <div class="sub">FLUJO DE FONDOS · ${(f.tipo||'').toUpperCase()}</div>
+    <div class="period">${f.periodo}${f.ipc?' · IPC '+f.ipc+'%':''}</div>
+    <div style="float:right;margin-top:-30px;font-size:9px;opacity:.6;font-family:monospace">${fecha}</div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi" style="border-top-color:#d93025;grid-column:span 2">
+      <div class="lbl">Fondos solicitados</div>
+      <div class="val" style="color:#d93025;font-size:18px">${C(necA)}</div>
+    </div>
+    <div class="kpi" style="border-top-color:#1a9e68">
+      <div class="lbl">Total ingresos</div>
+      <div class="val" style="color:#1a9e68">${C(ingA)}</div>
+    </div>
+    <div class="kpi" style="border-top-color:#d93025">
+      <div class="lbl">Total egresos</div>
+      <div class="val" style="color:#d93025">${C(egrA)}</div>
+    </div>
+    <div class="kpi" style="border-top-color:${semColor}">
+      <div class="lbl">Cobertura ing/egr</div>
+      <div class="val" style="color:${semColor}">${covA != null ? covA.toFixed(1)+'%' : '—'}</div>
+      <div style="font-size:7.5px;color:${semColor};margin-top:2px;font-family:monospace">${semText}</div>
+    </div>
+    ${labA ? `<div class="kpi" style="border-top-color:#e8c84a">
+      <div class="lbl">Costo laboral</div>
+      <div class="val" style="color:#7a5900">${C(labA)}</div>
+      ${egrA ? `<div style="font-size:7.5px;color:#888;margin-top:2px;font-family:monospace">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>` : ''}
+    </div>` : ''}
+  </div>
+
+  <div class="sec">Detalle de rubros</div>
+  <table>
+    <thead><tr style="background:#1a3a8f">
+      <th style="padding:6px 10px;text-align:left;font-size:8px;color:#fff;border:1px solid #1a3a8f">Concepto</th>
+      ${mesHeaders}
+      <th style="padding:6px 10px;text-align:right;font-size:8px;color:#fff;border:1px solid #1a3a8f;background:#0d2566">TOTAL</th>
+    </tr></thead>
+    <tbody>${filas}</tbody>
+  </table>
+
+  <div class="footer">
+    <span>Dashboard Empresas Estatales · Provincia de La Rioja</span>
+    <span>SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span>
+    <span>${fecha}</span>
+  </div>
+</div>
+<div style="position:fixed;bottom:20px;right:20px;z-index:9999" class="no-print">
+  <button onclick="window.print()" style="padding:10px 22px;background:linear-gradient(135deg,#0d1b4b,#1a3a8f);color:#fff;border:none;border-radius:6px;font-family:monospace;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 14px rgba(21,101,192,.45)">🖨 Imprimir</button>
+</div>
+<style>@media print{.no-print{display:none!important}}</style>
+</body></html>`;
+
+  let overlay = document.getElementById('_flujo_rpt_ind_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_flujo_rpt_ind_overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;flex-direction:column;background:#1a1f2e';
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0';
+  bar.innerHTML = `<span style="color:#aaa;font-size:9pt;font-family:monospace;flex:1">Flujo individual — ${f.empresa} · ${f.periodo}</span>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'flex:1;border:none;width:100%;background:#eef0f5';
+
+  const btnP = document.createElement('button');
+  btnP.textContent = '🖨 Imprimir';
+  btnP.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
+  btnP.onclick = () => iframe.contentWindow.print();
+  const btnC = document.createElement('button');
+  btnC.textContent = '✕ Cerrar';
+  btnC.style.cssText = 'padding:6px 14px;background:#333;color:#aaa;border:1px solid #555;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace';
+  btnC.onclick = () => overlay.remove();
+
+  bar.appendChild(btnP);
+  bar.appendChild(btnC);
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  document.body.appendChild(overlay);
   iframe.contentDocument.open();
   iframe.contentDocument.write(html);
   iframe.contentDocument.close();
