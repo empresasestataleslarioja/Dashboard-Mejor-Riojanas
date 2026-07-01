@@ -10341,7 +10341,11 @@ function buildComparacionFlujos() {
     alertaGapEl.style.cssText = 'margin:6px 0 10px';
     wrap.insertBefore(alertaGapEl, wrap.firstChild);
   }
-  if (gapMeses != null && gapMeses > durEsperada) {
+  // No advertir si es comparación año anterior (mismo período, año anterior)
+  // ni si los períodos son consecutivos (gap=0)
+  const pA2 = _parsePeriodoFlujo(fA.periodo), pB2 = _parsePeriodoFlujo(fB.periodo);
+  const esAnioAnterior = pA2 && pB2 && pA2.tipo === pB2.tipo && pA2.num === pB2.num && Math.abs(pA2.anio - pB2.anio) === 1;
+  if (gapMeses != null && gapMeses > 0 && !esAnioAnterior) {
     alertaGapEl.innerHTML = `
       <div style="background:#1a0f2a;border:1px solid #7c3aed;border-radius:4px;padding:7px 12px;
         font-size:8.5pt;font-family:var(--mono);color:#c4b5fd">
