@@ -9923,14 +9923,9 @@ function guardarFlujoManual() {
     if (msg) { msg.textContent = '⚠ Empresa y período son obligatorios.'; msg.style.color='var(--neg)'; }
     return;
   }
-  // Validar formato de período: año de 4 dígitos, opcionalmente seguido de -QN o -MM
-  if (!/^\d{4}(-Q[1-4]|-\d{2})?$/.test(periodo)) {
-    if (msg) { msg.textContent = '⚠ Período inválido. Usá formato: 2024, 2024-Q1, o 2024-06.'; msg.style.color='var(--neg)'; }
-    return;
-  }
-  const anio = parseInt(periodo.slice(0,4));
-  if (anio < 2010 || anio > 2050) {
-    if (msg) { msg.textContent = '⚠ Año fuera de rango (2010-2050).'; msg.style.color='var(--neg)'; }
+  // Validación mínima de período — solo requerir que no esté vacío (admite cualquier formato libre)
+  if (periodo.trim().length < 2) {
+    if (msg) { msg.textContent = '⚠ Período inválido — ingresá un valor reconocible.'; msg.style.color='var(--neg)'; }
     return;
   }
   const rubros = FLUJO_RUBROS_STD.map(r => {
@@ -10282,16 +10277,23 @@ function _matchEmpresaFlujo(nombreEmpresa) {
 // ── Vista individual de flujo ────────────────────────────────────
 // ── Helpers para extraer valores clave de un flujo ────────────────
 function _flujoNecesidad(f) {
-  // FIX 11: necesidad_fondos ya se guarda como Math.abs(), no duplicar
   if (!f) return null;
-  // 1. campo necesidad_fondos explícito — ya es positivo (se guardó con Math.abs)
-  if (f.necesidad_fondos != null && f.necesidad_fondos > 0) return f.necesidad_fondos;
+  // 1. campo necesidad_fondos explícito
+  if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return Math.abs(f.necesidad_fondos);
   // 2. rubro con key necesidad_fondos
   const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null);
   if (rNec) return Math.abs(rNec.actual);
-  // 3. Superávit/Déficit o tipo resultado — valor absoluto
+  // 3. Superávit/Déficit/Resultado o tipo resultado
   const rDef = (f.rubros||[]).find(r => (r.key === 'sup_def' || r.tipo === 'resultado') && r.actual != null);
   if (rDef) return Math.abs(rDef.actual);
+  // 4. Cualquier rubro cuyo label contenga DEFICIT, SUPERAVIT, RESULTADO, FONDOS
+  const rLbl = (f.rubros||[]).find(r => {
+    const u = (r.label||'').toUpperCase();
+    return r.actual != null && (u.includes('DÉFICIT') || u.includes('DEFICIT') ||
+      u.includes('SUPERÁVIT') || u.includes('SUPERAVIT') ||
+      u.includes('RESULTADO') || (u.includes('FONDOS') && u.includes('SOLICITA')));
+  });
+  if (rLbl) return Math.abs(rLbl.actual);
   return null;
 }
 
