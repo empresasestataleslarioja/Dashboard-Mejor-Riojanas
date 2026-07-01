@@ -16424,6 +16424,7 @@ function transFiltered() {
   };
 
   const result = DATA.transferencias.filter(t => {
+    if (!t.beneficiario && !t.saf && !t.organismo && !t.importe) return false;
     // Filtros multi-selección
     if (_transFiltros.año && !_transFiltros.año.has(getVal(t, 'año')))           return false;
     if (_transFiltros.mes && !_transFiltros.mes.has(getVal(t, 'mes')))           return false;
@@ -29845,23 +29846,26 @@ async function syncSoloTransferencias() {
   const setMsg = (txt, col) => { if (ind) { ind.textContent = txt; ind.style.color = col || '#47e8ff'; } };
 
   try {
-    const transRows = (DATA.transferencias || []).map(t => ({
-      saf:          t.saf          || '',
-      organismo:    t.organismo    || '',
-      beneficiario: t.beneficiario || '',
-      empresa:      t.empresa      || '',
-      ff:           t.ff           || '',
-      cgto:         t.cgto         || '',
-      observacion:  t.observacion  || '',
-      mes:            t.mes             || '',
-      año:            t.año             || '',
-      importe:        t.importe         || 0,
-      categoria:      t.categoria       || 'Sin Clasificar',
-      semana:         t.semana          || '',
-      esMesCompleto:  t.esMesCompleto   ? 1 : '',
-      _archivo:       t._archivo        || '',
-      _hoja:          t._hoja           || '',
-    }));
+    const _transVacia = t => !t.beneficiario && !t.saf && !t.organismo && !(t.importe);
+    const transRows = (DATA.transferencias || [])
+      .filter(t => !_transVacia(t))
+      .map(t => ({
+        saf:          t.saf          || '',
+        organismo:    t.organismo    || '',
+        beneficiario: t.beneficiario || '',
+        empresa:      t.empresa      || '',
+        ff:           t.ff           || '',
+        cgto:         t.cgto         || '',
+        observacion:  t.observacion  || '',
+        mes:            t.mes             || '',
+        año:            t.año             || '',
+        importe:        t.importe         || 0,
+        categoria:      t.categoria       || 'Sin Clasificar',
+        semana:         t.semana          || '',
+        esMesCompleto:  t.esMesCompleto   ? 1 : '',
+        _archivo:       t._archivo        || '',
+        _hoja:          t._hoja           || '',
+      }));
 
     const total = transRows.length;
 
@@ -30580,8 +30584,9 @@ function buildCloudPayload() {
     return row;
   });
 
-  // transferencias — spread completo incluye _archivo y _hoja
-  const transRows = (DATA.transferencias || []).map(t => ({
+  // transferencias — spread completo incluye _archivo y _hoja; excluir filas vacías
+  const _transVacia = t => !t.beneficiario && !t.saf && !t.organismo && !(t.importe);
+  const transRows = (DATA.transferencias || []).filter(t => !_transVacia(t)).map(t => ({
     saf:          t.saf          || '',
     organismo:    t.organismo    || '',
     beneficiario: t.beneficiario || '',
@@ -30593,7 +30598,7 @@ function buildCloudPayload() {
     año:          t.año          || '',
     importe:      t.importe      || 0,
     categoria:    t.categoria    || 'Sin Clasificar',
-    _archivo:     t._archivo     || '',  // campo clave para identificar origen
+    _archivo:     t._archivo     || '',
     _hoja:        t._hoja        || '',
   }));
 
