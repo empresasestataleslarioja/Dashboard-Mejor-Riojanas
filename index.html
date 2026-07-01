@@ -9280,10 +9280,43 @@ function parsearFlujoExcel(wb, XLSX) {
 
   // get: valor numérico/string crudo
   const getV = (r, c) => ws[XLSX.utils.encode_cell({r, c})]?.v ?? null;
-  // str: limpia apóstrofes iniciales y trim
-  const str  = (r, c) => String(getV(r, c) ?? '').trim().replace(/^'+\s*/, '');
-  // isNum: verdadero si hay valor numérico en la celda
-  const isNum = (r, c) => typeof getV(r, c) === 'number';
+  // getCellRaw: devuelve el objeto celda completo
+  const getCell = (r, c) => ws[XLSX.utils.encode_cell({r, c})];
+  // str: si la celda es fecha Excel, devuelve nombre de mes; si no, string limpio
+  const str = (r, c) => {
+    const cell = getCell(r, c);
+    if (!cell) return '';
+    // Fecha Excel (tipo 'd' con cellDates:true, o número con formato de fecha)
+    if (cell.t === 'd' || (cell.t === 'n' && cell.z && cell.z.toLowerCase().includes('m'))) {
+      const d = cell.t === 'd' ? cell.v : new Date(Math.round((cell.v - 25569) * 86400 * 1000));
+      if (d instanceof Date && !isNaN(d)) {
+        const MESES_ES_ARR = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                              'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+        return MESES_ES_ARR[d.getMonth()] || '';
+      }
+    }
+    return String(cell.v ?? '').trim().replace(/^'+\s*/, '');
+  };
+  // isNum: verdadero si hay valor numérico (incluyendo strings numéricos con formato de miles)
+  const isNum = (r, c) => {
+    const v = getV(r, c);
+    if (typeof v === 'number') return true;
+    if (typeof v === 'string') {
+      const n = parseFloat(v.replace(/\./g,'').replace(',','.'));
+      return !isNaN(n) && v.trim() !== '';
+    }
+    return false;
+  };
+  // getNum: obtiene valor numérico incluso de strings formateados
+  const getNum = (r, c) => {
+    const v = getV(r, c);
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+      const n = parseFloat(v.replace(/\./g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
 
   const MESES_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
                     'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
@@ -9350,13 +9383,25 @@ function parsearFlujoExcel(wb, XLSX) {
     }
     if (fbColLbl < 0) return { rubros: [], _diag: true, _sheet: snFlujo, _filas: _diagRows.slice(0, 8) };
 
-    // Período desde nombre de hoja
-    const periodoFB = snFlujo;
-    // Empresa desde primeras filas de texto
+    // Período: intentar desde las primeras filas de texto; fallback al nombre de hoja
+    let periodoFB = snFlujo;
     let empresaFB = '';
-    for (let r = 0; r < Math.min(fbDataStart, 5); r++) {
-      const v = str(r, 0) || str(r, 1);
-      if (v && v.length > 1 && isNaN(v) && !v.match(/^\d/)) { empresaFB = v.trim(); break; }
+    for (let r = 0; r < Math.min(fbDataStart, 6); r++) {
+      for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
+        const v = str(r, c);
+        if (!v || v.length < 2) continue;
+        // Detectar si la celda contiene info de período (mes, cuatrimestre, año)
+        const vU = v.toUpperCase();
+        const tieneMes = MESES_ES.some(m => vU.includes(m));
+        const tieneAnio = /20\d\d/.test(v);
+        if ((tieneMes || vU.includes('CUAT') || vU.includes('TRIM')) && tieneAnio) {
+          periodoFB = v.trim();
+        }
+        if (!empresaFB && isNaN(v) && !v.match(/^\d/) && !tieneMes && !tieneAnio &&
+            !['FLUJO','INGRESO','EGRESO','BASE','CALCULO'].includes(vU.split(' ')[0])) {
+          empresaFB = v.trim();
+        }
+      }
     }
 
     const rubrosFB = [];
@@ -9368,7 +9413,7 @@ function parsearFlujoExcel(wb, XLSX) {
       if (lUP === 'INGRESOS' || lUP === 'CONCEPTO' || lUP === 'DETALLE') { _secFB = 'ingreso'; continue; }
       if (lUP === 'EGRESOS' || lUP === 'GASTOS') { _secFB = 'egreso'; continue; }
       if (!isNum(r, fbColVal)) continue;
-      const val = getV(r, fbColVal);
+      const val = getNum(r, fbColVal);
       const esResultadoLbl = lUP.includes('SUPERÁVIT') || lUP.includes('SUPERAVIT') ||
         lUP.includes('FONDOS') || lUP.includes('NECESIDAD') || lUP.includes('SOLICIT');
       const esTot = /^(TOTAL|SUBTOTAL|SUB)/i.test(lbl) ||
@@ -9479,12 +9524,12 @@ function parsearFlujoExcel(wb, XLSX) {
     // Saltar otras filas de sección
     if (lUP === 'RESUMEN' || lUP === 'DETALLE') continue;
     // Saltar filas sin valor en colTotal ni en meses
-    const valTotal = isNum(r, colTotal) ? getV(r, colTotal) : null;
+    const valTotal = getNum(r, colTotal);
     // Si no hay total, buscar suma de meses como fallback
     let valTotalCalc = valTotal;
     if (valTotalCalc === null && meses.length) {
       let suma = 0; let algunoNum = false;
-      meses.forEach(m => { const v = getV(r, colM[m]); if (typeof v==='number'){suma+=v;algunoNum=true;} });
+      meses.forEach(m => { const v = getNum(r, colM[m]); if (v!=null){suma+=v;algunoNum=true;} });
       if (algunoNum) valTotalCalc = suma;
     }
     if (valTotalCalc === null) continue;
@@ -9492,8 +9537,8 @@ function parsearFlujoExcel(wb, XLSX) {
     // Valores por mes
     const porMes = {};
     meses.forEach(m => {
-      const v = getV(r, colM[m]);
-      if (typeof v === 'number') porMes[m] = v;
+      const v = getNum(r, colM[m]);
+      if (v != null) porMes[m] = v;
     });
 
     // Detectar si es fila totalizadora (TOTAL, SUBTOTAL en el label)
