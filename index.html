@@ -10358,10 +10358,27 @@ function buildVistaIndividualFlujo() {
     <div style="font-size:${k.big?'16px':'13px'};font-weight:700;color:${k.c};font-family:var(--mono)">${k.v}</div>
   </div>`).join('');
 
-  // Meses del flujo
-  const meses = (f.meses && f.meses.length)
+  // Meses del flujo — inferir desde el período si no hay datos mensuales
+  const _inferirMeses = per => {
+    const s = (per || '').toLowerCase();
+    const TODOS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                   'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const anio = (s.match(/20(\d\d)/)||[])[1] || '';
+    // Cuatrimestre
+    const mC = s.match(/([1-3])[°º]?\s*(?:cuatrimestre|cuat|c\b)/);
+    if (mC) { const b=(parseInt(mC[1])-1)*4; return TODOS.slice(b,b+4).map(m=>m+(anio?` ${anio}`:'')); }
+    // Trimestre
+    const mT = s.match(/([1-4])[°º]?\s*(?:trimestre|trim|t\b)/);
+    if (mT) { const b=(parseInt(mT[1])-1)*3; return TODOS.slice(b,b+3).map(m=>m+(anio?` ${anio}`:'')); }
+    // Mes suelto
+    const mesNom = TODOS.find(m => s.includes(m.toLowerCase()));
+    if (mesNom) return [mesNom+(anio?` ${anio}`:'')];
+    return [];
+  };
+  const mesesData = (f.meses && f.meses.length)
     ? f.meses
     : [...new Set(f.rubros.flatMap(r => Object.keys(r.porMes || {})))];
+  const meses = mesesData.length ? mesesData : _inferirMeses(f.periodo);
 
   // Estilo por tipo y jerarquía
   const _est = (r) => {
@@ -10376,19 +10393,30 @@ function buildVistaIndividualFlujo() {
     return { bg:'',bt:'',fw:'400',c:'var(--text)',indent:niv===1?20:0 };
   };
 
+  const sinDesglose = mesesData.length === 0 && meses.length > 0; // meses inferidos, sin datos reales por mes
+  const fmt2 = (r, m) => {
+    if (r.porMes?.[m] != null) return fmt(r.porMes[m]);
+    // Si no hay desglose pero hay total y es un período de 1 mes, mostrar el total
+    if (sinDesglose && meses.length === 1 && r.actual != null) return fmt(r.actual);
+    return '<span style="color:var(--bd2)">—</span>';
+  };
+
   const tbl = document.getElementById('tbl-flujos');
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Concepto</th>
     ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
-    <th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>
+    ${meses.length !== 1 ? `<th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>` : ''}
   </tr></thead><tbody>` +
+  (sinDesglose ? `<tr><td colspan="${meses.length+2}" style="padding:5px 12px;font-size:8px;color:var(--dim);font-family:var(--mono);font-style:italic">
+    * Sin desglose mensual en el archivo — se muestra el total del período
+  </td></tr>` : '') +
   f.rubros.map(r => {
     const st = _est(r);
     const ind = st.indent ? `padding-left:${12+st.indent}px` : 'padding:6px 12px';
     return `<tr style="background:${st.bg};${st.bt}">
       <td style="${ind};padding-top:5px;padding-bottom:5px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}</td>
-      ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${r.porMes?.[m] != null ? fmt(r.porMes[m]) : '—'}</td>`).join('')}
-      <td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>
+      ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${fmt2(r,m)}</td>`).join('')}
+      ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${fmt(r.actual)}</td>` : ''}
     </tr>`;
   }).join('') + '</tbody>';
 }
