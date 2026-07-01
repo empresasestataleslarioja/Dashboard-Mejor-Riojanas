@@ -30496,19 +30496,20 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // Restaurar flujos de fondos desde Sheets
-
+  // Restaurar flujos de fondos desde Sheets — MERGE, nunca reemplazar
+  // Sheets es fuente de verdad: los registros publicados jamás se eliminan.
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
-    // Guardar los flujos locales más recientes antes de pisar con Sheets
-    const flujosPrevios = DATA.flujos || {};
-    DATA.flujos = {};
+    DATA.flujos = DATA.flujos || {};
+    // Guardar snapshot de lo que vino de Sheets para que buildCloudPayload
+    // pueda incluir flujos de Sheets que no estén cargados localmente
+    try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
       const tsCloud = parseInt(f.timestamp) || 0;
-      // Si hay una versión local más nueva (cargada manualmente o recién importada), conservarla
-      const tsLocal = parseInt(flujosPrevios[clave]?.timestamp) || 0;
-      if (tsLocal > tsCloud) { DATA.flujos[clave] = flujosPrevios[clave]; return; }
+      const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
+      // Conservar versión local si es más reciente
+      if (tsLocal > tsCloud) return;
       let rubros_parsed = [];
       try { rubros_parsed = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
       let meses_parsed = [];
@@ -30524,11 +30525,9 @@ function applyCloudData(cloud, opts) {
         timestamp:   tsCloud,
         cargadoEl:   f.cargado_el || '',
         fuente:      f.fuente     || 'sheets',
-        rubros:      rubros_parsed,
+        rubros:      rubros_parsed.map(r => ({ ...r, porMes: r.porMes || {} })),
       };
     });
-    // Actualizar snapshot con los flujos restaurados desde Sheets
-    // Usar saveDataToLocalCache para mantener todo consistente
     try { saveDataToLocalCache(); } catch(e) {}
   }
 
@@ -30861,9 +30860,29 @@ function buildCloudPayload() {
     }));
   });
 
-  // Flujos de fondos — deduplicar por clave empresa_periodo_tipo
+  // Flujos de fondos — merge local + snapshot de Sheets (preserva registros publicados)
+  const _sheetsSnap = (() => {
+    try { return JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]'); } catch(e) { return []; }
+  })();
+  // Base: todos los flujos locales actuales
+  const _flujosBase = { ...(DATA.flujos || {}) };
+  // Agregar flujos del snapshot de Sheets que no existen localmente (no eliminar publicados)
+  _sheetsSnap.forEach(f => {
+    if (!f.empresa || !f.periodo) return;
+    const k = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+    if (!_flujosBase[k]) {
+      // Flujo en Sheets pero no local — reconstruir estructura mínima para preservarlo
+      let rp = []; try { rp = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
+      let mp = []; try { mp = f.meses ? JSON.parse(f.meses) : []; } catch(e) {}
+      _flujosBase[k] = { clave:k, empresa:f.empresa, periodo:f.periodo, tipo:f.tipo||'proyectado',
+        ipc:parseFloat(f.ipc)||0, necesidad_fondos:parseFloat(f.necesidad_fondos)||null,
+        necesidad_fondos_ant:parseFloat(f.necesidad_fondos_ant)||null,
+        meses:mp, timestamp:parseInt(f.timestamp)||0,
+        cargadoEl:f.cargado_el||'', fuente:f.fuente||'sheets', rubros:rp };
+    }
+  });
   const flujosSeen = new Set();
-  const flujosRows = Object.values(DATA.flujos || {})
+  const flujosRows = Object.values(_flujosBase)
     .filter(f => { if (!f.empresa || !f.periodo) return false;
       const k = _claveFlujo(f.empresa, f.periodo, f.tipo);
       if (flujosSeen.has(k)) return false; flujosSeen.add(k); return true; })
@@ -30878,9 +30897,11 @@ function buildCloudPayload() {
       timestamp: f.timestamp || 0,
       cargado_el: f.cargadoEl || '',
       fuente:   f.fuente   || 'manual',
+      meses: JSON.stringify(f.meses || []),
       rubros_json: JSON.stringify((f.rubros || []).map(r => ({
-        key:r.key, label:r.label, tipo:r.tipo,
-        actual:r.actual, anterior:r.anterior, var_pct:r.var_pct
+        key:r.key, label:r.label, tipo:r.tipo, esTotal:r.esTotal, nivel:r.nivel,
+        actual:r.actual, anterior:r.anterior, var_pct:r.var_pct,
+        porMes: r.porMes || {}
       }))),
     }));
 
