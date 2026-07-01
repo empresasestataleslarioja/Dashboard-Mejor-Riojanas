@@ -9311,18 +9311,27 @@ function parsearFlujoExcel(wb, XLSX) {
     return null;
   };
 
-  // ── PASO 1: Detectar fila de header (tiene ≥2 períodos reconocibles) ──
+  // ── PASO 1: Detectar fila de header (tiene ≥1 período reconocible) ──
   let resumenRow = -1;
+  // Recolectar las primeras celdas de texto para diagnóstico
+  const _diagRows = [];
   for (let r = 0; r <= Math.min(rng.e.r, 70); r++) {
     let n = 0;
+    const rowTxts = [];
     for (let c = 0; c <= Math.min(14, rng.e.c); c++) {
-      if (normHeader(str(r, c))) n++;
+      const s = str(r, c);
+      if (s) rowTxts.push(s);
+      if (normHeader(s)) n++;
     }
+    if (rowTxts.length) _diagRows.push(rowTxts.join(' | '));
     if (n >= 1) { resumenRow = r; break; }
     // También aceptar sección RESUMEN de RIODECO
     if (str(r, 1).toUpperCase() === 'RESUMEN') { resumenRow = r; break; }
   }
-  if (resumenRow < 0) return null;
+  if (resumenRow < 0) {
+    // Retornar objeto con diagnóstico en lugar de null
+    return { rubros: [], _diag: true, _sheet: snFlujo, _filas: _diagRows.slice(0, 8) };
+  }
 
   // ── PASO 2: Detectar columnas desde el header ─────────────────────
   let colLabel  = -1; // columna de labels de rubros
@@ -9554,8 +9563,12 @@ function importarFlujoDrive() {
 
       var wb = _xlsxInst.read(ab, { type: 'array', cellFormula: true, cellDates: true });
       var parsed = parsearFlujoExcel(wb, _xlsxInst);
-      if (!parsed || !parsed.rubros.length)
-        throw new Error('No se pudo leer la estructura del flujo desde Drive. Hojas encontradas: ' + wb.SheetNames.join(', '));
+      if (!parsed || !parsed.rubros.length) {
+        const diag = parsed?._diag
+          ? `Hoja: "${parsed._sheet}". Primeras filas:\n${(parsed._filas||[]).join('\n')}`
+          : `Hojas: ${wb.SheetNames.join(', ')}`;
+        throw new Error('No se pudo leer la estructura del flujo desde Drive.\n' + diag);
+      }
 
       setMsg('✓ Archivo leído desde Drive: ' + (res.filename || fileId), 'var(--pos)');
       if (input) input.value = '';
@@ -9588,8 +9601,12 @@ function importarFlujoExcel(file) {
         if (!_xlsxInst) throw new Error('Librería Excel no disponible. Recargá la página e intentá de nuevo.');
         const wb  = _xlsxInst.read(e.target.result, { type:'array', cellFormula:true, cellDates:true });
         const res = parsearFlujoExcel(wb, _xlsxInst);
-        if (!res || !res.rubros.length)
-          throw new Error('No se pudo leer la estructura del flujo. Hojas encontradas: ' + wb.SheetNames.join(', '));
+        if (!res || !res.rubros.length) {
+          const diag = res?._diag
+            ? `Hoja: "${res._sheet}". Primeras filas:\n${(res._filas||[]).join('\n')}`
+            : `Hojas: ${wb.SheetNames.join(', ')}`;
+          throw new Error('No se pudo leer la estructura del flujo.\n' + diag);
+        }
 
         // Intentar aplicar perfil guardado para esta empresa
         const resConPerfil = _aplicarPerfilEmpresa(res);
