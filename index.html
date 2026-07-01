@@ -10127,8 +10127,7 @@ function _flujoLaboral(f) {
   const matches = (f.rubros || []).filter(r2 => {
     if (r2.esTotal) return false;
     const u = (r2.label || '').toUpperCase();
-    return u.includes('SUELDO') || u.includes('SALARIO') || u.includes('REMUNER') ||
-           u.includes('LIQUIDAC') ||
+    return (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') || u.includes('REMUNER') ||
            u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB');
   });
   if (!matches.length) return null;
