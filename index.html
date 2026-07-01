@@ -9263,16 +9263,21 @@ function parsearFlujoExcel(wb, XLSX) {
                          'julio','agosto','septiembre','octubre','noviembre','diciembre'];
   const _snNorm = sn => sn.toLowerCase().replace(/\s+/g,'').replace(/[áéíóú]/g, c =>
     ({á:'a',é:'e',í:'i',ó:'o',ú:'u'}[c]||c));
-  // Busca por keywords explícitos; si no, busca hoja cuyo nombre contenga un mes; si no, primera hoja
+  // Busca por keywords explícitos; si no, primera hoja; como último recurso hoja con nombre de mes
+  // (hoja-mes solo si el archivo tiene UNA sola hoja, para no confundir archivos multi-hoja)
   const findSheet = (...kws) => {
     const byKw = wb.SheetNames.find(sn => kws.some(kw => _snNorm(sn).includes(kw)));
     if (byKw) return byKw;
-    const byMes = wb.SheetNames.find(sn => MESES_NOMBRES.some(m => _snNorm(sn).includes(m)));
-    if (byMes) return byMes;
+    // Si hay solo una hoja, usarla directamente
+    if (wb.SheetNames.length === 1) return wb.SheetNames[0];
+    // En archivos multi-hoja, intentar la primera hoja que no sea de "apoyo" conocido
+    const SKIP_APOYOS = ['presentacion','locacion','personal','detalle','honorarios','contrato','corriente','permanente','temporal','requerimiento'];
+    const primera = wb.SheetNames.find(sn => !SKIP_APOYOS.some(sk => _snNorm(sn).includes(sk)));
+    if (primera) return primera;
     return wb.SheetNames[0];
   };
 
-  const snFlujo = findSheet('flujoxmes','flujofondos','flujodefondo','flujo','hoja1','resumen','sheet1','proyecc','proyec');
+  const snFlujo = findSheet('flujoxmes','flujofondos','flujodefondo','flujo','hoja','resumen','sheet','proyecc','proyec');
   if (!snFlujo) return null;
 
   const ws  = wb.Sheets[snFlujo];
@@ -9280,39 +9285,35 @@ function parsearFlujoExcel(wb, XLSX) {
 
   // get: valor numérico/string crudo
   const getV = (r, c) => ws[XLSX.utils.encode_cell({r, c})]?.v ?? null;
-  // getCellRaw: devuelve el objeto celda completo
   const getCell = (r, c) => ws[XLSX.utils.encode_cell({r, c})];
-  // str: si la celda es fecha Excel, devuelve nombre de mes; si no, string limpio
+  const MESES_ES_ARR = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
+                        'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  // str: devuelve texto limpio; si la celda es fecha Excel tipo 'd', devuelve nombre de mes
   const str = (r, c) => {
     const cell = getCell(r, c);
     if (!cell) return '';
-    // Fecha Excel (tipo 'd' con cellDates:true, o número con formato de fecha)
-    if (cell.t === 'd' || (cell.t === 'n' && cell.z && cell.z.toLowerCase().includes('m'))) {
-      const d = cell.t === 'd' ? cell.v : new Date(Math.round((cell.v - 25569) * 86400 * 1000));
-      if (d instanceof Date && !isNaN(d)) {
-        const MESES_ES_ARR = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
-                              'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-        return MESES_ES_ARR[d.getMonth()] || '';
-      }
+    // Solo convertir a mes si el tipo es explícitamente fecha (cellDates:true → t:'d')
+    if (cell.t === 'd' && cell.v instanceof Date && !isNaN(cell.v)) {
+      return MESES_ES_ARR[cell.v.getMonth()] || '';
     }
     return String(cell.v ?? '').trim().replace(/^'+\s*/, '');
   };
-  // isNum: verdadero si hay valor numérico (incluyendo strings numéricos con formato de miles)
+  // isNum: acepta número real o string con formato de miles ("1.234.567")
   const isNum = (r, c) => {
     const v = getV(r, c);
     if (typeof v === 'number') return true;
-    if (typeof v === 'string') {
-      const n = parseFloat(v.replace(/\./g,'').replace(',','.'));
-      return !isNaN(n) && v.trim() !== '';
+    if (typeof v === 'string' && v.trim()) {
+      const cleaned = v.trim().replace(/^-/, '').replace(/\./g,'').replace(',','.');
+      return cleaned !== '' && !isNaN(parseFloat(cleaned));
     }
     return false;
   };
-  // getNum: obtiene valor numérico incluso de strings formateados
+  // getNum: valor numérico incluso desde strings formateados con puntos de miles
   const getNum = (r, c) => {
     const v = getV(r, c);
     if (typeof v === 'number') return v;
-    if (typeof v === 'string') {
-      const n = parseFloat(v.replace(/\./g,'').replace(',','.'));
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.trim().replace(/\./g,'').replace(',','.'));
       return isNaN(n) ? null : n;
     }
     return null;
