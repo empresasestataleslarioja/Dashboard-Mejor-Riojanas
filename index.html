@@ -10158,15 +10158,18 @@ function buildVistaIndividualFlujo() {
   const necA = _flujoNecesidad(f);
   const ingA = _flujoIngTotal(f);
   const egrA = _flujoEgrTotal(f);
-  const covA = (ingA && egrA) ? (ingA / Math.abs(egrA) * 100).toFixed(1) + '%' : '—';
+  const labA_ind = _flujoLaboral(f);
+  const covA     = (ingA && egrA)   ? (ingA / Math.abs(egrA)   * 100).toFixed(1) + '%' : '—';
+  const covLabA  = (ingA && labA_ind) ? (ingA / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
 
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:'Fondos solicitados', v:fmt(necA),         c:'var(--neg)', big:true },
-    { l:'Total ingresos',     v:fmt(ingA),          c:'#2ecc8a' },
-    { l:'Total egresos',      v:fmt(egrA),          c:'var(--neg)' },
-    { l:'Cobertura ing/egr',  v:covA,               c:'var(--text)' },
-    { l:'IPC período',        v:f.ipc ? f.ipc + '%' : '—', c:'#47e8ff' },
-    { l:'Tipo',               v:f.tipo || '—',      c:'var(--dim)' },
+    { l:'Fondos solicitados',       v:fmt(necA),   c:'var(--neg)', big:true },
+    { l:'Total ingresos',           v:fmt(ingA),   c:'#2ecc8a' },
+    { l:'Total egresos',            v:fmt(egrA),   c:'var(--neg)' },
+    { l:'Cobertura ing / egresos',  v:covA,        c:'var(--text)' },
+    ...(covLabA ? [{ l:'Cobertura ing / costo laboral', v:covLabA, c:'#e8c84a' }] : []),
+    { l:'IPC período',              v:f.ipc ? f.ipc + '%' : '—', c:'#47e8ff' },
+    { l:'Tipo',                     v:f.tipo || '—', c:'var(--dim)' },
   ].map(k => `<div style="padding:${k.big?'10px 18px':'8px 14px'};
     background:var(--s2);border:1px solid var(--bd);border-radius:6px;min-width:${k.big?'160px':'110px'};
     ${k.big ? 'border-left:3px solid var(--neg)' : ''}">
@@ -10436,6 +10439,7 @@ function buildComparacionFlujos() {
     { l:'Var. real (−IPC)',     v:fmtP(varReal),                                                 c:colVar(varReal) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
+    ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(1)+'%', c:'#e8c84a', title:'Ingresos totales sobre costo laboral del período actual' }] : []),
     ...(ipc&&necB ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(necB*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del período anterior en pesos actuales' }] : []),
     ...(ipcProy&&necA ? [{ l:`Proyección siguiente período`, v:fmtM(necA*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el período actual` }] : []),
   ].map(k => `<div style="padding:${k.big||k.big2?'10px 18px':'8px 14px'};background:var(--s2);
@@ -10463,13 +10467,13 @@ function buildComparacionFlujos() {
           <div style="font-size:7px;color:var(--dim);margin-bottom:2px">${fA.periodo}</div>
           <div style="font-size:13px;font-weight:700;color:var(--neg)">${fmtM(labA)}</div>
           ${labPctEgrA!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrA.toFixed(1)}% de egresos</div>`:''}
-          <div style="font-size:8px;color:var(--dim);margin-top:1px">Cob. ingresos: ${cpA}</div>
+          <div style="font-size:8px;color:#e8c84a;margin-top:1px;font-weight:600">Cob. ing/lab: ${cpA}</div>
         </div>
         <div>
           <div style="font-size:7px;color:var(--dim);margin-bottom:2px">${fB.periodo}</div>
           <div style="font-size:13px;font-weight:700;color:var(--dim)">${fmtM(labB)}</div>
           ${labPctEgrB!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrB.toFixed(1)}% de egresos</div>`:''}
-          <div style="font-size:8px;color:var(--dim);margin-top:1px">Cob. ingresos: ${cpB}</div>
+          <div style="font-size:8px;color:var(--dim);margin-top:1px">Cob. ing/lab: ${cpB}</div>
         </div>
         <div style="padding-top:4px;border-top:1px solid var(--bd)">
           <div style="font-size:7px;color:var(--dim);margin-bottom:2px">Var. nominal</div>
@@ -10997,6 +11001,11 @@ function exportarFlujoExcel() {
       <div class="val" style="color:${covColor(covA)}">${covA!=null?covA.toFixed(1)+'%':'—'}</div>
       ${covB!=null?`<div class="note">ant: ${covB.toFixed(1)}%</div>`:''}
     </div>
+    ${(labCovA||labCovB)?`<div class="kpi-card" style="border-top-color:#e8c84a">
+      <div class="lbl">COB. ING / COSTO LABORAL</div>
+      <div class="val" style="color:#b36a00">${labCovA!=null?labCovA.toFixed(1)+'%':'—'}</div>
+      ${labCovB!=null?`<div class="note">ant: ${labCovB.toFixed(1)}%</div>`:''}
+    </div>`:''}
     <div class="kpi-card" style="border-top-color:#1a9e68">
       <div class="lbl">TOTAL INGRESOS</div>
       <div class="val" style="color:#1a9e68">${C(ingA)}</div>
@@ -11015,11 +11024,13 @@ function exportarFlujoExcel() {
         <div class="lbl">${fA.periodo}</div>
         <div class="val" style="color:#d93025">${C(labA)}</div>
         ${(egrA&&labA)?`<div class="sub">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>`:''}
+        ${labCovA!=null?`<div class="sub" style="color:#b36a00">Cob. ing/lab: ${labCovA.toFixed(1)}%</div>`:''}
       </div>
       <div class="lab-cell">
         <div class="lbl">${fB.periodo}</div>
         <div class="val" style="color:#888">${C(labB)}</div>
         ${(egrB&&labB)?`<div class="sub">${(Math.abs(labB)/Math.abs(egrB)*100).toFixed(1)}% de egresos</div>`:''}
+        ${labCovB!=null?`<div class="sub" style="color:#b36a00">Cob. ing/lab: ${labCovB.toFixed(1)}%</div>`:''}
       </div>
       <div class="lab-cell">
         <div class="lbl">VAR. NOMINAL</div>
@@ -11124,11 +11135,12 @@ function _rptFlujoIndividual() {
     ? f.meses
     : [...new Set(f.rubros.flatMap(r => Object.keys(r.porMes || {})))];
 
-  const necA = _flujoNecesidad(f);
-  const ingA = _flujoIngTotal(f);
-  const egrA = _flujoEgrTotal(f);
-  const labA = _flujoLaboral(f);
-  const covA = (ingA && egrA) ? (ingA / Math.abs(egrA) * 100) : null;
+  const necA    = _flujoNecesidad(f);
+  const ingA    = _flujoIngTotal(f);
+  const egrA    = _flujoEgrTotal(f);
+  const labA    = _flujoLaboral(f);
+  const covA    = (ingA && egrA) ? (ingA / Math.abs(egrA) * 100) : null;
+  const covLabA_rpt = (ingA && labA) ? (ingA / Math.abs(labA) * 100) : null;
 
   // colores por tipo de rubro
   const _rowStyle = r => {
@@ -11210,6 +11222,11 @@ function _rptFlujoIndividual() {
       <div class="lbl">Costo laboral</div>
       <div class="val" style="color:#7a5900">${C(labA)}</div>
       ${egrA ? `<div style="font-size:7.5px;color:#888;margin-top:2px;font-family:monospace">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>` : ''}
+    </div>` : ''}
+    ${covLabA_rpt ? `<div class="kpi" style="border-top-color:#e8c84a">
+      <div class="lbl">Cob. ing / costo laboral</div>
+      <div class="val" style="color:#7a5900">${covLabA_rpt.toFixed(1)}%</div>
+      <div style="font-size:7.5px;color:#888;margin-top:2px;font-family:monospace">${covLabA_rpt>=100?'Ingresos cubren costo laboral':'Ingresos no cubren costo laboral'}</div>
     </div>` : ''}
   </div>
 
