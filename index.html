@@ -9183,6 +9183,12 @@ function _aplicarMapeadoWizard() {
   var resMaped = Object.assign({}, res, { rubros: rubrosNuevos, necesidad_fondos: necFondos });
   delete resMaped._perfilAplicado;
 
+  // Si venimos de remapearFlujo, eliminar el flujo original antes de guardar el remapeado
+  if (res._claveOriginal) {
+    delete DATA.flujos[res._claveOriginal];
+    delete resMaped._claveOriginal;
+  }
+
   document.getElementById('panel-flujo-wizard').style.display = 'none';
   _confirmarImportFlujo(resMaped);
 }
@@ -9756,16 +9762,29 @@ function guardarFlujoManual() {
   const grid = document.getElementById('fm-rubros-grid');
   if (grid && grid.querySelectorAll('input[data-key]').length > 0) {
     const fOriginal = claveEditando ? DATA.flujos[claveEditando] : null;
+    const _DEC_TIPO = {
+      'ingreso':     { tipo:'ingreso',   esTotal:false, nivel:1 },
+      'ingreso|tot': { tipo:'ingreso',   esTotal:true,  nivel:0 },
+      'egreso':      { tipo:'egreso',    esTotal:false, nivel:1 },
+      'egreso|sub':  { tipo:'egreso',    esTotal:true,  nivel:0 },
+      'total':       { tipo:'total',     esTotal:true,  nivel:0 },
+      'resultado':   { tipo:'resultado', esTotal:true,  nivel:0 },
+    };
     rubrosFinales = Array.from(grid.querySelectorAll('input[data-key]')).map(inp => {
       const key = inp.dataset.key;
       const orig = fOriginal?.rubros.find(r => r.key === key);
-      return {
-        key, label: orig?.label || key, tipo: orig?.tipo || 'egreso',
-        actual: parseFloat(inp.value) || null,
-        anterior: orig?.anterior ?? null,  // FIX 4: preservar valor anterior si existe
-        var_pct: null, porMes: orig?.porMes || {}
-      };
-    }).filter(r => r.actual !== null || r.anterior !== null);  // FIX 4: mantener rubros con anterior aunque actual sea null
+      // Leer tipo editado desde el select hermano si existe
+      const selTipo = inp.closest('div')?.querySelector('select[data-tipo-key]');
+      const tipoVal = selTipo ? selTipo.value : null;
+      const tipoDec = tipoVal ? (_DEC_TIPO[tipoVal] || { tipo: tipoVal, esTotal: false, nivel: 1 }) : null;
+      return Object.assign(
+        { key, label: orig?.label || key, tipo: orig?.tipo || 'egreso',
+          esTotal: orig?.esTotal ?? false, nivel: orig?.nivel ?? 1,
+          actual: parseFloat(inp.value) || null,
+          anterior: orig?.anterior ?? null, var_pct: null, porMes: orig?.porMes || {} },
+        tipoDec || {}
+      );
+    }).filter(r => r.actual !== null || r.anterior !== null);
     rubrosFinales = rubrosFinales.length ? rubrosFinales : rubros;
   }
 
@@ -9981,10 +10000,13 @@ function _renderListaFlujos() {
       </td>
       <td style="font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
       <td>
-        <button onclick="editarFlujo('${f.clave}')"
+        <button onclick="editarFlujo('${f.clave}')" title="Editar importes"
           style="padding:2px 6px;background:none;border:1px solid #47e8ff;
           color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">✏</button>
-        <button onclick="_eliminarFlujo('${f.clave}')"
+        <button onclick="remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
+          style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
+          color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">⇄</button>
+        <button onclick="_eliminarFlujo('${f.clave}')" title="Eliminar"
           style="padding:2px 6px;background:none;border:1px solid var(--neg);
           color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
       </td>
@@ -10165,19 +10187,16 @@ function editarFlujo(clave) {
   const f = DATA.flujos[clave];
   if (!f) return;
 
-  // Abrir panel de carga manual pre-poblado con los datos del flujo
   const pm = document.getElementById('panel-flujo-manual');
   if (!pm) return;
   pm.style.display = '';
 
-  // Poblar empresa datalist
   const dl = document.getElementById('fm-empresa-list');
   if (dl) {
     const emps = [...new Set([...Object.keys(rubros || {}), ...Object.keys(DATA.fact || {})])].sort();
     dl.innerHTML = emps.map(e => `<option value="${e}">`).join('');
   }
 
-  // Pre-poblar campos
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('fm-empresa', f.empresa);
   set('fm-periodo', f.periodo);
@@ -10185,27 +10204,71 @@ function editarFlujo(clave) {
   const tipoEl = document.getElementById('fm-tipo');
   if (tipoEl) tipoEl.value = f.tipo || 'proyectado';
 
-  // Generar grilla de rubros con valores actuales
+  const TIPO_OPTS_EDIT = [
+    { val:'ingreso',     lbl:'Ingreso',             c:'#2ecc8a' },
+    { val:'ingreso|tot', lbl:'Total Ingresos',       c:'#47ffb4' },
+    { val:'egreso',      lbl:'Egreso',               c:'var(--text)' },
+    { val:'egreso|sub',  lbl:'Subtotal Egresos',     c:'#47e8ff' },
+    { val:'total',       lbl:'Total Egresos',        c:'var(--neg)' },
+    { val:'resultado',   lbl:'Resultado/Fondos',     c:'var(--y21)' },
+  ];
+  const _rubroToTipoValEdit = r => {
+    if (r.tipo === 'resultado')             return 'resultado';
+    if (r.tipo === 'ingreso' && r.esTotal)  return 'ingreso|tot';
+    if (r.tipo === 'ingreso')               return 'ingreso';
+    if (r.tipo === 'total')                 return 'total';
+    if (r.tipo === 'egreso' && r.esTotal)   return 'egreso|sub';
+    return 'egreso';
+  };
+
   const grid = document.getElementById('fm-rubros-grid');
   if (grid) {
-    grid.innerHTML = f.rubros.map(r => `
-      <div style="display:flex;flex-direction:column;gap:2px">
-        <label style="font-size:8px;color:var(--dim);font-family:var(--mono)">${r.label.substring(0,30)}</label>
-        <input data-key="${r.key}" type="number" step="1" value="${Math.round(r.actual || 0)}"
-          placeholder="Actual"
-          style="padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
-          color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">
-      </div>`).join('');
+    grid.innerHTML = f.rubros.map(r => {
+      const curTipo = _rubroToTipoValEdit(r);
+      const tipoColor = r.tipo==='ingreso'?'#2ecc8a':r.tipo==='total'?'var(--neg)':r.tipo==='resultado'?'var(--y21)':'#47e8ff44';
+      const selOpts = TIPO_OPTS_EDIT.map(o =>
+        `<option value="${o.val}"${o.val===curTipo?' selected':''}>${o.lbl}</option>`
+      ).join('');
+      return `<div style="display:flex;flex-direction:column;gap:2px;border-left:2px solid ${tipoColor};padding-left:6px">
+        <label style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px" title="${r.label}">${r.label}</label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input data-key="${r.key}" type="number" step="1" value="${r.actual != null ? Math.round(r.actual) : ''}"
+            placeholder="Importe"
+            style="width:100px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">
+          <select data-tipo-key="${r.key}"
+            style="flex:1;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px">
+            ${selOpts}
+          </select>
+        </div>
+      </div>`;
+    }).join('');
   }
 
-  // Marcar que estamos editando (para que guardarFlujoManual sepa eliminar el original)
   pm.dataset.editandoClave = clave;
-
-  // Scroll
   pm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   const msg = document.getElementById('flujo-msg');
   if (msg) { msg.textContent = `✏ Editando flujo: ${f.empresa} · ${f.periodo}`; msg.style.color = '#47e8ff'; }
+}
+
+// Reabre el wizard de mapeo para un flujo ya guardado, permitiendo corregir tipos
+function remapearFlujo(clave) {
+  const f = DATA.flujos[clave];
+  if (!f) return;
+  // Reconstruir objeto "res" en el formato que espera el wizard
+  const res = {
+    empresa:          f.empresa,
+    periodo:          f.periodo,
+    tipo:             f.tipo,
+    ipc:              f.ipc,
+    meses:            f.meses || [],
+    rubros:           f.rubros.map(r => Object.assign({}, r, { _tipoConfirmado: true })),
+    necesidad_fondos: f.necesidad_fondos,
+    _claveOriginal:   clave,   // para que _aplicarMapeadoWizard reemplace el flujo original
+  };
+  _mostrarWizardMapeado(res);
 }
 
 
