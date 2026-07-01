@@ -10128,6 +10128,7 @@ function _flujoLaboral(f) {
     if (r2.esTotal) return false;
     const u = (r2.label || '').toUpperCase();
     return u.includes('SUELDO') || u.includes('SALARIO') || u.includes('REMUNER') ||
+           u.includes('LIQUIDAC') ||
            u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB');
   });
   if (!matches.length) return null;
