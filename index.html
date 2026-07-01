@@ -10334,6 +10334,36 @@ function remapearFlujo(clave) {
 }
 
 
+// Devuelve la cantidad de meses que cubre un flujo
+function _mesesFlujo(f) {
+  if (!f) return 4;
+  // Preferir el conteo real de meses detectados en el Excel
+  if (f.meses && f.meses.length > 0) return f.meses.length;
+  // Inferir del string de período
+  const s = (f.periodo || '').toLowerCase();
+  if (s.match(/cuatrimestre|cuat|[1-3][°º]c[/-]/)) return 4;
+  if (s.match(/trimestre|trim|[1-4][°º]t[/-]/)) return 3;
+  if (s.match(/bimestre|bim/)) return 2;
+  if (s.match(/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/)) return 1;
+  if (s.match(/anual|año/)) return 12;
+  return 4; // default: cuatrimestre
+}
+
+// Devuelve copia del flujo con todos los valores 'actual' escalados a targetMeses
+function _normalizarFlujoMeses(f, targetMeses) {
+  const origen = _mesesFlujo(f);
+  if (origen === targetMeses) return f; // sin cambios
+  const factor = targetMeses / origen;
+  return Object.assign({}, f, {
+    _normFactor: factor,
+    _normOrigen: origen,
+    rubros: f.rubros.map(r => Object.assign({}, r, {
+      actual: r.actual != null ? r.actual * factor : null,
+    })),
+    necesidad_fondos: f.necesidad_fondos != null ? f.necesidad_fondos * factor : null,
+  });
+}
+
 function buildComparacionFlujos() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
@@ -10355,9 +10385,15 @@ function buildComparacionFlujos() {
   if (!claveA || !claveB) {
     alert('Seleccioná ambos períodos para comparar.'); return;
   }
-  const fA = DATA.flujos[claveA]; // actual
-  const fB = DATA.flujos[claveB]; // anterior
-  if (!fA || !fB) return;
+  const fA_raw = DATA.flujos[claveA]; // actual
+  const fB_raw = DATA.flujos[claveB]; // anterior
+  if (!fA_raw || !fB_raw) return;
+
+  // ── Normalizar a la misma cantidad de meses ───────────────────────
+  const mesA = _mesesFlujo(fA_raw), mesB = _mesesFlujo(fB_raw);
+  const targetMeses = Math.max(mesA, mesB); // usar el período más largo como base
+  const fA = _normalizarFlujoMeses(fA_raw, targetMeses);
+  const fB = _normalizarFlujoMeses(fB_raw, targetMeses);
 
   wrap.style.display = '';
 
@@ -10427,11 +10463,15 @@ function buildComparacionFlujos() {
     alertaGapEl.innerHTML = '';
   }
 
+  // Nota de normalización si los períodos tienen distinta duración
+  const notaNorm = (mesA !== mesB)
+    ? `  ·  normalizado a ${targetMeses} meses (${fA_raw.periodo}: ${mesA}m → ×${(targetMeses/mesA).toFixed(2)}, ${fB_raw.periodo}: ${mesB}m → ×${(targetMeses/mesB).toFixed(2)})`
+    : '';
   // Título
   document.getElementById('flujo-comp-titulo').textContent =
     `${fA.empresa} — ${fA.periodo} vs ${fB.periodo}`;
   document.getElementById('flujo-comp-sub').textContent =
-    `${fA.tipo} · IPC acum. ${ipc}%${ipcProy ? '  ·  IPC proy. ' + ipcProy + '%' : ''}`;
+    `${fA.tipo} · IPC acum. ${ipc}%${ipcProy ? '  ·  IPC proy. ' + ipcProy + '%' : ''}${notaNorm}`;
   // Mostrar botón reporte comparativo, ocultar individual
   const _btnInd  = document.getElementById('btn-rpt-flujo-ind');
   const _btnComp = document.getElementById('btn-rpt-flujo-comp');
