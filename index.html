@@ -9295,13 +9295,30 @@ function parsearFlujoExcel(wb, XLSX) {
   const getCell = (r, c) => ws[XLSX.utils.encode_cell({r, c})];
   const MESES_ES_ARR = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
                         'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-  // str: devuelve texto limpio; si la celda es fecha Excel tipo 'd', devuelve nombre de mes
+  // str: devuelve texto limpio; convierte fechas Excel a nombre de mes
+  const _excelSerialToMonth = n => {
+    // Excel serial: días desde 1900-01-00 (con bug de 1900 bisiesto)
+    if (n < 1 || n > 73050) return null; // fuera de rango 1900–2099
+    const d = new Date(Math.round((n - 25569) * 86400000));
+    return isNaN(d) ? null : MESES_ES_ARR[d.getMonth()] || null;
+  };
+  const _isDateFormat = fmt => {
+    if (!fmt) return false;
+    const f = fmt.toLowerCase();
+    // Formato de fecha si tiene d/m/y pero NO solo '#','0','.' (formato numérico puro)
+    return /[dmy]/.test(f) && !/^[#0,.% ]+$/.test(f);
+  };
   const str = (r, c) => {
     const cell = getCell(r, c);
     if (!cell) return '';
-    // Solo convertir a mes si el tipo es explícitamente fecha (cellDates:true → t:'d')
+    // Fecha explícita (cellDates:true → t:'d')
     if (cell.t === 'd' && cell.v instanceof Date && !isNaN(cell.v)) {
       return MESES_ES_ARR[cell.v.getMonth()] || '';
+    }
+    // Número con formato de fecha (t:'n', z tiene d/m/y)
+    if (cell.t === 'n' && typeof cell.v === 'number' && _isDateFormat(cell.z)) {
+      const mes = _excelSerialToMonth(cell.v);
+      if (mes) return mes;
     }
     return String(cell.v ?? '').trim().replace(/^'+\s*/, '');
   };
