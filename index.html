@@ -10313,25 +10313,25 @@ function _renderListaFlujos() {
     const active = _flujoListaSort.col === colKey;
     const arr = active ? (_flujoListaSort.dir === 1 ? ' ▲' : ' ▼') : '';
     return `<th onclick="_flujoSortBy('${colKey}')" title="Ordenar por ${label}"
-      style="cursor:pointer;user-select:none;white-space:nowrap;
+      style="cursor:pointer;user-select:none;white-space:nowrap;font-size:10px;
       ${active ? 'color:var(--acc)' : ''}${extra}">${label}${arr}</th>`;
   };
 
   // Filtros de tipo (sobre la tabla)
   const filtroTipo = `<div style="display:flex;gap:5px;margin-bottom:8px;align-items:center">
-    <span style="font-size:8px;color:var(--dim);font-family:var(--mono)">Tipo:</span>
+    <span style="font-size:9px;color:var(--dim);font-family:var(--mono)">Tipo:</span>
     ${['','proyectado','real'].map(t => {
       const label = t===''?'Todos':t==='proyectado'?'Proyectado':'Real';
       const active = _flujoListaTipoFiltro === t;
       return `<button onclick="_flujoFiltroTipo('${t}')"
-        style="padding:2px 8px;font-size:8px;font-family:var(--mono);border-radius:3px;
+        style="padding:3px 10px;font-size:9px;font-family:var(--mono);border-radius:3px;
         cursor:pointer;border:1px solid ${active?'var(--acc)':'var(--bd2)'};
         background:${active?'rgba(71,232,255,.12)':'none'};
         color:${active?'var(--acc)':'var(--dim)'}">${label}</button>`;
     }).join('')}
   </div>`;
 
-  // Agrupar por empresa — mejora 1
+  // Agrupar por empresa
   const porEmpresa = {};
   flujos.forEach(f => { (porEmpresa[f.empresa] = porEmpresa[f.empresa] || []).push(f); });
 
@@ -10339,14 +10339,14 @@ function _renderListaFlujos() {
     <tr>
       ${th('Empresa','empresa')}
       ${th('Período','periodo')}
-      <th>Tipo</th>
-      <th>Rubros</th>
-      ${th('Déficit/Necesidad actual','necesidad','text-align:right')}
-      <th style="text-align:right">Per. anterior</th>
-      ${th('Var. nominal','var','text-align:right')}
-      <th>IPC %</th>
-      <th>Cargado</th>
-      <th>Acciones</th>
+      <th style="font-size:10px">Tipo</th>
+      <th style="font-size:10px">Rubros</th>
+      ${th('Déficit / Necesidad actual','necesidad',';text-align:right')}
+      <th style="text-align:right;font-size:10px">Per. anterior</th>
+      ${th('Var. nominal','var',';text-align:right')}
+      <th style="font-size:10px">IPC %</th>
+      <th style="font-size:10px">Cargado</th>
+      <th style="font-size:10px">Acciones</th>
     </tr>
   </thead>`;
 
@@ -10355,12 +10355,11 @@ function _renderListaFlujos() {
   empNames.forEach(emp => {
     const fEmp = porEmpresa[emp];
     if (empNames.length > 1) {
-      // Encabezado de grupo empresa — mejora 1
       rows += `<tr style="background:var(--s3)">
-        <td colspan="10" style="padding:5px 12px;font-size:8.5px;font-weight:700;
+        <td colspan="10" style="padding:6px 14px;font-size:10px;font-weight:700;
           color:var(--acc);font-family:var(--mono);letter-spacing:.07em;
           border-top:2px solid rgba(71,232,255,.2)">
-          ${emp} <span style="font-weight:400;color:var(--dim)">(${fEmp.length} período${fEmp.length!==1?'s':''})</span>
+          ${emp} <span style="font-weight:400;color:var(--dim);font-size:9px">(${fEmp.length} período${fEmp.length!==1?'s':''})</span>
         </td>
       </tr>`;
     }
@@ -10370,66 +10369,74 @@ function _renderListaFlujos() {
         : null;
       const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
 
-      // mejora 2: badge de tipo de datos
+      // Badge tipo proyectado/real
       const tieneMes = f.meses && f.meses.length > 0;
       const tipoTag = f.tipo === 'proyectado'
-        ? `<span style="color:var(--acc);font-size:7.5px;font-family:var(--mono)">PROY</span>`
-        : `<span style="color:#ff8c47;font-size:7.5px;font-family:var(--mono)">REAL</span>`;
+        ? `<span style="color:var(--acc);font-size:9px;font-weight:700;font-family:var(--mono)">PROY</span>`
+        : `<span style="color:#ff8c47;font-size:9px;font-weight:700;font-family:var(--mono)">REAL</span>`;
       const mesBadge = tieneMes
-        ? `<span style="margin-left:4px;font-size:7px;color:#2ecc8a;font-family:var(--mono)">por mes</span>`
-        : `<span style="margin-left:4px;font-size:7px;color:var(--dim);font-family:var(--mono)">solo totales</span>`;
+        ? `<br><span style="font-size:8px;color:#2ecc8a;font-family:var(--mono)">por mes</span>`
+        : `<br><span style="font-size:8px;color:var(--dim);font-family:var(--mono)">solo totales</span>`;
 
-      // mejora 3: conteo de rubros
+      // Conteo de rubros
       const nRubros = (f.rubros || []).filter(r => r.actual != null).length;
       const rubrosBadge = nRubros > 0
-        ? `<span style="font-size:8px;color:var(--dim);font-family:var(--mono)">${nRubros} rubros</span>`
-        : `<span style="font-size:8px;color:var(--neg);font-family:var(--mono)">sin datos</span>`;
+        ? `<span style="font-size:9px;color:var(--dim);font-family:var(--mono)">${nRubros} rubros</span>`
+        : `<span style="font-size:9px;color:var(--neg);font-family:var(--mono);font-weight:700">sin datos</span>`;
 
-      // mejora 6: mini barra de variación
+      // Mini barra de variación
       const barraVar = varPct != null ? (() => {
         const pct = Math.min(Math.abs(varPct), 100);
         const col = varPct > 0 ? 'var(--neg)' : 'var(--pos)';
-        return `<div style="width:40px;height:4px;background:var(--bd2);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:4px">
+        return `<div style="width:44px;height:5px;background:var(--bd2);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:5px">
           <div style="width:${pct}%;height:100%;background:${col};border-radius:2px"></div>
         </div>`;
       })() : '';
 
-      // mejora 7: fecha de carga
+      // Fecha de carga
       const fechaCarga = f.cargadoEl
-        ? `<span style="font-size:7.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap">${f.cargadoEl}</span>`
-        : `<span style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">—</span>`;
+        ? `<span style="font-size:8.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap">${f.cargadoEl}</span>`
+        : `<span style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">—</span>`;
+
+      // Nombre empresa (solo si vista plana, no agrupada)
+      const empCell = empNames.length > 1 ? '' :
+        `<strong style="font-size:11px;color:var(--text)">${f.empresa}</strong>`;
 
       rows += `<tr ondblclick="_verFlujoIndividual('${f.clave}')" title="Doble clic para ver flujo individual"
-        style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.04)'" onmouseout="this.style.background=''">
-        <td style="font-weight:600;font-size:9.5px">${empNames.length > 1 ? '' : f.empresa}</td>
-        <td style="font-family:var(--mono);font-size:9.5px">
-          ${f.periodo}
+        style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.05)'" onmouseout="this.style.background=''">
+        <td style="padding:9px 12px">${empCell}</td>
+        <td style="font-family:var(--mono);padding:9px 12px">
+          <strong style="font-size:11px;color:var(--text)">${f.periodo}</strong>
           <button onclick="event.stopPropagation();_editarPeriodoFlujo('${f.clave}')" title="Editar período"
             style="padding:1px 4px;background:none;border:1px solid var(--dim);
-            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
+            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:5px;vertical-align:middle">✎</button>
         </td>
-        <td>${tipoTag}${mesBadge}</td>
-        <td>${rubrosBadge}</td>
-        <td style="font-family:var(--mono);font-size:9.5px;text-align:right">${fmt(f.necesidad_fondos)}</td>
-        <td style="font-family:var(--mono);font-size:9px;text-align:right;color:var(--dim)">${fmt(f.necesidad_fondos_ant)}</td>
-        <td style="font-family:var(--mono);font-size:9px;text-align:right;color:${varCol}">
-          ${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}${barraVar}
+        <td style="padding:9px 10px">${tipoTag}${mesBadge}</td>
+        <td style="padding:9px 10px">${rubrosBadge}</td>
+        <td style="font-family:var(--mono);text-align:right;padding:9px 12px">
+          <strong style="font-size:12px;color:var(--neg)">${fmt(f.necesidad_fondos)}</strong>
         </td>
-        <td style="font-family:var(--mono);font-size:9px">${f.ipc ? f.ipc+'%' : '—'}</td>
-        <td>${fechaCarga}</td>
-        <td style="white-space:nowrap">
+        <td style="font-family:var(--mono);font-size:10px;text-align:right;color:var(--dim);padding:9px 12px">
+          ${fmt(f.necesidad_fondos_ant)}
+        </td>
+        <td style="font-family:var(--mono);text-align:right;padding:9px 10px">
+          <strong style="font-size:11px;color:${varCol}">${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}</strong>${barraVar}
+        </td>
+        <td style="font-family:var(--mono);font-size:10px;padding:9px 10px">${f.ipc ? f.ipc+'%' : '—'}</td>
+        <td style="padding:9px 10px">${fechaCarga}</td>
+        <td style="white-space:nowrap;padding:9px 8px">
           <button onclick="event.stopPropagation();_verFlujoIndividual('${f.clave}')" title="Ver flujo individual"
-            style="padding:2px 6px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
-            color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">📋</button>
+            style="padding:3px 7px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
+            color:var(--acc);font-size:9px;border-radius:2px;cursor:pointer;margin-right:2px">📋</button>
           <button onclick="event.stopPropagation();editarFlujo('${f.clave}')" title="Editar importes"
-            style="padding:2px 6px;background:none;border:1px solid #47e8ff;
-            color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">✏</button>
+            style="padding:3px 7px;background:none;border:1px solid #47e8ff;
+            color:var(--acc);font-size:9px;border-radius:2px;cursor:pointer;margin-right:2px">✏</button>
           <button onclick="event.stopPropagation();remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
-            style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
-            color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">⇄</button>
+            style="padding:3px 7px;background:none;border:1px solid #c4b5fd;
+            color:#c4b5fd;font-size:9px;border-radius:2px;cursor:pointer;margin-right:2px">⇄</button>
           <button onclick="event.stopPropagation();_eliminarFlujo('${f.clave}')" title="Eliminar"
-            style="padding:2px 6px;background:none;border:1px solid var(--neg);
-            color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
+            style="padding:3px 7px;background:none;border:1px solid var(--neg);
+            color:var(--neg);font-size:9px;border-radius:2px;cursor:pointer">✕</button>
         </td>
       </tr>`;
     });
