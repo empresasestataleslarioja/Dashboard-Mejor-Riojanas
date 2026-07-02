@@ -10635,6 +10635,37 @@ function _diagLaboral(empresaStr) {
   });
 }
 
+// Diagnóstico completo de estructura de rubros de un flujo
+// Uso: _diagFlujo('CERAMICA') o _diagFlujo() para todos
+function _diagFlujo(empresaStr) {
+  const flujos = Object.values(DATA.flujos||{})
+    .filter(f => !empresaStr || f.empresa?.toUpperCase().includes(empresaStr.toUpperCase()));
+  if (!flujos.length) { console.warn('No se encontró empresa'); return; }
+  flujos.forEach(f => {
+    const ing  = (f.rubros||[]).filter(r => r.tipo==='ingreso' && !r.esTotal);
+    const egr  = (f.rubros||[]).filter(r => r.tipo==='egreso'  && !r.esTotal);
+    const tot  = (f.rubros||[]).filter(r => r.esTotal);
+    const res  = (f.rubros||[]).filter(r => r.tipo==='resultado');
+    const sumIng = ing.reduce((s,r) => s+(r.actual||0), 0);
+    const sumEgr = egr.reduce((s,r) => s+(r.actual||0), 0);
+    console.group(`📊 ${f.empresa} · ${f.periodo} · ${f.tipo}`);
+    console.log(`  necesidad_fondos: ${f.necesidad_fondos}  |  ant: ${f.necesidad_fondos_ant}`);
+    console.group('  INGRESOS (' + ing.length + ' rubros, suma=' + Math.round(sumIng) + ')');
+    ing.forEach(r => console.log(`    [${r.key}] ${r.label} → ${r.actual}`));
+    console.groupEnd();
+    console.group('  EGRESOS (' + egr.length + ' rubros, suma=' + Math.round(sumEgr) + ')');
+    egr.forEach(r => console.log(`    [${r.key}] ${r.label} → ${r.actual}`));
+    console.groupEnd();
+    console.group('  TOTALIZADORES (' + tot.length + ')');
+    tot.forEach(r => console.log(`    [tipo=${r.tipo}] ${r.label} → ${r.actual}`));
+    console.groupEnd();
+    console.group('  RESULTADO (' + res.length + ')');
+    res.forEach(r => console.log(`    [${r.key}] ${r.label} → ${r.actual}`));
+    console.groupEnd();
+    console.groupEnd();
+  });
+}
+
 // Recalcula necesidad_fondos_ant para todos los flujos existentes sin reimportar Excel
 function _recalcularPeriodosAnteriores() {
   let actualizados = 0;
