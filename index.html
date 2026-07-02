@@ -9583,6 +9583,20 @@ function parsearFlujoExcel(wb, XLSX) {
     if (lUP === 'EGRESOS')  { _seccion = 'egreso';  continue; }
     // Saltar otras filas de sección
     if (lUP === 'RESUMEN' || lUP === 'DETALLE') continue;
+    // Saltar filas sin valor en colTotal ni en meses — pero antes detectar headers de sección
+    {
+      const valTotalPre = getNum(r, colTotal);
+      let hasMesVal = false;
+      if (valTotalPre === null && meses.length) {
+        for (const m of meses) { if (getNum(r, colM[m]) != null) { hasMesVal = true; break; } }
+      }
+      if (valTotalPre === null && !hasMesVal) {
+        // Fila sin valor numérico — puede ser un header de sección
+        if (/INGRESO/.test(lUP)) _seccion = 'ingreso';
+        else if (/EGRESO|GASTO|EROG|COSTO/.test(lUP)) _seccion = 'egreso';
+        continue;
+      }
+    }
     // Saltar filas sin valor en colTotal ni en meses
     const valTotal = getNum(r, colTotal);
     // Si no hay total, buscar suma de meses como fallback
@@ -9606,6 +9620,7 @@ function parsearFlujoExcel(wb, XLSX) {
       lUP.includes('SUPERÁVIT') || lUP.includes('SUPERAVIT') ||
       lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD') ||
       lUP.includes('RESULTADO') || lUP.includes('DÉFICIT') || lUP.includes('DEFICIT') ||
+      lUP.includes('REQUERIM') ||
       (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO')));
     const esTotalizador = /^(TOTAL|SUBTOTAL|SUB-TOTAL|SUB TOTAL)/i.test(lbl) ||
       (lUP.includes('TOTAL') && (lUP.includes('ING') || lUP.includes('EGR')));
@@ -9638,6 +9653,15 @@ function parsearFlujoExcel(wb, XLSX) {
   }
 
   if (!rubros.length) return null;
+
+  // ── POST-PROC: corregir signo en resultado cuando egresos > ingresos ──
+  {
+    const sumIng = rubros.filter(r2=>r2.tipo==='ingreso'&&!r2.esTotal).reduce((s,r2)=>s+(r2.actual||0),0);
+    const sumEgr = rubros.filter(r2=>r2.tipo==='egreso'&&!r2.esTotal).reduce((s,r2)=>s+Math.abs(r2.actual||0),0);
+    if (sumEgr > sumIng) {
+      rubros.filter(r2=>r2.tipo==='resultado'&&r2.actual!=null&&r2.actual>0).forEach(r2=>{ r2.actual=-r2.actual; });
+    }
+  }
 
   // ── PASO 5: Calcular necesidad de fondos ──────────────────────────
   // FIX 3: detección más robusta respetando tipo semántico del rubro
