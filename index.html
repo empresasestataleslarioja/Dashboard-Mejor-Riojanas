@@ -4462,6 +4462,13 @@ self.onmessage = async (e) => {
       <div class="card-hd">
         <span class="card-hd-title">Flujos registrados</span>
         <span class="card-hd-unit" id="flujo-lista-lbl"></span>
+        <button onclick="_recalcularPeriodosAnteriores()" title="Actualizar columna 'Período anterior' en todos los flujos cargados sin reimportar Excel"
+          style="margin-left:auto;padding:3px 10px;background:none;border:1px solid var(--bd2);
+          color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:3px;cursor:pointer"
+          onmouseover="this.style.borderColor='var(--acc)';this.style.color='var(--acc)'"
+          onmouseout="this.style.borderColor='var(--bd2)';this.style.color='var(--dim)'">
+          ↻ Recalcular períodos anteriores
+        </button>
       </div>
       <div id="flujos-lista-filtros" style="padding:8px 14px 0"></div>
       <div style="overflow-x:auto">
@@ -10585,10 +10592,43 @@ function _flujoLaboral(f) {
     if (r2.esTotal) return false;
     const u = (r2.label || '').toUpperCase();
     return (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') || u.includes('REMUNER') ||
+           u.includes('SAC') || u.includes('AGUINALDO') ||
            u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB');
   });
   if (!matches.length) return null;
-  return matches.reduce((s, r2) => s + (r2.actual ?? 0), 0);
+  // Usar Math.abs: los egresos pueden estar almacenados como negativos según la fuente
+  return matches.reduce((s, r2) => s + Math.abs(r2.actual ?? 0), 0);
+}
+
+// Recalcula necesidad_fondos_ant para todos los flujos existentes sin reimportar Excel
+function _recalcularPeriodosAnteriores() {
+  let actualizados = 0;
+  Object.values(DATA.flujos || {}).forEach(f => {
+    if (!f.necesidad_fondos || !f.empresa || !f.periodo) return;
+    const thisP   = _parsePeriodoFlujoStr(f.periodo);
+    const thisAbs = thisP ? _absInicioPeriodo(thisP) : null;
+    if (thisAbs == null) return;
+    const candidatos = Object.values(DATA.flujos)
+      .filter(g => g.empresa === f.empresa && g.tipo === f.tipo && g.clave !== f.clave
+                   && g.necesidad_fondos != null)
+      .map(g => ({ nec: g.necesidad_fondos, abs: _absInicioPeriodo(_parsePeriodoFlujoStr(g.periodo)) }))
+      .filter(x => x.abs != null && x.abs < thisAbs)
+      .sort((a, b) => b.abs - a.abs);
+    if (!candidatos.length) return;
+    const nuevoAnt = candidatos[0].nec;
+    if (f.necesidad_fondos_ant !== nuevoAnt) {
+      f.necesidad_fondos_ant = nuevoAnt;
+      actualizados++;
+    }
+  });
+  if (actualizados > 0) {
+    saveDataToLocalCache();
+    try { syncToCloud('Recálculo períodos anteriores'); } catch(e) {}
+    _renderListaFlujos();
+    alert(`✓ Se actualizaron ${actualizados} flujo${actualizados!==1?'s':''} con su período anterior.`);
+  } else {
+    alert('No se encontraron cambios pendientes en períodos anteriores.');
+  }
 }
 
 
