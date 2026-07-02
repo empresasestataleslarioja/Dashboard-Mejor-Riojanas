@@ -4472,7 +4472,7 @@ self.onmessage = async (e) => {
       </div>
       <div id="flujos-lista-filtros" style="padding:8px 14px 0"></div>
       <div style="overflow-x:auto">
-        <table class="tbl" id="tbl-flujos-lista" style="font-size:9.5px;width:100%"></table>
+        <table class="tbl" id="tbl-flujos-lista" style="font-size:10.5px;width:100%"></table>
       </div>
     </div>
 
@@ -10306,14 +10306,20 @@ function _renderListaFlujos() {
     return;
   }
 
-  const fmt = v => v==null?'—':(v<0?'(':'')+'$'+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
+  // Retorna el valor con signo del resultado del flujo (necesidad_fondos se guarda abs)
+  const necSignada = f => {
+    const r = (f.rubros||[]).find(r2 => r2.tipo === 'resultado' && r2.actual != null);
+    return r != null ? r.actual : (f.necesidad_fondos != null ? -Math.abs(f.necesidad_fondos) : null);
+  };
+  const fmt = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
+  const fmtDim = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
 
   // Helper de encabezado con ordenamiento
   const th = (label, colKey, extra='') => {
     const active = _flujoListaSort.col === colKey;
     const arr = active ? (_flujoListaSort.dir === 1 ? ' ▲' : ' ▼') : '';
     return `<th onclick="_flujoSortBy('${colKey}')" title="Ordenar por ${label}"
-      style="cursor:pointer;user-select:none;white-space:nowrap;font-size:10px;
+      style="cursor:pointer;user-select:none;white-space:nowrap;
       ${active ? 'color:var(--acc)' : ''}${extra}">${label}${arr}</th>`;
   };
 
@@ -10324,7 +10330,7 @@ function _renderListaFlujos() {
       const label = t===''?'Todos':t==='proyectado'?'Proyectado':'Real';
       const active = _flujoListaTipoFiltro === t;
       return `<button onclick="_flujoFiltroTipo('${t}')"
-        style="padding:3px 10px;font-size:9px;font-family:var(--mono);border-radius:3px;
+        style="padding:2px 9px;font-size:8.5px;font-family:var(--mono);border-radius:3px;
         cursor:pointer;border:1px solid ${active?'var(--acc)':'var(--bd2)'};
         background:${active?'rgba(71,232,255,.12)':'none'};
         color:${active?'var(--acc)':'var(--dim)'}">${label}</button>`;
@@ -10339,14 +10345,14 @@ function _renderListaFlujos() {
     <tr>
       ${th('Empresa','empresa')}
       ${th('Período','periodo')}
-      <th style="font-size:10px">Tipo</th>
-      <th style="font-size:10px">Rubros</th>
+      <th>Tipo</th>
+      <th>Rubros</th>
       ${th('Déficit / Necesidad actual','necesidad',';text-align:right')}
-      <th style="text-align:right;font-size:10px">Per. anterior</th>
+      <th style="text-align:right">Per. anterior</th>
       ${th('Var. nominal','var',';text-align:right')}
-      <th style="font-size:10px">IPC %</th>
-      <th style="font-size:10px">Cargado</th>
-      <th style="font-size:10px">Acciones</th>
+      <th>IPC %</th>
+      <th>Cargado</th>
+      <th>Acciones</th>
     </tr>
   </thead>`;
 
@@ -10356,87 +10362,96 @@ function _renderListaFlujos() {
     const fEmp = porEmpresa[emp];
     if (empNames.length > 1) {
       rows += `<tr style="background:var(--s3)">
-        <td colspan="10" style="padding:6px 14px;font-size:10px;font-weight:700;
+        <td colspan="10" style="padding:5px 14px;font-size:9.5px;font-weight:700;
           color:var(--acc);font-family:var(--mono);letter-spacing:.07em;
           border-top:2px solid rgba(71,232,255,.2)">
-          ${emp} <span style="font-weight:400;color:var(--dim);font-size:9px">(${fEmp.length} período${fEmp.length!==1?'s':''})</span>
+          ${emp} <span style="font-weight:400;color:var(--dim)">(${fEmp.length} período${fEmp.length!==1?'s':''})</span>
         </td>
       </tr>`;
     }
     fEmp.forEach(f => {
-      const varPct = (f.necesidad_fondos != null && f.necesidad_fondos_ant)
-        ? ((f.necesidad_fondos - f.necesidad_fondos_ant) / Math.abs(f.necesidad_fondos_ant) * 100)
+      const necAct = necSignada(f);
+      // Para período anterior: usar el signo del resultado del flujo anterior si está disponible,
+      // si no, asumir negativo (déficit) como convención
+      const necAnt = f.necesidad_fondos_ant != null ? -Math.abs(f.necesidad_fondos_ant) : null;
+
+      const varPct = (necAct != null && necAnt != null && necAnt !== 0)
+        ? ((necAct - necAnt) / Math.abs(necAnt) * 100)
         : null;
       const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
 
-      // Badge tipo proyectado/real
+      // Badge tipo — todo en una línea, sin <br>
       const tieneMes = f.meses && f.meses.length > 0;
       const tipoTag = f.tipo === 'proyectado'
-        ? `<span style="color:var(--acc);font-size:9px;font-weight:700;font-family:var(--mono)">PROY</span>`
-        : `<span style="color:#ff8c47;font-size:9px;font-weight:700;font-family:var(--mono)">REAL</span>`;
+        ? `<span style="color:var(--acc);font-weight:700;font-family:var(--mono)">PROY</span>`
+        : `<span style="color:#ff8c47;font-weight:700;font-family:var(--mono)">REAL</span>`;
       const mesBadge = tieneMes
-        ? `<br><span style="font-size:8px;color:#2ecc8a;font-family:var(--mono)">por mes</span>`
-        : `<br><span style="font-size:8px;color:var(--dim);font-family:var(--mono)">solo totales</span>`;
+        ? ` <span style="color:#2ecc8a;font-family:var(--mono)">· mes</span>`
+        : '';
 
       // Conteo de rubros
       const nRubros = (f.rubros || []).filter(r => r.actual != null).length;
       const rubrosBadge = nRubros > 0
-        ? `<span style="font-size:9px;color:var(--dim);font-family:var(--mono)">${nRubros} rubros</span>`
-        : `<span style="font-size:9px;color:var(--neg);font-family:var(--mono);font-weight:700">sin datos</span>`;
+        ? `<span style="color:var(--dim);font-family:var(--mono)">${nRubros}</span>`
+        : `<span style="color:var(--neg);font-family:var(--mono);font-weight:700">sin datos</span>`;
 
       // Mini barra de variación
       const barraVar = varPct != null ? (() => {
         const pct = Math.min(Math.abs(varPct), 100);
         const col = varPct > 0 ? 'var(--neg)' : 'var(--pos)';
-        return `<div style="width:44px;height:5px;background:var(--bd2);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:5px">
+        return `<div style="width:40px;height:4px;background:var(--bd2);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:5px">
           <div style="width:${pct}%;height:100%;background:${col};border-radius:2px"></div>
         </div>`;
       })() : '';
 
       // Fecha de carga
       const fechaCarga = f.cargadoEl
-        ? `<span style="font-size:8.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap">${f.cargadoEl}</span>`
-        : `<span style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">—</span>`;
+        ? `<span style="color:var(--dim);font-family:var(--mono);white-space:nowrap">${f.cargadoEl}</span>`
+        : `<span style="color:var(--dim)">—</span>`;
 
       // Nombre empresa (solo si vista plana, no agrupada)
       const empCell = empNames.length > 1 ? '' :
-        `<strong style="font-size:11px;color:var(--text)">${f.empresa}</strong>`;
+        `<strong style="color:var(--text)">${f.empresa}</strong>`;
+
+      // Color del importe: negativo=rojo, positivo=verde (superávit)
+      const necCol = necAct == null ? 'var(--dim)' : necAct < 0 ? 'var(--neg)' : 'var(--pos)';
+      const antCol = necAnt == null ? 'var(--dim)' : necAnt < 0 ? 'var(--neg)' : 'var(--pos)';
 
       rows += `<tr ondblclick="_verFlujoIndividual('${f.clave}')" title="Doble clic para ver flujo individual"
         style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.05)'" onmouseout="this.style.background=''">
-        <td style="padding:9px 12px">${empCell}</td>
-        <td style="font-family:var(--mono);padding:9px 12px">
-          <strong style="font-size:11px;color:var(--text)">${f.periodo}</strong>
+        <td>${empCell}</td>
+        <td style="font-family:var(--mono)">
+          <strong>${f.periodo}</strong>
           <button onclick="event.stopPropagation();_editarPeriodoFlujo('${f.clave}')" title="Editar período"
             style="padding:1px 4px;background:none;border:1px solid var(--dim);
-            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:5px;vertical-align:middle">✎</button>
+            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
         </td>
-        <td style="padding:9px 10px">${tipoTag}${mesBadge}</td>
-        <td style="padding:9px 10px">${rubrosBadge}</td>
-        <td style="font-family:var(--mono);text-align:right;padding:9px 12px">
-          <strong style="font-size:12px;color:var(--neg)">${fmt(f.necesidad_fondos)}</strong>
+        <td>${tipoTag}${mesBadge}</td>
+        <td>${rubrosBadge}</td>
+        <td style="font-family:var(--mono);text-align:right">
+          <strong style="color:${necCol}">${fmt(necAct)}</strong>
         </td>
-        <td style="font-family:var(--mono);font-size:10px;text-align:right;color:var(--dim);padding:9px 12px">
-          ${fmt(f.necesidad_fondos_ant)}
+        <td style="font-family:var(--mono);text-align:right;color:${antCol}">
+          ${fmtDim(necAnt)}
         </td>
-        <td style="font-family:var(--mono);text-align:right;padding:9px 10px">
-          <strong style="font-size:11px;color:${varCol}">${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}</strong>${barraVar}
+        <td style="font-family:var(--mono);text-align:right">
+          <strong style="color:${varCol}">${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}</strong>${barraVar}
         </td>
-        <td style="font-family:var(--mono);font-size:10px;padding:9px 10px">${f.ipc ? f.ipc+'%' : '—'}</td>
-        <td style="padding:9px 10px">${fechaCarga}</td>
-        <td style="white-space:nowrap;padding:9px 8px">
+        <td style="font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
+        <td>${fechaCarga}</td>
+        <td style="white-space:nowrap">
           <button onclick="event.stopPropagation();_verFlujoIndividual('${f.clave}')" title="Ver flujo individual"
-            style="padding:3px 7px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
-            color:var(--acc);font-size:9px;border-radius:2px;cursor:pointer;margin-right:2px">📋</button>
+            style="padding:2px 6px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
+            color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">📋</button>
           <button onclick="event.stopPropagation();editarFlujo('${f.clave}')" title="Editar importes"
-            style="padding:3px 7px;background:none;border:1px solid #47e8ff;
-            color:var(--acc);font-size:9px;border-radius:2px;cursor:pointer;margin-right:2px">✏</button>
+            style="padding:2px 6px;background:none;border:1px solid #47e8ff;
+            color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">✏</button>
           <button onclick="event.stopPropagation();remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
-            style="padding:3px 7px;background:none;border:1px solid #c4b5fd;
-            color:#c4b5fd;font-size:9px;border-radius:2px;cursor:pointer;margin-right:2px">⇄</button>
+            style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
+            color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">⇄</button>
           <button onclick="event.stopPropagation();_eliminarFlujo('${f.clave}')" title="Eliminar"
-            style="padding:3px 7px;background:none;border:1px solid var(--neg);
-            color:var(--neg);font-size:9px;border-radius:2px;cursor:pointer">✕</button>
+            style="padding:2px 6px;background:none;border:1px solid var(--neg);
+            color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
         </td>
       </tr>`;
     });
