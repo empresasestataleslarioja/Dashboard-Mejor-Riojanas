@@ -10593,11 +10593,24 @@ function _flujoLaboral(f) {
     const u = (r2.label || '').toUpperCase();
     return (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') || u.includes('REMUNER') ||
            u.includes('SAC') || u.includes('AGUINALDO') ||
-           u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB');
+           u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB') ||
+           u.includes('PERSONAL') || u.includes('HABERES') || u.includes('JORNAL');
   });
   if (!matches.length) return null;
-  // Usar Math.abs: los egresos pueden estar almacenados como negativos según la fuente
   return matches.reduce((s, r2) => s + Math.abs(r2.actual ?? 0), 0);
+}
+
+// Diagnóstico: ejecutar en consola → _diagLaboral('ALFA') para ver qué rubros detecta
+function _diagLaboral(empresaStr) {
+  const flujos = Object.values(DATA.flujos||{}).filter(f => f.empresa?.toUpperCase().includes((empresaStr||'').toUpperCase()));
+  if (!flujos.length) { console.log('No se encontró empresa'); return; }
+  flujos.forEach(f => {
+    console.group(f.empresa + ' · ' + f.periodo);
+    console.log('Todos los rubros de egreso:');
+    (f.rubros||[]).filter(r=>r.tipo==='egreso'&&!r.esTotal).forEach(r => console.log(' ', r.label, '→', r.actual));
+    console.log('Rubros laborales detectados:', _flujoLaboral(f));
+    console.groupEnd();
+  });
 }
 
 // Recalcula necesidad_fondos_ant para todos los flujos existentes sin reimportar Excel
