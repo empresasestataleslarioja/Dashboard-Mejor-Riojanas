@@ -4463,6 +4463,7 @@ self.onmessage = async (e) => {
         <span class="card-hd-title">Flujos registrados</span>
         <span class="card-hd-unit" id="flujo-lista-lbl"></span>
       </div>
+      <div id="flujos-lista-filtros" style="padding:8px 14px 0"></div>
       <div style="overflow-x:auto">
         <table class="tbl" id="tbl-flujos-lista" style="font-size:9.5px;width:100%"></table>
       </div>
@@ -10097,36 +10098,67 @@ function limpiarFlujoManual() {
   });
 }
 
+// ── Helpers para comparar períodos (módulo-nivel, usados también en comparación) ──
+function _parsePeriodoFlujoStr(per) {
+  const s = (per || '').toLowerCase();
+  const anio = parseInt(s.match(/20\d\d/)?.[0]);
+  if (!anio) return null;
+  const cuatMatch = s.match(/([1-4])[°ºo]?\s*(?:cuatrimestre|cuatrim|cuat)/);
+  const trimMatch = s.match(/([1-4])[°ºo]?\s*(?:trimestre|trim)/);
+  if (cuatMatch) return { anio, tipo:'cuat', num: parseInt(cuatMatch[1]) };
+  if (trimMatch) return { anio, tipo:'trim', num: parseInt(trimMatch[1]) };
+  const MESES_MAP = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
+                     julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
+  const mesNom = Object.keys(MESES_MAP).find(m => s.includes(m));
+  if (mesNom) return { anio, tipo:'mes', num: MESES_MAP[mesNom] };
+  return { anio, tipo:'anio', num: 1 };
+}
+function _absInicioPeriodo(p) {
+  if (!p) return null;
+  const m = p.tipo==='cuat'?(p.num-1)*4+1 : p.tipo==='trim'?(p.num-1)*3+1 : p.num;
+  return p.anio * 12 + m;
+}
+
 // ── GUARDAR datos del flujo (core) ────────────────────────────────
 function _guardarFlujoData(data) {
-  const { empresa, periodo, tipo, ipc, rubros, necesidad_fondos, necesidad_fondos_ant } = data;
+  // Usar rubrosArr para evitar colisión con el objeto global `rubros` (empresa→sector)
+  const { empresa, periodo, tipo, ipc, necesidad_fondos, necesidad_fondos_ant } = data;
+  const rubrosArr = data.rubros;
   const clave = _claveFlujo(empresa, periodo, tipo);
 
-  // Vincular empresa al portafolio si no existe ya
+  // Vincular empresa al portafolio si no existe ya (usa el objeto global `rubros`, no rubrosArr)
   if (empresa && !rubros[empresa]) {
-    // Intentar match con empresa existente
     const match = _matchEmpresaFlujo(empresa);
     if (!match) {
-      // Agregar al portafolio con rubro Sin rubro
       rubros[empresa] = 'Sin rubro';
       if (!DATA.fact[empresa])  DATA.fact[empresa]  = {};
       if (!DATA.sit[empresa])   DATA.sit[empresa]   = {};
       saveRubros();
-      // FIX 6: refrescar todos los selectores al agregar empresa nueva
-      try {
-        if (typeof populateSelects === 'function') populateSelects();
-      } catch(e) {}
+      try { if (typeof populateSelects === 'function') populateSelects(); } catch(e) {}
     }
   }
 
-  // necesidad_fondos_ant: solo usar si viene explícito del archivo (columna "Anterior" en Excel)
-  // No auto-poblar desde otros flujos — evita mostrar datos de períodos no relacionados
-  const necAnt = necesidad_fondos_ant ?? null;
+  // necesidad_fondos_ant: prioridad al valor explícito del Excel; si no hay,
+  // buscar el período cronológicamente anterior del mismo empresa+tipo
+  let necAnt = necesidad_fondos_ant ?? null;
+  if (necAnt == null) {
+    const thisP  = _parsePeriodoFlujoStr(periodo);
+    const thisAbs = thisP ? _absInicioPeriodo(thisP) : null;
+    if (thisAbs != null) {
+      const candidatos = Object.values(DATA.flujos)
+        .filter(f => f.empresa === empresa && f.tipo === tipo && f.clave !== clave
+                     && f.necesidad_fondos != null)
+        .map(f => ({ nec: f.necesidad_fondos, abs: _absInicioPeriodo(_parsePeriodoFlujoStr(f.periodo)) }))
+        .filter(x => x.abs != null && x.abs < thisAbs)
+        .sort((a, b) => b.abs - a.abs);  // más reciente primero
+      if (candidatos.length) necAnt = candidatos[0].nec;
+    }
+  }
 
   DATA.flujos[clave] = {
     clave, empresa, periodo, tipo, ipc,
     meses: data.meses || [],
-    rubros, necesidad_fondos, necesidad_fondos_ant: necAnt,
+    rubros: rubrosArr, necesidad_fondos, necesidad_fondos_ant: necAnt,
     timestamp: Date.now(),
     cargadoEl: nowAR(),
     fuente: data.fuente || 'manual',
@@ -10219,16 +10251,40 @@ function _poblarSelectoresFlujos() {
   if (lbl) lbl.textContent = filtrados.length + ' registro' + (filtrados.length!==1?'s':'');
 }
 
+// Estado de ordenamiento de la tabla de flujos
+let _flujoListaSort = { col: 'timestamp', dir: -1 };
+let _flujoListaTipoFiltro = '';  // '' = todos, 'proyectado', 'real'
+
 function _renderListaFlujos() {
   const tbl  = document.getElementById('tbl-flujos-lista');
   if (!tbl) return;
   const empresa = document.getElementById('sel-flujo-empresa')?.value || '';
-  const flujos  = Object.values(DATA.flujos || {})
+
+  // Todos los flujos filtrados por empresa
+  let flujos = Object.values(DATA.flujos || {})
     .filter(f => !empresa || f.empresa === empresa)
-    .sort((a,b) => b.timestamp - a.timestamp);
+    .filter(f => !_flujoListaTipoFiltro || f.tipo === _flujoListaTipoFiltro);
+
+  // Ordenamiento por columna
+  const { col, dir } = _flujoListaSort;
+  flujos.sort((a, b) => {
+    let va, vb;
+    if (col === 'empresa')          { va = a.empresa;               vb = b.empresa; }
+    else if (col === 'periodo')     { va = _absInicioPeriodo(_parsePeriodoFlujoStr(a.periodo)) ?? 0;
+                                      vb = _absInicioPeriodo(_parsePeriodoFlujoStr(b.periodo)) ?? 0; }
+    else if (col === 'necesidad')   { va = a.necesidad_fondos ?? 0; vb = b.necesidad_fondos ?? 0; }
+    else if (col === 'var')         { va = (a.necesidad_fondos != null && a.necesidad_fondos_ant)
+                                           ? (a.necesidad_fondos - a.necesidad_fondos_ant) / Math.abs(a.necesidad_fondos_ant) : null;
+                                      vb = (b.necesidad_fondos != null && b.necesidad_fondos_ant)
+                                           ? (b.necesidad_fondos - b.necesidad_fondos_ant) / Math.abs(b.necesidad_fondos_ant) : null;
+                                      if (va == null) return 1; if (vb == null) return -1; }
+    else                            { va = a.timestamp ?? 0;        vb = b.timestamp ?? 0; }
+    if (typeof va === 'string') return dir * va.localeCompare(vb);
+    return dir * ((va ?? 0) - (vb ?? 0));
+  });
 
   if (!flujos.length) {
-    tbl.innerHTML = `<tr><td colspan="8" style="padding:30px 20px;text-align:center">
+    tbl.innerHTML = `<tr><td colspan="9" style="padding:30px 20px;text-align:center">
       <div style="font-size:32px;margin-bottom:10px">💰</div>
       <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">
         Sin flujos de fondos cargados
@@ -10244,50 +10300,153 @@ function _renderListaFlujos() {
   }
 
   const fmt = v => v==null?'—':(v<0?'(':'')+'$'+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
-  tbl.innerHTML = `<thead><tr>
-    <th>Empresa</th><th>Período</th><th>Tipo</th>
-    <th>Déficit/Necesidad actual</th><th>Período anterior</th>
-    <th>Var nominal</th><th>IPC %</th><th>Acciones</th>
-  </tr></thead><tbody>` +
-  flujos.map(f => {
-    const varPct = (f.necesidad_fondos != null && f.necesidad_fondos_ant)
-      ? ((f.necesidad_fondos - f.necesidad_fondos_ant) / Math.abs(f.necesidad_fondos_ant) * 100)
-      : null;
-    const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
-    const tipoTag = f.tipo === 'proyectado'
-      ? `<span style="color:var(--acc);font-size:8px">PROY</span>`
-      : `<span style="color:#ff8c47;font-size:8px">REAL</span>`;
-    return `<tr ondblclick="_verFlujoIndividual('${f.clave}')" title="Doble clic para ver flujo individual"
-      style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.04)'" onmouseout="this.style.background=''">
-      <td style="font-weight:600">${f.empresa}</td>
-      <td style="font-family:var(--mono)">${f.periodo}
-        <button onclick="event.stopPropagation();_editarPeriodoFlujo('${f.clave}')" title="Editar período"
-          style="padding:1px 4px;background:none;border:1px solid var(--dim);
-          color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
-      </td>
-      <td>${tipoTag}</td>
-      <td style="font-family:var(--mono);text-align:right">${fmt(f.necesidad_fondos)}</td>
-      <td style="font-family:var(--mono);text-align:right">${fmt(f.necesidad_fondos_ant)}</td>
-      <td style="font-family:var(--mono);text-align:right;color:${varCol}">
-        ${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(2)+'%' : '—'}
-      </td>
-      <td style="font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
-      <td>
-        <button onclick="event.stopPropagation();_verFlujoIndividual('${f.clave}')" title="Ver flujo individual"
-          style="padding:2px 6px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
-          color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">📋</button>
-        <button onclick="event.stopPropagation();editarFlujo('${f.clave}')" title="Editar importes"
-          style="padding:2px 6px;background:none;border:1px solid #47e8ff;
-          color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">✏</button>
-        <button onclick="event.stopPropagation();remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
-          style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
-          color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:3px">⇄</button>
-        <button onclick="event.stopPropagation();_eliminarFlujo('${f.clave}')" title="Eliminar"
-          style="padding:2px 6px;background:none;border:1px solid var(--neg);
-          color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
-      </td>
-    </tr>`;
-  }).join('') + '</tbody>';
+
+  // Helper de encabezado con ordenamiento
+  const th = (label, colKey, extra='') => {
+    const active = _flujoListaSort.col === colKey;
+    const arr = active ? (_flujoListaSort.dir === 1 ? ' ▲' : ' ▼') : '';
+    return `<th onclick="_flujoSortBy('${colKey}')" title="Ordenar por ${label}"
+      style="cursor:pointer;user-select:none;white-space:nowrap;
+      ${active ? 'color:var(--acc)' : ''}${extra}">${label}${arr}</th>`;
+  };
+
+  // Filtros de tipo (sobre la tabla)
+  const filtroTipo = `<div style="display:flex;gap:5px;margin-bottom:8px;align-items:center">
+    <span style="font-size:8px;color:var(--dim);font-family:var(--mono)">Tipo:</span>
+    ${['','proyectado','real'].map(t => {
+      const label = t===''?'Todos':t==='proyectado'?'Proyectado':'Real';
+      const active = _flujoListaTipoFiltro === t;
+      return `<button onclick="_flujoFiltroTipo('${t}')"
+        style="padding:2px 8px;font-size:8px;font-family:var(--mono);border-radius:3px;
+        cursor:pointer;border:1px solid ${active?'var(--acc)':'var(--bd2)'};
+        background:${active?'rgba(71,232,255,.12)':'none'};
+        color:${active?'var(--acc)':'var(--dim)'}">${label}</button>`;
+    }).join('')}
+  </div>`;
+
+  // Agrupar por empresa — mejora 1
+  const porEmpresa = {};
+  flujos.forEach(f => { (porEmpresa[f.empresa] = porEmpresa[f.empresa] || []).push(f); });
+
+  const thead = `<thead>
+    <tr>
+      ${th('Empresa','empresa')}
+      ${th('Período','periodo')}
+      <th>Tipo</th>
+      <th>Rubros</th>
+      ${th('Déficit/Necesidad actual','necesidad','text-align:right')}
+      <th style="text-align:right">Per. anterior</th>
+      ${th('Var. nominal','var','text-align:right')}
+      <th>IPC %</th>
+      <th>Cargado</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>`;
+
+  let rows = '';
+  const empNames = Object.keys(porEmpresa).sort();
+  empNames.forEach(emp => {
+    const fEmp = porEmpresa[emp];
+    if (empNames.length > 1) {
+      // Encabezado de grupo empresa — mejora 1
+      rows += `<tr style="background:var(--s3)">
+        <td colspan="10" style="padding:5px 12px;font-size:8.5px;font-weight:700;
+          color:var(--acc);font-family:var(--mono);letter-spacing:.07em;
+          border-top:2px solid rgba(71,232,255,.2)">
+          ${emp} <span style="font-weight:400;color:var(--dim)">(${fEmp.length} período${fEmp.length!==1?'s':''})</span>
+        </td>
+      </tr>`;
+    }
+    fEmp.forEach(f => {
+      const varPct = (f.necesidad_fondos != null && f.necesidad_fondos_ant)
+        ? ((f.necesidad_fondos - f.necesidad_fondos_ant) / Math.abs(f.necesidad_fondos_ant) * 100)
+        : null;
+      const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
+
+      // mejora 2: badge de tipo de datos
+      const tieneMes = f.meses && f.meses.length > 0;
+      const tipoTag = f.tipo === 'proyectado'
+        ? `<span style="color:var(--acc);font-size:7.5px;font-family:var(--mono)">PROY</span>`
+        : `<span style="color:#ff8c47;font-size:7.5px;font-family:var(--mono)">REAL</span>`;
+      const mesBadge = tieneMes
+        ? `<span style="margin-left:4px;font-size:7px;color:#2ecc8a;font-family:var(--mono)">por mes</span>`
+        : `<span style="margin-left:4px;font-size:7px;color:var(--dim);font-family:var(--mono)">solo totales</span>`;
+
+      // mejora 3: conteo de rubros
+      const nRubros = (f.rubros || []).filter(r => r.actual != null).length;
+      const rubrosBadge = nRubros > 0
+        ? `<span style="font-size:8px;color:var(--dim);font-family:var(--mono)">${nRubros} rubros</span>`
+        : `<span style="font-size:8px;color:var(--neg);font-family:var(--mono)">sin datos</span>`;
+
+      // mejora 6: mini barra de variación
+      const barraVar = varPct != null ? (() => {
+        const pct = Math.min(Math.abs(varPct), 100);
+        const col = varPct > 0 ? 'var(--neg)' : 'var(--pos)';
+        return `<div style="width:40px;height:4px;background:var(--bd2);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:4px">
+          <div style="width:${pct}%;height:100%;background:${col};border-radius:2px"></div>
+        </div>`;
+      })() : '';
+
+      // mejora 7: fecha de carga
+      const fechaCarga = f.cargadoEl
+        ? `<span style="font-size:7.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap">${f.cargadoEl}</span>`
+        : `<span style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">—</span>`;
+
+      rows += `<tr ondblclick="_verFlujoIndividual('${f.clave}')" title="Doble clic para ver flujo individual"
+        style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.04)'" onmouseout="this.style.background=''">
+        <td style="font-weight:600;font-size:9.5px">${empNames.length > 1 ? '' : f.empresa}</td>
+        <td style="font-family:var(--mono);font-size:9.5px">
+          ${f.periodo}
+          <button onclick="event.stopPropagation();_editarPeriodoFlujo('${f.clave}')" title="Editar período"
+            style="padding:1px 4px;background:none;border:1px solid var(--dim);
+            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
+        </td>
+        <td>${tipoTag}${mesBadge}</td>
+        <td>${rubrosBadge}</td>
+        <td style="font-family:var(--mono);font-size:9.5px;text-align:right">${fmt(f.necesidad_fondos)}</td>
+        <td style="font-family:var(--mono);font-size:9px;text-align:right;color:var(--dim)">${fmt(f.necesidad_fondos_ant)}</td>
+        <td style="font-family:var(--mono);font-size:9px;text-align:right;color:${varCol}">
+          ${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}${barraVar}
+        </td>
+        <td style="font-family:var(--mono);font-size:9px">${f.ipc ? f.ipc+'%' : '—'}</td>
+        <td>${fechaCarga}</td>
+        <td style="white-space:nowrap">
+          <button onclick="event.stopPropagation();_verFlujoIndividual('${f.clave}')" title="Ver flujo individual"
+            style="padding:2px 6px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
+            color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">📋</button>
+          <button onclick="event.stopPropagation();editarFlujo('${f.clave}')" title="Editar importes"
+            style="padding:2px 6px;background:none;border:1px solid #47e8ff;
+            color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">✏</button>
+          <button onclick="event.stopPropagation();remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
+            style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
+            color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">⇄</button>
+          <button onclick="event.stopPropagation();_eliminarFlujo('${f.clave}')" title="Eliminar"
+            style="padding:2px 6px;background:none;border:1px solid var(--neg);
+            color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
+        </td>
+      </tr>`;
+    });
+  });
+
+  // Inyectar filtros de tipo en el contenedor padre (si existe el slot)
+  const slot = document.getElementById('flujos-lista-filtros');
+  if (slot) slot.innerHTML = filtroTipo;
+
+  tbl.innerHTML = thead + '<tbody>' + rows + '</tbody>';
+}
+
+function _flujoSortBy(col) {
+  if (_flujoListaSort.col === col) {
+    _flujoListaSort.dir *= -1;
+  } else {
+    _flujoListaSort = { col, dir: col === 'empresa' || col === 'periodo' ? 1 : -1 };
+  }
+  _renderListaFlujos();
+}
+
+function _flujoFiltroTipo(tipo) {
+  _flujoListaTipoFiltro = tipo;
+  _renderListaFlujos();
 }
 
 function _verFlujoIndividual(clave) {
@@ -10713,34 +10872,15 @@ function buildComparacionFlujos() {
   wrap.style.display = '';
 
   // ── Punto 3: advertir si los períodos no son consecutivos ────────
-  const _parsePeriodoFlujo = per => {
-    const s = (per || '').toLowerCase();
-    const anio = parseInt(s.match(/20\d\d/)?.[0]);
-    if (!anio) return null;
-    // Detectar cuatrimestre o trimestre
-    const cuatMatch = s.match(/([1-4])[°ºo]?\s*(?:cuatrimestre|cuatrim|cuat)/);
-    const trimMatch = s.match(/([1-4])[°ºo]?\s*(?:trimestre|trim)/);
-    if (cuatMatch) return { anio, tipo:'cuat', num: parseInt(cuatMatch[1]) };
-    if (trimMatch) return { anio, tipo:'trim', num: parseInt(trimMatch[1]) };
-    // Detectar mes por nombre
-    const MESES = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
-                   julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
-    const mesNom = Object.keys(MESES).find(m => s.includes(m));
-    if (mesNom) return { anio, tipo:'mes', num: MESES[mesNom] };
-    return { anio, tipo:'anio', num: 1 };
-  };
+  // Usa helpers de módulo _parsePeriodoFlujoStr / _absInicioPeriodo
   const _diffMesesFlujo = (pA, pB) => {
-    // FIX 13: gap = distancia entre inicios - duración del período B (el anterior)
-    const a = _parsePeriodoFlujo(pA), b = _parsePeriodoFlujo(pB);
+    const a = _parsePeriodoFlujoStr(pA), b = _parsePeriodoFlujoStr(pB);
     if (!a || !b) return null;
     const duracion = { cuat:4, trim:3, mes:1, anio:12 };
-    const mesInicioA = a.tipo === 'cuat' ? (a.num-1)*4+1 : a.tipo === 'trim' ? (a.num-1)*3+1 : a.num;
-    const mesInicioB = b.tipo === 'cuat' ? (b.num-1)*4+1 : b.tipo === 'trim' ? (b.num-1)*3+1 : b.num;
-    const absA = a.anio * 12 + mesInicioA;
-    const absB = b.anio * 12 + mesInicioB;
-    const distancia = absA - absB;  // cuántos meses entre inicios
+    const absA = _absInicioPeriodo(a), absB = _absInicioPeriodo(b);
+    const distancia = absA - absB;
     const durB = duracion[b.tipo] || 4;
-    const gap = distancia - durB;  // gap = 0 si son consecutivos
+    const gap = distancia - durB;
     return Math.max(0, gap);
   };
   const gapMeses = _diffMesesFlujo(fA.periodo, fB.periodo);
@@ -10758,13 +10898,8 @@ function buildComparacionFlujos() {
   }
   // No advertir si es comparación anual (distancia entre inicios ≈ 12 meses)
   // Usar distancia absoluta en meses para evitar falsos positivos por nombres distintos
-  const pA2 = _parsePeriodoFlujo(fA.periodo), pB2 = _parsePeriodoFlujo(fB.periodo);
-  const _absInicio = p => {
-    if (!p) return null;
-    const m = p.tipo==='cuat'?(p.num-1)*4+1 : p.tipo==='trim'?(p.num-1)*3+1 : p.num;
-    return p.anio * 12 + m;
-  };
-  const distanciaAbsInicio = (pA2 && pB2) ? Math.abs(_absInicio(pA2) - _absInicio(pB2)) : null;
+  const pA2 = _parsePeriodoFlujoStr(fA.periodo), pB2 = _parsePeriodoFlujoStr(fB.periodo);
+  const distanciaAbsInicio = (pA2 && pB2) ? Math.abs(_absInicioPeriodo(pA2) - _absInicioPeriodo(pB2)) : null;
   const esComparacionAnual = distanciaAbsInicio != null && distanciaAbsInicio >= 10 && distanciaAbsInicio <= 14;
   if (gapMeses != null && gapMeses > 0 && !esComparacionAnual) {
     alertaGapEl.innerHTML = `
@@ -10819,6 +10954,27 @@ function buildComparacionFlujos() {
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
   const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v<0?')':'');
   const colVar = v => v==null ? 'var(--dim)' : v>0 ? 'var(--neg)' : 'var(--pos)';
+
+  // Advertencia si período B no tiene rubros con datos (ej: cargado de Sheets sin rubros_json)
+  const bSinRubros = !fB_raw.rubros?.some(r => r.actual != null);
+  if (bSinRubros) {
+    let warnB = document.getElementById('flujo-warn-b-sinrubros');
+    if (!warnB) {
+      warnB = document.createElement('div');
+      warnB.id = 'flujo-warn-b-sinrubros';
+      warnB.style.cssText = 'margin:0 0 10px';
+      wrap.insertBefore(warnB, wrap.firstChild);
+    }
+    warnB.innerHTML = `<div style="background:#2a1000;border:1px solid #ff8c47;border-radius:4px;
+      padding:8px 14px;font-size:8.5pt;font-family:var(--mono);color:#ff8c47">
+      ⚠ El período anterior (<strong>${fB_raw.periodo}</strong>) no tiene detalle de rubros cargado —
+      fue restaurado desde Sheets sin datos de rubros. Re-importá el Excel de ese período para
+      recuperar el desglose completo.
+    </div>`;
+  } else {
+    const warnB = document.getElementById('flujo-warn-b-sinrubros');
+    if (warnB) warnB.innerHTML = '';
+  }
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Necesidad actual',     v:fmtM(necA),                                                    c:'var(--neg)', big:true },
@@ -30584,10 +30740,13 @@ function applyCloudData(cloud, opts) {
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
       const tsCloud = parseInt(f.timestamp) || 0;
       const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
-      // Conservar versión local si es más reciente
-      if (tsLocal > tsCloud) return;
+      // Conservar versión local si es igual o más reciente (>= evita pisar con misma versión de Sheets)
+      if (tsLocal >= tsCloud) return;
       let rubros_parsed = [];
       try { rubros_parsed = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
+      // Si la versión de Sheets no tiene rubros pero la local sí, conservar la local (no degradar)
+      const localTieneRubros = (DATA.flujos[clave]?.rubros || []).some(r => r.actual != null);
+      if (rubros_parsed.length === 0 && localTieneRubros) return;
       let meses_parsed = [];
       try { meses_parsed = f.meses ? JSON.parse(f.meses) : []; } catch(e) {
         meses_parsed = typeof f.meses === 'string' ? f.meses.split(',').filter(Boolean) : [];
