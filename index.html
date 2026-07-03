@@ -1009,6 +1009,8 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   padding:7px 10px; border-bottom:1px solid var(--bd); text-align:left; font-weight:400;
 }
 .tbl td { padding:8px 10px; border-bottom:1px solid #0d1018; font-size:11px; }
+#tbl-flujos-lista th { padding:4px 8px; font-size:8px; }
+#tbl-flujos-lista td { padding:2px 7px; font-size:9px; white-space:nowrap; }
 .tbl tr:last-child td { border-bottom:none; }
 .tbl tr:hover td { background:var(--s2); }
 .tbl .r { text-align:right; font-variant-numeric:tabular-nums; }
@@ -10376,18 +10378,32 @@ function _renderListaFlujos() {
       ${active ? 'color:var(--acc)' : ''}${extra}">${label}${arr}</th>`;
   };
 
-  // Filtros de tipo (sobre la tabla)
-  const filtroTipo = `<div style="display:flex;gap:5px;margin-bottom:8px;align-items:center">
-    <span style="font-size:9px;color:var(--dim);font-family:var(--mono)">Tipo:</span>
+  // Filtros sobre la tabla: empresa + tipo
+  const todasEmps = [...new Set(Object.values(DATA.flujos || {}).map(f => f.empresa).filter(Boolean))].sort();
+  const empActual = empresa;
+  const filtroEmp = `<div style="display:flex;align-items:center;gap:4px">
+    <span style="font-size:8.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap">Empresa:</span>
+    <select onchange="_flujoFiltroEmpresa(this.value)"
+      style="padding:2px 7px;font-size:8.5px;font-family:var(--mono);background:var(--s2);
+      border:1px solid var(--bd2);color:var(--text);border-radius:3px;cursor:pointer">
+      <option value=""${!empActual?' selected':''}>Todas</option>
+      ${todasEmps.map(e=>`<option value="${e}"${e===empActual?' selected':''}>${e}</option>`).join('')}
+    </select>
+  </div>`;
+  const filtroTipoHtml = `<div style="display:flex;align-items:center;gap:4px">
+    <span style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Tipo:</span>
     ${['','proyectado','real'].map(t => {
-      const label = t===''?'Todos':t==='proyectado'?'Proyectado':'Real';
+      const label = t===''?'Todos':t==='proyectado'?'Proy':'Real';
       const active = _flujoListaTipoFiltro === t;
       return `<button onclick="_flujoFiltroTipo('${t}')"
-        style="padding:2px 9px;font-size:8.5px;font-family:var(--mono);border-radius:3px;
+        style="padding:2px 8px;font-size:8px;font-family:var(--mono);border-radius:3px;
         cursor:pointer;border:1px solid ${active?'var(--acc)':'var(--bd2)'};
         background:${active?'rgba(71,232,255,.12)':'none'};
         color:${active?'var(--acc)':'var(--dim)'}">${label}</button>`;
     }).join('')}
+  </div>`;
+  const filtroTipo = `<div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+    ${filtroEmp}${filtroTipoHtml}
   </div>`;
 
   // Agrupar por empresa
@@ -10529,6 +10545,12 @@ function _flujoSortBy(col) {
 
 function _flujoFiltroTipo(tipo) {
   _flujoListaTipoFiltro = tipo;
+  _renderListaFlujos();
+}
+
+function _flujoFiltroEmpresa(emp) {
+  const sel = document.getElementById('sel-flujo-empresa');
+  if (sel) { sel.value = emp; }
   _renderListaFlujos();
 }
 
