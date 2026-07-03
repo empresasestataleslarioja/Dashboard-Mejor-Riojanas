@@ -9620,13 +9620,18 @@ function parsearFlujoExcel(wb, XLSX) {
       lUP.includes('SUPERÁVIT') || lUP.includes('SUPERAVIT') ||
       lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD') ||
       lUP.includes('RESULTADO') || lUP.includes('DÉFICIT') || lUP.includes('DEFICIT') ||
-      lUP.includes('REQUERIM') ||
+      lUP.includes('REQUERI') ||
       (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO')));
     const esTotalizador = /^(TOTAL|SUBTOTAL|SUB-TOTAL|SUB TOTAL)/i.test(lbl) ||
       (lUP.includes('TOTAL') && (lUP.includes('ING') || lUP.includes('EGR')));
     const esTotal = esTotalizador || esResultadoLbl;
     const nivel   = esTotal ? 0 : 1; // 0=totalizador, 1=concepto detalle
 
+    // Filas de sección con valor (ej: "INGRESOS" / "EGRESOS" en CUADRO RESUMEN)
+    if (!esResultadoLbl && !esTotalizador) {
+      if (/^INGRESO/.test(lUP)) _seccion = 'ingreso';
+      else if (/^EGRESO|^GASTO/.test(lUP)) _seccion = 'egreso';
+    }
     // Detectar tipo — usa _seccion para rubros sin pista en el label
     const tipo = esResultadoLbl ? 'resultado'
       : (esTotalizador && (lUP.includes('ING') || (_seccion==='ingreso' && !lUP.includes('EGR')))) ? 'ingreso'
