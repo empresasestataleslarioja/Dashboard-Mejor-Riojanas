@@ -9533,12 +9533,11 @@ function parsearFlujoExcel(wb, XLSX) {
       colM[per] = c;
       continue;
     }
-    // TOTAL exacto (no TOTAL ANTERIOR, no TOTAL CUATRIMESTRE ANTERIOR)
-    if (h === 'TOTAL' || h === 'TOTALES') { colTotal = c; continue; }
-    // TOTAL con año o período abreviado: 'TOTAL 1°C/26', 'TOTAL 3°C/25'
-    if (h.startsWith('TOTAL') && h.length < 20 &&
-        !h.includes('ANTERIOR') && !h.includes('CUATR') && !h.includes('ANT')) {
-      if (colTotal < 0) colTotal = c;
+    // Cualquier encabezado que empiece con TOTAL, excepto los de período anterior
+    if (h.startsWith('TOTAL') || h === 'TOTALES') {
+      if (!h.includes('ANTERIOR') && !h.includes(' ANT ') && !h.match(/ANT\.?\s*$/) && colTotal < 0) {
+        colTotal = c;
+      }
       continue;
     }
   }
@@ -9562,6 +9561,22 @@ function parsearFlujoExcel(wb, XLSX) {
   if (colTotal < 0 && meses.length > 0) {
     const lastMesCol = Math.max(...Object.values(colM));
     colTotal = lastMesCol + 1;
+  }
+
+  // Diagnóstico disponible en consola: _diagParser=true antes de importar para activar
+  if (window._diagParser) {
+    const hdrRow = [];
+    for (let c = 0; c <= Math.min(14, rng.e.c); c++) hdrRow.push(`[${c}]"${str(resumenRow,c)}"`);
+    console.group('🔍 parsearFlujoExcel diagnóstico');
+    console.log('Hoja:', snFlujo, '| resumenRow:', resumenRow);
+    console.log('Columnas header:', hdrRow.join(' '));
+    console.log('colLabel:', colLabel, '| colTotal:', colTotal, '| meses:', JSON.stringify(colM));
+    const sample = [];
+    for (let r = resumenRow+1; r <= Math.min(resumenRow+5, rng.e.r); r++) {
+      sample.push(`row${r}: label="${str(r,colLabel)}" total=${getNum(r,colTotal)}`);
+    }
+    console.log('Primeras filas:', sample.join(' || '));
+    console.groupEnd();
   }
 
   // ── PASO 3: Detectar empresa y período ────────────────────────────
