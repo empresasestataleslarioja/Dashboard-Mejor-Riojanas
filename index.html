@@ -4472,7 +4472,7 @@ self.onmessage = async (e) => {
       </div>
       <div id="flujos-lista-filtros" style="padding:8px 14px 0"></div>
       <div style="overflow-x:auto">
-        <table class="tbl" id="tbl-flujos-lista" style="font-size:10.5px;width:100%"></table>
+        <table class="tbl" id="tbl-flujos-lista" style="font-size:9px;width:100%"></table>
       </div>
     </div>
 
@@ -9127,8 +9127,12 @@ function _mostrarWizardMapeado(res) {
     return '';
   }
 
-  var rows = res.rubros.map(function(r, i) {
-    var curVal = r._tipoConfirmado ? _rubroToTipoVal(r) : _rubroToTipoVal(r);
+  // Solo mostrar rubros que NO fueron confirmados por perfil guardado
+  var rubrosNuevos = res.rubros.filter(function(r) { return !r._tipoConfirmado; });
+  var nConfirmados = res.rubros.length - rubrosNuevos.length;
+
+  var rows = rubrosNuevos.map(function(r, i) {
+    var curVal = _rubroToTipoVal(r);
     var opts = TIPO_OPTS.map(function(o){
       return '<option value="'+o.val+'"'+(o.val===curVal?' selected':'')+'>'+o.lbl+'</option>';
     }).join('');
@@ -9144,27 +9148,37 @@ function _mostrarWizardMapeado(res) {
         fmtV(r.actual) +
       '</td>' +
       '<td style="padding:5px 8px;min-width:220px">' +
-        '<select data-rubro-idx="'+i+'" style="width:100%;padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">' +
+        '<select data-rubro-new-idx="'+i+'" style="width:100%;padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">' +
           opts +
         '</select>' +
       '</td>' +
     '</tr>';
   }).join('');
 
+  // Guardar en el container el listado de rubros nuevos para usarlos en _aplicarMapeadoWizard
+  container._rubrosNuevosIdx = rubrosNuevos.map(function(r) { return res.rubros.indexOf(r); });
+
   container.innerHTML =
-    '<table style="width:100%;border-collapse:collapse">' +
-    '<thead><tr>' +
-      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Concepto en Excel</th>' +
-      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:right;border-bottom:1px solid var(--bd)">Valor total</th>' +
-      '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Tipo de fila</th>' +
-    '</tr></thead>' +
-    '<tbody>' + rows + '</tbody>' +
-    '</table>';
+    (nConfirmados > 0
+      ? '<div style="padding:6px 10px;font-size:8.5px;font-family:var(--mono);color:#2ecc8a;background:rgba(46,204,138,.08);border-radius:4px;margin-bottom:8px">'+
+          '✓ '+nConfirmados+' concepto'+(nConfirmados!==1?'s':'')+' del perfil guardado aplicado'+(nConfirmados!==1?'s':'')+' automáticamente'+
+        '</div>'
+      : '') +
+    (rows
+      ? '<table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr>' +
+          '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Concepto nuevo en Excel</th>' +
+          '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:right;border-bottom:1px solid var(--bd)">Valor total</th>' +
+          '<th style="padding:4px 8px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);background:var(--s3);text-align:left;border-bottom:1px solid var(--bd)">Tipo de fila</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+        '</table>'
+      : '<div style="padding:10px;font-size:9px;color:var(--dim);font-family:var(--mono)">— Todos los conceptos ya están mapeados por el perfil guardado —</div>');
 
   // Show profile status
   var infoEl = document.getElementById('wizard-perfil-info');
   if (infoEl && res._perfilAplicado) {
-    infoEl.textContent = '↩ Se aplicó perfil guardado — revisá y confirmá';
+    infoEl.textContent = nConfirmados > 0 ? '↩ Perfil aplicado — solo conceptos nuevos requieren mapeo' : '↩ Se aplicó perfil guardado';
     infoEl.style.color = '#47b4ff';
   } else if (infoEl) {
     infoEl.textContent = '';
@@ -9188,9 +9202,12 @@ function _aplicarMapeadoWizard() {
   if (!res) return;
   var msgEl = document.getElementById('wizard-msg');
 
-  var selects = document.querySelectorAll('#wizard-rows-container [data-rubro-idx]');
+  var container = document.getElementById('wizard-rows-container');
+  var selects = document.querySelectorAll('#wizard-rows-container [data-rubro-new-idx]');
+  // Índices originales de los rubros mostrados en el wizard (los no confirmados)
+  var originalIdxMap = (container && container._rubrosNuevosIdx) || [];
   var mappings = {};
-  var rubroAssign = {};
+  var rubroAssignByOrigIdx = {};
 
   // Decodificar tipoVal → { tipo, esTotal }
   function _decodeTipoVal(v) {
@@ -9204,19 +9221,23 @@ function _aplicarMapeadoWizard() {
   }
 
   selects.forEach(function(sel) {
-    var idx = parseInt(sel.dataset.rubroIdx);
-    var rubro = res.rubros[idx];
+    var newIdx = parseInt(sel.dataset.rubroNewIdx);
+    var origIdx = originalIdxMap[newIdx];
+    if (origIdx == null) return;
+    var rubro = res.rubros[origIdx];
     var tipoVal = sel.value;
     if (tipoVal) {
       var lUP = rubro.label.toUpperCase().trim();
       mappings[lUP] = tipoVal;
-      rubroAssign[idx] = tipoVal;
+      rubroAssignByOrigIdx[origIdx] = tipoVal;
     }
   });
 
+  // Combinar: confirmados del perfil se preservan; nuevos se mapean; el resto se ignora
   var rubrosNuevos = res.rubros.map(function(r, i) {
-    var tipoVal = rubroAssign[i];
-    if (!tipoVal) return null; // ignorar
+    if (r._tipoConfirmado) return r; // ya confirmado por perfil
+    var tipoVal = rubroAssignByOrigIdx[i];
+    if (!tipoVal) return null; // ignorar (sin mapeo asignado)
     var dec = _decodeTipoVal(tipoVal);
     if (!dec) return r;
     return Object.assign({}, r, dec, { _tipoConfirmado: true });
@@ -9227,10 +9248,13 @@ function _aplicarMapeadoWizard() {
     return;
   }
 
-  // Save profile if checkbox checked
+  // Save profile if checkbox checked — fusionar con perfil previo para no perder mappings ya guardados
   var guardar = document.getElementById('wizard-guardar-perfil');
   if (guardar && guardar.checked && res.empresa && Object.keys(mappings).length) {
-    _guardarPerfilEmpresa(res.empresa, mappings);
+    var key = _empKeyPerfil(res.empresa);
+    var perfilPrevio = (DATA.flujos_config && DATA.flujos_config.perfiles && DATA.flujos_config.perfiles[key]);
+    var mappingsFusionados = Object.assign({}, (perfilPrevio && perfilPrevio.rowMappings) || {}, mappings);
+    _guardarPerfilEmpresa(res.empresa, mappingsFusionados);
     if (msgEl) { msgEl.textContent = '✓ Perfil guardado'; msgEl.style.color = 'var(--pos)'; }
   }
 
@@ -10391,7 +10415,7 @@ function _renderListaFlujos() {
     const fEmp = porEmpresa[emp];
     if (empNames.length > 1) {
       rows += `<tr style="background:var(--s3)">
-        <td colspan="10" style="padding:5px 14px;font-size:9.5px;font-weight:700;
+        <td colspan="10" style="padding:3px 12px;font-size:9px;font-weight:700;
           color:var(--acc);font-family:var(--mono);letter-spacing:.07em;
           border-top:2px solid rgba(71,232,255,.2)">
           ${emp} <span style="font-weight:400;color:var(--dim)">(${fEmp.length} período${fEmp.length!==1?'s':''})</span>
@@ -10446,40 +10470,41 @@ function _renderListaFlujos() {
       const necCol = necAct == null ? 'var(--dim)' : necAct < 0 ? 'var(--neg)' : 'var(--pos)';
       const antCol = necAnt == null ? 'var(--dim)' : necAnt < 0 ? 'var(--neg)' : 'var(--pos)';
 
+      const tdBase = 'padding:3px 7px;white-space:nowrap';
       rows += `<tr ondblclick="_verFlujoIndividual('${f.clave}')" title="Doble clic para ver flujo individual"
         style="cursor:pointer" onmouseover="this.style.background='rgba(71,232,255,.05)'" onmouseout="this.style.background=''">
-        <td>${empCell}</td>
-        <td style="font-family:var(--mono)">
+        <td style="${tdBase}">${empCell}</td>
+        <td style="${tdBase};font-family:var(--mono)">
           <strong>${f.periodo}</strong>
           <button onclick="event.stopPropagation();_editarPeriodoFlujo('${f.clave}')" title="Editar período"
-            style="padding:1px 4px;background:none;border:1px solid var(--dim);
-            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:4px;vertical-align:middle">✎</button>
+            style="padding:1px 3px;background:none;border:1px solid var(--dim);
+            color:var(--dim);font-size:7px;border-radius:2px;cursor:pointer;margin-left:3px;vertical-align:middle">✎</button>
         </td>
-        <td>${tipoTag}${mesBadge}</td>
-        <td>${rubrosBadge}</td>
-        <td style="font-family:var(--mono);text-align:right">
+        <td style="${tdBase}">${tipoTag}${mesBadge}</td>
+        <td style="${tdBase}">${rubrosBadge}</td>
+        <td style="${tdBase};font-family:var(--mono);text-align:right">
           <strong style="color:${necCol}">${fmt(necAct)}</strong>
         </td>
-        <td style="font-family:var(--mono);text-align:right;color:${antCol}">
+        <td style="${tdBase};font-family:var(--mono);text-align:right;color:${antCol}">
           ${fmtDim(necAnt)}
         </td>
-        <td style="font-family:var(--mono);text-align:right">
+        <td style="${tdBase};font-family:var(--mono);text-align:right">
           <strong style="color:${varCol}">${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}</strong>${barraVar}
         </td>
-        <td style="font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
-        <td>${fechaCarga}</td>
-        <td style="white-space:nowrap">
+        <td style="${tdBase};font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
+        <td style="${tdBase}">${fechaCarga}</td>
+        <td style="${tdBase}">
           <button onclick="event.stopPropagation();_verFlujoIndividual('${f.clave}')" title="Ver flujo individual"
-            style="padding:2px 6px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
+            style="padding:1px 5px;background:rgba(71,232,255,.1);border:1px solid #47e8ff;
             color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">📋</button>
           <button onclick="event.stopPropagation();editarFlujo('${f.clave}')" title="Editar importes"
-            style="padding:2px 6px;background:none;border:1px solid #47e8ff;
+            style="padding:1px 5px;background:none;border:1px solid #47e8ff;
             color:var(--acc);font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">✏</button>
           <button onclick="event.stopPropagation();remapearFlujo('${f.clave}')" title="Reasignar tipos de rubros"
-            style="padding:2px 6px;background:none;border:1px solid #c4b5fd;
+            style="padding:1px 5px;background:none;border:1px solid #c4b5fd;
             color:#c4b5fd;font-size:8px;border-radius:2px;cursor:pointer;margin-right:2px">⇄</button>
           <button onclick="event.stopPropagation();_eliminarFlujo('${f.clave}')" title="Eliminar"
-            style="padding:2px 6px;background:none;border:1px solid var(--neg);
+            style="padding:1px 5px;background:none;border:1px solid var(--neg);
             color:var(--neg);font-size:8px;border-radius:2px;cursor:pointer">✕</button>
         </td>
       </tr>`;
