@@ -9378,28 +9378,49 @@ function parsearFlujoExcel(wb, XLSX) {
     }
     return String(cell.v ?? '').trim().replace(/^'+\s*/, '');
   };
-  // isNum: acepta número real o string con formato de miles ("1.234.567")
+  // _parseNumStr: parsea número en formato argentino (1.234,56) o inglés (1,234.56)
+  // detecta el formato por posición del último separador
+  const _parseNumStr = s => {
+    const lastDot   = s.lastIndexOf('.');
+    const lastComma = s.lastIndexOf(',');
+    let cleaned;
+    if (lastDot > lastComma) {
+      // Formato inglés/US: 1,234.56 → coma=miles, punto=decimal
+      cleaned = s.replace(/,/g, '');
+    } else if (lastComma > lastDot) {
+      // Formato argentino: 1.234,56 → punto=miles, coma=decimal
+      cleaned = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Sin separador mixto (solo entero o solo un tipo)
+      cleaned = s.replace(/[.,]/g, match => lastDot >= 0 ? '' : (match === ',' ? '.' : ''));
+      if (lastDot < 0 && lastComma < 0) cleaned = s;
+    }
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? null : n;
+  };
+  // isNum: acepta número real o string en formato argentino o inglés
   const isNum = (r, c) => {
     const v = getV(r, c);
     if (typeof v === 'number') return true;
     if (typeof v === 'string' && v.trim()) {
       let s = v.trim().replace(/^\$\s*/, '').replace(/\s/g, '');
       if (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1);
-      const cleaned = s.replace(/^-/, '').replace(/\./g,'').replace(',','.');
-      return cleaned !== '' && !isNaN(parseFloat(cleaned));
+      s = s.replace(/^-/, '');
+      return s !== '' && _parseNumStr(s) !== null;
     }
     return false;
   };
-  // getNum: valor numérico incluso desde strings formateados con puntos de miles
+  // getNum: valor numérico desde strings en formato argentino o inglés
   const getNum = (r, c) => {
     const v = getV(r, c);
     if (typeof v === 'number') return v;
     if (typeof v === 'string' && v.trim()) {
       let s = v.trim().replace(/^\$\s*/, '').replace(/\s/g, '');
-      const neg = s.startsWith('(') && s.endsWith(')');
-      if (neg) s = s.slice(1, -1);
-      const n = parseFloat(s.replace(/\./g,'').replace(',','.'));
-      return isNaN(n) ? null : (neg ? -n : n);
+      const neg = s.startsWith('(') && s.endsWith(')') || s.startsWith('-');
+      if (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1);
+      s = s.replace(/^-/, '');
+      const n = _parseNumStr(s);
+      return n === null ? null : (neg ? -n : n);
     }
     return null;
   };
