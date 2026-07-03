@@ -9408,13 +9408,17 @@ function parsearFlujoExcel(wb, XLSX) {
                     'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
   const MESES_ABREV = ['ENE','FEB','MAR','ABR','MAY','JUN',
                        'JUL','AGO','SEP','OCT','NOV','DIC'];
+  // Abreviaturas en inglés que difieren de las españolas
+  const MESES_EN_MAP = { JAN:0, APR:3, JUL:6, AUG:7, DEC:11 };
   // Normaliza encabezado de columna a nombre canónico de período o null
   const normHeader = h => {
-    // Eliminar año (ej. "ENERO 2026" → "ENERO", "ENERO-26" → "ENERO")
+    // Eliminar año (ej. "ENERO 2026" → "ENERO", "ENERO-26" → "ENERO", "Jan-26" → "JAN")
     const u = h.toUpperCase().trim().replace(/[\s\-\/]+20\d\d$/, '').replace(/[\s\-\/]+\d{2}$/, '').trim();
     if (MESES_ES.includes(u)) return u;
     const iAbr = MESES_ABREV.indexOf(u);
     if (iAbr >= 0) return MESES_ES[iAbr];
+    // Meses en inglés no cubiertos por abreviaturas españolas
+    if (MESES_EN_MAP[u] !== undefined) return MESES_ES[MESES_EN_MAP[u]];
     // Cuatrimestres: "1° CUATRIMESTRE", "2DO CUATR", "1er C", "1°C", "PRIMER CUATRIMESTRE", etc.
     const mC = u.match(/^(\d)[°ºERSTNDO°\.]*\s*(CUAT|C\b)/);
     if (mC) return `${mC[1]}°CUAT`;
@@ -9444,7 +9448,9 @@ function parsearFlujoExcel(wb, XLSX) {
       if (normHeader(s)) n++;
     }
     if (rowTxts.length) _diagRows.push(rowTxts.join(' | '));
-    if (n >= 1) { resumenRow = r; break; }
+    // Aceptar como header solo si col 0 NO es en sí misma un período
+    // (evita que títulos como "1º CUATRIMESTRE 2026" sean tomados como fila de cabecera)
+    if (n >= 1 && !normHeader(str(r, 0))) { resumenRow = r; break; }
     // También aceptar sección RESUMEN de RIODECO
     if (str(r, 1).toUpperCase() === 'RESUMEN') { resumenRow = r; break; }
   }
