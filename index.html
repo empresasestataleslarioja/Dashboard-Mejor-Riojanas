@@ -3936,22 +3936,13 @@ self.onmessage = async (e) => {
         <!-- KPI banda -->
         <div id="bal-kpi-band" class="kpi-band" style="margin-bottom:12px"></div>
 
-        <!-- Radar + estados contables -->
-        <div class="row2" style="margin-bottom:12px">
-          <div class="card">
-            <div class="card-hd">
-              <span class="card-hd-title">Perfil financiero</span>
-              <span class="card-hd-unit" id="bal-radar-lbl">score 4 ejes</span>
-            </div>
-            <canvas id="ch-bal-radar" style="max-height:220px"></canvas>
+        <!-- Estado de situación patrimonial (full width) -->
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Estado de situación patrimonial</span>
+            <span class="card-hd-unit" id="bal-esp-lbl"></span>
           </div>
-          <div class="card">
-            <div class="card-hd">
-              <span class="card-hd-title">Estado de situación patrimonial</span>
-              <span class="card-hd-unit" id="bal-esp-lbl"></span>
-            </div>
-            <div id="bal-estado-patrimonial"></div>
-          </div>
+          <div id="bal-estado-patrimonial"></div>
         </div>
 
         <!-- Estado de resultados solo -->
@@ -25932,46 +25923,90 @@ function eliminarBalanceActivo() {
 }
 
 // ── Estado de situación patrimonial (resumen) ──────────────
-function buildEstadoPatrimonial(b) {
+function buildEstadoPatrimonial(b, bAnt) {
   const ind  = b.indicadores || {};
   const liq  = ind.liquidez    || {};
   const sol  = ind.solvencia   || {};
-  const fmtM = v => {
+
+  const indA = bAnt ? (bAnt.indicadores || {}) : null;
+  const liqA = indA ? (indA.liquidez || {}) : {};
+  const solA = indA ? (indA.solvencia || {}) : {};
+
+  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+  const fmtM = (v, color) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
-    const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
     const s = v < 0 ? '−' : '';
-    return `<span style="color:${v<0?'var(--neg)':'var(--text)'};font-family:var(--mono)">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+    const c = color || (v < 0 ? 'var(--neg)' : 'var(--text)');
+    return `<span style="color:${c};font-family:var(--mono)">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+  };
+  const fmtVar = (act, ant) => {
+    if (act == null || ant == null || ant === 0) return '<span style="color:var(--dim)">—</span>';
+    const pct = (act - ant) / Math.abs(ant) * 100;
+    const c = pct > 0 ? 'var(--pos)' : pct < 0 ? 'var(--neg)' : 'var(--dim)';
+    return `<span style="color:${c};font-family:var(--mono)">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
   };
 
+  const acAct = liq.activo_corriente;
+  const acAnt = liqA.activo_corriente;
+  const atAct = sol.activo_total;
+  const atAnt = solA.activo_total;
+  const ancAct = atAct != null && acAct != null ? atAct - acAct : null;
+  const ancAnt = atAnt != null && acAnt != null ? atAnt - acAnt : null;
+  const pcAct = liq.pasivo_corriente;
+  const pcAnt = liqA.pasivo_corriente;
+  const ptAct = sol.pasivo_total;
+  const ptAnt = solA.pasivo_total;
+  const pncAct = ptAct != null && pcAct != null ? ptAct - pcAct : null;
+  const pncAnt = ptAnt != null && pcAnt != null ? ptAnt - pcAnt : null;
+  const pnAct = sol.patrimonio_neto;
+  const pnAnt = solA.patrimonio_neto;
+  const totAct = (ptAct != null && pnAct != null) ? ptAct + pnAct : atAct ?? null;
+  const totAnt = (ptAnt != null && pnAnt != null) ? ptAnt + pnAnt : atAnt ?? null;
+
   const filas = [
-    { label:'ACTIVO',              valor: null, negrita:true, nivel:0 },
-    { label:'Activo corriente',    valor: liq.activo_corriente,    nivel:1 },
-    { label:'Activo no corriente', valor: sol.activo_total != null && liq.activo_corriente != null ? sol.activo_total - liq.activo_corriente : null, nivel:1 },
-    { label:'TOTAL ACTIVO',        valor: sol.activo_total,        negrita:true, nivel:0, color:'#47e8ff' },
-    { label:'',                    valor: null, separador:true },
-    { label:'PASIVO',              valor: null, negrita:true, nivel:0 },
-    { label:'Pasivo corriente',    valor: liq.pasivo_corriente,    nivel:1 },
-    { label:'Pasivo no corriente', valor: sol.pasivo_total != null && liq.pasivo_corriente != null ? sol.pasivo_total - liq.pasivo_corriente : null, nivel:1 },
-    { label:'TOTAL PASIVO',        valor: sol.pasivo_total,        negrita:true, nivel:0, color:sol.pasivo_total>0?'var(--neg)':'var(--text)' },
-    { label:'',                    valor: null, separador:true },
-    { label:'PATRIMONIO NETO',     valor: sol.patrimonio_neto,     negrita:true, nivel:0, color: sol.patrimonio_neto >= 0 ? 'var(--pos)' : 'var(--neg)' },
-    { label:'',                    valor: null, separador:true },
-    { label:'TOTAL PASIVO Y PATRIMONIO NETO',
-      valor: (sol.pasivo_total != null && sol.patrimonio_neto != null) ? sol.pasivo_total + sol.patrimonio_neto : sol.activo_total ?? null,
-      negrita:true, nivel:0, color:'#47e8ff' },
+    { label:'ACTIVO',              act:null,   ant:null,   negrita:true, nivel:0 },
+    { label:'Activo corriente',    act:acAct,  ant:acAnt,  nivel:1 },
+    { label:'Activo no corriente', act:ancAct, ant:ancAnt, nivel:1 },
+    { label:'TOTAL ACTIVO',        act:atAct,  ant:atAnt,  negrita:true, nivel:0, colorAct:'#47e8ff' },
+    { separador:true },
+    { label:'PASIVO',              act:null,   ant:null,   negrita:true, nivel:0 },
+    { label:'Pasivo corriente',    act:pcAct,  ant:pcAnt,  nivel:1 },
+    { label:'Pasivo no corriente', act:pncAct, ant:pncAnt, nivel:1 },
+    { label:'TOTAL PASIVO',        act:ptAct,  ant:ptAnt,  negrita:true, nivel:0, colorAct:ptAct>0?'var(--neg)':'var(--text)' },
+    { separador:true },
+    { label:'PATRIMONIO NETO',     act:pnAct,  ant:pnAnt,  negrita:true, nivel:0, colorAct:pnAct>=0?'var(--pos)':'var(--neg)' },
+    { separador:true },
+    { label:'TOTAL PASIVO Y PATRIMONIO NETO', act:totAct, ant:totAnt, negrita:true, nivel:0, colorAct:'#47e8ff' },
   ];
 
+  const periodoAct = b.periodo || 'Ejercicio actual';
+  const periodoAnt = bAnt ? (bAnt.periodo || 'Ejercicio anterior') : 'Ejercicio anterior';
+  const colsAnt = bAnt ? 2 : 0; // 2 extra cols when anterior is available
+  const totalCols = 2 + colsAnt; // label + actual [+ anterior + variacion]
+
+  const thStyle = 'padding:5px 8px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const thLStyle = 'padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const header = `<tr>
+    <th style="${thLStyle}">Rubro</th>
+    <th style="${thStyle}">${periodoAct}</th>
+    ${bAnt ? `<th style="${thStyle}">${periodoAnt}</th><th style="${thStyle}">Variación</th>` : ''}
+  </tr>`;
+
   return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead>${header}</thead>
+    <tbody>
     ${filas.map(f => {
-      if (f.separador) return '<tr><td colspan="2" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>';
-      const indent  = f.nivel === 1 ? 'padding-left:22px' : '';
-      const weight  = f.negrita ? 'font-weight:600' : 'font-weight:400';
-      const labelColor = f.color ? `color:${f.color}` : f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
+      if (f.separador) return `<tr><td colspan="${totalCols}" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
+      const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+      const weight = f.negrita ? 'font-weight:600' : 'font-weight:400';
+      const labelColor = f.colorAct ? `color:${f.colorAct}` : f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
       return `<tr style="border-bottom:1px solid var(--bd2)">
         <td style="padding:5px 8px;${indent};${weight};${labelColor}">${f.label}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtM(f.valor)}</td>
+        <td style="padding:5px 8px;text-align:right">${f.act != null ? fmtM(f.act, f.colorAct) : '<span style="color:var(--dim)">—</span>'}</td>
+        ${bAnt ? `<td style="padding:5px 8px;text-align:right;opacity:.7">${f.ant != null ? fmtM(f.ant) : '<span style="color:var(--dim)">—</span>'}</td><td style="padding:5px 8px;text-align:right">${fmtVar(f.act, f.ant)}</td>` : ''}
       </tr>`;
     }).join('')}
+    </tbody>
   </table>`;
 }
 
@@ -26563,9 +26598,19 @@ function showBalanceResult() {
   const erEl  = document.getElementById('bal-estado-resultados');
   const espLbl= document.getElementById('bal-esp-lbl');
   const erLbl = document.getElementById('bal-er-lbl');
-  if (espEl)  espEl.innerHTML  = buildEstadoPatrimonial(b);
+
+  // Buscar balance anterior de la misma empresa
+  const _balsEmpresa = Object.values(_balances)
+    .filter(bx => bx.empresa === b.empresa && bx !== b)
+    .sort((a, bx) => String(a.periodo).localeCompare(String(bx.periodo)));
+  const _bAnterior = _balsEmpresa.length > 0 ? _balsEmpresa[_balsEmpresa.length - 1] : null;
+
+  if (espEl)  espEl.innerHTML  = buildEstadoPatrimonial(b, _bAnterior);
   if (erEl)   erEl.innerHTML   = buildEstadoResultados(b);
-  if (espLbl) espLbl.textContent = b.empresa + ' · ' + b.periodo;
+  if (espLbl) {
+    espLbl.textContent = b.empresa + ' · ' + b.periodo;
+    if (_bAnterior) espLbl.textContent += ' vs ' + _bAnterior.periodo;
+  }
   if (erLbl)  erLbl.textContent  = b.empresa + ' · ' + b.periodo;
 
   // Actualizar lista de archivos para resaltar el activo
