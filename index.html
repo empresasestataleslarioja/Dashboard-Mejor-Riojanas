@@ -9570,17 +9570,37 @@ function parsearFlujoExcel(wb, XLSX) {
   }
 
   // colLabel: detectar dinámicamente la columna de texto de rubros
-  // Buscar en las primeras filas de datos la primera columna con texto no-numérico
-  for (let r = resumenRow + 1; r <= Math.min(resumenRow + 5, rng.e.r); r++) {
-    for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
-      const v = getV(r, c);
-      if (v && typeof v === 'string' && v.trim().length > 1) {
-        colLabel = c; break;
+  // Buscar la columna con etiquetas de rubro reales: texto largo, sin chars decorativos ni dígito inicial
+  // Escanea varias filas para encontrar la col con mayor promedio de longitud de texto
+  {
+    const colScores = {};
+    for (let r = resumenRow + 1; r <= Math.min(resumenRow + 10, rng.e.r); r++) {
+      for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
+        const v = getV(r, c);
+        if (v && typeof v === 'string') {
+          const t = v.trim();
+          // Saltar labels decorativos (▼, ►, *, #) o que arrancan con dígito (números de ítem)
+          if (t.length > 2 && !/^[\s▼▲►◄*#→←•·\d]/.test(t)) {
+            colScores[c] = (colScores[c] || 0) + t.length;
+          }
+        }
       }
     }
-    if (colLabel >= 0) break;
+    if (Object.keys(colScores).length > 0) {
+      colLabel = parseInt(Object.entries(colScores).sort((a,b) => b[1]-a[1])[0][0]);
+    }
   }
-  if (colLabel < 0) colLabel = 0; // fallback col A
+  if (colLabel < 0) {
+    // Fallback: primera columna con cualquier string en las primeras filas
+    for (let r = resumenRow + 1; r <= Math.min(resumenRow + 5, rng.e.r); r++) {
+      for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
+        const v = getV(r, c);
+        if (v && typeof v === 'string' && v.trim().length > 1) { colLabel = c; break; }
+      }
+      if (colLabel >= 0) break;
+    }
+  }
+  if (colLabel < 0) colLabel = 0; // último fallback col A
 
   const meses = Object.keys(colM); // meses detectados
 
