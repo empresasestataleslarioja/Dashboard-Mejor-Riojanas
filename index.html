@@ -3936,13 +3936,22 @@ self.onmessage = async (e) => {
         <!-- KPI banda -->
         <div id="bal-kpi-band" class="kpi-band" style="margin-bottom:12px"></div>
 
-        <!-- Estado de situación patrimonial (full width) -->
-        <div class="rowfull card" style="margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Estado de situación patrimonial</span>
-            <span class="card-hd-unit" id="bal-esp-lbl"></span>
+        <!-- Estado de situación patrimonial + Análisis horizontal -->
+        <div class="row2" style="margin-bottom:12px">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Estado de situación patrimonial</span>
+              <span class="card-hd-unit" id="bal-esp-lbl"></span>
+            </div>
+            <div id="bal-estado-patrimonial"></div>
           </div>
-          <div id="bal-estado-patrimonial"></div>
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Análisis horizontal</span>
+              <span class="card-hd-unit" id="bal-ah-lbl"></span>
+            </div>
+            <div id="bal-analisis-horizontal"></div>
+          </div>
         </div>
 
         <!-- Estado de resultados solo -->
@@ -4978,8 +4987,8 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #bal-kpi-band .kpi { min-width:100px !important; flex:1 !important; }
 
   /* Secciones del balance — todas visibles */
-  #bal-radar-lbl, #bal-esp-lbl, #bal-er-lbl { display:block !important; }
-  #bal-estado-patrimonial, #bal-estado-resultados,
+  #bal-radar-lbl, #bal-esp-lbl, #bal-ah-lbl, #bal-er-lbl { display:block !important; }
+  #bal-estado-patrimonial, #bal-analisis-horizontal, #bal-estado-resultados,
   #bal-liquidez, #bal-solvencia,
   #bal-rentabilidad, #bal-eficiencia,
   #bal-diagnostico { display:block !important; break-inside:avoid; }
@@ -6852,24 +6861,112 @@ function _rptBalance(autoPrint) {
 
   <div class="section-title">Situación patrimonial</div>
   <div class="grid2">
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:0">
-        <div class="pat-row pat-section"><span>ACTIVO</span></div>
-        <div class="pat-row"><span style="font-size:10px">Activo corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(activoC)}</span></div>
-        <div class="pat-row"><span style="font-size:10px">Activo no corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(activoNC)}</span></div>
-        <div class="pat-row pat-total"><span style="font-size:10px">Activo total</span><span style="font-family:monospace;font-size:11px;color:#1a3a8f">${fM(activoT)}</span></div>
-        <div class="pat-row pat-section" style="margin-top:4px"><span>PASIVO</span></div>
-        <div class="pat-row"><span style="font-size:10px">Pasivo corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(pasivoC)}</span></div>
-        <div class="pat-row"><span style="font-size:10px">Pasivo no corriente</span><span style="font-family:monospace;font-size:10px;font-weight:600">${fM(pasivoNC)}</span></div>
-        <div class="pat-row pat-total"><span style="font-size:10px">Pasivo total</span><span style="font-family:monospace;font-size:11px;color:#d93025">${fM(pasivoT)}</span></div>
-        <div class="pat-row pat-pn"><span>Patrimonio neto</span><span style="font-family:monospace;font-size:13px;color:${pColor(patrimon)}">${fM(patrimon)}</span></div>
-        <div class="pat-row pat-total" style="border-top:2px solid #1a3a8f"><span style="font-size:10px">Total Pasivo + PN</span><span style="font-family:monospace;font-size:11px;color:#1a3a8f">${fM(pasivoT!=null&&patrimon!=null?pasivoT+patrimon:null)}</span></div>
-      </div>
-    </div>
-    <div class="card">
-      <div style="font-size:8px;color:#aaa;font-family:monospace;letter-spacing:.08em;margin-bottom:10px">DISTRIBUCIÓN PATRIMONIAL</div>
-      ${svgPat || '<div style="color:#aaa;font-size:10px;padding:20px 0">Sin datos patrimoniales disponibles.</div>'}
-    </div>
+    ${(() => {
+      // Tabla patrimonial con ejercicio anterior
+      const cur = _extractPatrimonialData(b);
+      const antD = anterior ? _extractPatrimonialData(anterior) : null;
+      const perAct = b.periodo || '—';
+      const perAnt = anterior ? (anterior.periodo || '—') : null;
+      const filasPat = [
+        { l:'ACTIVO',              v:null,    va:null,    sec:true },
+        { l:'Activo corriente',    v:cur.aC,  va:antD?.aC },
+        { l:'Activo no corriente', v:cur.aNC, va:antD?.aNC },
+        { l:'TOTAL ACTIVO',        v:cur.aT,  va:antD?.aT,  tot:true, tc:'#1a3a8f' },
+        { sep:true },
+        { l:'PASIVO',              v:null,    va:null,    sec:true },
+        { l:'Pasivo corriente',    v:cur.pC,  va:antD?.pC },
+        { l:'Pasivo no corriente', v:cur.pNC, va:antD?.pNC },
+        { l:'TOTAL PASIVO',        v:cur.pT,  va:antD?.pT,  tot:true, tc:'#d93025' },
+        { sep:true },
+        { l:'PATRIMONIO NETO',     v:cur.pN,  va:antD?.pN,  tot:true, tc:pColor(cur.pN) },
+        { sep:true },
+        { l:'TOTAL PASIVO + PN',   v:cur.tot, va:antD?.tot, tot:true, tc:'#1a3a8f' },
+      ];
+      const nC = antD ? 3 : 2;
+      const thR = `padding:6px 10px;text-align:right;font-family:monospace;font-size:8.5px;letter-spacing:.06em;color:rgba(255,255,255,.75);font-weight:500`;
+      const thL = `padding:6px 10px;text-align:left;font-family:monospace;font-size:8.5px;letter-spacing:.06em;color:rgba(255,255,255,.75);font-weight:500`;
+      const rows = filasPat.map(f => {
+        if (f.sep) return `<tr><td colspan="${nC}" style="height:5px;background:#f8f9fa"></td></tr>`;
+        const bg  = f.sec ? '#f0f4ff' : f.tot ? '#eef2ff' : '#fff';
+        const fw  = (f.sec || f.tot) ? '700' : '400';
+        const lc  = f.sec ? '#1a3a8f' : '#333';
+        const vc  = f.tc || (f.v != null && f.v < 0 ? '#d93025' : '#333');
+        const fmV = v => v != null ? fM(v) : '—';
+        return `<tr style="background:${bg};border-bottom:1px solid #eee">
+          <td style="padding:5px 10px;font-weight:${fw};color:${lc};font-size:10px">${f.l}</td>
+          <td style="padding:5px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:${fw};color:${vc}">${fmV(f.v)}</td>
+          ${antD ? `<td style="padding:5px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:#888">${fmV(f.va)}</td>` : ''}
+        </tr>`;
+      }).join('');
+      return `<div class="card" style="padding:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:linear-gradient(135deg,#0d1b4b,#1a3a8f)">
+            <th style="${thL}">Rubro</th>
+            <th style="${thR}">${perAct}</th>
+            ${antD ? `<th style="${thR};opacity:.65">${perAnt}</th>` : ''}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    })()}
+    ${(() => {
+      // Análisis horizontal
+      const cur = _extractPatrimonialData(b);
+      const antD = anterior ? _extractPatrimonialData(anterior) : null;
+      if (!antD) return `<div class="card"><div style="font-size:10px;color:#aaa;padding:20px 0;text-align:center">Cargá un ejercicio anterior para ver variaciones.</div></div>`;
+      const fVar = (c, a) => {
+        if (c == null || a == null || a === 0) return { pct:null };
+        const pct = (c - a) / Math.abs(a) * 100;
+        return { pct, pos: pct >= 0 };
+      };
+      const filasAH = [
+        { l:'Activo corriente',    ...fVar(cur.aC,  antD.aC)  },
+        { l:'Activo no corriente', ...fVar(cur.aNC, antD.aNC) },
+        { l:'TOTAL ACTIVO',        ...fVar(cur.aT,  antD.aT),  negrita:true },
+        { sep:true },
+        { l:'Pasivo corriente',    ...fVar(cur.pC,  antD.pC)  },
+        { l:'Pasivo no corriente', ...fVar(cur.pNC, antD.pNC) },
+        { l:'TOTAL PASIVO',        ...fVar(cur.pT,  antD.pT),  negrita:true },
+        { sep:true },
+        { l:'PATRIMONIO NETO',     ...fVar(cur.pN,  antD.pN),  negrita:true },
+        { sep:true },
+        { l:'TOTAL PASIVO + PN',   ...fVar(cur.tot, antD.tot), negrita:true },
+      ];
+      const thR2 = `padding:6px 10px;text-align:right;font-family:monospace;font-size:8.5px;color:rgba(255,255,255,.75);font-weight:500`;
+      const thL2 = `padding:6px 10px;text-align:left;font-family:monospace;font-size:8.5px;color:rgba(255,255,255,.75);font-weight:500`;
+      const rows2 = filasAH.map(f => {
+        if (f.sep) return `<tr><td colspan="2" style="height:5px;background:#f8f9fa"></td></tr>`;
+        const fw = f.negrita ? '700' : '400';
+        const bg = f.negrita ? '#eef2ff' : '#fff';
+        let varCell = '<td style="padding:5px 10px;text-align:right;color:#aaa">—</td>';
+        if (f.pct != null) {
+          const c = f.pos ? '#1a9e68' : '#d93025';
+          const ar = f.pos ? '▲' : '▼';
+          const bw = Math.min(Math.abs(f.pct), 100);
+          varCell = `<td style="padding:5px 10px;text-align:right">
+            <span style="font-family:monospace;font-size:10.5px;font-weight:${fw};color:${c}">${ar} ${Math.abs(f.pct).toFixed(1)}%</span>
+            <div style="margin-top:3px;height:4px;border-radius:2px;background:#eee;overflow:hidden">
+              <div style="height:100%;width:${bw}%;background:${c};border-radius:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact"></div>
+            </div>
+          </td>`;
+        }
+        return `<tr style="background:${bg};border-bottom:1px solid #eee">
+          <td style="padding:5px 10px;font-weight:${fw};color:#333;font-size:10px">${f.l}</td>
+          ${varCell}
+        </tr>`;
+      }).join('');
+      const perAct = b.periodo || '—';
+      const perAnt = anterior.periodo || '—';
+      return `<div class="card" style="padding:0;overflow:hidden">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:linear-gradient(135deg,#0d1b4b,#1a3a8f)">
+            <th style="${thL2}">Análisis horizontal</th>
+            <th style="${thR2}">Var. ${perAnt} → ${perAct}</th>
+          </tr></thead>
+          <tbody>${rows2}</tbody>
+        </table>
+      </div>`;
+    })()}
   </div>
 
   <div class="section-title">Indicadores financieros</div>
@@ -7936,7 +8033,7 @@ function _prepararPanelParaPrint(panelId, panelEl) {
     _set('bal-comparacion-wrap', 'block');
 
     // Secciones de indicadores — mostrar solo si tienen contenido
-    ['bal-estado-patrimonial','bal-estado-resultados',
+    ['bal-estado-patrimonial','bal-analisis-horizontal','bal-estado-resultados',
      'bal-liquidez','bal-solvencia','bal-rentabilidad','bal-eficiencia'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -7981,7 +8078,7 @@ function _limpiarDespuesDePrint(panelId, panelEl) {
     'bal-empresa-det','bal-periodo-det','bal-status','bal-comp-checks','bal-fuente',
     'bal-cierre-det','bal-comp-selector-row','bal-editor-toggle','bal-editor-wrap',
     'bal-raw-toggle','bal-raw-wrap','bal-vincular-card','bal-vincular-sel','bal-vincular-estado',
-    'bal-estado-patrimonial','bal-estado-resultados','bal-liquidez','bal-solvencia',
+    'bal-estado-patrimonial','bal-analisis-horizontal','bal-estado-resultados','bal-liquidez','bal-solvencia',
     'bal-rentabilidad','bal-eficiencia','flujo-comp-wrap','panel-flujo-confirm','panel-flujo-manual',
     'pers-mensual-wrap','pers-manual-panel','pers-import-msg','pers-tabla-wrap','kpi-pers',
     'btn-cargar-bal','file-bal','bal-progress','tbl-flujos-lista'];
@@ -25923,14 +26020,24 @@ function eliminarBalanceActivo() {
 }
 
 // ── Estado de situación patrimonial (resumen) ──────────────
-function buildEstadoPatrimonial(b, bAnt) {
-  const ind  = b.indicadores || {};
-  const liq  = ind.liquidez    || {};
-  const sol  = ind.solvencia   || {};
+function _extractPatrimonialData(b) {
+  const ind = b ? (b.indicadores || {}) : {};
+  const liq = ind.liquidez || {};
+  const sol = ind.solvencia || {};
+  const aC  = liq.activo_corriente ?? null;
+  const aT  = sol.activo_total ?? null;
+  const aNC = (aT != null && aC != null) ? aT - aC : null;
+  const pC  = liq.pasivo_corriente ?? null;
+  const pT  = sol.pasivo_total ?? null;
+  const pNC = (pT != null && pC != null) ? pT - pC : null;
+  const pN  = sol.patrimonio_neto ?? null;
+  const tot = (pT != null && pN != null) ? pT + pN : aT ?? null;
+  return { aC, aNC, aT, pC, pNC, pT, pN, tot };
+}
 
-  const indA = bAnt ? (bAnt.indicadores || {}) : null;
-  const liqA = indA ? (indA.liquidez || {}) : {};
-  const solA = indA ? (indA.solvencia || {}) : {};
+function buildEstadoPatrimonial(b, bAnt) {
+  const cur = _extractPatrimonialData(b);
+  const ant = bAnt ? _extractPatrimonialData(bAnt) : null;
 
   const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
   const fmtM = (v, color) => {
@@ -25939,74 +26046,118 @@ function buildEstadoPatrimonial(b, bAnt) {
     const c = color || (v < 0 ? 'var(--neg)' : 'var(--text)');
     return `<span style="color:${c};font-family:var(--mono)">${s}$ ${fmt.format(Math.abs(v))}</span>`;
   };
-  const fmtVar = (act, ant) => {
-    if (act == null || ant == null || ant === 0) return '<span style="color:var(--dim)">—</span>';
-    const pct = (act - ant) / Math.abs(ant) * 100;
-    const c = pct > 0 ? 'var(--pos)' : pct < 0 ? 'var(--neg)' : 'var(--dim)';
-    return `<span style="color:${c};font-family:var(--mono)">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
-  };
-
-  const acAct = liq.activo_corriente;
-  const acAnt = liqA.activo_corriente;
-  const atAct = sol.activo_total;
-  const atAnt = solA.activo_total;
-  const ancAct = atAct != null && acAct != null ? atAct - acAct : null;
-  const ancAnt = atAnt != null && acAnt != null ? atAnt - acAnt : null;
-  const pcAct = liq.pasivo_corriente;
-  const pcAnt = liqA.pasivo_corriente;
-  const ptAct = sol.pasivo_total;
-  const ptAnt = solA.pasivo_total;
-  const pncAct = ptAct != null && pcAct != null ? ptAct - pcAct : null;
-  const pncAnt = ptAnt != null && pcAnt != null ? ptAnt - pcAnt : null;
-  const pnAct = sol.patrimonio_neto;
-  const pnAnt = solA.patrimonio_neto;
-  const totAct = (ptAct != null && pnAct != null) ? ptAct + pnAct : atAct ?? null;
-  const totAnt = (ptAnt != null && pnAnt != null) ? ptAnt + pnAnt : atAnt ?? null;
 
   const filas = [
-    { label:'ACTIVO',              act:null,   ant:null,   negrita:true, nivel:0 },
-    { label:'Activo corriente',    act:acAct,  ant:acAnt,  nivel:1 },
-    { label:'Activo no corriente', act:ancAct, ant:ancAnt, nivel:1 },
-    { label:'TOTAL ACTIVO',        act:atAct,  ant:atAnt,  negrita:true, nivel:0, colorAct:'#47e8ff' },
+    { label:'ACTIVO',              cur:null,     ant:null,       negrita:true, nivel:0 },
+    { label:'Activo corriente',    cur:cur.aC,   ant:ant?.aC,    nivel:1 },
+    { label:'Activo no corriente', cur:cur.aNC,  ant:ant?.aNC,   nivel:1 },
+    { label:'TOTAL ACTIVO',        cur:cur.aT,   ant:ant?.aT,    negrita:true, nivel:0, color:'#47e8ff' },
     { separador:true },
-    { label:'PASIVO',              act:null,   ant:null,   negrita:true, nivel:0 },
-    { label:'Pasivo corriente',    act:pcAct,  ant:pcAnt,  nivel:1 },
-    { label:'Pasivo no corriente', act:pncAct, ant:pncAnt, nivel:1 },
-    { label:'TOTAL PASIVO',        act:ptAct,  ant:ptAnt,  negrita:true, nivel:0, colorAct:ptAct>0?'var(--neg)':'var(--text)' },
+    { label:'PASIVO',              cur:null,     ant:null,       negrita:true, nivel:0 },
+    { label:'Pasivo corriente',    cur:cur.pC,   ant:ant?.pC,    nivel:1 },
+    { label:'Pasivo no corriente', cur:cur.pNC,  ant:ant?.pNC,   nivel:1 },
+    { label:'TOTAL PASIVO',        cur:cur.pT,   ant:ant?.pT,    negrita:true, nivel:0, color:cur.pT>0?'var(--neg)':'var(--text)' },
     { separador:true },
-    { label:'PATRIMONIO NETO',     act:pnAct,  ant:pnAnt,  negrita:true, nivel:0, colorAct:pnAct>=0?'var(--pos)':'var(--neg)' },
+    { label:'PATRIMONIO NETO',     cur:cur.pN,   ant:ant?.pN,    negrita:true, nivel:0, color:cur.pN>=0?'var(--pos)':'var(--neg)' },
     { separador:true },
-    { label:'TOTAL PASIVO Y PATRIMONIO NETO', act:totAct, ant:totAnt, negrita:true, nivel:0, colorAct:'#47e8ff' },
+    { label:'TOTAL PASIVO + PN',   cur:cur.tot,  ant:ant?.tot,   negrita:true, nivel:0, color:'#47e8ff' },
   ];
 
-  const periodoAct = b.periodo || 'Ejercicio actual';
-  const periodoAnt = bAnt ? (bAnt.periodo || 'Ejercicio anterior') : 'Ejercicio anterior';
-  const colsAnt = bAnt ? 2 : 0; // 2 extra cols when anterior is available
-  const totalCols = 2 + colsAnt; // label + actual [+ anterior + variacion]
+  const perAct = b.periodo || '—';
+  const perAnt = bAnt ? (bAnt.periodo || '—') : null;
+  const nCols  = ant ? 3 : 2;
 
-  const thStyle = 'padding:5px 8px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
-  const thLStyle = 'padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
-  const header = `<tr>
-    <th style="${thLStyle}">Rubro</th>
-    <th style="${thStyle}">${periodoAct}</th>
-    ${bAnt ? `<th style="${thStyle}">${periodoAnt}</th><th style="${thStyle}">Variación</th>` : ''}
-  </tr>`;
+  const thS  = 'padding:5px 8px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const thLS = 'padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
 
   return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
-    <thead>${header}</thead>
+    <thead><tr>
+      <th style="${thLS}">Rubro</th>
+      <th style="${thS}">${perAct}</th>
+      ${ant ? `<th style="${thS};opacity:.65">${perAnt}</th>` : ''}
+    </tr></thead>
     <tbody>
     ${filas.map(f => {
-      if (f.separador) return `<tr><td colspan="${totalCols}" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
+      if (f.separador) return `<tr><td colspan="${nCols}" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
       const indent = f.nivel === 1 ? 'padding-left:22px' : '';
       const weight = f.negrita ? 'font-weight:600' : 'font-weight:400';
-      const labelColor = f.colorAct ? `color:${f.colorAct}` : f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
+      const lc = f.color ? `color:${f.color}` : f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
       return `<tr style="border-bottom:1px solid var(--bd2)">
-        <td style="padding:5px 8px;${indent};${weight};${labelColor}">${f.label}</td>
-        <td style="padding:5px 8px;text-align:right">${f.act != null ? fmtM(f.act, f.colorAct) : '<span style="color:var(--dim)">—</span>'}</td>
-        ${bAnt ? `<td style="padding:5px 8px;text-align:right;opacity:.7">${f.ant != null ? fmtM(f.ant) : '<span style="color:var(--dim)">—</span>'}</td><td style="padding:5px 8px;text-align:right">${fmtVar(f.act, f.ant)}</td>` : ''}
+        <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
+        <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.color) : '<span style="color:var(--dim)">—</span>'}</td>
+        ${ant ? `<td style="padding:5px 8px;text-align:right;opacity:.65">${f.ant != null ? fmtM(f.ant) : '<span style="color:var(--dim)">—</span>'}</td>` : ''}
       </tr>`;
     }).join('')}
     </tbody>
+  </table>`;
+}
+
+function buildAnalisisHorizontal(b, bAnt) {
+  if (!bAnt) {
+    return `<div style="padding:24px 16px;text-align:center;color:var(--dim);font-size:10px;font-family:var(--mono)">
+      Cargá un segundo ejercicio de la misma empresa para visualizar las variaciones.</div>`;
+  }
+  const cur = _extractPatrimonialData(b);
+  const ant = _extractPatrimonialData(bAnt);
+
+  const filas = [
+    { label:'Activo corriente',    cur:cur.aC,  ant:ant.aC,  negrita:false },
+    { label:'Activo no corriente', cur:cur.aNC, ant:ant.aNC, negrita:false },
+    { label:'TOTAL ACTIVO',        cur:cur.aT,  ant:ant.aT,  negrita:true  },
+    { separador:true },
+    { label:'Pasivo corriente',    cur:cur.pC,  ant:ant.pC,  negrita:false },
+    { label:'Pasivo no corriente', cur:cur.pNC, ant:ant.pNC, negrita:false },
+    { label:'TOTAL PASIVO',        cur:cur.pT,  ant:ant.pT,  negrita:true  },
+    { separador:true },
+    { label:'PATRIMONIO NETO',     cur:cur.pN,  ant:ant.pN,  negrita:true  },
+    { separador:true },
+    { label:'TOTAL PASIVO + PN',   cur:cur.tot, ant:ant.tot, negrita:true  },
+  ];
+
+  const fmtPct = (c, a) => {
+    if (c == null || a == null || a === 0) return null;
+    return (c - a) / Math.abs(a) * 100;
+  };
+
+  const rows = filas.map(f => {
+    if (f.separador) return `<tr><td colspan="3" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
+    const pct = fmtPct(f.cur, f.ant);
+    const weight = f.negrita ? 'font-weight:600' : 'font-weight:400';
+    const lc = f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
+
+    let pctHtml = '<span style="color:var(--dim)">—</span>';
+    let barHtml  = '';
+    if (pct != null) {
+      const pos = pct >= 0;
+      const c   = pos ? 'var(--pos)' : 'var(--neg)';
+      const arrow = pos ? '▲' : '▼';
+      pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:11px">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+      const barW = Math.min(Math.abs(pct), 100);
+      barHtml = `<div style="margin-top:3px;height:4px;border-radius:2px;background:var(--bd2);overflow:hidden">
+        <div style="height:100%;width:${barW}%;background:${c};border-radius:2px;transition:width .3s"></div>
+      </div>`;
+    }
+
+    return `<tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:5px 8px;${weight};${lc}">${f.label}</td>
+      <td style="padding:5px 8px;text-align:right;min-width:90px">
+        ${pctHtml}
+        ${barHtml}
+      </td>
+    </tr>`;
+  }).join('');
+
+  const perAct = b.periodo || '—';
+  const perAnt = bAnt.periodo || '—';
+  const thS  = 'padding:5px 8px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const thLS = 'padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+
+  return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead><tr>
+      <th style="${thLS}">Rubro</th>
+      <th style="${thS}">Var. ${perAnt} → ${perAct}</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
   </table>`;
 }
 
@@ -26605,12 +26756,14 @@ function showBalanceResult() {
     .sort((a, bx) => String(a.periodo).localeCompare(String(bx.periodo)));
   const _bAnterior = _balsEmpresa.length > 0 ? _balsEmpresa[_balsEmpresa.length - 1] : null;
 
+  const ahEl  = document.getElementById('bal-analisis-horizontal');
+  const ahLbl = document.getElementById('bal-ah-lbl');
   if (espEl)  espEl.innerHTML  = buildEstadoPatrimonial(b, _bAnterior);
+  if (ahEl)   ahEl.innerHTML   = buildAnalisisHorizontal(b, _bAnterior);
   if (erEl)   erEl.innerHTML   = buildEstadoResultados(b);
-  if (espLbl) {
-    espLbl.textContent = b.empresa + ' · ' + b.periodo;
-    if (_bAnterior) espLbl.textContent += ' vs ' + _bAnterior.periodo;
-  }
+  const _lblPer = _bAnterior ? b.periodo + ' vs ' + _bAnterior.periodo : b.periodo;
+  if (espLbl) espLbl.textContent = b.empresa + ' · ' + _lblPer;
+  if (ahLbl)  ahLbl.textContent  = _bAnterior ? 'variación ' + _bAnterior.periodo + ' → ' + b.periodo : b.empresa + ' · ' + b.periodo;
   if (erLbl)  erLbl.textContent  = b.empresa + ' · ' + b.periodo;
 
   // Actualizar lista de archivos para resaltar el activo
