@@ -6862,40 +6862,26 @@ function _rptBalance(autoPrint) {
   <div class="section-title">Situación patrimonial</div>
   <div class="grid2">
     ${(() => {
-      // Tabla patrimonial con ejercicio anterior
-      const cur = _extractPatrimonialData(b);
+      const cur  = _extractPatrimonialData(b);
       const antD = anterior ? _extractPatrimonialData(anterior) : null;
+      const filas = _patFilasShared(cur, antD);
       const perAct = b.periodo || '—';
       const perAnt = anterior ? (anterior.periodo || '—') : null;
-      const filasPat = [
-        { l:'ACTIVO',              v:null,    va:null,    sec:true },
-        { l:'Activo corriente',    v:cur.aC,  va:antD?.aC },
-        { l:'Activo no corriente', v:cur.aNC, va:antD?.aNC },
-        { l:'TOTAL ACTIVO',        v:cur.aT,  va:antD?.aT,  tot:true, tc:'#1a3a8f' },
-        { sep:true },
-        { l:'PASIVO',              v:null,    va:null,    sec:true },
-        { l:'Pasivo corriente',    v:cur.pC,  va:antD?.pC },
-        { l:'Pasivo no corriente', v:cur.pNC, va:antD?.pNC },
-        { l:'TOTAL PASIVO',        v:cur.pT,  va:antD?.pT,  tot:true, tc:'#d93025' },
-        { sep:true },
-        { l:'PATRIMONIO NETO',     v:cur.pN,  va:antD?.pN,  tot:true, tc:pColor(cur.pN) },
-        { sep:true },
-        { l:'TOTAL PASIVO + PN',   v:cur.tot, va:antD?.tot, tot:true, tc:'#1a3a8f' },
-      ];
       const nC = antD ? 3 : 2;
       const thR = `padding:6px 10px;text-align:right;font-family:monospace;font-size:8.5px;letter-spacing:.06em;color:rgba(255,255,255,.75);font-weight:500`;
       const thL = `padding:6px 10px;text-align:left;font-family:monospace;font-size:8.5px;letter-spacing:.06em;color:rgba(255,255,255,.75);font-weight:500`;
-      const rows = filasPat.map(f => {
-        if (f.sep) return `<tr><td colspan="${nC}" style="height:5px;background:#f8f9fa"></td></tr>`;
-        const bg  = f.sec ? '#f0f4ff' : f.tot ? '#eef2ff' : '#fff';
-        const fw  = (f.sec || f.tot) ? '700' : '400';
-        const lc  = f.sec ? '#1a3a8f' : '#333';
-        const vc  = f.tc || (f.v != null && f.v < 0 ? '#d93025' : '#333');
+      const rows = filas.map(f => {
+        if (f.separador) return `<tr><td colspan="${nC}" style="height:5px;background:#f8f9fa"></td></tr>`;
+        const bg = f.seccion ? '#f0f4ff' : f.total ? '#eef2ff' : '#fff';
+        const fw = (f.seccion || f.total) ? '700' : '400';
+        const lc = f.seccion ? '#1a3a8f' : '#333';
+        const vc = f.colorVal || (f.cur != null && f.cur < 0 ? '#d93025' : '#333');
+        const indent = f.nivel === 1 ? 'padding-left:22px' : '';
         const fmV = v => v != null ? fM(v) : '—';
         return `<tr style="background:${bg};border-bottom:1px solid #eee">
-          <td style="padding:5px 10px;font-weight:${fw};color:${lc};font-size:10px">${f.l}</td>
-          <td style="padding:5px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:${fw};color:${vc}">${fmV(f.v)}</td>
-          ${antD ? `<td style="padding:5px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:#888">${fmV(f.va)}</td>` : ''}
+          <td style="padding:5px 10px;${indent};font-weight:${fw};color:${lc};font-size:10px">${f.label}</td>
+          <td style="padding:5px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:${fw};color:${vc}">${f.seccion ? '' : fmV(f.cur)}</td>
+          ${antD ? `<td style="padding:5px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:#888">${f.seccion ? '' : fmV(f.ant)}</td>` : ''}
         </tr>`;
       }).join('');
       return `<div class="card" style="padding:0;overflow:hidden">
@@ -6910,53 +6896,44 @@ function _rptBalance(autoPrint) {
       </div>`;
     })()}
     ${(() => {
-      // Análisis horizontal
-      const cur = _extractPatrimonialData(b);
+      const cur  = _extractPatrimonialData(b);
       const antD = anterior ? _extractPatrimonialData(anterior) : null;
       if (!antD) return `<div class="card"><div style="font-size:10px;color:#aaa;padding:20px 0;text-align:center">Cargá un ejercicio anterior para ver variaciones.</div></div>`;
-      const fVar = (c, a) => {
-        if (c == null || a == null || a === 0) return { pct:null };
-        const pct = (c - a) / Math.abs(a) * 100;
-        return { pct, pos: pct >= 0 };
-      };
-      const filasAH = [
-        { l:'Activo corriente',    ...fVar(cur.aC,  antD.aC)  },
-        { l:'Activo no corriente', ...fVar(cur.aNC, antD.aNC) },
-        { l:'TOTAL ACTIVO',        ...fVar(cur.aT,  antD.aT),  negrita:true },
-        { sep:true },
-        { l:'Pasivo corriente',    ...fVar(cur.pC,  antD.pC)  },
-        { l:'Pasivo no corriente', ...fVar(cur.pNC, antD.pNC) },
-        { l:'TOTAL PASIVO',        ...fVar(cur.pT,  antD.pT),  negrita:true },
-        { sep:true },
-        { l:'PATRIMONIO NETO',     ...fVar(cur.pN,  antD.pN),  negrita:true },
-        { sep:true },
-        { l:'TOTAL PASIVO + PN',   ...fVar(cur.tot, antD.tot), negrita:true },
-      ];
+      const filas = _patFilasShared(cur, antD);
+      const perAct = b.periodo || '—';
+      const perAnt = anterior.periodo || '—';
       const thR2 = `padding:6px 10px;text-align:right;font-family:monospace;font-size:8.5px;color:rgba(255,255,255,.75);font-weight:500`;
       const thL2 = `padding:6px 10px;text-align:left;font-family:monospace;font-size:8.5px;color:rgba(255,255,255,.75);font-weight:500`;
-      const rows2 = filasAH.map(f => {
-        if (f.sep) return `<tr><td colspan="2" style="height:5px;background:#f8f9fa"></td></tr>`;
-        const fw = f.negrita ? '700' : '400';
-        const bg = f.negrita ? '#eef2ff' : '#fff';
+      const rows2 = filas.map(f => {
+        if (f.separador) return `<tr><td colspan="2" style="height:5px;background:#f8f9fa"></td></tr>`;
+        const fw = (f.seccion || f.total) ? '700' : '400';
+        const bg = f.seccion ? '#f0f4ff' : f.total ? '#eef2ff' : '#fff';
+        const lc = f.seccion ? '#1a3a8f' : '#333';
+        const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+        if (f.seccion) {
+          return `<tr style="background:${bg};border-bottom:1px solid #eee">
+            <td style="padding:5px 10px;${indent};font-weight:${fw};color:${lc};font-size:10px">${f.label}</td>
+            <td style="padding:5px 10px"></td>
+          </tr>`;
+        }
+        const pct = (f.cur != null && f.ant != null && f.ant !== 0) ? (f.cur - f.ant) / Math.abs(f.ant) * 100 : null;
         let varCell = '<td style="padding:5px 10px;text-align:right;color:#aaa">—</td>';
-        if (f.pct != null) {
-          const c = f.pos ? '#1a9e68' : '#d93025';
-          const ar = f.pos ? '▲' : '▼';
-          const bw = Math.min(Math.abs(f.pct), 100);
+        if (pct != null) {
+          const c = pct >= 0 ? '#1a9e68' : '#d93025';
+          const ar = pct >= 0 ? '▲' : '▼';
+          const bw = Math.min(Math.abs(pct), 100);
           varCell = `<td style="padding:5px 10px;text-align:right">
-            <span style="font-family:monospace;font-size:10.5px;font-weight:${fw};color:${c}">${ar} ${Math.abs(f.pct).toFixed(1)}%</span>
+            <span style="font-family:monospace;font-size:10.5px;font-weight:${fw};color:${c}">${ar} ${Math.abs(pct).toFixed(1)}%</span>
             <div style="margin-top:3px;height:4px;border-radius:2px;background:#eee;overflow:hidden">
               <div style="height:100%;width:${bw}%;background:${c};border-radius:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact"></div>
             </div>
           </td>`;
         }
         return `<tr style="background:${bg};border-bottom:1px solid #eee">
-          <td style="padding:5px 10px;font-weight:${fw};color:#333;font-size:10px">${f.l}</td>
+          <td style="padding:5px 10px;${indent};font-weight:${fw};color:${lc};font-size:10px">${f.label}</td>
           ${varCell}
         </tr>`;
       }).join('');
-      const perAct = b.periodo || '—';
-      const perAnt = anterior.periodo || '—';
       return `<div class="card" style="padding:0;overflow:hidden">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:linear-gradient(135deg,#0d1b4b,#1a3a8f)">
@@ -26035,11 +26012,31 @@ function _extractPatrimonialData(b) {
   return { aC, aNC, aT, pC, pNC, pT, pN, tot };
 }
 
-function buildEstadoPatrimonial(b, bAnt) {
-  const cur = _extractPatrimonialData(b);
-  const ant = bAnt ? _extractPatrimonialData(bAnt) : null;
+// Definición compartida de filas — usada por ambas cards para garantizar alineación exacta
+function _patFilasShared(cur, ant) {
+  return [
+    { label:'ACTIVO',              seccion:true,  cur:null,    ant:null     },
+    { label:'Activo corriente',    nivel:1,       cur:cur.aC,  ant:ant?.aC  },
+    { label:'Activo no corriente', nivel:1,       cur:cur.aNC, ant:ant?.aNC },
+    { label:'TOTAL ACTIVO',        total:true,    cur:cur.aT,  ant:ant?.aT,  colorVal:'#47e8ff' },
+    { separador:true },
+    { label:'PASIVO',              seccion:true,  cur:null,    ant:null     },
+    { label:'Pasivo corriente',    nivel:1,       cur:cur.pC,  ant:ant?.pC  },
+    { label:'Pasivo no corriente', nivel:1,       cur:cur.pNC, ant:ant?.pNC },
+    { label:'TOTAL PASIVO',        total:true,    cur:cur.pT,  ant:ant?.pT,  colorVal:cur.pT > 0 ? 'var(--neg)' : 'var(--text)' },
+    { separador:true },
+    { label:'PATRIMONIO NETO',     total:true,    cur:cur.pN,  ant:ant?.pN,  colorVal:cur.pN >= 0 ? 'var(--pos)' : 'var(--neg)' },
+    { separador:true },
+    { label:'TOTAL PASIVO + PN',   total:true,    cur:cur.tot, ant:ant?.tot, colorVal:'#47e8ff' },
+  ];
+}
 
-  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+function buildEstadoPatrimonial(b, bAnt) {
+  const cur  = _extractPatrimonialData(b);
+  const ant  = bAnt ? _extractPatrimonialData(bAnt) : null;
+  const filas = _patFilasShared(cur, ant);
+
+  const fmt  = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
   const fmtM = (v, color) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
     const s = v < 0 ? '−' : '';
@@ -26047,26 +26044,9 @@ function buildEstadoPatrimonial(b, bAnt) {
     return `<span style="color:${c};font-family:var(--mono)">${s}$ ${fmt.format(Math.abs(v))}</span>`;
   };
 
-  const filas = [
-    { label:'ACTIVO',              cur:null,     ant:null,       negrita:true, nivel:0 },
-    { label:'Activo corriente',    cur:cur.aC,   ant:ant?.aC,    nivel:1 },
-    { label:'Activo no corriente', cur:cur.aNC,  ant:ant?.aNC,   nivel:1 },
-    { label:'TOTAL ACTIVO',        cur:cur.aT,   ant:ant?.aT,    negrita:true, nivel:0, color:'#47e8ff' },
-    { separador:true },
-    { label:'PASIVO',              cur:null,     ant:null,       negrita:true, nivel:0 },
-    { label:'Pasivo corriente',    cur:cur.pC,   ant:ant?.pC,    nivel:1 },
-    { label:'Pasivo no corriente', cur:cur.pNC,  ant:ant?.pNC,   nivel:1 },
-    { label:'TOTAL PASIVO',        cur:cur.pT,   ant:ant?.pT,    negrita:true, nivel:0, color:cur.pT>0?'var(--neg)':'var(--text)' },
-    { separador:true },
-    { label:'PATRIMONIO NETO',     cur:cur.pN,   ant:ant?.pN,    negrita:true, nivel:0, color:cur.pN>=0?'var(--pos)':'var(--neg)' },
-    { separador:true },
-    { label:'TOTAL PASIVO + PN',   cur:cur.tot,  ant:ant?.tot,   negrita:true, nivel:0, color:'#47e8ff' },
-  ];
-
   const perAct = b.periodo || '—';
   const perAnt = bAnt ? (bAnt.periodo || '—') : null;
   const nCols  = ant ? 3 : 2;
-
   const thS  = 'padding:5px 8px;text-align:right;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
   const thLS = 'padding:5px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
 
@@ -26080,12 +26060,13 @@ function buildEstadoPatrimonial(b, bAnt) {
     ${filas.map(f => {
       if (f.separador) return `<tr><td colspan="${nCols}" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
       const indent = f.nivel === 1 ? 'padding-left:22px' : '';
-      const weight = f.negrita ? 'font-weight:600' : 'font-weight:400';
-      const lc = f.color ? `color:${f.color}` : f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
-      return `<tr style="border-bottom:1px solid var(--bd2)">
+      const weight = (f.seccion || f.total) ? 'font-weight:600' : 'font-weight:400';
+      const lc = f.colorVal ? `color:${f.colorVal}` : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
+      const bgRow = f.seccion ? 'background:var(--s2)' : '';
+      return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
         <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
-        <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.color) : '<span style="color:var(--dim)">—</span>'}</td>
-        ${ant ? `<td style="padding:5px 8px;text-align:right;opacity:.65">${f.ant != null ? fmtM(f.ant) : '<span style="color:var(--dim)">—</span>'}</td>` : ''}
+        <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.colorVal) : (f.seccion ? '' : '<span style="color:var(--dim)">—</span>')}</td>
+        ${ant ? `<td style="padding:5px 8px;text-align:right;opacity:.65">${f.ant != null ? fmtM(f.ant) : (f.seccion ? '' : '<span style="color:var(--dim)">—</span>')}</td>` : ''}
       </tr>`;
     }).join('')}
     </tbody>
@@ -26097,55 +26078,14 @@ function buildAnalisisHorizontal(b, bAnt) {
     return `<div style="padding:24px 16px;text-align:center;color:var(--dim);font-size:10px;font-family:var(--mono)">
       Cargá un segundo ejercicio de la misma empresa para visualizar las variaciones.</div>`;
   }
-  const cur = _extractPatrimonialData(b);
-  const ant = _extractPatrimonialData(bAnt);
-
-  const filas = [
-    { label:'Activo corriente',    cur:cur.aC,  ant:ant.aC,  negrita:false },
-    { label:'Activo no corriente', cur:cur.aNC, ant:ant.aNC, negrita:false },
-    { label:'TOTAL ACTIVO',        cur:cur.aT,  ant:ant.aT,  negrita:true  },
-    { separador:true },
-    { label:'Pasivo corriente',    cur:cur.pC,  ant:ant.pC,  negrita:false },
-    { label:'Pasivo no corriente', cur:cur.pNC, ant:ant.pNC, negrita:false },
-    { label:'TOTAL PASIVO',        cur:cur.pT,  ant:ant.pT,  negrita:true  },
-    { separador:true },
-    { label:'PATRIMONIO NETO',     cur:cur.pN,  ant:ant.pN,  negrita:true  },
-    { separador:true },
-    { label:'TOTAL PASIVO + PN',   cur:cur.tot, ant:ant.tot, negrita:true  },
-  ];
+  const cur  = _extractPatrimonialData(b);
+  const ant  = _extractPatrimonialData(bAnt);
+  const filas = _patFilasShared(cur, ant);
 
   const fmtPct = (c, a) => {
     if (c == null || a == null || a === 0) return null;
     return (c - a) / Math.abs(a) * 100;
   };
-
-  const rows = filas.map(f => {
-    if (f.separador) return `<tr><td colspan="3" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
-    const pct = fmtPct(f.cur, f.ant);
-    const weight = f.negrita ? 'font-weight:600' : 'font-weight:400';
-    const lc = f.negrita ? 'color:var(--text)' : 'color:var(--dim)';
-
-    let pctHtml = '<span style="color:var(--dim)">—</span>';
-    let barHtml  = '';
-    if (pct != null) {
-      const pos = pct >= 0;
-      const c   = pos ? 'var(--pos)' : 'var(--neg)';
-      const arrow = pos ? '▲' : '▼';
-      pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:11px">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
-      const barW = Math.min(Math.abs(pct), 100);
-      barHtml = `<div style="margin-top:3px;height:4px;border-radius:2px;background:var(--bd2);overflow:hidden">
-        <div style="height:100%;width:${barW}%;background:${c};border-radius:2px;transition:width .3s"></div>
-      </div>`;
-    }
-
-    return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="padding:5px 8px;${weight};${lc}">${f.label}</td>
-      <td style="padding:5px 8px;text-align:right;min-width:90px">
-        ${pctHtml}
-        ${barHtml}
-      </td>
-    </tr>`;
-  }).join('');
 
   const perAct = b.periodo || '—';
   const perAnt = bAnt.periodo || '—';
@@ -26157,7 +26097,42 @@ function buildAnalisisHorizontal(b, bAnt) {
       <th style="${thLS}">Rubro</th>
       <th style="${thS}">Var. ${perAnt} → ${perAct}</th>
     </tr></thead>
-    <tbody>${rows}</tbody>
+    <tbody>
+    ${filas.map(f => {
+      if (f.separador) return `<tr><td colspan="2" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
+      const weight = (f.seccion || f.total) ? 'font-weight:600' : 'font-weight:400';
+      const lc = f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
+      const bgRow = f.seccion ? 'background:var(--s2)' : '';
+      const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+
+      if (f.seccion) {
+        // Fila de sección: solo label, celda de variación vacía — mantiene alineación
+        return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
+          <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
+          <td style="padding:5px 8px"></td>
+        </tr>`;
+      }
+
+      const pct = fmtPct(f.cur, f.ant);
+      let pctHtml = '<span style="color:var(--dim)">—</span>';
+      let barHtml = '';
+      if (pct != null) {
+        const pos = pct >= 0;
+        const c   = pos ? 'var(--pos)' : 'var(--neg)';
+        const arrow = pos ? '▲' : '▼';
+        pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:11px">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+        const barW = Math.min(Math.abs(pct), 100);
+        barHtml = `<div style="margin-top:3px;height:4px;border-radius:2px;background:var(--bd2);overflow:hidden">
+          <div style="height:100%;width:${barW}%;background:${c};border-radius:2px;transition:width .3s"></div>
+        </div>`;
+      }
+
+      return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
+        <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
+        <td style="padding:5px 8px;text-align:right;min-width:90px">${pctHtml}${barHtml}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>
   </table>`;
 }
 
