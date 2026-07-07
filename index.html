@@ -27216,11 +27216,7 @@ function showBalanceResult() {
   if (ahLbl)  ahLbl.textContent  = b.empresa + ' · ' + b.periodo;
   if (erLbl)  erLbl.textContent  = b.empresa + ' · ' + b.periodo;
 
-  const indPatEl  = document.getElementById('bal-ind-patrimoniales');
-  const indResEl  = document.getElementById('bal-ind-resultados');
   const erLbl2El  = document.getElementById('bal-er-lbl2');
-  if (indPatEl) indPatEl.innerHTML = buildIndicadoresPatrimoniales(b, _bAnterior, liq, sol, scores);
-  if (indResEl) indResEl.innerHTML = buildIndicadoresResultados(b, ren, efi, scores);
   if (erLbl2El) erLbl2El.textContent = b.empresa + ' · ' + b.periodo;
 
   // Comparativo plurianual — Patrimonial | Resultados
@@ -27345,6 +27341,16 @@ function showBalanceResult() {
       ? `Score global: ${scoreGlobal}/100 — ${scoreLabel}`
       : 'Datos insuficientes para radar';
   }
+
+  // ── Indicadores patrimoniales y de resultados (nuevo diseño) ──
+  const indPatEl = document.getElementById('bal-ind-patrimoniales');
+  const indResEl = document.getElementById('bal-ind-resultados');
+  if (indPatEl) indPatEl.innerHTML = buildIndicadoresPatrimoniales(b, _bAnterior, liq, sol, scores);
+  if (indResEl) indResEl.innerHTML = buildIndicadoresResultados(b, ren, efi, scores);
+
+  // ── Diagnóstico financiero 3 columnas ─────────────────────
+  const diagEl = document.getElementById('bal-diagnostico');
+  if (diagEl) diagEl.innerHTML = buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq, sol, ren);
 
   // ── Tablas de indicadores con barras de progreso visuales ──
   document.getElementById('bal-liquidez').innerHTML    = buildIndicTableVis([
@@ -27533,10 +27539,6 @@ function showBalanceResult() {
     : `<div style="padding:6px 12px;background:rgba(71,255,180,.08);border:1px solid #2ecc8a40;
         border-radius:3px;font-size:9.5px;color:#1a9e68;margin-bottom:12px;display:inline-flex;
         align-items:center;gap:6px">🟢 Sin alertas críticas detectadas</div>`;
-
-  // ── Diagnóstico financiero — nuevo diseño 3 columnas ─────────
-  document.getElementById('bal-diagnostico').innerHTML =
-    buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq, sol, ren);
 
   document.getElementById('bal-raw-txt').textContent = b.textoRaw;
   // Actualizar comparativos al cambiar de balance activo
