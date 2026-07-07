@@ -3981,7 +3981,25 @@ self.onmessage = async (e) => {
           <div id="bal-eficiencia"></div>
         </div>
 
-        <!-- FILA 3: Comparativo plurianual — Patrimonial | Resultados -->
+        <!-- FILA 3: Comparativo reexpresado — Patrimonial | Resultados -->
+        <div class="row2" id="bal-reexp-integ-wrap" style="margin-bottom:12px;display:none">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Situación patrimonial comparada</span>
+              <span class="card-hd-unit" id="bal-reexp-esp-lbl"></span>
+            </div>
+            <div id="bal-reexp-esp"></div>
+          </div>
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Estado de resultados comparado</span>
+              <span class="card-hd-unit" id="bal-reexp-er-lbl"></span>
+            </div>
+            <div id="bal-reexp-er"></div>
+          </div>
+        </div>
+
+        <!-- FILA 4: Comparativo plurianual — Patrimonial | Resultados -->
         <div class="row2" style="margin-bottom:12px">
           <div class="card">
             <div class="card-hd">
@@ -3999,7 +4017,7 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
-        <!-- FILA 4: Comparativo de indicadores (ancho completo) -->
+        <!-- FILA 5: Comparativo de indicadores (ancho completo) -->
         <div class="rowfull card" style="margin-bottom:12px">
           <div class="card-hd">
             <span class="card-hd-title">Comparativo de indicadores</span>
@@ -4008,7 +4026,7 @@ self.onmessage = async (e) => {
           <div id="bal-comp-indicadores"></div>
         </div>
 
-        <!-- FILA 5: Diagnóstico financiero (3 columnas) -->
+        <!-- FILA 6: Diagnóstico financiero (3 columnas) -->
         <div class="rowfull card" style="margin-bottom:12px">
           <div class="card-hd">
             <span class="card-hd-title">Diagnóstico financiero</span>
@@ -4017,22 +4035,10 @@ self.onmessage = async (e) => {
           <div id="bal-diagnostico"></div>
         </div>
 
-        <!-- Comparación entre períodos -->
-        <div class="rowfull card" id="bal-comparacion-wrap" style="display:none;margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Comparación entre períodos</span>
-            <span class="card-hd-unit" id="bal-comp-lbl"></span>
-          </div>
-          <div id="bal-comp-contenido"></div>
-        </div>
-
-        <!-- Comparativo reexpresado (año actual vs anterior reexpresado del mismo balance) -->
-        <div class="rowfull card" id="bal-reexp-wrap" style="display:none;margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Comparativo reexpresado (moneda homogénea)</span>
-            <span class="card-hd-unit" id="bal-reexp-lbl"></span>
-          </div>
-          <div id="bal-reexp-contenido"></div>
+        <!-- Elementos ocultos — compatibilidad con funciones antiguas -->
+        <div style="display:none">
+          <div id="bal-comparacion-wrap"><div id="bal-comp-contenido"></div></div>
+          <div id="bal-reexp-wrap"><div id="bal-reexp-contenido"></div><span id="bal-reexp-lbl"></span></div>
         </div>
 
         <!-- ══ EDITOR DE DATOS ══════════════════════════════ -->
@@ -5011,14 +5017,14 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #bal-kpi-band .kpi { min-width:100px !important; flex:1 !important; }
 
   /* Secciones del balance — todas visibles */
-  #bal-radar-lbl, #bal-esp-lbl, #bal-ah-lbl, #bal-er-lbl, #bal-er-lbl2 { display:block !important; }
+  #bal-radar-lbl, #bal-esp-lbl, #bal-ah-lbl, #bal-er-lbl, #bal-er-lbl2,
+  #bal-reexp-esp-lbl, #bal-reexp-er-lbl { display:block !important; }
   #bal-estado-patrimonial, #bal-estado-resultados,
   #bal-ind-patrimoniales, #bal-ind-resultados,
+  #bal-reexp-esp, #bal-reexp-er,
   #bal-plurianual-er,
   #bal-diagnostico { display:block !important; break-inside:avoid; }
-
-  /* Comparación solo si tiene contenido */
-  #bal-comparacion-wrap { display:block !important; }
+  #bal-reexp-integ-wrap { display:grid !important; }
 
   /* Encabezado de empresa en balance */
   #bal-empresa-info { display:block !important; font-size:13pt !important;
@@ -5244,7 +5250,8 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #bal-error-msg,    #bal-dup-msg,
   #btn-cargar-bal,   #file-bal,
   #file-bal2,        #file-bal-xlsx { display:none !important; }
-  #bal-comparacion-wrap { display:block !important; }
+  #bal-reexp-integ-wrap { display:grid !important; }
+  #bal-reexp-esp, #bal-reexp-er { display:block !important; break-inside:avoid; }
   #bal-kpi-band { display:flex !important; flex-wrap:wrap !important;
                   gap:6px !important; margin-bottom:10px !important; }
   #bal-kpi-band .kpi { min-width:90px; flex:1; }
@@ -26238,7 +26245,7 @@ function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
   };
   const pill = (ok, lbl) => ok == null ? '' :
     `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:8px;margin-left:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${lbl}</span>`;
-  const fml = t => `<span style="display:block;color:var(--dim);font-size:8.5px;font-family:var(--mono)">${t}</span>`;
+  const fml = t => `<span style="color:var(--dim);font-size:8px;font-family:var(--mono);margin-left:4px">(${t})</span>`;
   const secR = lbl => `<tr style="background:var(--s2)"><td colspan="4" style="padding:4px 8px;font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700;border-bottom:1px solid var(--bd)">${lbl}</td></tr>`;
   const thS = 'padding:5px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600';
   const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
@@ -26306,7 +26313,7 @@ function buildIndicadoresResultados(b, ren, efi, scores) {
   };
   const pill = (ok, lbl) => ok == null ? '' :
     `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:8px;margin-left:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${lbl}</span>`;
-  const fml = t => `<span style="display:block;color:var(--dim);font-size:8.5px;font-family:var(--mono)">${t}</span>`;
+  const fml = t => `<span style="color:var(--dim);font-size:8px;font-family:var(--mono);margin-left:4px">(${t})</span>`;
   const secR = lbl => `<tr style="background:var(--s2)"><td colspan="4" style="padding:4px 8px;font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700;border-bottom:1px solid var(--bd)">${lbl}</td></tr>`;
   const thS = 'padding:5px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600';
   const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
@@ -26482,6 +26489,146 @@ function buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq,
 }
 
 // ── Comparativo plurianual ──────────────────────────────────
+// ── Comparativo reexpresado — ESP (patrimonial) ────────────
+function buildComparativoReexpESP(b, bAnt) {
+  const cur = _extractPatrimonialData(b);
+  const pAct = b.periodo || '—';
+  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+  const fmtM = (v, color) => {
+    if (v == null) return '<span style="color:var(--dim)">—</span>';
+    const s = v < 0 ? '−' : '';
+    const c = color || (v < 0 ? 'var(--neg)' : 'var(--text)');
+    return `<span style="color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+  };
+  const fmtVar = (act, comp) => {
+    if (act == null || comp == null || comp === 0) return '';
+    const p = (act - comp) / Math.abs(comp) * 100;
+    const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
+    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+  };
+  const curY = _periodoYear(b.periodo);
+  const antD = bAnt ? _extractPatrimonialData(bAnt) : null;
+  const antY = bAnt ? _periodoYear(bAnt.periodo) : null;
+  const factor = (antD && curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
+  const adj = v => v != null ? v * factor : null;
+  const pComp = bAnt ? (bAnt.periodo || '—') : null;
+  const hasComp = !!antD;
+  const thS = 'padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const thLS = 'padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const nCols = hasComp ? 4 : 3;
+  const reexpNote = hasComp && factor !== 1
+    ? `<span style="font-size:7.5px;color:var(--dim2)">(reexpresado × ${factor.toFixed(2)} — IPC INDEC)</span>` : '';
+  const rows = [
+    { lbl:'Activo corriente',    cur: cur.aC,  ant: adj(antD?.aC),  color:null,       indent:true,  bold:false },
+    { lbl:'Activo no corriente', cur: cur.aNC, ant: adj(antD?.aNC), color:null,       indent:true,  bold:false },
+    { sep: true },
+    { lbl:'TOTAL ACTIVO',        cur: cur.aT,  ant: adj(antD?.aT),  color:'var(--acc)',indent:false, bold:true  },
+    { sep: true },
+    { lbl:'Pasivo corriente',    cur: cur.pC,  ant: adj(antD?.pC),  color:'var(--neg)',indent:true,  bold:false },
+    { lbl:'Pasivo no corriente', cur: cur.pNC, ant: adj(antD?.pNC), color:'var(--neg)',indent:true,  bold:false },
+    { sep: true },
+    { lbl:'TOTAL PASIVO',        cur: cur.pT,  ant: adj(antD?.pT),  color:'var(--neg)',indent:false, bold:true  },
+    { sep: true },
+    { lbl:'PATRIMONIO NETO',     cur: cur.pN,  ant: adj(antD?.pN),  color:'var(--pos)',indent:false, bold:true  },
+  ];
+  return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead><tr>
+      <th style="${thLS}">Rubro</th>
+      <th style="${thS}">${pAct}</th>
+      ${hasComp ? `<th style="${thS};opacity:.7">${pComp} ${reexpNote}</th><th style="${thS}">Var %</th>` : ''}
+    </tr></thead>
+    <tbody>
+    ${rows.map(f => {
+      if (f.sep) return `<tr><td colspan="${nCols}" style="height:4px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+      const fw = f.bold ? 'font-weight:700' : 'font-weight:400';
+      const bg = f.bold ? 'background:var(--s2)' : '';
+      const lc = f.color ? `color:${f.color}` : 'color:var(--dim)';
+      const ind = f.indent ? 'padding-left:20px' : '';
+      return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
+        <td style="padding:5px 8px;${ind};${fw};${lc}">${f.lbl}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtM(f.cur, f.color)}</td>
+        ${hasComp ? `<td style="padding:5px 8px;text-align:right;opacity:.7">${fmtM(f.ant, f.color)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtVar(f.cur, f.ant)}</td>` : ''}
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ── Comparativo reexpresado — ER ────────────────────────────
+function buildComparativoReexpER(b, bAnt) {
+  const pAct  = b.periodo || '—';
+  const pComp = b.periodoComp || (bAnt ? bAnt.periodo : null);
+  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+  const fmtM = v => {
+    if (v == null) return '<span style="color:var(--dim)">—</span>';
+    const s = v < 0 ? '−' : '';
+    return `<span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+  };
+  const fmtVar = (act, comp) => {
+    if (act == null || comp == null || comp === 0) return '';
+    const p = (act - comp) / Math.abs(comp) * 100;
+    const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
+    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+  };
+  // Prefer valComp from the balance itself (moneda homogénea del propio balance)
+  const er = b.estructura_er || [];
+  const hasValComp = er.some(r => r.valComp != null && r.valComp !== 0);
+  let rows = [];
+  if (hasValComp) {
+    rows = er.filter(r => r.val != null || r.valComp != null).map(r => ({
+      lbl: r.lbl,
+      cur: r.val,
+      ant: r.valComp,
+      bold: /resultado|total|utilidad|ganancia|pérdida|ventas|ingresos/i.test(r.lbl),
+      calc: r.calc,
+    }));
+  } else if (bAnt) {
+    // Fallback: use bAnt ER rows with IPC adjustment
+    const curY = _periodoYear(b.periodo);
+    const antY = _periodoYear(bAnt.periodo);
+    const factor = (curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
+    const antEr = bAnt.estructura_er || [];
+    const renCur = b.indicadores?.rentabilidad || {};
+    const renAnt = bAnt.indicadores?.rentabilidad || {};
+    rows = [
+      { lbl:'Ventas / Ingresos',      cur: renCur.ventas_ingresos,    ant: (renAnt.ventas_ingresos||null) != null ? renAnt.ventas_ingresos * factor : null, bold:true },
+      { lbl:'Costo de ventas',         cur: renCur.costo_ventas,       ant: (renAnt.costo_ventas||null) != null ? renAnt.costo_ventas * factor : null, bold:false },
+      { lbl:'Resultado bruto',         cur: renCur.resultado_bruto,    ant: (renAnt.resultado_bruto||null) != null ? renAnt.resultado_bruto * factor : null, bold:true },
+      { lbl:'Resultado operativo',     cur: renCur.resultado_operativo,ant: (renAnt.resultado_operativo||null) != null ? renAnt.resultado_operativo * factor : null, bold:true },
+      { lbl:'Resultado del ejercicio', cur: renCur.resultado_neto,     ant: (renAnt.resultado_neto||null) != null ? renAnt.resultado_neto * factor : null, bold:true },
+    ].filter(r => r.cur != null || r.ant != null);
+  }
+  if (!rows.length) return '<div style="padding:20px;text-align:center;font-size:10px;color:var(--dim)">Sin datos comparativos disponibles.</div>';
+  const hasComp = rows.some(r => r.ant != null);
+  const nCols = hasComp ? 4 : 2;
+  const reexpNote = hasValComp
+    ? `<span style="font-size:7.5px;color:var(--dim2)">(moneda homogénea del balance)</span>`
+    : `<span style="font-size:7.5px;color:var(--dim2)">(reexpresado — IPC INDEC)</span>`;
+  const thS = 'padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const thLS = 'padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead><tr>
+      <th style="${thLS}">Concepto</th>
+      <th style="${thS}">${pAct}</th>
+      ${hasComp ? `<th style="${thS};opacity:.7">${pComp || 'Anterior'} ${reexpNote}</th><th style="${thS}">Var %</th>` : ''}
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => {
+      const fw = r.bold ? 'font-weight:700' : 'font-weight:400';
+      const bg = r.bold ? 'background:var(--s2)' : '';
+      const lc = r.calc ? 'color:var(--acc)' : r.bold ? 'color:var(--text)' : 'color:var(--dim)';
+      return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
+        <td style="padding:5px 8px;${fw};${lc}">${r.lbl}</td>
+        <td style="padding:5px 8px;text-align:right;${fw}">${fmtM(r.cur)}</td>
+        ${hasComp ? `<td style="padding:5px 8px;text-align:right;opacity:.7">${fmtM(r.ant)}</td>
+        <td style="padding:5px 8px;text-align:right">${fmtVar(r.cur, r.ant)}</td>` : ''}
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>`;
+}
+
 // IPC INDEC anual (variación decimal) — fuente: INDEC
 const _ipcAnual = {2019:0.538,2020:0.361,2021:0.509,2022:0.948,2023:2.114,2024:1.178};
 function _ipcFactor(fromYear, toYear) {
@@ -27235,13 +27382,26 @@ function showBalanceResult() {
   if (espEl)  espEl.innerHTML  = buildESPConParticipacion(b, _bAnterior);
   if (ahEl)   ahEl.innerHTML   = buildAnalisisHorizontal(b, _bAnterior); // oculto, compatibilidad
   if (erEl)   erEl.innerHTML   = buildEstadoResultados(b);
-  const _lblPer = _bAnterior ? b.periodo + ' vs ' + _bAnterior.periodo : b.periodo;
-  if (espLbl) espLbl.textContent = b.empresa + ' · ' + _lblPer;
+  if (espLbl) espLbl.textContent = b.empresa + ' · ' + b.periodo;
   if (ahLbl)  ahLbl.textContent  = b.empresa + ' · ' + b.periodo;
   if (erLbl)  erLbl.textContent  = b.empresa + ' · ' + b.periodo;
 
   const erLbl2El  = document.getElementById('bal-er-lbl2');
   if (erLbl2El) erLbl2El.textContent = b.empresa + ' · ' + b.periodo;
+
+  // Comparativo reexpresado — Patrimonial | Resultados (nueva fila)
+  const reexpWrap  = document.getElementById('bal-reexp-integ-wrap');
+  const reexpESPEl = document.getElementById('bal-reexp-esp');
+  const reexpEREl  = document.getElementById('bal-reexp-er');
+  const reexpESPLbl= document.getElementById('bal-reexp-esp-lbl');
+  const reexpERLbl = document.getElementById('bal-reexp-er-lbl');
+  const _hasReexp = _bAnterior || (b.estructura_er||[]).some(r=>r.valComp!=null&&r.valComp!==0);
+  if (reexpWrap) reexpWrap.style.display = _hasReexp ? '' : 'none';
+  if (reexpESPEl) reexpESPEl.innerHTML = buildComparativoReexpESP(b, _bAnterior);
+  if (reexpEREl)  reexpEREl.innerHTML  = buildComparativoReexpER(b, _bAnterior);
+  const _lblReexp = _bAnterior ? b.periodo + ' vs ' + _bAnterior.periodo + ' (reexp.)' : b.periodo;
+  if (reexpESPLbl) reexpESPLbl.textContent = b.empresa + ' · ' + _lblReexp;
+  if (reexpERLbl)  reexpERLbl.textContent  = b.empresa + ' · ' + _lblReexp;
 
   // Comparativo plurianual — Patrimonial | Resultados
   const pluriEl     = document.getElementById('bal-plurianual');
