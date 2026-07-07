@@ -26781,7 +26781,9 @@ function _buildERDesdeEstructura(b, fmtM) {
   const ES_TOTAL    = /resultado.*(ejercicio|período|neto|final)|ganancia.*(pérdida|neta)|pérdida.*(ejercicio)/i;
   const ES_SUBTOTAL = /^(sub.?total|resultado|total.*(ingre|egre|rentas|ventas)|utilidad|ganancia|pérdida)/i;
 
-  const P = 'padding:4px 8px';
+  const P  = 'padding:4px 8px';
+  const PA = 'padding:4px 6px 4px 2px';   // amount cell — tighter left, small right gap
+  const PP = 'padding:4px 8px 4px 0';     // pct cell — no left padding, flush right
   const filaHTML = (r) => {
     const val = r.val;
     if (val == null) return '';
@@ -26790,27 +26792,28 @@ function _buildERDesdeEstructura(b, fmtM) {
     const esTotal  = isCalc && ES_TOTAL.test(r.lbl);
     const esSub    = isCalc && !esTotal && ES_SUBTOTAL.test(r.lbl);
     const esNeg    = val < 0;
-    const bold     = isCalc;
-    const color    = esNeg ? 'var(--neg)' : isCalc ? 'var(--text)' : 'var(--text)';
-    const lcolor   = isUltimo ? (esNeg?'var(--neg)':'var(--pos)') : esSub ? 'var(--text)' : esTotal ? 'var(--text)' : 'var(--dim)';
+    const lcolor   = isUltimo ? (esNeg?'var(--neg)':'var(--pos)') : isCalc ? 'var(--text)' : 'var(--dim)';
+    const acolor   = esNeg ? 'var(--neg)' : isCalc ? 'var(--text)' : 'var(--text)';
     const bg       = isUltimo ? (esNeg?'rgba(255,71,102,.06)':'rgba(71,255,180,.06)') : esSub ? 'var(--s2)' : '';
-    const bt       = isUltimo ? `border-top:1px solid var(--bd)` : esSub ? 'border-top:1px solid var(--bd2)' : '';
-    const fw       = bold ? '700' : '400';
-    const pctVal   = baseIngr && !isUltimo && val !== 0 ? (val/baseIngr*100) : null;
-    const pct      = pctVal != null
-      ? `<span style="color:var(--dim2);font-family:var(--mono);font-size:8px;margin-left:10px;white-space:nowrap">${Math.round(pctVal)}%</span>`
-      : '';
+    const bt       = isUltimo ? 'border-top:1px solid var(--bd)' : esSub ? 'border-top:1px solid var(--bd2)' : '';
+    const fw       = isCalc ? '700' : '400';
+    const sign     = esNeg ? '− ' : '  ';  // minus or two non-breaking spaces to keep width
+    const pctVal   = baseIngr && !isUltimo && val !== 0 ? (val / baseIngr * 100) : null;
+    const pctStr   = pctVal != null ? `${Math.round(pctVal)}%` : '';
     return `<tr style="border-bottom:1px solid var(--bd2);${bg};${bt}">
       <td style="${P};font-size:10px;font-weight:${fw};color:${lcolor}">${r.lbl}</td>
-      <td style="${P};text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:10px;font-weight:${fw};color:${color}">${esNeg?'(':''}$ ${fmt.format(Math.abs(val))}${esNeg?')':''}${pct}</td>
+      <td style="${PA};text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:10px;font-weight:${fw};color:${acolor}">${sign}$ ${fmt.format(Math.abs(val))}</td>
+      <td style="${PP};text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:8px;color:var(--dim2);width:44px">${pctStr}</td>
     </tr>`;
   };
 
   const thS = `${P};font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
-  return `<table style="width:100%;border-collapse:collapse">
+  return `<table style="width:100%;border-collapse:collapse;table-layout:auto">
+    <colgroup><col><col style="width:1px"><col style="width:44px"></colgroup>
     <thead><tr>
       <th style="${thS};text-align:left">Concepto</th>
-      <th style="${thS};text-align:right">Importe&nbsp;&nbsp;% s/ing.</th>
+      <th style="${thS};text-align:right">Importe</th>
+      <th style="${thS};text-align:right;padding-right:8px">% s/ing.</th>
     </tr></thead>
     <tbody>${er.map(r => filaHTML(r)).join('')}</tbody>
   </table>`;
