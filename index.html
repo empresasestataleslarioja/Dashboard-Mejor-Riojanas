@@ -26394,31 +26394,33 @@ function buildPluriER(b, priores) {
   });
   const showTrend = hist.length > 1;
   const nCols = hist.length + 1 + (showTrend ? 1 : 0);
-  const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
-  const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
-  const constNote = curYear ? `<span style="font-size:7.5px;color:var(--dim2);margin-left:6px">$ constantes ${curYear} — IPC INDEC</span>` : '';
+  const P = 'padding:4px 8px';
+  const thS = cur => `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim2)'}`;
+  const thLS = `${P};text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:var(--dim)`;
+  const constNote = curYear ? ` <span style="font-size:7px;color:var(--dim2);font-weight:400">$ ctes. ${curYear} IPC</span>` : '';
   const thead = `<thead><tr>
     <th style="${thLS}">Concepto${constNote}</th>
     ${rows_data.map((r,i)=>`<th style="${thS(i===rows_data.length-1)}">${r.per}</th>`).join('')}
     ${showTrend?`<th style="${thS(false)}">${rows_data[0].per}→${rows_data[rows_data.length-1].per}</th>`:''}
   </tr></thead>`;
-  const sepRow = `<tr><td colspan="${nCols}" style="height:5px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+  const sepRow = `<tr><td colspan="${nCols}" style="height:3px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
   const mkRow = (label, key, bold, colorCur, indent) => {
     const vals = rows_data.map(r=>r[key]);
     const curV = vals[vals.length-1], iniV = vals[0];
     const bg = bold ? 'background:var(--s2)' : '';
     const fw = bold ? 'font-weight:700' : '';
     return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
-      <td style="padding:5px 8px;${indent?'padding-left:18px':''}${fw};${bold?'color:var(--text)':'color:var(--dim)'}">${label}</td>
+      <td style="${P};${indent?'padding-left:18px':''};${fw};${bold?'color:var(--text)':'color:var(--dim)'};font-size:10px">${label}</td>
       ${vals.map((v,i)=>{
         const isCur=i===vals.length-1;
-        const c=isCur?(colorCur||(bold?'var(--text)':'var(--dim)')):'var(--dim2)';
-        return `<td style="padding:5px 8px;text-align:right;${isCur?'font-weight:700':'color:var(--dim2)'};color:${c}">${fmtM(v)}</td>`;
+        const c=isCur?(colorCur||(bold?'var(--text)':'var(--dim)')):'var(--dim)';
+        const fwv=isCur?'font-weight:700':'font-weight:400';
+        return `<td style="${P};text-align:right;${fwv};color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:10px">${fmtM(v)}</td>`;
       }).join('')}
-      ${showTrend?`<td style="padding:5px 8px;text-align:right;font-size:9.5px">${fmtPct(curV,iniV)}</td>`:''}
+      ${showTrend?`<td style="${P};text-align:right;font-size:9px">${fmtPct(curV,iniV)}</td>`:''}
     </tr>`;
   };
-  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     ${thead}<tbody>
     ${mkRow('Ventas / Ingresos','ingresos',true,'var(--pos)',false)}
     ${mkRow('Costo de ventas','costos',false,null,true)}
@@ -26494,17 +26496,18 @@ function buildComparativoReexpESP(b, bAnt) {
   const cur = _extractPatrimonialData(b);
   const pAct = b.periodo || '—';
   const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
-  const fmtM = (v, color) => {
-    if (v == null) return '<span style="color:var(--dim)">—</span>';
+  // color: current period uses full accent color; prior period uses muted but readable dim
+  const fmtM = (v, color, muted) => {
+    if (v == null) return '<span style="color:var(--dim2)">—</span>';
     const s = v < 0 ? '−' : '';
-    const c = color || (v < 0 ? 'var(--neg)' : 'var(--text)');
-    return `<span style="color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+    const c = muted ? 'var(--dim)' : (color || (v < 0 ? 'var(--neg)' : 'var(--text)'));
+    return `<span style="color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap">${s}$ ${fmt.format(Math.abs(v))}</span>`;
   };
   const fmtVar = (act, comp) => {
-    if (act == null || comp == null || comp === 0) return '';
+    if (act == null || comp == null || comp === 0) return '<span style="color:var(--dim2)">—</span>';
     const p = (act - comp) / Math.abs(comp) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
   };
   const curY = _periodoYear(b.periodo);
   const antD = bAnt ? _extractPatrimonialData(bAnt) : null;
@@ -26513,42 +26516,43 @@ function buildComparativoReexpESP(b, bAnt) {
   const adj = v => v != null ? v * factor : null;
   const pComp = bAnt ? (bAnt.periodo || '—') : null;
   const hasComp = !!antD;
-  const thS = 'padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
-  const thLS = 'padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const P = 'padding:4px 8px';
+  const thS  = `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
+  const thLS = `${P};font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
   const nCols = hasComp ? 4 : 3;
   const reexpNote = hasComp && factor !== 1
-    ? `<span style="font-size:7.5px;color:var(--dim2)">(reexpresado × ${factor.toFixed(2)} — IPC INDEC)</span>` : '';
+    ? ` <span style="font-size:7px;color:var(--dim2)">×${factor.toFixed(2)} IPC</span>` : '';
   const rows = [
-    { lbl:'Activo corriente',    cur: cur.aC,  ant: adj(antD?.aC),  color:null,       indent:true,  bold:false },
-    { lbl:'Activo no corriente', cur: cur.aNC, ant: adj(antD?.aNC), color:null,       indent:true,  bold:false },
+    { lbl:'Activo corriente',    cur: cur.aC,  ant: adj(antD?.aC),  color:null,        indent:true,  bold:false },
+    { lbl:'Activo no corriente', cur: cur.aNC, ant: adj(antD?.aNC), color:null,        indent:true,  bold:false },
     { sep: true },
-    { lbl:'TOTAL ACTIVO',        cur: cur.aT,  ant: adj(antD?.aT),  color:'var(--acc)',indent:false, bold:true  },
+    { lbl:'Total activo',        cur: cur.aT,  ant: adj(antD?.aT),  color:'var(--acc)',indent:false, bold:true  },
     { sep: true },
     { lbl:'Pasivo corriente',    cur: cur.pC,  ant: adj(antD?.pC),  color:'var(--neg)',indent:true,  bold:false },
     { lbl:'Pasivo no corriente', cur: cur.pNC, ant: adj(antD?.pNC), color:'var(--neg)',indent:true,  bold:false },
     { sep: true },
-    { lbl:'TOTAL PASIVO',        cur: cur.pT,  ant: adj(antD?.pT),  color:'var(--neg)',indent:false, bold:true  },
+    { lbl:'Total pasivo',        cur: cur.pT,  ant: adj(antD?.pT),  color:'var(--neg)',indent:false, bold:true  },
     { sep: true },
-    { lbl:'PATRIMONIO NETO',     cur: cur.pN,  ant: adj(antD?.pN),  color:'var(--pos)',indent:false, bold:true  },
+    { lbl:'Patrimonio neto',     cur: cur.pN,  ant: adj(antD?.pN),  color:'var(--pos)',indent:false, bold:true  },
   ];
-  return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
+  return `<table style="width:100%;border-collapse:collapse;font-size:10px">
     <thead><tr>
       <th style="${thLS}">Rubro</th>
       <th style="${thS}">${pAct}</th>
-      ${hasComp ? `<th style="${thS};opacity:.7">${pComp} ${reexpNote}</th><th style="${thS}">Var %</th>` : ''}
+      ${hasComp ? `<th style="${thS};color:var(--dim2)">${pComp}${reexpNote}</th><th style="${thS}">Var %</th>` : ''}
     </tr></thead>
     <tbody>
     ${rows.map(f => {
-      if (f.sep) return `<tr><td colspan="${nCols}" style="height:4px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+      if (f.sep) return `<tr><td colspan="${nCols}" style="height:3px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
       const fw = f.bold ? 'font-weight:700' : 'font-weight:400';
       const bg = f.bold ? 'background:var(--s2)' : '';
-      const lc = f.color ? `color:${f.color}` : 'color:var(--dim)';
+      const lc = f.color ? `color:${f.color}` : f.bold ? 'color:var(--text)' : 'color:var(--dim)';
       const ind = f.indent ? 'padding-left:20px' : '';
       return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
-        <td style="padding:5px 8px;${ind};${fw};${lc}">${f.lbl}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtM(f.cur, f.color)}</td>
-        ${hasComp ? `<td style="padding:5px 8px;text-align:right;opacity:.7">${fmtM(f.ant, f.color)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtVar(f.cur, f.ant)}</td>` : ''}
+        <td style="${P};${ind};${fw};${lc}">${f.lbl}</td>
+        <td style="${P};text-align:right;${fw}">${fmtM(f.cur, f.color, false)}</td>
+        ${hasComp ? `<td style="${P};text-align:right">${fmtM(f.ant, f.color, true)}</td>
+        <td style="${P};text-align:right">${fmtVar(f.cur, f.ant)}</td>` : ''}
       </tr>`;
     }).join('')}
     </tbody>
@@ -26560,18 +26564,18 @@ function buildComparativoReexpER(b, bAnt) {
   const pAct  = b.periodo || '—';
   const pComp = b.periodoComp || (bAnt ? bAnt.periodo : null);
   const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
-  const fmtM = v => {
-    if (v == null) return '<span style="color:var(--dim)">—</span>';
+  const fmtM = (v, muted) => {
+    if (v == null) return '<span style="color:var(--dim2)">—</span>';
     const s = v < 0 ? '−' : '';
-    return `<span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+    const c = muted ? 'var(--dim)' : (v < 0 ? 'var(--neg)' : 'var(--text)');
+    return `<span style="color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap">${s}$ ${fmt.format(Math.abs(v))}</span>`;
   };
   const fmtVar = (act, comp) => {
-    if (act == null || comp == null || comp === 0) return '';
+    if (act == null || comp == null || comp === 0) return '<span style="color:var(--dim2)">—</span>';
     const p = (act - comp) / Math.abs(comp) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
   };
-  // Prefer valComp from the balance itself (moneda homogénea del propio balance)
   const er = b.estructura_er || [];
   const hasValComp = er.some(r => r.valComp != null && r.valComp !== 0);
   let rows = [];
@@ -26584,34 +26588,31 @@ function buildComparativoReexpER(b, bAnt) {
       calc: r.calc,
     }));
   } else if (bAnt) {
-    // Fallback: use bAnt ER rows with IPC adjustment
     const curY = _periodoYear(b.periodo);
     const antY = _periodoYear(bAnt.periodo);
     const factor = (curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
-    const antEr = bAnt.estructura_er || [];
     const renCur = b.indicadores?.rentabilidad || {};
     const renAnt = bAnt.indicadores?.rentabilidad || {};
     rows = [
-      { lbl:'Ventas / Ingresos',      cur: renCur.ventas_ingresos,    ant: (renAnt.ventas_ingresos||null) != null ? renAnt.ventas_ingresos * factor : null, bold:true },
-      { lbl:'Costo de ventas',         cur: renCur.costo_ventas,       ant: (renAnt.costo_ventas||null) != null ? renAnt.costo_ventas * factor : null, bold:false },
-      { lbl:'Resultado bruto',         cur: renCur.resultado_bruto,    ant: (renAnt.resultado_bruto||null) != null ? renAnt.resultado_bruto * factor : null, bold:true },
-      { lbl:'Resultado operativo',     cur: renCur.resultado_operativo,ant: (renAnt.resultado_operativo||null) != null ? renAnt.resultado_operativo * factor : null, bold:true },
-      { lbl:'Resultado del ejercicio', cur: renCur.resultado_neto,     ant: (renAnt.resultado_neto||null) != null ? renAnt.resultado_neto * factor : null, bold:true },
+      { lbl:'Ventas / Ingresos',      cur: renCur.ventas_ingresos,     ant: renAnt.ventas_ingresos     != null ? renAnt.ventas_ingresos * factor     : null, bold:true  },
+      { lbl:'Costo de ventas',         cur: renCur.costo_ventas,        ant: renAnt.costo_ventas        != null ? renAnt.costo_ventas * factor        : null, bold:false },
+      { lbl:'Resultado bruto',         cur: renCur.resultado_bruto,     ant: renAnt.resultado_bruto     != null ? renAnt.resultado_bruto * factor     : null, bold:true  },
+      { lbl:'Resultado operativo',     cur: renCur.resultado_operativo, ant: renAnt.resultado_operativo != null ? renAnt.resultado_operativo * factor : null, bold:true  },
+      { lbl:'Resultado del ejercicio', cur: renCur.resultado_neto,      ant: renAnt.resultado_neto      != null ? renAnt.resultado_neto * factor      : null, bold:true  },
     ].filter(r => r.cur != null || r.ant != null);
   }
   if (!rows.length) return '<div style="padding:20px;text-align:center;font-size:10px;color:var(--dim)">Sin datos comparativos disponibles.</div>';
   const hasComp = rows.some(r => r.ant != null);
   const nCols = hasComp ? 4 : 2;
-  const reexpNote = hasValComp
-    ? `<span style="font-size:7.5px;color:var(--dim2)">(moneda homogénea del balance)</span>`
-    : `<span style="font-size:7.5px;color:var(--dim2)">(reexpresado — IPC INDEC)</span>`;
-  const thS = 'padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
-  const thLS = 'padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
-  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px">
+  const srcNote = hasValComp ? 'moneda homogénea' : 'IPC INDEC';
+  const P = 'padding:4px 8px';
+  const thS  = `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
+  const thLS = `${P};font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
     <thead><tr>
       <th style="${thLS}">Concepto</th>
       <th style="${thS}">${pAct}</th>
-      ${hasComp ? `<th style="${thS};opacity:.7">${pComp || 'Anterior'} ${reexpNote}</th><th style="${thS}">Var %</th>` : ''}
+      ${hasComp ? `<th style="${thS};color:var(--dim2)">${pComp || 'Anterior'} <span style="font-size:7px">(${srcNote})</span></th><th style="${thS}">Var %</th>` : ''}
     </tr></thead>
     <tbody>
     ${rows.map(r => {
@@ -26619,10 +26620,10 @@ function buildComparativoReexpER(b, bAnt) {
       const bg = r.bold ? 'background:var(--s2)' : '';
       const lc = r.calc ? 'color:var(--acc)' : r.bold ? 'color:var(--text)' : 'color:var(--dim)';
       return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
-        <td style="padding:5px 8px;${fw};${lc}">${r.lbl}</td>
-        <td style="padding:5px 8px;text-align:right;${fw}">${fmtM(r.cur)}</td>
-        ${hasComp ? `<td style="padding:5px 8px;text-align:right;opacity:.7">${fmtM(r.ant)}</td>
-        <td style="padding:5px 8px;text-align:right">${fmtVar(r.cur, r.ant)}</td>` : ''}
+        <td style="${P};${fw};${lc}">${r.lbl}</td>
+        <td style="${P};text-align:right;${fw}">${fmtM(r.cur, false)}</td>
+        ${hasComp ? `<td style="${P};text-align:right">${fmtM(r.ant, true)}</td>
+        <td style="${P};text-align:right">${fmtVar(r.cur, r.ant)}</td>` : ''}
       </tr>`;
     }).join('')}
     </tbody>
@@ -26668,39 +26669,40 @@ function buildComparativoPlurianual(b, priores) {
   });
   const showTrend = hist.length > 1;
   const nCols = hist.length + 1 + (showTrend ? 1 : 0);
-  const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
-  const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
-  const constNote = curYear ? `<span style="font-size:7.5px;color:var(--dim2);margin-left:6px">$ constantes ${curYear} — IPC INDEC</span>` : '';
+  const P = 'padding:4px 8px';
+  const thS = cur => `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim2)'}`;
+  const thLS = `${P};text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:var(--dim)`;
+  const constNote = curYear ? ` <span style="font-size:7px;color:var(--dim2);font-weight:400">$ ctes. ${curYear} IPC</span>` : '';
   const thead = `<thead><tr>
     <th style="${thLS}">Rubro${constNote}</th>
     ${rows_data.map((r,i)=>`<th style="${thS(i===rows_data.length-1)}">${r.per}</th>`).join('')}
     ${showTrend?`<th style="${thS(false)}">${rows_data[0].per}→${rows_data[rows_data.length-1].per}</th>`:''}
   </tr></thead>`;
-  const sepRow = `<tr><td colspan="${nCols}" style="height:5px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+  const sepRow = `<tr><td colspan="${nCols}" style="height:3px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
   const mkRow = (label, key, bold, colorCur, indent) => {
     const vals = rows_data.map(r=>r[key]);
     const curV = vals[vals.length-1], iniV = vals[0];
     const bg = bold ? 'background:var(--s2)' : '';
     const fw = bold ? 'font-weight:700' : '';
     return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
-      <td style="padding:5px 8px;${indent?'padding-left:18px':''}${fw};${bold?'color:var(--text)':'color:var(--dim)'}">${label}</td>
+      <td style="${P};${indent?'padding-left:18px':''};${fw};${bold?'color:var(--text)':'color:var(--dim)'};font-size:10px">${label}</td>
       ${vals.map((v,i)=>{
         const isCur=i===vals.length-1;
-        const c=isCur?(colorCur||(bold?'var(--text)':'var(--dim)')):'var(--dim2)';
-        const fwv=isCur?'font-weight:700':'';
-        return `<td style="padding:5px 8px;text-align:right;${fwv};color:${c}">${fmtM(v)}</td>`;
+        const c=isCur?(colorCur||(bold?'var(--text)':'var(--dim)')):'var(--dim)';
+        const fwv=isCur?'font-weight:700':'font-weight:400';
+        return `<td style="${P};text-align:right;${fwv};color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:10px">${fmtM(v)}</td>`;
       }).join('')}
-      ${showTrend?`<td style="padding:5px 8px;text-align:right;font-size:9.5px">${fmtPct(curV,iniV)}</td>`:''}
+      ${showTrend?`<td style="${P};text-align:right;font-size:9px">${fmtPct(curV,iniV)}</td>`:''}
     </tr>`;
   };
-  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     ${thead}<tbody>
     ${mkRow('Activo corriente',   'aC',  false,null,true)}
     ${mkRow('Activo no corriente','aNC', false,null,true)}
-    ${mkRow('TOTAL ACTIVO',       'aT',  true, '#47e8ff',false)}
+    ${mkRow('Total activo',       'aT',  true, 'var(--acc)',false)}
     ${sepRow}
     ${mkRow('Pasivo total',       'pT',  true, 'var(--neg)',false)}
-    ${mkRow('PATRIMONIO NETO',    'pN',  true, 'var(--pos)',false)}
+    ${mkRow('Patrimonio neto',    'pN',  true, 'var(--pos)',false)}
     ${sepRow}
     ${mkRow('Resultado del ej.',  'res', true, 'var(--pos)',false)}
     </tbody></table></div>`;
@@ -26737,29 +26739,30 @@ function buildComparativoIndicadores(b, priores) {
     if (efi.rotacion_activos!=null&&ren.rotacion_activos==null) ren.rotacion_activos=efi.rotacion_activos;
     return {per:bx.periodo,liq,sol,ren,efi};
   });
-  const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
-  const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
+  const P = 'padding:4px 8px';
+  const thS = cur => `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim2)'}`;
+  const thLS = `${P};text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:var(--dim)`;
   const thead = `<thead><tr>
     <th style="${thLS}">Indicador</th>
     ${inds.map((r,i)=>`<th style="${thS(i===inds.length-1)}">${r.per}</th>`).join('')}
     ${showTrend?`<th style="${thS(false)}">Tend.</th>`:''}
   </tr></thead>`;
   const secRow = lbl => `<tr style="background:var(--s2)">
-    <td colspan="${nCols}" style="padding:4px 8px;font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700">${lbl}</td>
+    <td colspan="${nCols}" style="${P};font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700">${lbl}</td>
   </tr>`;
   const mkRow = (lbl, acc, tipo, betterLow) => {
     const vals=inds.map(r=>acc(r));
     const curV=vals[vals.length-1], iniV=vals[0];
     return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10px">${lbl}</td>
+      <td style="${P};padding-left:16px;color:var(--dim);font-size:10px">${lbl}</td>
       ${vals.map((v,i)=>{
         const isCur=i===vals.length-1;
-        return `<td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:10px;${isCur?'font-weight:700;color:var(--text)':'color:var(--dim2)'};font-variant-numeric:tabular-nums">${fmtInd(v,tipo)}</td>`;
+        return `<td style="${P};text-align:right;font-family:var(--mono);font-size:10px;${isCur?'font-weight:700;color:var(--text)':'color:var(--dim)'};font-variant-numeric:tabular-nums;white-space:nowrap">${fmtInd(v,tipo)}</td>`;
       }).join('')}
-      ${showTrend?`<td style="padding:5px 8px;text-align:right">${fmtTend(curV,iniV,betterLow)}</td>`:''}
+      ${showTrend?`<td style="${P};text-align:right">${fmtTend(curV,iniV,betterLow)}</td>`:''}
     </tr>`;
   };
-  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     ${thead}<tbody>
     ${secRow('Liquidez')}
     ${mkRow('Liquidez corriente', r=>r.liq.liquidez_corriente, 'ratio', false)}
