@@ -26162,11 +26162,10 @@ function buildAnalisisHorizontal(b, bAnt) {
 
 // ── ESP con columna de participación % ─────────────────────
 function buildESPConParticipacion(b, bAnt) {
-  const cur  = _extractPatrimonialData(b);
-  const ant  = bAnt ? _extractPatrimonialData(bAnt) : null;
-  const filas = _patFilasShared(cur, ant);
-  const fmt  = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
-  const fmtM = (v, color) => {
+  const cur   = _extractPatrimonialData(b);
+  const filas = _patFilasShared(cur, null);
+  const fmt   = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+  const fmtM  = (v, color) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
     const s = v < 0 ? '−' : '';
     const c = color || (v < 0 ? 'var(--neg)' : 'var(--text)');
@@ -26190,15 +26189,13 @@ function buildESPConParticipacion(b, bAnt) {
     </td>`;
   };
   const perAct = b.periodo || '—';
-  const perAnt = bAnt ? (bAnt.periodo || '—') : null;
-  const nCols  = ant ? 4 : 3;
+  const nCols  = 3;
   const thS  = 'padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
   const thLS = 'padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
   return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
     <thead><tr>
       <th style="${thLS}">Rubro</th>
       <th style="${thS}">${perAct}</th>
-      ${ant ? `<th style="${thS};opacity:.6">${perAnt}</th>` : ''}
       <th style="${thS}">% s/Total</th>
     </tr></thead>
     <tbody>
@@ -26217,7 +26214,6 @@ function buildESPConParticipacion(b, bAnt) {
       return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
         <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
         <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.colorVal) : '<span style="color:var(--dim)">—</span>'}</td>
-        ${ant ? `<td style="padding:5px 8px;text-align:right;opacity:.65">${f.ant != null ? fmtM(f.ant) : '<span style="color:var(--dim)">—</span>'}</td>` : ''}
         ${fmtPart(f.cur, pctColor)}
       </tr>`;
     }).join('')}
@@ -26242,13 +26238,13 @@ function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
   };
   const pill = (ok, lbl) => ok == null ? '' :
     `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:8px;margin-left:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${lbl}</span>`;
-  const fml = t => `<span style="color:var(--dim2);font-size:8px">(${t})</span>`;
+  const fml = t => `<span style="display:block;color:var(--dim);font-size:8.5px;font-family:var(--mono)">${t}</span>`;
   const secR = lbl => `<tr style="background:var(--s2)"><td colspan="4" style="padding:4px 8px;font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700;border-bottom:1px solid var(--bd)">${lbl}</td></tr>`;
   const thS = 'padding:5px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600';
   const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
     const scoreColor = okBool == null ? 'var(--dim2)' : okBool ? 'var(--pos)' : 'var(--neg)';
     return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl} ${fml(formula)}</td>
+      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}${fml(formula)}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)">${valFmt}${pill(okBool, pillLbl)}</td>
       <td style="padding:5px 8px;text-align:right">${bar(scoreVal, scoreColor)}</td>
       <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim2)">${ref}</td>
@@ -26310,13 +26306,13 @@ function buildIndicadoresResultados(b, ren, efi, scores) {
   };
   const pill = (ok, lbl) => ok == null ? '' :
     `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:8px;margin-left:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${lbl}</span>`;
-  const fml = t => `<span style="color:var(--dim2);font-size:8px">(${t})</span>`;
+  const fml = t => `<span style="display:block;color:var(--dim);font-size:8.5px;font-family:var(--mono)">${t}</span>`;
   const secR = lbl => `<tr style="background:var(--s2)"><td colspan="4" style="padding:4px 8px;font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700;border-bottom:1px solid var(--bd)">${lbl}</td></tr>`;
   const thS = 'padding:5px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600';
   const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
     const scoreColor = okBool == null ? 'var(--dim2)' : okBool ? 'var(--pos)' : 'var(--neg)';
     return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl} ${fml(formula)}</td>
+      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}${fml(formula)}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)">${valFmt}${pill(okBool,pillLbl)}</td>
       <td style="padding:5px 8px;text-align:right">${bar(scoreVal,scoreColor)}</td>
       <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim2)">${ref}</td>
@@ -26368,6 +26364,7 @@ function buildPluriER(b, priores) {
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
     return `<span style="color:${c};font-weight:600;font-family:var(--mono);font-size:9px">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
   };
+  const curYear = _periodoYear(b.periodo);
   const rows_data = hist.map(bx => {
     const ren = (bx.indicadores||{}).rentabilidad || {};
     let ingresos = ren.ventas_ingresos, costos = ren.costo_ventas;
@@ -26381,14 +26378,20 @@ function buildPluriER(b, priores) {
         if (posRows.length) ingresos = posRows.reduce((s,r)=>s+(r.val||0),0) || null;
       }
     }
-    return { per: bx.periodo, ingresos, costos, resBruto, resOp, resNeto };
+    const yr = _periodoYear(bx.periodo);
+    const f = (curYear && yr && yr < curYear) ? _ipcFactor(yr, curYear) : 1;
+    const adj = v => v != null ? v * f : null;
+    return { per: bx.periodo,
+      ingresos: adj(ingresos), costos: adj(costos),
+      resBruto: adj(resBruto), resOp: adj(resOp), resNeto: adj(resNeto) };
   });
   const showTrend = hist.length > 1;
   const nCols = hist.length + 1 + (showTrend ? 1 : 0);
   const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
   const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
+  const constNote = curYear ? `<span style="font-size:7.5px;color:var(--dim2);margin-left:6px">$ constantes ${curYear} — IPC INDEC</span>` : '';
   const thead = `<thead><tr>
-    <th style="${thLS}">Concepto</th>
+    <th style="${thLS}">Concepto${constNote}</th>
     ${rows_data.map((r,i)=>`<th style="${thS(i===rows_data.length-1)}">${r.per}</th>`).join('')}
     ${showTrend?`<th style="${thS(false)}">${rows_data[0].per}→${rows_data[rows_data.length-1].per}</th>`:''}
   </tr></thead>`;
@@ -26479,6 +26482,19 @@ function buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq,
 }
 
 // ── Comparativo plurianual ──────────────────────────────────
+// IPC INDEC anual (variación decimal) — fuente: INDEC
+const _ipcAnual = {2019:0.538,2020:0.361,2021:0.509,2022:0.948,2023:2.114,2024:1.178};
+function _ipcFactor(fromYear, toYear) {
+  let f = 1;
+  for (let y = +fromYear + 1; y <= +toYear; y++) f *= 1 + (_ipcAnual[y] || 0);
+  return f;
+}
+function _periodoYear(periodo) {
+  if (!periodo) return null;
+  const m = String(periodo).match(/\d{4}/);
+  return m ? +m[0] : null;
+}
+
 function buildComparativoPlurianual(b, priores) {
   const hist = [...(priores || []).slice(-2), b];
   const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
@@ -26491,17 +26507,25 @@ function buildComparativoPlurianual(b, priores) {
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
     return `<span style="color:${c};font-weight:600;font-family:var(--mono)">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
   };
+  const curYear = _periodoYear(b.periodo);
   const rows_data = hist.map(bx => {
     const d = _extractPatrimonialData(bx);
     const ren = ((bx.indicadores||{}).rentabilidad)||{};
-    return { per: bx.periodo, ...d, res: ren.resultado_neto };
+    const yr = _periodoYear(bx.periodo);
+    const f = (curYear && yr && yr < curYear) ? _ipcFactor(yr, curYear) : 1;
+    const adj = v => v != null ? v * f : null;
+    return { per: bx.periodo, isCur: yr === curYear,
+      aC: adj(d.aC), aNC: adj(d.aNC), aT: adj(d.aT),
+      pC: adj(d.pC), pNC: adj(d.pNC), pT: adj(d.pT),
+      pN: adj(d.pN), res: adj(ren.resultado_neto) };
   });
   const showTrend = hist.length > 1;
   const nCols = hist.length + 1 + (showTrend ? 1 : 0);
   const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
   const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
+  const constNote = curYear ? `<span style="font-size:7.5px;color:var(--dim2);margin-left:6px">$ constantes ${curYear} — IPC INDEC</span>` : '';
   const thead = `<thead><tr>
-    <th style="${thLS}">Rubro</th>
+    <th style="${thLS}">Rubro${constNote}</th>
     ${rows_data.map((r,i)=>`<th style="${thS(i===rows_data.length-1)}">${r.per}</th>`).join('')}
     ${showTrend?`<th style="${thS(false)}">${rows_data[0].per}→${rows_data[rows_data.length-1].per}</th>`:''}
   </tr></thead>`;
