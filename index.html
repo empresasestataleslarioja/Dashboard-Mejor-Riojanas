@@ -3985,6 +3985,33 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
+        <!-- Comparativo plurianual + Diagnóstico | Comparativo de indicadores -->
+        <div style="display:grid;grid-template-columns:46fr 54fr;gap:10px;margin-bottom:12px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="card">
+              <div class="card-hd">
+                <span class="card-hd-title">Comparativo plurianual</span>
+                <span class="card-hd-unit" id="bal-pluri-lbl"></span>
+              </div>
+              <div id="bal-plurianual"></div>
+            </div>
+            <div class="card">
+              <div class="card-hd">
+                <span class="card-hd-title">Diagnóstico financiero</span>
+                <span class="card-hd-unit" id="bal-empresa-lbl2"></span>
+              </div>
+              <div id="bal-diagnostico" style="font-size:11.5px;line-height:1.8;color:var(--text);padding-top:4px"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Comparativo de indicadores</span>
+              <span class="card-hd-unit" id="bal-compind-lbl"></span>
+            </div>
+            <div id="bal-comp-indicadores"></div>
+          </div>
+        </div>
+
         <!-- Comparación entre períodos -->
         <div class="rowfull card" id="bal-comparacion-wrap" style="display:none;margin-bottom:12px">
           <div class="card-hd">
@@ -4046,14 +4073,6 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
-        <!-- Diagnóstico -->
-        <div class="rowfull card" style="margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Diagnóstico financiero</span>
-            <span class="card-hd-unit" id="bal-empresa-lbl"></span>
-          </div>
-          <div id="bal-diagnostico" style="font-size:11.5px;line-height:1.8;color:var(--text);padding-top:4px"></div>
-        </div>
 
         <!-- Texto extraído (colapsable) -->
         <div class="rowfull card" style="display:none">
@@ -26136,6 +26155,138 @@ function buildAnalisisHorizontal(b, bAnt) {
   </table>`;
 }
 
+// ── Comparativo plurianual ──────────────────────────────────
+function buildComparativoPlurianual(b, priores) {
+  const hist = [...(priores || []).slice(-2), b];
+  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+  const fmtM = v => v == null
+    ? '<span style="color:var(--dim)">—</span>'
+    : `<span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${v<0?'−':''}$ ${fmt.format(Math.abs(v))}</span>`;
+  const fmtPct = (cur, ini) => {
+    if (cur == null || ini == null || ini === 0) return '';
+    const p = (cur - ini) / Math.abs(ini) * 100;
+    const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
+    return `<span style="color:${c};font-weight:600;font-family:var(--mono)">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+  };
+  const rows_data = hist.map(bx => {
+    const d = _extractPatrimonialData(bx);
+    const ren = ((bx.indicadores||{}).rentabilidad)||{};
+    return { per: bx.periodo, ...d, res: ren.resultado_neto };
+  });
+  const showTrend = hist.length > 1;
+  const nCols = hist.length + 1 + (showTrend ? 1 : 0);
+  const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
+  const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
+  const thead = `<thead><tr>
+    <th style="${thLS}">Rubro</th>
+    ${rows_data.map((r,i)=>`<th style="${thS(i===rows_data.length-1)}">${r.per}</th>`).join('')}
+    ${showTrend?`<th style="${thS(false)}">${rows_data[0].per}→${rows_data[rows_data.length-1].per}</th>`:''}
+  </tr></thead>`;
+  const sepRow = `<tr><td colspan="${nCols}" style="height:5px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+  const mkRow = (label, key, bold, colorCur, indent) => {
+    const vals = rows_data.map(r=>r[key]);
+    const curV = vals[vals.length-1], iniV = vals[0];
+    const bg = bold ? 'background:var(--s2)' : '';
+    const fw = bold ? 'font-weight:700' : '';
+    return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
+      <td style="padding:5px 8px;${indent?'padding-left:18px':''}${fw};${bold?'color:var(--text)':'color:var(--dim)'}">${label}</td>
+      ${vals.map((v,i)=>{
+        const isCur=i===vals.length-1;
+        const c=isCur?(colorCur||(bold?'var(--text)':'var(--dim)')):'var(--dim2)';
+        const fwv=isCur?'font-weight:700':'';
+        return `<td style="padding:5px 8px;text-align:right;${fwv};color:${c}">${fmtM(v)}</td>`;
+      }).join('')}
+      ${showTrend?`<td style="padding:5px 8px;text-align:right;font-size:9.5px">${fmtPct(curV,iniV)}</td>`:''}
+    </tr>`;
+  };
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+    ${thead}<tbody>
+    ${mkRow('Activo corriente',   'aC',  false,null,true)}
+    ${mkRow('Activo no corriente','aNC', false,null,true)}
+    ${mkRow('TOTAL ACTIVO',       'aT',  true, '#47e8ff',false)}
+    ${sepRow}
+    ${mkRow('Pasivo total',       'pT',  true, 'var(--neg)',false)}
+    ${mkRow('PATRIMONIO NETO',    'pN',  true, 'var(--pos)',false)}
+    ${sepRow}
+    ${mkRow('Resultado del ej.',  'res', true, 'var(--pos)',false)}
+    </tbody></table></div>`;
+}
+
+// ── Comparativo de indicadores (multi-período) ─────────────
+function buildComparativoIndicadores(b, priores) {
+  const hist = [...(priores || []).slice(-2), b];
+  const showTrend = hist.length > 1;
+  const nCols = hist.length + 1 + (showTrend ? 1 : 0);
+  const fmtN = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+  const fmtInd = (v, tipo) => {
+    if (v == null) return '<span style="color:var(--dim)">—</span>';
+    if (tipo==='pct')   return (v*100).toFixed(1)+'%';
+    if (tipo==='ratio') return v.toFixed(2);
+    if (tipo==='dias')  return Math.round(v)+' d';
+    const a=Math.abs(v), s=v<0?'−':'';
+    if (a>=1e9) return s+'$ '+(a/1e9).toFixed(2)+'B';
+    if (a>=1e6) return s+'$ '+(a/1e6).toFixed(0)+'M';
+    return s+'$ '+fmtN.format(a);
+  };
+  const fmtTend = (cur, ini, betterLow) => {
+    if (cur==null||ini==null||ini===0) return '';
+    const delta=cur-ini, pct=Math.abs(delta/ini*100);
+    if (Math.abs(delta)<0.0001) return '<span style="color:var(--dim)">—</span>';
+    let good = delta>0; if (betterLow) good=!good;
+    const c = good?'var(--pos)':'var(--neg)';
+    return `<span style="color:${c};font-size:9px;font-family:var(--mono);font-weight:600">${delta>0?'▲':'▼'} ${pct.toFixed(0)}%</span>`;
+  };
+  const inds = hist.map(bx => {
+    const ind=bx.indicadores||{};
+    const liq=ind.liquidez||{}, sol=ind.solvencia||{}, ren=ind.rentabilidad||{}, efi=ind.eficiencia||{};
+    if (ren.rotacion_activos!=null&&efi.rotacion_activos==null) efi.rotacion_activos=ren.rotacion_activos;
+    if (efi.rotacion_activos!=null&&ren.rotacion_activos==null) ren.rotacion_activos=efi.rotacion_activos;
+    return {per:bx.periodo,liq,sol,ren,efi};
+  });
+  const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
+  const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
+  const thead = `<thead><tr>
+    <th style="${thLS}">Indicador</th>
+    ${inds.map((r,i)=>`<th style="${thS(i===inds.length-1)}">${r.per}</th>`).join('')}
+    ${showTrend?`<th style="${thS(false)}">Tend.</th>`:''}
+  </tr></thead>`;
+  const secRow = lbl => `<tr style="background:var(--s2)">
+    <td colspan="${nCols}" style="padding:4px 8px;font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700">${lbl}</td>
+  </tr>`;
+  const mkRow = (lbl, acc, tipo, betterLow) => {
+    const vals=inds.map(r=>acc(r));
+    const curV=vals[vals.length-1], iniV=vals[0];
+    return `<tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10px">${lbl}</td>
+      ${vals.map((v,i)=>{
+        const isCur=i===vals.length-1;
+        return `<td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:10px;${isCur?'font-weight:700;color:var(--text)':'color:var(--dim2)'};font-variant-numeric:tabular-nums">${fmtInd(v,tipo)}</td>`;
+      }).join('')}
+      ${showTrend?`<td style="padding:5px 8px;text-align:right">${fmtTend(curV,iniV,betterLow)}</td>`:''}
+    </tr>`;
+  };
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+    ${thead}<tbody>
+    ${secRow('Liquidez')}
+    ${mkRow('Liquidez corriente', r=>r.liq.liquidez_corriente, 'ratio', false)}
+    ${mkRow('Liquidez seca',      r=>r.liq.liquidez_seca,      'ratio', false)}
+    ${mkRow('Capital de trabajo', r=>r.liq.capital_trabajo,    'monto', false)}
+    ${secRow('Solvencia')}
+    ${mkRow('Razón endeudamiento',r=>r.sol.razon_endeudamiento,'pct',   true)}
+    ${mkRow('Deuda / Patrimonio', r=>r.sol.deuda_patrimonio,   'ratio', true)}
+    ${mkRow('Cobertura intereses',r=>r.sol.cobertura_intereses,'ratio', false)}
+    ${secRow('Rentabilidad')}
+    ${mkRow('ROE',                r=>r.ren.roe,                'pct',   false)}
+    ${mkRow('ROA',                r=>r.ren.roa,                'pct',   false)}
+    ${mkRow('Margen operativo',   r=>r.ren.margen_operativo,   'pct',   false)}
+    ${mkRow('Margen neto',        r=>r.ren.margen_neto,        'pct',   false)}
+    ${secRow('Eficiencia operativa')}
+    ${mkRow('Rotación activos',   r=>r.efi.rotacion_activos,   'ratio', false)}
+    ${mkRow('Días de cobro',      r=>r.efi.dias_cobro,         'dias',  true)}
+    ${mkRow('Días de pago',       r=>r.efi.dias_pago,          'dias',  false)}
+    </tbody></table></div>`;
+}
+
 // ── Estado de resultados (resumen) ─────────────────────────
 // ── Reporte ER generado directamente desde estructura_er del Excel ──────────
 // Garantiza consistencia total con el editor de datos: misma fuente, mismos valores,
@@ -26740,6 +26891,17 @@ function showBalanceResult() {
   if (espLbl) espLbl.textContent = b.empresa + ' · ' + _lblPer;
   if (ahLbl)  ahLbl.textContent  = _bAnterior ? 'variación ' + _bAnterior.periodo + ' → ' + b.periodo : b.empresa + ' · ' + b.periodo;
   if (erLbl)  erLbl.textContent  = b.empresa + ' · ' + b.periodo;
+
+  // Comparativo plurianual + Comparativo de indicadores
+  const pluriEl    = document.getElementById('bal-plurianual');
+  const compIndEl  = document.getElementById('bal-comp-indicadores');
+  const pluriLbl   = document.getElementById('bal-pluri-lbl');
+  const compIndLbl = document.getElementById('bal-compind-lbl');
+  if (pluriEl)   pluriEl.innerHTML   = buildComparativoPlurianual(b, _balsEmpresa);
+  if (compIndEl) compIndEl.innerHTML = buildComparativoIndicadores(b, _balsEmpresa);
+  const _periodos = [..._balsEmpresa.slice(-2), b].map(bx=>bx.periodo).join(' · ');
+  if (pluriLbl)   pluriLbl.textContent   = _periodos;
+  if (compIndLbl) compIndLbl.textContent = _periodos;
 
   // Actualizar lista de archivos para resaltar el activo
   renderListaArchivos();
