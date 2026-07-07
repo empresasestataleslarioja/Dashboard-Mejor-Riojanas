@@ -3936,6 +3936,30 @@ self.onmessage = async (e) => {
         <!-- KPI banda -->
         <div id="bal-kpi-band" class="kpi-band" style="margin-bottom:12px"></div>
 
+        <!-- Editor de datos — accesible en la parte superior del análisis -->
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd" style="cursor:pointer" onclick="toggleBalEditor()">
+            <span class="card-hd-title">✎ Editor de datos</span>
+            <span style="font-size:9px;color:var(--dim)">Corregir valores que el PDF no leyó bien</span>
+            <span id="bal-editor-toggle" style="font-size:10px;color:var(--dim);margin-left:auto">▼ mostrar</span>
+          </div>
+          <div id="bal-editor-wrap" style="display:none;margin-top:10px">
+            <div style="margin-bottom:14px">
+              <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);margin-bottom:8px;font-weight:600">Estado de Situación Patrimonial</div>
+              <div style="display:flex;flex-direction:column;gap:6px" id="bal-editor-patrimonial"></div>
+            </div>
+            <div style="margin-bottom:14px">
+              <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#1a9e68;margin-bottom:8px;font-weight:600">Estado de Resultados</div>
+              <div style="display:flex;flex-direction:column;gap:6px" id="bal-editor-resultados"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;padding-top:4px;border-top:1px solid var(--bd)">
+              <button onclick="balEditorGuardar()" style="padding:7px 18px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.4);color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">✓ Guardar cambios</button>
+              <button onclick="balEditorRecargar()" style="padding:7px 14px;background:var(--s2);border:1px solid var(--bd2);color:var(--dim);font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">↺ Recargar del PDF</button>
+              <span id="bal-editor-msg" style="font-size:9px;font-family:var(--mono);color:var(--dim)"></span>
+            </div>
+          </div>
+        </div>
+
         <!-- FILA 1: ESP (% participación) | Indicadores patrimoniales -->
         <div class="row2" style="margin-bottom:12px">
           <div class="card">
@@ -4017,71 +4041,28 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
-        <!-- FILA 5: Comparativo de indicadores (ancho completo) -->
-        <div class="rowfull card" style="margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Comparativo de indicadores</span>
-            <span class="card-hd-unit" id="bal-compind-lbl"></span>
+        <!-- FILA 5+6: Comparativo de indicadores | Diagnóstico financiero -->
+        <div class="row2" style="margin-bottom:12px">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Comparativo de indicadores</span>
+              <span class="card-hd-unit" id="bal-compind-lbl"></span>
+            </div>
+            <div id="bal-comp-indicadores"></div>
           </div>
-          <div id="bal-comp-indicadores"></div>
-        </div>
-
-        <!-- FILA 6: Diagnóstico financiero (3 columnas) -->
-        <div class="rowfull card" style="margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Diagnóstico financiero</span>
-            <span class="card-hd-unit" id="bal-empresa-lbl2"></span>
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Diagnóstico financiero</span>
+              <span class="card-hd-unit" id="bal-empresa-lbl2"></span>
+            </div>
+            <div id="bal-diagnostico"></div>
           </div>
-          <div id="bal-diagnostico"></div>
         </div>
 
         <!-- Elementos ocultos — compatibilidad con funciones antiguas -->
         <div style="display:none">
           <div id="bal-comparacion-wrap"><div id="bal-comp-contenido"></div></div>
           <div id="bal-reexp-wrap"><div id="bal-reexp-contenido"></div><span id="bal-reexp-lbl"></span></div>
-        </div>
-
-        <!-- ══ EDITOR DE DATOS ══════════════════════════════ -->
-        <div class="rowfull card" style="margin-bottom:12px">
-          <div class="card-hd" style="cursor:pointer" onclick="toggleBalEditor()">
-            <span class="card-hd-title">✎ Editor de datos</span>
-            <span style="font-size:9px;color:var(--dim)">Corregir valores que el PDF no leyó bien</span>
-            <span id="bal-editor-toggle" style="font-size:10px;color:var(--dim);margin-left:auto">▼ mostrar</span>
-          </div>
-          <div id="bal-editor-wrap" style="display:none;margin-top:10px">
-
-            <!-- Tipo de empresa — controla qué rubros aparecen en el editor y en el ER -->
-            <!-- Estado Patrimonial -->
-            <div style="margin-bottom:14px">
-              <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
-                color:var(--acc);margin-bottom:8px;font-weight:600">Estado de Situación Patrimonial</div>
-              <div style="display:flex;flex-direction:column;gap:6px"
-                id="bal-editor-patrimonial"></div>
-            </div>
-
-            <!-- Estado de Resultados -->
-            <div style="margin-bottom:14px">
-              <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
-                color:#1a9e68;margin-bottom:8px;font-weight:600">Estado de Resultados</div>
-              <div style="display:flex;flex-direction:column;gap:6px"
-                id="bal-editor-resultados"></div>
-            </div>
-
-            <!-- Acciones -->
-            <div style="display:flex;gap:8px;align-items:center;padding-top:4px;border-top:1px solid var(--bd)">
-              <button onclick="balEditorGuardar()"
-                style="padding:7px 18px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.4);
-                color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
-                ✓ Guardar cambios
-              </button>
-              <button onclick="balEditorRecargar()"
-                style="padding:7px 14px;background:var(--s2);border:1px solid var(--bd2);
-                color:var(--dim);font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
-                ↺ Recargar del PDF
-              </button>
-              <span id="bal-editor-msg" style="font-size:9px;font-family:var(--mono);color:var(--dim)"></span>
-            </div>
-          </div>
         </div>
 
 
@@ -26251,10 +26232,10 @@ function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
   const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
     const scoreColor = okBool == null ? 'var(--dim2)' : okBool ? 'var(--pos)' : 'var(--neg)';
     return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}${fml(formula)}</td>
+      <td style="padding:5px 8px;padding-left:16px;color:var(--text);font-size:10px">${lbl}${fml(formula)}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)">${valFmt}${pill(okBool, pillLbl)}</td>
       <td style="padding:5px 8px;text-align:right">${bar(scoreVal, scoreColor)}</td>
-      <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim2)">${ref}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim)">${ref}</td>
     </tr>`;
   };
   const fmtVar = (curV, antV) => {
@@ -26270,9 +26251,9 @@ function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
   const lC = liq.liquidez_corriente, lS = liq.liquidez_seca, kT = liq.capital_trabajo;
   const sEnd = sol.razon_endeudamiento, sDP = sol.deuda_patrimonio, sCob = sol.cobertura_intereses;
   const mkMontoRow = (lbl, curV, antV, color) => `<tr style="border-bottom:1px solid var(--bd2)">
-    <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}</td>
+    <td style="padding:5px 8px;padding-left:16px;color:var(--text);font-size:10px">${lbl}</td>
     <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:${color}">${fmtM(curV)}</td>
-    <td colspan="2" style="padding:5px 16px;text-align:right">${fmtVar(curV,antV)}${antD?`<span style="font-size:8px;color:var(--dim2);margin-left:4px">vs ${bAnt.periodo}</span>`:''}</td>
+    <td colspan="2" style="padding:5px 16px;text-align:right">${fmtVar(curV,antV)}${antD?`<span style="font-size:8px;color:var(--dim);margin-left:4px">vs ${bAnt.periodo}</span>`:''}</td>
   </tr>`;
   return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px">
     <thead><tr>
@@ -26319,10 +26300,10 @@ function buildIndicadoresResultados(b, ren, efi, scores) {
   const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
     const scoreColor = okBool == null ? 'var(--dim2)' : okBool ? 'var(--pos)' : 'var(--neg)';
     return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}${fml(formula)}</td>
+      <td style="padding:5px 8px;padding-left:16px;color:var(--text);font-size:10px">${lbl}${fml(formula)}</td>
       <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)">${valFmt}${pill(okBool,pillLbl)}</td>
       <td style="padding:5px 8px;text-align:right">${bar(scoreVal,scoreColor)}</td>
-      <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim2)">${ref}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim)">${ref}</td>
     </tr>`;
   };
   const mkMontoRow = (lbl, v, color) => `<tr style="border-bottom:1px solid var(--bd2)">
@@ -26750,11 +26731,12 @@ function buildComparativoIndicadores(b, priores) {
   const secRow = lbl => `<tr style="background:var(--s2)">
     <td colspan="${nCols}" style="${P};font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700">${lbl}</td>
   </tr>`;
-  const mkRow = (lbl, acc, tipo, betterLow) => {
+  const fml = t => `<span style="color:var(--dim);font-size:7.5px;font-family:var(--mono);margin-left:3px">(${t})</span>`;
+  const mkRow = (lbl, formula, acc, tipo, betterLow) => {
     const vals=inds.map(r=>acc(r));
     const curV=vals[vals.length-1], iniV=vals[0];
     return `<tr style="border-bottom:1px solid var(--bd2)">
-      <td style="${P};padding-left:16px;color:var(--dim);font-size:10px">${lbl}</td>
+      <td style="${P};padding-left:14px;color:var(--text);font-size:10px;white-space:nowrap">${lbl}${fml(formula)}</td>
       ${vals.map((v,i)=>{
         const isCur=i===vals.length-1;
         return `<td style="${P};text-align:right;font-family:var(--mono);font-size:10px;${isCur?'font-weight:700;color:var(--text)':'color:var(--dim)'};font-variant-numeric:tabular-nums;white-space:nowrap">${fmtInd(v,tipo)}</td>`;
@@ -26765,22 +26747,22 @@ function buildComparativoIndicadores(b, priores) {
   return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
     ${thead}<tbody>
     ${secRow('Liquidez')}
-    ${mkRow('Liquidez corriente', r=>r.liq.liquidez_corriente, 'ratio', false)}
-    ${mkRow('Liquidez seca',      r=>r.liq.liquidez_seca,      'ratio', false)}
-    ${mkRow('Capital de trabajo', r=>r.liq.capital_trabajo,    'monto', false)}
+    ${mkRow('Liquidez corriente','AC / PC',         r=>r.liq.liquidez_corriente, 'ratio', false)}
+    ${mkRow('Liquidez seca',    '(AC−BC) / PC',    r=>r.liq.liquidez_seca,      'ratio', false)}
+    ${mkRow('Capital de trabajo','AC − PC',         r=>r.liq.capital_trabajo,    'monto', false)}
     ${secRow('Solvencia')}
-    ${mkRow('Razón endeudamiento',r=>r.sol.razon_endeudamiento,'pct',   true)}
-    ${mkRow('Deuda / Patrimonio', r=>r.sol.deuda_patrimonio,   'ratio', true)}
-    ${mkRow('Cobertura intereses',r=>r.sol.cobertura_intereses,'ratio', false)}
+    ${mkRow('Endeudamiento',    'PT / AT',          r=>r.sol.razon_endeudamiento,'pct',   true)}
+    ${mkRow('Deuda / Patrimonio','PT / PN',         r=>r.sol.deuda_patrimonio,   'ratio', true)}
+    ${mkRow('Cobertura int.',   'EBIT / Gtos.fin.', r=>r.sol.cobertura_intereses,'ratio', false)}
     ${secRow('Rentabilidad')}
-    ${mkRow('ROE',                r=>r.ren.roe,                'pct',   false)}
-    ${mkRow('ROA',                r=>r.ren.roa,                'pct',   false)}
-    ${mkRow('Margen operativo',   r=>r.ren.margen_operativo,   'pct',   false)}
-    ${mkRow('Margen neto',        r=>r.ren.margen_neto,        'pct',   false)}
-    ${secRow('Eficiencia operativa')}
-    ${mkRow('Rotación activos',   r=>r.efi.rotacion_activos,   'ratio', false)}
-    ${mkRow('Días de cobro',      r=>r.efi.dias_cobro,         'dias',  true)}
-    ${mkRow('Días de pago',       r=>r.efi.dias_pago,          'dias',  false)}
+    ${mkRow('ROE',              'Res.neto / PN',    r=>r.ren.roe,                'pct',   false)}
+    ${mkRow('ROA',              'Res.neto / AT',    r=>r.ren.roa,                'pct',   false)}
+    ${mkRow('Margen operativo', 'EBIT / Ingresos',  r=>r.ren.margen_operativo,   'pct',   false)}
+    ${mkRow('Margen neto',      'Res.neto / Ing.',  r=>r.ren.margen_neto,        'pct',   false)}
+    ${secRow('Eficiencia')}
+    ${mkRow('Rotación activos', 'Ing. / AT',        r=>r.efi.rotacion_activos,   'ratio', false)}
+    ${mkRow('Días de cobro',    'Créd.×365 / Ing.', r=>r.efi.dias_cobro,         'dias',  true)}
+    ${mkRow('Días de pago',     'Deud.×365 / Cost.',r=>r.efi.dias_pago,          'dias',  false)}
     </tbody></table></div>`;
 }
 
@@ -26799,79 +26781,36 @@ function _buildERDesdeEstructura(b, fmtM) {
   const ES_TOTAL    = /resultado.*(ejercicio|período|neto|final)|ganancia.*(pérdida|neta)|pérdida.*(ejercicio)/i;
   const ES_SUBTOTAL = /^(sub.?total|resultado|total.*(ingre|egre|rentas|ventas)|utilidad|ganancia|pérdida)/i;
 
+  const P = 'padding:4px 8px';
   const filaHTML = (r) => {
     const val = r.val;
     if (val == null) return '';
-
     const isCalc   = r.calc;
     const isUltimo = r === ultimoCalc;
     const esTotal  = isCalc && ES_TOTAL.test(r.lbl);
     const esSub    = isCalc && !esTotal && ES_SUBTOTAL.test(r.lbl);
     const esNeg    = val < 0;
-    const nivel    = isUltimo ? 3 : esTotal ? 2 : esSub ? 1 : 0;
-
-    // ── Paleta por nivel ──────────────────────────────────────────
-    // Nivel 3: resultado final — amarillo con borde
-    // Nivel 2: total intermedio — rojo/verde fuerte
-    // Nivel 1: subtotal — azul/verde tenue
-    // Nivel 0: dato base — texto normal, negativo en rojo tenue
-
-    const colorPos = nivel === 3 ? 'var(--y21)'
-                   : nivel === 2 ? '#2ecc8a'
-                   : nivel === 1 ? '#47e8ff'
-                   : 'var(--text)';
-    const colorNeg = nivel === 3 ? 'var(--y21)'
-                   : nivel >= 2 ? 'var(--neg)'
-                   : nivel === 1 ? '#ff8c47'
-                   : '#ff6b80';
-    const color = esNeg ? colorNeg : colorPos;
-
-    const bg = nivel === 3 ? 'rgba(232,255,71,.07)'
-             : nivel === 2 ? (esNeg ? 'rgba(255,71,102,.07)' : 'rgba(71,255,180,.07)')
-             : nivel === 1 ? 'rgba(100,100,80,.04)'
-             : '';
-    const bt = nivel === 3 ? 'border-top:2px solid var(--y21);border-bottom:2px solid var(--y21)'
-             : nivel === 2 ? `border-top:2px solid ${esNeg?'var(--neg)':'#2ecc8a'}`
-             : nivel === 1 ? `border-top:1px solid ${esNeg?'#ff8c4744':'#47e8ff44'}`
-             : '';
-    const fw    = nivel >= 2 ? '700' : nivel === 1 ? '600' : '400';
-    const fs    = nivel === 3 ? '10.5px' : nivel >= 1 ? '10px' : '9.5px';
-    const pad   = nivel === 3 ? '9px 14px' : nivel >= 1 ? '7px 14px' : '5px 14px';
-    const arrow = esNeg ? '▼ ' : nivel > 0 ? '▲ ' : '';
-    const arrowCol = esNeg ? colorNeg : colorPos;
-
-    // Porcentaje sobre ingresos base — en span de ancho fijo para alinear
-    const pctVal = baseIngr && !isUltimo && Math.abs(val) > 0 ? (val/baseIngr*100) : null;
-    const pct = pctVal != null
-      ? `<span style="display:inline-block;width:64px;text-align:right;font-size:8px;color:var(--dim);font-family:var(--mono)">${Math.round(pctVal)}%</span>`
-      : `<span style="display:inline-block;width:64px"></span>`;
-
-    // Tag de nivel
-    const tag = nivel === 3
-      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:rgba(232,255,71,.15);color:#b8a000;font-family:var(--mono);margin-left:6px">RESULTADO</span>`
-      : nivel === 2
-      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:${esNeg?'rgba(255,71,102,.12)':'rgba(71,255,180,.12)'};color:${color};font-family:var(--mono);margin-left:6px">TOTAL</span>`
-      : nivel === 1
-      ? `<span style="font-size:7.5px;padding:1px 5px;border-radius:2px;background:rgba(100,100,80,.08);color:var(--acc);font-family:var(--mono);margin-left:6px">SUBTOTAL</span>`
+    const bold     = isCalc;
+    const color    = esNeg ? 'var(--neg)' : isCalc ? 'var(--text)' : 'var(--text)';
+    const lcolor   = isUltimo ? (esNeg?'var(--neg)':'var(--pos)') : esSub ? 'var(--text)' : esTotal ? 'var(--text)' : 'var(--dim)';
+    const bg       = isUltimo ? (esNeg?'rgba(255,71,102,.06)':'rgba(71,255,180,.06)') : esSub ? 'var(--s2)' : '';
+    const bt       = isUltimo ? `border-top:1px solid var(--bd)` : esSub ? 'border-top:1px solid var(--bd2)' : '';
+    const fw       = bold ? '700' : '400';
+    const pctVal   = baseIngr && !isUltimo && val !== 0 ? (val/baseIngr*100) : null;
+    const pct      = pctVal != null
+      ? `<span style="color:var(--dim2);font-family:var(--mono);font-size:8px;margin-left:10px;white-space:nowrap">${Math.round(pctVal)}%</span>`
       : '';
-
-    return `<tr style="background:${bg};${bt}">
-      <td style="padding:${pad};font-size:${fs};font-weight:${fw};color:${color};
-        font-family:var(--mono);border-bottom:1px solid var(--bd2)">
-        ${nivel > 0 ? `<span style="color:${arrowCol};font-size:8px">${arrow}</span>` : ''}${r.lbl}${tag}
-      </td>
-      <td style="padding:${pad};text-align:right;border-bottom:1px solid var(--bd2);white-space:nowrap">
-        <span style="display:inline-block;text-align:right;font-family:var(--mono);font-size:10px;font-weight:${nivel>=2?'700':'500'};color:${color};font-variant-numeric:tabular-nums;min-width:130px">${(esNeg?'(':'') + '$ ' + fmt.format(Math.abs(val)) + (esNeg?')':'')}</span>${pct}
-      </td>
+    return `<tr style="border-bottom:1px solid var(--bd2);${bg};${bt}">
+      <td style="${P};font-size:10px;font-weight:${fw};color:${lcolor}">${r.lbl}</td>
+      <td style="${P};text-align:right;white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:10px;font-weight:${fw};color:${color}">${esNeg?'(':''}$ ${fmt.format(Math.abs(val))}${esNeg?')':''}${pct}</td>
     </tr>`;
   };
 
+  const thS = `${P};font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
   return `<table style="width:100%;border-collapse:collapse">
-    <thead><tr style="background:var(--s3)">
-      <th style="padding:8px 14px;text-align:left;font-size:9px;color:var(--dim);
-        font-family:var(--mono);border-bottom:1px solid var(--bd)">Concepto</th>
-      <th style="padding:8px 14px;text-align:right;font-size:9px;color:var(--dim);
-        font-family:var(--mono);border-bottom:1px solid var(--bd)"><span style="display:inline-block;min-width:130px;text-align:right">Importe</span><span style="display:inline-block;width:64px;text-align:right">% s/ventas</span></th>
+    <thead><tr>
+      <th style="${thS};text-align:left">Concepto</th>
+      <th style="${thS};text-align:right">Importe&nbsp;&nbsp;% s/ing.</th>
     </tr></thead>
     <tbody>${er.map(r => filaHTML(r)).join('')}</tbody>
   </table>`;
