@@ -5003,8 +5003,8 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #bal-estado-patrimonial, #bal-estado-resultados,
   #bal-ind-patrimoniales, #bal-ind-resultados,
   #bal-reexp-esp, #bal-reexp-er,
-  #bal-plurianual-er,
-  #bal-diagnostico { display:block !important; break-inside:avoid; }
+  #bal-plurianual, #bal-plurianual-er,
+  #bal-comp-indicadores, #bal-diagnostico { display:block !important; break-inside:avoid; }
   #bal-reexp-integ-wrap { display:grid !important; }
 
   /* Encabezado de empresa en balance */
@@ -5695,7 +5695,7 @@ function imprimirPanelActivo() {
   // Generar HTML del reporte según módulo
   var reportHTML = '';
   if      (panelId === 'personal')       reportHTML = _rptPersonal();
-  else if (panelId === 'balances')       reportHTML = _rptBalance();
+  else if (panelId === 'balances')       { _imprimirPanelFallback(panelId, panelActivo); return; }
   else if (panelId === 'resumen')        reportHTML = _rptResumen();
   else if (panelId === 'facturacion')    reportHTML = _rptFacturacion();
   else if (panelId === 'resultado')      reportHTML = _rptResultado();
@@ -5771,7 +5771,6 @@ function imprimirPanelActivo() {
         var html3 = '';
         try {
           if      (pid3==='personal')       html3 = _rptPersonal();
-          else if (pid3==='balances')       html3 = _rptBalance();
           else if (pid3==='transferencias') html3 = _rptTransferencias();
           else if (pid3==='resumen')        html3 = _rptResumen();
           else if (pid3==='facturacion')    html3 = _rptFacturacion();
@@ -8021,14 +8020,25 @@ function _prepararPanelParaPrint(panelId, panelEl) {
     _set('bal-diagnostico',      'block');
     _set('bal-comparacion-wrap', 'block');
 
-    // Secciones de indicadores — mostrar solo si tienen contenido
-    ['bal-estado-patrimonial','bal-analisis-horizontal','bal-estado-resultados',
+    // Mostrar secciones con contenido
+    ['bal-estado-patrimonial','bal-ind-patrimoniales',
+     'bal-estado-resultados','bal-ind-resultados',
+     'bal-reexp-esp','bal-reexp-er',
+     'bal-plurianual','bal-plurianual-er',
+     'bal-comp-indicadores','bal-diagnostico',
+     'bal-analisis-horizontal',
      'bal-liquidez','bal-solvencia','bal-rentabilidad','bal-eficiencia'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.dataset.pwas = el.style.display;
       el.style.display = el.innerHTML.trim().length > 20 ? 'block' : 'none';
     });
+    // Mostrar el wrapper del comparativo reexpresado si tiene contenido
+    const reexpWrap = document.getElementById('bal-reexp-integ-wrap');
+    if (reexpWrap) {
+      reexpWrap.dataset.pwas = reexpWrap.style.display;
+      reexpWrap.style.display = reexpWrap.innerHTML.trim().length > 20 ? 'grid' : 'none';
+    }
   }
 
   if (panelId === 'flujos') {
@@ -8067,7 +8077,11 @@ function _limpiarDespuesDePrint(panelId, panelEl) {
     'bal-empresa-det','bal-periodo-det','bal-status','bal-comp-checks','bal-fuente',
     'bal-cierre-det','bal-comp-selector-row','bal-editor-toggle','bal-editor-wrap',
     'bal-raw-toggle','bal-raw-wrap','bal-vincular-card','bal-vincular-sel','bal-vincular-estado',
-    'bal-estado-patrimonial','bal-analisis-horizontal','bal-estado-resultados','bal-liquidez','bal-solvencia',
+    'bal-estado-patrimonial','bal-ind-patrimoniales','bal-analisis-horizontal',
+    'bal-estado-resultados','bal-ind-resultados',
+    'bal-reexp-esp','bal-reexp-er','bal-reexp-integ-wrap',
+    'bal-plurianual','bal-plurianual-er','bal-comp-indicadores',
+    'bal-liquidez','bal-solvencia',
     'bal-rentabilidad','bal-eficiencia','flujo-comp-wrap','panel-flujo-confirm','panel-flujo-manual',
     'pers-mensual-wrap','pers-manual-panel','pers-import-msg','pers-tabla-wrap','kpi-pers',
     'btn-cargar-bal','file-bal','bal-progress','tbl-flujos-lista'];
