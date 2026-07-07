@@ -3936,7 +3936,7 @@ self.onmessage = async (e) => {
         <!-- KPI banda -->
         <div id="bal-kpi-band" class="kpi-band" style="margin-bottom:12px"></div>
 
-        <!-- Estado de situación patrimonial + Análisis horizontal -->
+        <!-- FILA 1: ESP (% participación) | Indicadores patrimoniales -->
         <div class="row2" style="margin-bottom:12px">
           <div class="card">
             <div class="card-hd">
@@ -3947,69 +3947,74 @@ self.onmessage = async (e) => {
           </div>
           <div class="card">
             <div class="card-hd">
-              <span class="card-hd-title">Análisis horizontal</span>
+              <span class="card-hd-title">Indicadores patrimoniales</span>
               <span class="card-hd-unit" id="bal-ah-lbl"></span>
             </div>
-            <div id="bal-analisis-horizontal"></div>
+            <div id="bal-ind-patrimoniales"></div>
           </div>
         </div>
 
-        <!-- Estado de resultados solo -->
-        <div class="rowfull card" style="margin-bottom:12px">
-          <div class="card-hd">
-            <span class="card-hd-title">Estado de resultados</span>
-            <span class="card-hd-unit" id="bal-er-lbl"></span>
-          </div>
-          <div id="bal-estado-resultados"></div>
-        </div>
-
-        <!-- Indicadores 2×2 -->
+        <!-- FILA 2: Estado de resultados | Indicadores de resultados -->
         <div class="row2" style="margin-bottom:12px">
           <div class="card">
-            <div class="card-hd"><span class="card-hd-title">Liquidez y capital de trabajo</span></div>
-            <div id="bal-liquidez"></div>
-          </div>
-          <div class="card">
-            <div class="card-hd"><span class="card-hd-title">Solvencia y endeudamiento</span></div>
-            <div id="bal-solvencia"></div>
-          </div>
-        </div>
-        <div class="row2" style="margin-bottom:12px">
-          <div class="card">
-            <div class="card-hd"><span class="card-hd-title">Rentabilidad</span></div>
-            <div id="bal-rentabilidad"></div>
-          </div>
-          <div class="card">
-            <div class="card-hd"><span class="card-hd-title">Eficiencia operativa</span></div>
-            <div id="bal-eficiencia"></div>
-          </div>
-        </div>
-
-        <!-- Comparativo plurianual + Diagnóstico | Comparativo de indicadores -->
-        <div style="display:grid;grid-template-columns:46fr 54fr;gap:10px;margin-bottom:12px;align-items:start">
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div class="card">
-              <div class="card-hd">
-                <span class="card-hd-title">Comparativo plurianual</span>
-                <span class="card-hd-unit" id="bal-pluri-lbl"></span>
-              </div>
-              <div id="bal-plurianual"></div>
+            <div class="card-hd">
+              <span class="card-hd-title">Estado de resultados</span>
+              <span class="card-hd-unit" id="bal-er-lbl"></span>
             </div>
-            <div class="card">
-              <div class="card-hd">
-                <span class="card-hd-title">Diagnóstico financiero</span>
-                <span class="card-hd-unit" id="bal-empresa-lbl2"></span>
-              </div>
-              <div id="bal-diagnostico" style="font-size:11.5px;line-height:1.8;color:var(--text);padding-top:4px"></div>
-            </div>
+            <div id="bal-estado-resultados"></div>
           </div>
           <div class="card">
             <div class="card-hd">
-              <span class="card-hd-title">Comparativo de indicadores</span>
-              <span class="card-hd-unit" id="bal-compind-lbl"></span>
+              <span class="card-hd-title">Indicadores de resultados</span>
+              <span class="card-hd-unit" id="bal-er-lbl2"></span>
             </div>
-            <div id="bal-comp-indicadores"></div>
+            <div id="bal-ind-resultados"></div>
           </div>
+        </div>
+
+        <!-- Elementos ocultos — compatibilidad con JS existente -->
+        <div style="display:none">
+          <div id="bal-analisis-horizontal"></div>
+          <div id="bal-liquidez"></div>
+          <div id="bal-solvencia"></div>
+          <div id="bal-rentabilidad"></div>
+          <div id="bal-eficiencia"></div>
+        </div>
+
+        <!-- FILA 3: Comparativo plurianual — Patrimonial | Resultados -->
+        <div class="row2" style="margin-bottom:12px">
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Comparativo plurianual — Patrimonial</span>
+              <span class="card-hd-unit" id="bal-pluri-lbl"></span>
+            </div>
+            <div id="bal-plurianual"></div>
+          </div>
+          <div class="card">
+            <div class="card-hd">
+              <span class="card-hd-title">Comparativo plurianual — Resultados</span>
+              <span class="card-hd-unit" id="bal-pluri-er-lbl"></span>
+            </div>
+            <div id="bal-plurianual-er"></div>
+          </div>
+        </div>
+
+        <!-- FILA 4: Comparativo de indicadores (ancho completo) -->
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Comparativo de indicadores</span>
+            <span class="card-hd-unit" id="bal-compind-lbl"></span>
+          </div>
+          <div id="bal-comp-indicadores"></div>
+        </div>
+
+        <!-- FILA 5: Diagnóstico financiero (3 columnas) -->
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Diagnóstico financiero</span>
+            <span class="card-hd-unit" id="bal-empresa-lbl2"></span>
+          </div>
+          <div id="bal-diagnostico"></div>
         </div>
 
         <!-- Comparación entre períodos -->
@@ -5006,10 +5011,10 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #bal-kpi-band .kpi { min-width:100px !important; flex:1 !important; }
 
   /* Secciones del balance — todas visibles */
-  #bal-radar-lbl, #bal-esp-lbl, #bal-ah-lbl, #bal-er-lbl { display:block !important; }
-  #bal-estado-patrimonial, #bal-analisis-horizontal, #bal-estado-resultados,
-  #bal-liquidez, #bal-solvencia,
-  #bal-rentabilidad, #bal-eficiencia,
+  #bal-radar-lbl, #bal-esp-lbl, #bal-ah-lbl, #bal-er-lbl, #bal-er-lbl2 { display:block !important; }
+  #bal-estado-patrimonial, #bal-estado-resultados,
+  #bal-ind-patrimoniales, #bal-ind-resultados,
+  #bal-plurianual-er,
   #bal-diagnostico { display:block !important; break-inside:avoid; }
 
   /* Comparación solo si tiene contenido */
@@ -26155,6 +26160,324 @@ function buildAnalisisHorizontal(b, bAnt) {
   </table>`;
 }
 
+// ── ESP con columna de participación % ─────────────────────
+function buildESPConParticipacion(b, bAnt) {
+  const cur  = _extractPatrimonialData(b);
+  const ant  = bAnt ? _extractPatrimonialData(bAnt) : null;
+  const filas = _patFilasShared(cur, ant);
+  const fmt  = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
+  const fmtM = (v, color) => {
+    if (v == null) return '<span style="color:var(--dim)">—</span>';
+    const s = v < 0 ? '−' : '';
+    const c = color || (v < 0 ? 'var(--neg)' : 'var(--text)');
+    return `<span style="color:${c};font-family:var(--mono);font-variant-numeric:tabular-nums">${s}$ ${fmt.format(Math.abs(v))}</span>`;
+  };
+  const aT = Math.abs(cur.aT) || 1;
+  const fmtPart = (v, color) => {
+    if (v == null) return '<td></td>';
+    const pct = Math.abs(v / aT * 100);
+    const isTotal = Math.abs(pct - 100) < 0.5;
+    if (isTotal) return `<td style="padding:4px 8px;text-align:right;font-size:9px;color:var(--dim2)">100%</td>`;
+    const barW = Math.min(pct, 100).toFixed(1);
+    const c = color || 'var(--acc)';
+    return `<td style="padding:4px 8px;text-align:right;white-space:nowrap">
+      <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+        <div style="width:36px;height:3px;background:var(--bd2);border-radius:2px;overflow:hidden;flex-shrink:0">
+          <div style="height:100%;width:${barW}%;background:${c};border-radius:2px"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:9.5px;color:${c};font-weight:600;min-width:34px;text-align:right">${pct.toFixed(1)}%</span>
+      </div>
+    </td>`;
+  };
+  const perAct = b.periodo || '—';
+  const perAnt = bAnt ? (bAnt.periodo || '—') : null;
+  const nCols  = ant ? 4 : 3;
+  const thS  = 'padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  const thLS = 'padding:5px 8px;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:500';
+  return `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead><tr>
+      <th style="${thLS}">Rubro</th>
+      <th style="${thS}">${perAct}</th>
+      ${ant ? `<th style="${thS};opacity:.6">${perAnt}</th>` : ''}
+      <th style="${thS}">% s/Total</th>
+    </tr></thead>
+    <tbody>
+    ${filas.map(f => {
+      if (f.separador) return `<tr><td colspan="${nCols}" style="height:5px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+      const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+      const weight = (f.seccion || f.total) ? 'font-weight:600' : 'font-weight:400';
+      const lc = f.colorVal ? `color:${f.colorVal}` : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
+      const bgRow = f.seccion ? 'background:var(--s2)' : f.total && f.colorVal === 'var(--pos)' ? 'background:var(--pos-lt)' : '';
+      if (f.seccion) {
+        return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
+          <td colspan="${nCols}" style="padding:4px 8px;${weight};${lc}">${f.label}</td>
+        </tr>`;
+      }
+      const pctColor = f.colorVal === 'var(--pos)' ? 'var(--pos)' : f.colorVal === 'var(--neg)' ? 'var(--neg)' : 'var(--acc)';
+      return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
+        <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
+        <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.colorVal) : '<span style="color:var(--dim)">—</span>'}</td>
+        ${ant ? `<td style="padding:5px 8px;text-align:right;opacity:.65">${f.ant != null ? fmtM(f.ant) : '<span style="color:var(--dim)">—</span>'}</td>` : ''}
+        ${fmtPart(f.cur, pctColor)}
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ── Indicadores patrimoniales con fórmulas + barras ────────
+function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
+  const fmt = new Intl.NumberFormat('es-AR', {maximumFractionDigits:0});
+  const fmtM = v => v == null ? '<span style="color:var(--dim)">—</span>'
+    : `<span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${v<0?'−':''}$ ${fmt.format(Math.abs(v))}</span>`;
+  const bar = (score, color) => {
+    if (score == null) return '';
+    const w = Math.min(Math.max(score,0),100);
+    return `<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+      <div style="width:44px;height:4px;background:var(--bd2);border-radius:2px;overflow:hidden;flex-shrink:0">
+        <div style="height:100%;width:${w}%;background:${color};border-radius:2px"></div>
+      </div>
+      <span style="font-size:8.5px;font-family:var(--mono);color:${color};min-width:24px;text-align:right">${w}</span>
+    </div>`;
+  };
+  const pill = (ok, lbl) => ok == null ? '' :
+    `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:8px;margin-left:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${lbl}</span>`;
+  const fml = t => `<span style="color:var(--dim2);font-size:8px">(${t})</span>`;
+  const secR = lbl => `<tr style="background:var(--s2)"><td colspan="4" style="padding:4px 8px;font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700;border-bottom:1px solid var(--bd)">${lbl}</td></tr>`;
+  const thS = 'padding:5px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600';
+  const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
+    const scoreColor = okBool == null ? 'var(--dim2)' : okBool ? 'var(--pos)' : 'var(--neg)';
+    return `<tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl} ${fml(formula)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)">${valFmt}${pill(okBool, pillLbl)}</td>
+      <td style="padding:5px 8px;text-align:right">${bar(scoreVal, scoreColor)}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim2)">${ref}</td>
+    </tr>`;
+  };
+  const fmtVar = (curV, antV) => {
+    if (curV == null || antV == null || antV === 0) return '';
+    const p = (curV - antV) / Math.abs(antV) * 100;
+    const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
+    return `<span style="color:${c};font-size:9px;font-family:var(--mono);font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+  };
+  const curD = _extractPatrimonialData(b);
+  const antD = bAnt ? _extractPatrimonialData(bAnt) : null;
+  const liqScore = scores?.liquidez != null ? Math.min(scores.liquidez,100) : null;
+  const solScore = scores?.solvencia != null ? Math.min(scores.solvencia,100) : null;
+  const lC = liq.liquidez_corriente, lS = liq.liquidez_seca, kT = liq.capital_trabajo;
+  const sEnd = sol.razon_endeudamiento, sDP = sol.deuda_patrimonio, sCob = sol.cobertura_intereses;
+  const mkMontoRow = (lbl, curV, antV, color) => `<tr style="border-bottom:1px solid var(--bd2)">
+    <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}</td>
+    <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:${color}">${fmtM(curV)}</td>
+    <td colspan="2" style="padding:5px 16px;text-align:right">${fmtVar(curV,antV)}${antD?`<span style="font-size:8px;color:var(--dim2);margin-left:4px">vs ${bAnt.periodo}</span>`:''}</td>
+  </tr>`;
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead><tr>
+      <th style="padding:5px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600">Indicador</th>
+      <th style="${thS}">Valor</th><th style="${thS}">Score</th><th style="${thS}">Ref.</th>
+    </tr></thead>
+    <tbody>
+    ${secR('Liquidez')}
+    ${mkRow('Liquidez corriente','AC / PC',lC!=null?lC.toFixed(2):'—',lC!=null&&lC>=1,'OK',liqScore,'≥ 1,0')}
+    ${mkRow('Liquidez seca','(AC − BC) / PC',lS!=null?lS.toFixed(2):'—',lS!=null&&lS>=1,'OK',null,'≥ 1,0')}
+    ${mkRow('Capital de trabajo','AC − PC',kT!=null?fmtM(kT):'—',kT!=null&&kT>0,'> 0',null,'> 0')}
+    ${secR('Solvencia')}
+    ${mkRow('Razón endeudamiento','PT / AT',sEnd!=null?(sEnd*100).toFixed(1)+'%':'—',sEnd!=null&&sEnd<0.6,'bajo',solScore,'< 60%')}
+    ${mkRow('Deuda / Patrimonio','PT / PN',sDP!=null?sDP.toFixed(2):'—',sDP!=null&&sDP<1,'OK',null,'< 1,0')}
+    ${mkRow('Cobertura intereses','EBIT / Gtos. fin.',sCob!=null?sCob.toFixed(2)+'×':'—',sCob!=null&&sCob>1.5,'OK',null,'> 1,5')}
+    ${secR('Montos estructurales')}
+    ${mkMontoRow('Activo total',curD.aT,antD?.aT,'var(--acc)')}
+    ${mkMontoRow('Pasivo total',curD.pT,antD?.pT,'var(--neg)')}
+    ${mkMontoRow('Patrimonio neto',curD.pN,antD?.pN,'var(--pos)')}
+    </tbody>
+  </table></div>`;
+}
+
+// ── Indicadores de resultados con fórmulas + barras ────────
+function buildIndicadoresResultados(b, ren, efi, scores) {
+  const fmt = new Intl.NumberFormat('es-AR', {maximumFractionDigits:0});
+  const fmtM = v => v == null ? '<span style="color:var(--dim)">—</span>'
+    : `<span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${v<0?'−':''}$ ${fmt.format(Math.abs(v))}</span>`;
+  const bar = (score, color) => {
+    if (score == null) return '';
+    const w = Math.min(Math.max(score,0),100);
+    return `<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+      <div style="width:44px;height:4px;background:var(--bd2);border-radius:2px;overflow:hidden;flex-shrink:0">
+        <div style="height:100%;width:${w}%;background:${color};border-radius:2px"></div>
+      </div>
+      <span style="font-size:8.5px;font-family:var(--mono);color:${color};min-width:24px;text-align:right">${w}</span>
+    </div>`;
+  };
+  const pill = (ok, lbl) => ok == null ? '' :
+    `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:8px;margin-left:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${lbl}</span>`;
+  const fml = t => `<span style="color:var(--dim2);font-size:8px">(${t})</span>`;
+  const secR = lbl => `<tr style="background:var(--s2)"><td colspan="4" style="padding:4px 8px;font-size:7.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--acc);font-weight:700;border-bottom:1px solid var(--bd)">${lbl}</td></tr>`;
+  const thS = 'padding:5px 8px;text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600';
+  const mkRow = (lbl, formula, valFmt, okBool, pillLbl, scoreVal, ref) => {
+    const scoreColor = okBool == null ? 'var(--dim2)' : okBool ? 'var(--pos)' : 'var(--neg)';
+    return `<tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl} ${fml(formula)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)">${valFmt}${pill(okBool,pillLbl)}</td>
+      <td style="padding:5px 8px;text-align:right">${bar(scoreVal,scoreColor)}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim2)">${ref}</td>
+    </tr>`;
+  };
+  const mkMontoRow = (lbl, v, color) => `<tr style="border-bottom:1px solid var(--bd2)">
+    <td style="padding:5px 8px;padding-left:16px;color:var(--dim);font-size:10.5px">${lbl}</td>
+    <td colspan="3" style="padding:5px 8px;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;color:${color}">${fmtM(v)}</td>
+  </tr>`;
+  const renScore = scores?.rentabilidad != null ? Math.min(scores.rentabilidad,100) : null;
+  const efiScore = scores?.eficiencia   != null ? Math.min(scores.eficiencia,100)   : null;
+  const fp = v => v != null ? (v*100).toFixed(1)+'%' : '—';
+  const fr = v => v != null ? v.toFixed(2) : '—';
+  const fd = v => v != null ? Math.round(v)+' d' : '—';
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <thead><tr>
+      <th style="padding:5px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600">Indicador</th>
+      <th style="${thS}">Valor</th><th style="${thS}">Score</th><th style="${thS}">Ref.</th>
+    </tr></thead>
+    <tbody>
+    ${secR('Rentabilidad')}
+    ${mkRow('ROE','Res. neto / PN',fp(ren.roe),ren.roe!=null&&ren.roe>0,'OK',renScore,'> 5%')}
+    ${mkRow('ROA','Res. neto / AT',fp(ren.roa),ren.roa!=null&&ren.roa>0,'OK',null,'> 0%')}
+    ${mkRow('Margen bruto','Res. bruto / Ingresos',fp(ren.margen_bruto),ren.margen_bruto!=null&&ren.margen_bruto>=0,'OK',null,'≥ 0%')}
+    ${mkRow('Margen operativo','EBIT / Ingresos',fp(ren.margen_operativo),ren.margen_operativo!=null&&ren.margen_operativo>=0,'OK',null,'≥ 0%')}
+    ${mkRow('Margen neto','Res. neto / Ingresos',fp(ren.margen_neto),ren.margen_neto!=null&&ren.margen_neto>=0,'OK',null,'≥ 0%')}
+    ${secR('Eficiencia')}
+    ${mkRow('Rotación activos','Ingresos / AT',fr(efi.rotacion_activos),efi.rotacion_activos!=null&&efi.rotacion_activos>0.5,'medio',efiScore,'> 0,5')}
+    ${mkRow('Días de cobro','Créd. × 365 / Ingresos',fd(efi.dias_cobro),efi.dias_cobro!=null&&efi.dias_cobro<60,'OK',null,'< 60 d')}
+    ${mkRow('Días de pago','Deud. com. × 365 / Costos',fd(efi.dias_pago),efi.dias_pago!=null&&efi.dias_pago>20,'OK',null,'> 20 d')}
+    ${secR('Ingresos y resultados')}
+    ${mkMontoRow('Ventas / Ingresos',ren.ventas_ingresos,'var(--pos)')}
+    ${mkMontoRow('Resultado neto',ren.resultado_neto,ren.resultado_neto!=null&&ren.resultado_neto>=0?'var(--pos)':'var(--neg)')}
+    </tbody>
+  </table></div>`;
+}
+
+// ── Comparativo plurianual — Estado de resultados ───────────
+function buildPluriER(b, priores) {
+  const hist = [...(priores || []).slice(-2), b];
+  if (!hist.length) return '<div style="color:var(--dim);padding:20px;text-align:center;font-size:10px">Sin datos</div>';
+  const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+  const fmtM = v => v == null
+    ? '<span style="color:var(--dim)">—</span>'
+    : `<span style="font-family:var(--mono);font-variant-numeric:tabular-nums">${v<0?'−':''}$ ${fmt.format(Math.abs(v))}</span>`;
+  const fmtPct = (cur, ini) => {
+    if (cur == null || ini == null || ini === 0) return '';
+    const p = (cur - ini) / Math.abs(ini) * 100;
+    const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
+    return `<span style="color:${c};font-weight:600;font-family:var(--mono);font-size:9px">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+  };
+  const rows_data = hist.map(bx => {
+    const ren = (bx.indicadores||{}).rentabilidad || {};
+    let ingresos = ren.ventas_ingresos, costos = ren.costo_ventas;
+    let resOp = ren.resultado_operativo, resNeto = ren.resultado_neto, resBruto = ren.resultado_bruto;
+    if (bx.estructura_er?.length) {
+      const calcRows = bx.estructura_er.filter(r => r.calc && r.val != null);
+      const lastCalc = [...calcRows].reverse()[0];
+      if (lastCalc) resNeto = lastCalc.val;
+      if (!ingresos) {
+        const posRows = bx.estructura_er.filter(r => !r.calc && r.val > 0);
+        if (posRows.length) ingresos = posRows.reduce((s,r)=>s+(r.val||0),0) || null;
+      }
+    }
+    return { per: bx.periodo, ingresos, costos, resBruto, resOp, resNeto };
+  });
+  const showTrend = hist.length > 1;
+  const nCols = hist.length + 1 + (showTrend ? 1 : 0);
+  const thS = cur => `padding:5px 8px;text-align:right;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--bd);color:${cur?'var(--text)':'var(--dim)'}`;
+  const thLS = 'padding:5px 8px;text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:500;border-bottom:1px solid var(--bd);color:var(--dim)';
+  const thead = `<thead><tr>
+    <th style="${thLS}">Concepto</th>
+    ${rows_data.map((r,i)=>`<th style="${thS(i===rows_data.length-1)}">${r.per}</th>`).join('')}
+    ${showTrend?`<th style="${thS(false)}">${rows_data[0].per}→${rows_data[rows_data.length-1].per}</th>`:''}
+  </tr></thead>`;
+  const sepRow = `<tr><td colspan="${nCols}" style="height:5px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
+  const mkRow = (label, key, bold, colorCur, indent) => {
+    const vals = rows_data.map(r=>r[key]);
+    const curV = vals[vals.length-1], iniV = vals[0];
+    const bg = bold ? 'background:var(--s2)' : '';
+    const fw = bold ? 'font-weight:700' : '';
+    return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
+      <td style="padding:5px 8px;${indent?'padding-left:18px':''}${fw};${bold?'color:var(--text)':'color:var(--dim)'}">${label}</td>
+      ${vals.map((v,i)=>{
+        const isCur=i===vals.length-1;
+        const c=isCur?(colorCur||(bold?'var(--text)':'var(--dim)')):'var(--dim2)';
+        return `<td style="padding:5px 8px;text-align:right;${isCur?'font-weight:700':'color:var(--dim2)'};color:${c}">${fmtM(v)}</td>`;
+      }).join('')}
+      ${showTrend?`<td style="padding:5px 8px;text-align:right;font-size:9.5px">${fmtPct(curV,iniV)}</td>`:''}
+    </tr>`;
+  };
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+    ${thead}<tbody>
+    ${mkRow('Ventas / Ingresos','ingresos',true,'var(--pos)',false)}
+    ${mkRow('Costo de ventas','costos',false,null,true)}
+    ${mkRow('Resultado bruto','resBruto',true,null,false)}
+    ${sepRow}
+    ${mkRow('Resultado operativo','resOp',true,null,false)}
+    ${sepRow}
+    ${mkRow('Resultado del ejercicio','resNeto',true,'var(--pos)',false)}
+    </tbody></table></div>`;
+}
+
+// ── Diagnóstico financiero 3 columnas ───────────────────────
+function buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq, sol, ren) {
+  const fmtM = v => {
+    if (v == null) return null;
+    const s = v<0?'−':'', a=Math.abs(v);
+    if (a>=1e9) return s+'$ '+(a/1e9).toFixed(2)+'B';
+    if (a>=1e6) return s+'$ '+(a/1e6).toFixed(0)+'M';
+    if (a>=1e3) return s+'$ '+Math.round(a/1e3)+'K';
+    return s+'$ '+Math.round(a);
+  };
+  const statPill = (ok, good, bad) => {
+    if (ok == null) return `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 6px;border-radius:3px;background:var(--s2);color:var(--dim)">SIN DATOS</span>`;
+    return `<span style="font-size:7px;font-family:var(--mono);font-weight:700;padding:1px 6px;border-radius:3px;background:${ok?'rgba(4,108,73,.1)':'rgba(185,28,28,.08)'};color:${ok?'var(--pos)':'var(--neg)'}">${ok?good:bad}</span>`;
+  };
+  const liqOk = liq.liquidez_corriente!=null ? liq.liquidez_corriente>=1 : null;
+  const liqVal = liq.liquidez_corriente?.toFixed(2);
+  const liqKT  = fmtM(liq.capital_trabajo);
+  const liqText = liq.liquidez_corriente==null ? 'Sin datos de liquidez disponibles para este balance.'
+    : liq.liquidez_corriente>=2 ? `Posición sólida con ratio corriente de <strong>${liqVal}</strong>, ampliamente por encima del umbral mínimo.${liqKT?' Capital de trabajo: <strong>'+liqKT+'</strong>.':''}`
+    : liq.liquidez_corriente>=1 ? `Liquidez ajustada con ratio corriente de <strong>${liqVal}</strong>. Cubre el pasivo corriente con margen reducido.${liqKT?' Capital de trabajo: <strong>'+liqKT+'</strong>.':''}`
+    : `Liquidez insuficiente: ratio corriente <strong>${liqVal}</strong> por debajo de 1,0. Riesgo de incumplimiento de obligaciones de corto plazo.`;
+  const solEnd = sol.razon_endeudamiento;
+  const solOk  = solEnd!=null ? solEnd<0.6 : null;
+  const solEndFmt = solEnd!=null ? (solEnd*100).toFixed(1)+'%' : null;
+  const solText = solEnd==null ? 'Sin datos de solvencia disponibles.'
+    : solEnd<0.3 ? `Endeudamiento bajo (<strong>${solEndFmt}</strong>) — patrimonio predomina. Estructura financiera conservadora y robusta.`
+    : solEnd<0.6 ? `Endeudamiento moderado (<strong>${solEndFmt}</strong>) dentro de parámetros aceptables.`
+    : `Endeudamiento elevado (<strong>${solEndFmt}</strong>) — la deuda supera el umbral recomendado. Monitorear capacidad de refinanciamiento.`;
+  const roe = ren.roe, roeFmt = roe!=null ? (roe*100).toFixed(1)+'%' : null;
+  const margenFmt = ren.margen_neto!=null ? (ren.margen_neto*100).toFixed(1)+'%' : null;
+  const renOk = roe!=null ? roe>0 : null;
+  const renText = roe==null ? 'Sin datos de rentabilidad disponibles.'
+    : roe>=0.15 ? `Rentabilidad alta — ROE <strong>${roeFmt}</strong>${margenFmt?' y margen neto <strong>'+margenFmt+'</strong>':''}.`
+    : roe>=0.05 ? `Rentabilidad moderada — ROE <strong>${roeFmt}</strong>${margenFmt?' con margen neto <strong>'+margenFmt+'</strong>':''}.`
+    : roe>=0    ? `Rentabilidad baja — ROE <strong>${roeFmt}</strong>. Empresa rentable pero retornos por debajo de lo deseable.`
+    : `Resultado negativo — ROE <strong>${roeFmt}</strong>. La empresa registra pérdidas en el ejercicio.`;
+  const synLabel = scoreGlobal==null ? 'Datos insuficientes'
+    : scoreGlobal>=70 ? 'Situación financiera saludable'
+    : scoreGlobal>=45 ? 'Situación financiera moderada'
+    : 'Situación financiera crítica';
+  const synText = scoreGlobal==null ? 'No hay datos suficientes para emitir un diagnóstico consolidado.'
+    : scoreGlobal>=70 ? `${b.empresa||'La empresa'} presenta indicadores financieros positivos en las dimensiones analizadas. La combinación de liquidez, solvencia moderada y resultado positivo configura un perfil financiero saludable para el ejercicio ${b.periodo||''}.`
+    : scoreGlobal>=45 ? `${b.empresa||'La empresa'} muestra resultados mixtos. Algunas dimensiones presentan indicadores adecuados mientras otras requieren seguimiento en los próximos ejercicios.`
+    : `${b.empresa||'La empresa'} presenta señales de alerta en múltiples dimensiones financieras. Se recomienda revisar la estructura de financiamiento y la capacidad de generación de resultados.`;
+  const colHd = (lbl, pill) => `<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--bd)">
+    <span style="font-size:8px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--acc);font-weight:700">${lbl}</span>${pill}
+  </div>`;
+  return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;padding:14px 16px">
+    <div>${colHd('Liquidez',statPill(liqOk,'BUENA','CRÍTICA'))}<p style="font-size:10.5px;color:var(--text);line-height:1.65">${liqText}</p></div>
+    <div>${colHd('Solvencia',statPill(solOk,'SÓLIDA','ELEVADA'))}<p style="font-size:10.5px;color:var(--text);line-height:1.65">${solText}</p></div>
+    <div>${colHd('Rentabilidad',statPill(renOk,'POSITIVA','NEGATIVA'))}<p style="font-size:10.5px;color:var(--text);line-height:1.65">${renText}</p></div>
+  </div>
+  <div style="margin:0 16px 14px;padding:10px 14px;background:var(--s2);border-radius:5px;border-left:3px solid ${scoreColor||'var(--acc)'}">
+    <div style="font-size:7.5px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--acc);font-weight:700;margin-bottom:4px">Síntesis · Score ${scoreGlobal!=null?scoreGlobal+'/100':'—'} — ${synLabel}</div>
+    <p style="font-size:10.5px;color:var(--text);line-height:1.7">${synText}</p>
+  </div>`;
+}
+
 // ── Comparativo plurianual ──────────────────────────────────
 function buildComparativoPlurianual(b, priores) {
   const hist = [...(priores || []).slice(-2), b];
@@ -26884,24 +27207,36 @@ function showBalanceResult() {
 
   const ahEl  = document.getElementById('bal-analisis-horizontal');
   const ahLbl = document.getElementById('bal-ah-lbl');
-  if (espEl)  espEl.innerHTML  = buildEstadoPatrimonial(b, _bAnterior);
-  if (ahEl)   ahEl.innerHTML   = buildAnalisisHorizontal(b, _bAnterior);
+  // FILA 1: ESP con % participación | Indicadores patrimoniales
+  if (espEl)  espEl.innerHTML  = buildESPConParticipacion(b, _bAnterior);
+  if (ahEl)   ahEl.innerHTML   = buildAnalisisHorizontal(b, _bAnterior); // oculto, compatibilidad
   if (erEl)   erEl.innerHTML   = buildEstadoResultados(b);
   const _lblPer = _bAnterior ? b.periodo + ' vs ' + _bAnterior.periodo : b.periodo;
   if (espLbl) espLbl.textContent = b.empresa + ' · ' + _lblPer;
-  if (ahLbl)  ahLbl.textContent  = _bAnterior ? 'variación ' + _bAnterior.periodo + ' → ' + b.periodo : b.empresa + ' · ' + b.periodo;
+  if (ahLbl)  ahLbl.textContent  = b.empresa + ' · ' + b.periodo;
   if (erLbl)  erLbl.textContent  = b.empresa + ' · ' + b.periodo;
 
-  // Comparativo plurianual + Comparativo de indicadores
-  const pluriEl    = document.getElementById('bal-plurianual');
-  const compIndEl  = document.getElementById('bal-comp-indicadores');
-  const pluriLbl   = document.getElementById('bal-pluri-lbl');
-  const compIndLbl = document.getElementById('bal-compind-lbl');
-  if (pluriEl)   pluriEl.innerHTML   = buildComparativoPlurianual(b, _balsEmpresa);
-  if (compIndEl) compIndEl.innerHTML = buildComparativoIndicadores(b, _balsEmpresa);
+  const indPatEl  = document.getElementById('bal-ind-patrimoniales');
+  const indResEl  = document.getElementById('bal-ind-resultados');
+  const erLbl2El  = document.getElementById('bal-er-lbl2');
+  if (indPatEl) indPatEl.innerHTML = buildIndicadoresPatrimoniales(b, _bAnterior, liq, sol, scores);
+  if (indResEl) indResEl.innerHTML = buildIndicadoresResultados(b, ren, efi, scores);
+  if (erLbl2El) erLbl2El.textContent = b.empresa + ' · ' + b.periodo;
+
+  // Comparativo plurianual — Patrimonial | Resultados
+  const pluriEl     = document.getElementById('bal-plurianual');
+  const pluriEREl   = document.getElementById('bal-plurianual-er');
+  const compIndEl   = document.getElementById('bal-comp-indicadores');
+  const pluriLbl    = document.getElementById('bal-pluri-lbl');
+  const pluriERLbl  = document.getElementById('bal-pluri-er-lbl');
+  const compIndLbl  = document.getElementById('bal-compind-lbl');
+  if (pluriEl)    pluriEl.innerHTML    = buildComparativoPlurianual(b, _balsEmpresa);
+  if (pluriEREl)  pluriEREl.innerHTML  = buildPluriER(b, _balsEmpresa);
+  if (compIndEl)  compIndEl.innerHTML  = buildComparativoIndicadores(b, _balsEmpresa);
   const _periodos = [..._balsEmpresa.slice(-2), b].map(bx=>bx.periodo).join(' · ');
-  if (pluriLbl)   pluriLbl.textContent   = _periodos;
-  if (compIndLbl) compIndLbl.textContent = _periodos;
+  if (pluriLbl)    pluriLbl.textContent    = _periodos;
+  if (pluriERLbl)  pluriERLbl.textContent  = _periodos;
+  if (compIndLbl)  compIndLbl.textContent  = _periodos;
 
   // Actualizar lista de archivos para resaltar el activo
   renderListaArchivos();
@@ -26936,30 +27271,43 @@ function showBalanceResult() {
   const scoreLabel  = scoreGlobal == null ? 'Sin datos' : scoreGlobal >= 70 ? 'Saludable' : scoreGlobal >= 45 ? 'Moderado' : 'Crítico';
 
   // KPI banda con score global
+  const fmtImporte = v => {
+    if (v==null) return '—';
+    const s=v<0?'−':'', a=Math.abs(v);
+    const fmt2=new Intl.NumberFormat('es-AR',{maximumFractionDigits:0});
+    return s+'$ '+fmt2.format(a);
+  };
   const kpis = [
-    { lbl:'Salud financiera', val: scoreGlobal!=null ? scoreGlobal+'/100' : '—',
-      sub: scoreLabel, ac: scoreColor },
-    { lbl:'Liquidez corriente', val: liq.liquidez_corriente!=null ? liq.liquidez_corriente.toFixed(2) : '—',
-      sub: liq.liquidez_corriente!=null ? (liq.liquidez_corriente>=1 ? '✓ Cubre pasivo corriente' : '⚠ Menor a 1') : 'Sin dato',
-      ac: liq.liquidez_corriente==null?'#94a3b8':liq.liquidez_corriente>=1?'#47ffb4':'#ff4766' },
-    { lbl:'ROE', val: ren.roe!=null ? (ren.roe*100).toFixed(1)+'%' : '—',
-      sub: ren.roe!=null ? (ren.roe>0 ? 'Rentable sobre patrimonio' : '⚠ Pérdida sobre patrimonio') : 'Sin dato',
-      ac: ren.roe==null?'#94a3b8':ren.roe>0?'#47ffb4':'#ff4766' },
-    { lbl:'Endeudamiento', val: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento*100).toFixed(1)+'%' : '—',
+    { lbl:'Salud financiera',
+      val: scoreGlobal!=null ? scoreGlobal+'/100' : '—',
+      sub: scoreLabel,
+      ac:  scoreColor },
+    { lbl:'Cobertura intereses',
+      val: sol.cobertura_intereses!=null ? sol.cobertura_intereses.toFixed(2)+'×' : '—',
+      sub: sol.cobertura_intereses!=null ? (sol.cobertura_intereses>1.5?'✓ Cubre intereses':'⚠ Menor a 1,5×') : 'Sin dato',
+      ac:  sol.cobertura_intereses==null?'#94a3b8':sol.cobertura_intereses>1.5?'#47ffb4':'#ff4766' },
+    { lbl:'Ingresos / Ventas',
+      val: ren.ventas_ingresos!=null ? fmtImporte(ren.ventas_ingresos) : '—',
+      sub: ren.ventas_ingresos!=null ? 'Ejercicio '+b.periodo : 'Sin dato',
+      ac:  ren.ventas_ingresos!=null?'#47e8ff':'#94a3b8' },
+    { lbl:'Liquidez corriente',
+      val: liq.liquidez_corriente!=null ? liq.liquidez_corriente.toFixed(2) : '—',
+      sub: liq.liquidez_corriente!=null ? (liq.liquidez_corriente>=1?'✓ Cubre pasivo corriente':'⚠ Menor a 1') : 'Sin dato',
+      ac:  liq.liquidez_corriente==null?'#94a3b8':liq.liquidez_corriente>=1?'#47ffb4':'#ff4766' },
+    { lbl:'Endeudamiento',
+      val: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento*100).toFixed(1)+'%' : '—',
       sub: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento<0.6?'Nivel moderado':'⚠ Alta deuda') : 'Sin dato',
-      ac: sol.razon_endeudamiento==null?'#94a3b8':sol.razon_endeudamiento<0.6?'#47e8ff':'#ff4766' },
-    { lbl:'Patrimonio neto', val: sol.patrimonio_neto!=null ? fv(sol.patrimonio_neto) : '—',
-      sub: sol.patrimonio_neto!=null ? (sol.patrimonio_neto>0?'Positivo':'⚠ Negativo') : 'Sin dato',
-      ac: sol.patrimonio_neto==null?'#94a3b8':sol.patrimonio_neto>0?'#47e8ff':'#ff4766' },
-    { lbl:'Margen neto', val: ren.margen_neto!=null ? (ren.margen_neto*100).toFixed(1)+'%' : '—',
-      sub: ren.margen_neto!=null ? (ren.margen_neto>=0?'Positivo':'Negativo') : 'Sin dato',
-      ac: ren.margen_neto==null?'#94a3b8':ren.margen_neto>=0?'#47ffb4':'#ff4766' },
+      ac:  sol.razon_endeudamiento==null?'#94a3b8':sol.razon_endeudamiento<0.6?'#47e8ff':'#ff4766' },
+    { lbl:'ROE',
+      val: ren.roe!=null ? (ren.roe*100).toFixed(1)+'%' : '—',
+      sub: ren.roe!=null ? (ren.roe>0?'Rentable sobre patrimonio':'⚠ Pérdida sobre patrimonio') : 'Sin dato',
+      ac:  ren.roe==null?'#94a3b8':ren.roe>0?'#47ffb4':'#ff4766' },
   ];
   document.getElementById('bal-kpi-band').innerHTML = kpis.map(k=>`
     <div class="kpi-band-item">
       <div class="kpi-band-accent" style="background:${k.ac}"></div>
       <div class="kpi-band-label">${k.lbl}</div>
-      <div class="kpi-band-value">${k.val}</div>
+      <div class="kpi-band-value" style="font-size:${k.lbl==='Ingresos / Ventas'?'13px':'20px'};font-family:var(--mono);font-variant-numeric:tabular-nums">${k.val}</div>
       <div class="kpi-band-sub">${k.sub}</div>
     </div>`).join('');
 
@@ -27186,13 +27534,9 @@ function showBalanceResult() {
         border-radius:3px;font-size:9.5px;color:#1a9e68;margin-bottom:12px;display:inline-flex;
         align-items:center;gap:6px">🟢 Sin alertas críticas detectadas</div>`;
 
-  // ── Diagnóstico financiero generado desde los indicadores reales ──
-  // Se recalcula en cada render para reflejar el estado actual de ind,
-  // incluyendo cambios hechos en el Editor de Datos.
-  const diagHtml = generarDiagnosticoFinanciero(liq, sol, ren, efi, b);
-
+  // ── Diagnóstico financiero — nuevo diseño 3 columnas ─────────
   document.getElementById('bal-diagnostico').innerHTML =
-    cobertura + alertHTML + diagHtml;
+    buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq, sol, ren);
 
   document.getElementById('bal-raw-txt').textContent = b.textoRaw;
   // Actualizar comparativos al cambiar de balance activo
