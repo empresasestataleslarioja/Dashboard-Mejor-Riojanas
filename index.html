@@ -5695,7 +5695,7 @@ function imprimirPanelActivo() {
   // Generar HTML del reporte según módulo
   var reportHTML = '';
   if      (panelId === 'personal')       reportHTML = _rptPersonal();
-  else if (panelId === 'balances')       { _imprimirPanelFallback(panelId, panelActivo); return; }
+  else if (panelId === 'balances')       reportHTML = _rptBalanceDesdeDOM();
   else if (panelId === 'resumen')        reportHTML = _rptResumen();
   else if (panelId === 'facturacion')    reportHTML = _rptFacturacion();
   else if (panelId === 'resultado')      reportHTML = _rptResultado();
@@ -5771,6 +5771,7 @@ function imprimirPanelActivo() {
         var html3 = '';
         try {
           if      (pid3==='personal')       html3 = _rptPersonal();
+          else if (pid3==='balances')       html3 = _rptBalanceDesdeDOM();
           else if (pid3==='transferencias') html3 = _rptTransferencias();
           else if (pid3==='resumen')        html3 = _rptResumen();
           else if (pid3==='facturacion')    html3 = _rptFacturacion();
@@ -6648,6 +6649,95 @@ function _rptPersonal(autoPrint) {
   }
 }
 
+
+function _rptBalanceDesdeDOM() {
+  const key = _balActivo || document.getElementById('bal-sel')?.value;
+  if (!key || !_balances[key]) return '';
+  const b = _balances[key];
+
+  // Capture current theme so preview matches
+  const theme = document.documentElement.dataset.theme ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+  // Collect all page CSS (includes CSS vars, component styles, etc.)
+  const allCSS = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+
+  const contentEl = document.getElementById('bal-content');
+  if (!contentEl) return '';
+
+  // Snapshot canvas elements as data URIs before cloning (canvas content is lost on clone)
+  const canvasSnapshots = [];
+  contentEl.querySelectorAll('canvas').forEach(c => {
+    try { canvasSnapshots.push(c.toDataURL()); } catch(e) { canvasSnapshots.push(''); }
+  });
+
+  const clone = contentEl.cloneNode(true);
+
+  // Replace cloned canvas with img tags
+  const cloneCanvases = clone.querySelectorAll('canvas');
+  cloneCanvases.forEach((c, i) => {
+    const src = canvasSnapshots[i] || '';
+    if (!src) return;
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = c.getAttribute('style') || '';
+    img.style.maxWidth = '100%';
+    img.style.display = 'block';
+    c.parentNode.replaceChild(img, c);
+  });
+
+  // Hide UI-only elements
+  ['bal-empty','bal-progress','bal-error-msg','bal-dup-msg',
+   'btn-cargar-bal','file-bal','file-bal2','file-bal-xlsx',
+   'bal-comp-selector-row','bal-editor-toggle','bal-editor-wrap',
+   'bal-raw-toggle','bal-raw-wrap','bal-vincular-card',
+   'bal-lista-wrap','bal-lista-toggle','bal-lista-body',
+   'bal-vincular-sel','bal-vincular-estado',
+   'bal-sel-empresa','bal-sel-periodo',
+   'bal-empresa-det','bal-periodo-det','bal-status',
+   'bal-comp-checks','bal-fuente','bal-cierre-det'
+  ].forEach(id => {
+    const el = clone.querySelector('#' + id);
+    if (el) el.style.display = 'none';
+  });
+
+  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'long', year:'numeric'});
+  const titulo = (b.empresa || '') + (b.periodo ? '  ·  ' + b.periodo : '');
+
+  return `<!DOCTYPE html>
+<html lang="es" data-theme="${theme}">
+<head>
+<meta charset="UTF-8">
+<title>Análisis de Balance — ${titulo}</title>
+<style>${allCSS}</style>
+<style>
+html, body { margin:0; padding:16px; overflow-y:auto !important; }
+.sidebar,.topbar,.nav-footer,#login-overlay,#save-panel,#user-panel,
+#cloud-panel,#export-menu,#global-search-wrap,#btn-user-fixed,
+.sel-row,.imp-ctrl-row,.kpi-strip,button:not(.print-keep),
+label.tba-btn,input[type=file],input[type=text],input[type=number],select
+{ display:none !important; }
+.layout { display:block !important; padding:0 !important; }
+.scroll-area { overflow:visible !important; height:auto !important; max-height:none !important; padding:0 !important; }
+.panel { display:none !important; }
+.panel.on { display:block !important; padding:0 !important; }
+.panel-inner { padding:8px 0 !important; }
+#bal-content { display:block !important; }
+#bal-kpi-band { display:flex !important; flex-wrap:wrap !important; }
+#bal-reexp-integ-wrap { display:grid !important; }
+</style>
+</head>
+<body>
+<div style="max-width:1100px;margin:0 auto;padding:4px 0 24px">
+  <div style="margin-bottom:12px;padding:10px 14px;background:var(--s2);border-radius:6px;border:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">${titulo}</span>
+    <span style="font-size:10px;color:var(--dim);font-family:var(--mono)">${fecha}</span>
+  </div>
+  <div class="panel on"><div class="panel-inner">${clone.outerHTML}</div></div>
+</div>
+</body>
+</html>`;
+}
 
 function _rptBalance(autoPrint) {
   const key = _balActivo || document.getElementById('bal-sel')?.value;
