@@ -6655,17 +6655,21 @@ function _rptBalanceDesdeDOM() {
   if (!key || !_balances[key]) return '';
   const b = _balances[key];
 
-  // Capture current theme so preview matches
+  // Current theme
   const theme = document.documentElement.dataset.theme ||
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const isDark = theme === 'dark';
 
-  // Collect all page CSS (includes CSS vars, component styles, etc.)
-  const allCSS = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  // Extract ONLY CSS variable blocks (:root, theme overrides, media prefers-color-scheme)
+  // Avoids embedding full page CSS which conflicts with preview layout
+  const allStyleText = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  const cssVarBlocks = (allStyleText.match(/(?::root|\[data-theme[^\]]*\])\s*\{[^}]*\}/g) || []).join('\n')
+    + '\n'
+    + (allStyleText.match(/@media\s*\(prefers-color-scheme[^)]*\)\s*\{[^@]*?:root\s*\{[^}]*\}[^}]*\}/gs) || []).join('\n');
 
+  // Snapshot canvas elements as data URIs before cloning
   const contentEl = document.getElementById('bal-content');
   if (!contentEl) return '';
-
-  // Snapshot canvas elements as data URIs before cloning (canvas content is lost on clone)
   const canvasSnapshots = [];
   contentEl.querySelectorAll('canvas').forEach(c => {
     try { canvasSnapshots.push(c.toDataURL()); } catch(e) { canvasSnapshots.push(''); }
@@ -6673,9 +6677,8 @@ function _rptBalanceDesdeDOM() {
 
   const clone = contentEl.cloneNode(true);
 
-  // Replace cloned canvas with img tags
-  const cloneCanvases = clone.querySelectorAll('canvas');
-  cloneCanvases.forEach((c, i) => {
+  // Replace canvas with img (canvas content is lost on clone)
+  clone.querySelectorAll('canvas').forEach((c, i) => {
     const src = canvasSnapshots[i] || '';
     if (!src) return;
     const img = document.createElement('img');
@@ -6686,7 +6689,7 @@ function _rptBalanceDesdeDOM() {
     c.parentNode.replaceChild(img, c);
   });
 
-  // Hide UI-only elements
+  // Hide UI-only elements and empresa-info (redundant with header)
   ['bal-empty','bal-progress','bal-error-msg','bal-dup-msg',
    'btn-cargar-bal','file-bal','file-bal2','file-bal-xlsx',
    'bal-comp-selector-row','bal-editor-toggle','bal-editor-wrap',
@@ -6695,14 +6698,35 @@ function _rptBalanceDesdeDOM() {
    'bal-vincular-sel','bal-vincular-estado',
    'bal-sel-empresa','bal-sel-periodo',
    'bal-empresa-det','bal-periodo-det','bal-status',
-   'bal-comp-checks','bal-fuente','bal-cierre-det'
+   'bal-comp-checks','bal-fuente','bal-cierre-det',
+   'bal-empresa-info','bal-radar-lbl','bal-esp-lbl','bal-er-lbl','bal-er-lbl2'
   ].forEach(id => {
     const el = clone.querySelector('#' + id);
     if (el) el.style.display = 'none';
   });
 
+  // Force key sections visible (they may have display:none inline style)
+  ['bal-content','bal-kpi-band',
+   'bal-estado-patrimonial','bal-ind-patrimoniales',
+   'bal-estado-resultados','bal-ind-resultados',
+   'bal-reexp-esp','bal-reexp-er',
+   'bal-plurianual','bal-plurianual-er',
+   'bal-comp-indicadores','bal-diagnostico'
+  ].forEach(id => {
+    const el = clone.querySelector('#' + id);
+    if (!el) return;
+    if (id === 'bal-kpi-band') el.style.display = 'flex';
+    else el.style.display = 'block';
+  });
+  const reexpWrap = clone.querySelector('#bal-reexp-integ-wrap');
+  if (reexpWrap && reexpWrap.innerHTML.trim().length > 20) reexpWrap.style.display = 'grid';
+
   const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'long', year:'numeric'});
   const titulo = (b.empresa || '') + (b.periodo ? '  ·  ' + b.periodo : '');
+  const bg  = isDark ? '#111827' : '#f3f4f6';
+  const cardBg  = isDark ? '#1e2636' : '#ffffff';
+  const bdCol   = isDark ? '#2d3748' : '#e5e7eb';
+  const textCol = isDark ? '#e2e8f0' : '#111827';
 
   const header = `<div style="
       background:linear-gradient(135deg,#0d1b4b 0%,#1a3a8f 60%,#1565c0 100%);
@@ -6735,7 +6759,7 @@ function _rptBalanceDesdeDOM() {
 
   const footer = `<div style="
       display:flex;justify-content:space-between;align-items:center;
-      padding:12px 0;border-top:1px solid #e3e6f0;
+      padding:12px 0;border-top:1px solid ${bdCol};
       color:#aaa;font-size:8px;font-family:monospace;margin-top:16px">
     <span>Dashboard Empresas Estatales · Provincia de La Rioja</span>
     <span>SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span>
@@ -6747,31 +6771,35 @@ function _rptBalanceDesdeDOM() {
 <head>
 <meta charset="UTF-8">
 <title>Análisis de Balance — ${titulo}</title>
-<style>${allCSS}</style>
 <style>
-html, body { margin:0; padding:16px; overflow-y:auto !important; }
-.sidebar,.topbar,.nav-footer,#login-overlay,#save-panel,#user-panel,
-#cloud-panel,#export-menu,#global-search-wrap,#btn-user-fixed,
-.sel-row,.imp-ctrl-row,.kpi-strip,button:not(.print-keep),
-label.tba-btn,input[type=file],input[type=text],input[type=number],select
-{ display:none !important; }
-.layout { display:block !important; padding:0 !important; }
-.scroll-area { overflow:visible !important; height:auto !important; max-height:none !important; padding:0 !important; }
-.panel { display:none !important; }
-.panel.on { display:block !important; padding:0 !important; }
-.panel-inner { padding:8px 0 !important; }
-#bal-content { display:block !important; }
-#bal-kpi-band { display:flex !important; flex-wrap:wrap !important; }
-#bal-reexp-integ-wrap { display:grid !important; }
-@media print {
+/* CSS variables from page (theme tokens) */
+${cssVarBlocks}
+/* Base reset */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;
+  background:${bg};color:${textCol};padding:16px;overflow-y:auto}
+/* Layout classes used by panel content */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.rowfull{margin-bottom:12px}
+.card{background:${cardBg};border:1px solid ${bdCol};border-radius:8px;padding:14px 16px;overflow:hidden}
+.card-hd{display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid ${bdCol}}
+.card-hd-title{font-size:11px;font-weight:700;color:${textCol}}
+.kpi{background:${cardBg};border:1px solid ${bdCol};border-radius:6px;padding:10px 12px}
+#bal-kpi-band{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+#bal-reexp-integ-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse}
+@media print{
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  body{padding:8px}
+  .row2,#bal-reexp-integ-wrap{break-inside:avoid}
 }
 </style>
 </head>
 <body>
 <div style="max-width:1100px;margin:0 auto;padding:4px 0 24px">
   ${header}
-  <div class="panel on"><div class="panel-inner">${clone.outerHTML}</div></div>
+  ${clone.outerHTML}
   ${footer}
 </div>
 </body>
