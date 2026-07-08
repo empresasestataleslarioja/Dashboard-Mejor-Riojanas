@@ -6655,17 +6655,25 @@ function _rptBalanceDesdeDOM() {
   if (!key || !_balances[key]) return '';
   const b = _balances[key];
 
-  // Current theme
-  const theme = document.documentElement.dataset.theme ||
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const isDark = theme === 'dark';
+  // Read current computed CSS custom properties (resolves to actual theme values)
+  const cs = getComputedStyle(document.documentElement);
+  const cv = n => cs.getPropertyValue(n).trim();
+  const cssVars = [
+    '--bg','--s1','--s2','--s3','--s4',
+    '--text','--dim','--dim2','--acc','--acc2',
+    '--bd','--bd2','--bd3',
+    '--pos','--neg','--warn',
+    '--mono','--y21','--y22',
+  ].map(n => `${n}:${cv(n) || 'inherit'}`).join(';');
 
-  // Extract ONLY CSS variable blocks (:root, theme overrides, media prefers-color-scheme)
-  // Avoids embedding full page CSS which conflicts with preview layout
-  const allStyleText = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
-  const cssVarBlocks = (allStyleText.match(/(?::root|\[data-theme[^\]]*\])\s*\{[^}]*\}/g) || []).join('\n')
-    + '\n'
-    + (allStyleText.match(/@media\s*\(prefers-color-scheme[^)]*\)\s*\{[^@]*?:root\s*\{[^}]*\}[^}]*\}/gs) || []).join('\n');
+  const isDark = (cv('--bg') || '#fff').trim().startsWith('#0') ||
+                 (cv('--bg') || '#fff').trim().startsWith('#1') ||
+                 (cv('--bg') || '#fff').trim().startsWith('rgb(1') ||
+                 (cv('--bg') || '#fff').trim().startsWith('rgb(0');
+  const bg      = cv('--bg')   || (isDark ? '#111' : '#f5f5f5');
+  const cardBg  = cv('--s1')   || (isDark ? '#1a1f2e' : '#ffffff');
+  const bdCol   = cv('--bd')   || (isDark ? '#2d3748' : '#e5e7eb');
+  const textCol = cv('--text') || (isDark ? '#e2e8f0' : '#111');
 
   // Snapshot canvas elements as data URIs before cloning
   const contentEl = document.getElementById('bal-content');
@@ -6676,8 +6684,9 @@ function _rptBalanceDesdeDOM() {
   });
 
   const clone = contentEl.cloneNode(true);
+  clone.style.display = 'block'; // #bal-content starts as display:none
 
-  // Replace canvas with img (canvas content is lost on clone)
+  // Replace canvas with img snapshots (canvas content is lost on clone)
   clone.querySelectorAll('canvas').forEach((c, i) => {
     const src = canvasSnapshots[i] || '';
     if (!src) return;
@@ -6689,44 +6698,41 @@ function _rptBalanceDesdeDOM() {
     c.parentNode.replaceChild(img, c);
   });
 
-  // Hide UI-only elements and empresa-info (redundant with header)
-  ['bal-empty','bal-progress','bal-error-msg','bal-dup-msg',
-   'btn-cargar-bal','file-bal','file-bal2','file-bal-xlsx',
-   'bal-comp-selector-row','bal-editor-toggle','bal-editor-wrap',
-   'bal-raw-toggle','bal-raw-wrap','bal-vincular-card',
-   'bal-lista-wrap','bal-lista-toggle','bal-lista-body',
-   'bal-vincular-sel','bal-vincular-estado',
-   'bal-sel-empresa','bal-sel-periodo',
-   'bal-empresa-det','bal-periodo-det','bal-status',
-   'bal-comp-checks','bal-fuente','bal-cierre-det',
+  // Hide the navigator card (empresa/periodo selectors + action buttons) — first direct child
+  const navCard = clone.firstElementChild;
+  if (navCard) navCard.style.display = 'none';
+
+  // Hide the editor card (contains bal-editor-toggle)
+  const editorCard = clone.querySelector('#bal-editor-toggle')?.closest('.rowfull,.card');
+  if (editorCard) editorCard.style.display = 'none';
+
+  // Hide other UI-only IDs
+  ['bal-lista-wrap','bal-comp-selector-row',
    'bal-empresa-info','bal-radar-lbl','bal-esp-lbl','bal-er-lbl','bal-er-lbl2'
   ].forEach(id => {
     const el = clone.querySelector('#' + id);
     if (el) el.style.display = 'none';
   });
 
-  // Force key sections visible (they may have display:none inline style)
-  ['bal-content','bal-kpi-band',
-   'bal-estado-patrimonial','bal-ind-patrimoniales',
+  // Force analysis sections visible
+  clone.querySelector('#bal-kpi-band')?.style.setProperty('display','flex');
+  ['bal-estado-patrimonial','bal-ind-patrimoniales',
    'bal-estado-resultados','bal-ind-resultados',
-   'bal-reexp-esp','bal-reexp-er',
    'bal-plurianual','bal-plurianual-er',
    'bal-comp-indicadores','bal-diagnostico'
   ].forEach(id => {
     const el = clone.querySelector('#' + id);
-    if (!el) return;
-    if (id === 'bal-kpi-band') el.style.display = 'flex';
-    else el.style.display = 'block';
+    if (el) el.style.display = 'block';
   });
   const reexpWrap = clone.querySelector('#bal-reexp-integ-wrap');
   if (reexpWrap && reexpWrap.innerHTML.trim().length > 20) reexpWrap.style.display = 'grid';
+  const reexpEsp = clone.querySelector('#bal-reexp-esp');
+  if (reexpEsp) reexpEsp.style.display = 'block';
+  const reexpEr = clone.querySelector('#bal-reexp-er');
+  if (reexpEr) reexpEr.style.display = 'block';
 
   const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'long', year:'numeric'});
   const titulo = (b.empresa || '') + (b.periodo ? '  ·  ' + b.periodo : '');
-  const bg  = isDark ? '#111827' : '#f3f4f6';
-  const cardBg  = isDark ? '#1e2636' : '#ffffff';
-  const bdCol   = isDark ? '#2d3748' : '#e5e7eb';
-  const textCol = isDark ? '#e2e8f0' : '#111827';
 
   const header = `<div style="
       background:linear-gradient(135deg,#0d1b4b 0%,#1a3a8f 60%,#1565c0 100%);
@@ -6767,26 +6773,24 @@ function _rptBalanceDesdeDOM() {
   </div>`;
 
   return `<!DOCTYPE html>
-<html lang="es" data-theme="${theme}">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <title>Análisis de Balance — ${titulo}</title>
 <style>
-/* CSS variables from page (theme tokens) */
-${cssVarBlocks}
-/* Base reset */
 *{box-sizing:border-box;margin:0;padding:0}
+:root{${cssVars}}
 html,body{font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;
   background:${bg};color:${textCol};padding:16px;overflow-y:auto}
-/* Layout classes used by panel content */
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .rowfull{margin-bottom:12px}
 .card{background:${cardBg};border:1px solid ${bdCol};border-radius:8px;padding:14px 16px;overflow:hidden}
 .card-hd{display:flex;align-items:center;justify-content:space-between;
   padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid ${bdCol}}
 .card-hd-title{font-size:11px;font-weight:700;color:${textCol}}
+.card-hd-unit{font-size:9px;color:${cv('--dim')||'#888'};margin-left:auto}
 .kpi{background:${cardBg};border:1px solid ${bdCol};border-radius:6px;padding:10px 12px}
-#bal-kpi-band{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.kpi-band{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 #bal-reexp-integ-wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 table{width:100%;border-collapse:collapse}
 @media print{
