@@ -11004,6 +11004,19 @@ function _matchEmpresaFlujo(nombreEmpresa) {
 
 // ── Vista individual de flujo ────────────────────────────────────
 // ── Helpers para extraer valores clave de un flujo ────────────────
+// Devuelve la necesidad de fondos con signo real (negativo = déficit)
+function _flujoNecesidadSignada(f) {
+  if (!f) return null;
+  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null);
+  if (rNec) return rNec.actual;
+  const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null)
+            ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null)
+            ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null);
+  if (rDef) return rDef.actual;
+  if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return -Math.abs(f.necesidad_fondos);
+  return null;
+}
+
 function _flujoNecesidad(f) {
   if (!f) return null;
   // 1. campo necesidad_fondos explícito
@@ -11177,15 +11190,16 @@ function buildVistaIndividualFlujo(claveOverride) {
     (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
 
   // KPIs
-  const necA = _flujoNecesidad(f);
+  const necA = _flujoNecesidadSignada(f);
   const ingA = _flujoIngTotal(f);
   const egrA = _flujoEgrTotal(f);
   const labA_ind = _flujoLaboral(f);
   const covA     = (ingA && egrA)   ? (ingA / Math.abs(egrA)   * 100).toFixed(1) + '%' : '—';
   const covLabA  = (ingA && labA_ind) ? (ingA / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
+  const necCol   = necA == null ? 'var(--dim)' : necA < 0 ? 'var(--neg)' : 'var(--pos)';
 
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:'Fondos solicitados',       v:fmt(necA),   c:'var(--neg)', big:true },
+    { l:'Fondos solicitados',       v:fmt(necA),   c:necCol, big:true },
     { l:'Total ingresos',           v:fmt(ingA),   c:'#1a9e68' },
     { l:'Total egresos',            v:fmt(egrA),   c:'var(--neg)' },
     { l:'Cobertura ing / egresos',  v:covA,        c:'var(--text)' },
@@ -11493,9 +11507,9 @@ function buildComparacionFlujos() {
   const allKeys = [...new Set([...labelsA.keys(), ...labelsB.keys()])];
 
   // KPIs — helpers robustos para cualquier estructura de flujo
-  const necA = _flujoNecesidad(fA);
-  const necB = _flujoNecesidad(fB);
-  const varNom  = (necA!=null && necB && necB!==0) ? (necA - necB) / necB * 100 : null;
+  const necA = _flujoNecesidadSignada(fA); // signed: negativo = déficit
+  const necB = _flujoNecesidadSignada(fB);
+  const varNom  = (necA!=null && necB && necB!==0) ? (necA - necB) / Math.abs(necB) * 100 : null;
   // Fisher: var real = (1+varNom/100)/(1+ipc/100) - 1
   const varReal = (varNom!=null && ipc) ? ((1 + varNom/100) / (1 + ipc/100) - 1) * 100 : null;
 
@@ -11536,7 +11550,7 @@ function buildComparacionFlujos() {
   }
 
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:'Necesidad actual',     v:fmtM(necA),                                                    c:'var(--neg)', big:true },
+    { l:'Necesidad actual',     v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
     { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
     { l:'Var. real (−IPC)',     v:fmtP(varReal),                                                 c:colVar(varReal) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
