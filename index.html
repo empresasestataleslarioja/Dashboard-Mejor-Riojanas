@@ -9817,9 +9817,10 @@ function parsearFlujoExcel(wb, XLSX) {
   }
 
   // ── PASO 2: Detectar columnas desde el header ─────────────────────
-  let colLabel  = -1; // columna de labels de rubros
-  let colTotal  = -1; // columna TOTAL/TOTALES del período
-  const colM    = {}; // { 'ENERO': 3, 'FEBRERO': 4, ... } o { '1°CUAT': 3, ... }
+  let colLabel     = -1; // columna de labels de rubros
+  let colTotal     = -1; // columna TOTAL/TOTALES del período
+  let colCategoria = -1; // columna "Categoría Estándar" (formato estándar v14)
+  const colM       = {}; // { 'ENERO': 3, 'FEBRERO': 4, ... } o { '1°CUAT': 3, ... }
 
   for (let c = 0; c <= Math.min(14, rng.e.c); c++) {
     const h = str(resumenRow, c).toUpperCase().trim();
@@ -9835,19 +9836,25 @@ function parsearFlujoExcel(wb, XLSX) {
       }
       continue;
     }
+    // Detectar columna de Concepto/Rubro en el header (formato estándar)
+    if ((h.includes('CONCEPTO') || h.includes('RUBRO') || h.includes('DESCRIPCION') || h.includes('DESCRIPCIÓN')) && colLabel < 0) {
+      colLabel = c;
+    }
+    // Detectar columna de Categoría Estándar
+    if ((h.includes('CATEGOR') || h.includes('ESTÁNDAR') || h.includes('ESTANDAR')) && colCategoria < 0) {
+      colCategoria = c;
+    }
   }
 
-  // colLabel: detectar dinámicamente la columna de texto de rubros
-  // Buscar la columna con etiquetas de rubro reales: texto largo, sin chars decorativos ni dígito inicial
-  // Escanea varias filas para encontrar la col con mayor promedio de longitud de texto
-  {
+  // colLabel: si no fue detectado por keyword en el header, inferirlo dinámicamente
+  if (colLabel < 0) {
     const colScores = {};
     for (let r = resumenRow + 1; r <= Math.min(resumenRow + 10, rng.e.r); r++) {
       for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
         const v = getV(r, c);
         if (v && typeof v === 'string') {
           const t = v.trim();
-          // Saltar labels decorativos (▼, ►, *, #) o que arrancan con dígito (números de ítem)
+          // Saltar labels decorativos (▼, ►, *, #) o que arrancan con dígito
           if (t.length > 2 && !/^[\s▼▲►◄*#→←•·\d]/.test(t)) {
             colScores[c] = (colScores[c] || 0) + t.length;
           }
@@ -9857,18 +9864,18 @@ function parsearFlujoExcel(wb, XLSX) {
     if (Object.keys(colScores).length > 0) {
       colLabel = parseInt(Object.entries(colScores).sort((a,b) => b[1]-a[1])[0][0]);
     }
-  }
-  if (colLabel < 0) {
-    // Fallback: primera columna con cualquier string en las primeras filas
-    for (let r = resumenRow + 1; r <= Math.min(resumenRow + 5, rng.e.r); r++) {
-      for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
-        const v = getV(r, c);
-        if (v && typeof v === 'string' && v.trim().length > 1) { colLabel = c; break; }
+    if (colLabel < 0) {
+      // Fallback: primera columna con cualquier string en las primeras filas
+      for (let r = resumenRow + 1; r <= Math.min(resumenRow + 5, rng.e.r); r++) {
+        for (let c = 0; c <= Math.min(3, rng.e.c); c++) {
+          const v = getV(r, c);
+          if (v && typeof v === 'string' && v.trim().length > 1) { colLabel = c; break; }
+        }
+        if (colLabel >= 0) break;
       }
-      if (colLabel >= 0) break;
     }
+    if (colLabel < 0) colLabel = 0; // último fallback col A
   }
-  if (colLabel < 0) colLabel = 0; // último fallback col A
 
   const meses = Object.keys(colM); // meses detectados
 
@@ -9900,15 +9907,34 @@ function parsearFlujoExcel(wb, XLSX) {
                                  'SUBTOTAL','RESUMEN','FONDOS','GASTOS','SUELDOS',
                                  'EGRESOS','INGRESOS','HONORARIOS','CUATRIMESTRE']);
   let empresa = '';
+  let cuatriStrV14 = ''; // período leído de etiqueta CUATRIMESTRE: (formato v14)
 
-  for (let r = 0; r <= Math.min(resumenRow - 1, 6); r++) {
-    for (let c = 0; c <= Math.min(5, rng.e.c); c++) {
-      const v = str(r, c);
-      if (v && v.length > 1 && v.length < 50 && isNaN(v) &&
-          !MESES_ES_SET.has(v.toUpperCase()) &&
-          !SKIP_WORDS.has(v.toUpperCase().split(' ')[0]) &&
-          !v.includes('/') && !v.match(/^\d/)) {
-        if (!empresa) empresa = v.trim();
+  // Primero buscar etiquetas explícitas EMPRESA:/CUATRIMESTRE: (formato estándar v14)
+  for (let r = 0; r <= Math.min(resumenRow, 10); r++) {
+    for (let c = 0; c <= Math.min(8, rng.e.c); c++) {
+      const vUp = str(r, c).toUpperCase().trim();
+      if ((vUp === 'EMPRESA:' || vUp === 'EMPRESA') && !empresa) {
+        const next = str(r, c + 1).trim();
+        if (next && next.length > 1) empresa = next;
+      }
+      if ((vUp === 'CUATRIMESTRE:' || vUp === 'CUATRIMESTRE') && !cuatriStrV14) {
+        const next = str(r, c + 1).trim();
+        if (next && next.length > 1) cuatriStrV14 = next; // e.g. "3° 2026"
+      }
+    }
+  }
+
+  // Si no hubo EMPRESA: explícito, usar heurística genérica (formatos clásicos)
+  if (!empresa) {
+    for (let r = 0; r <= Math.min(resumenRow - 1, 6); r++) {
+      for (let c = 0; c <= Math.min(5, rng.e.c); c++) {
+        const v = str(r, c);
+        if (v && v.length > 1 && v.length < 50 && isNaN(v) &&
+            !MESES_ES_SET.has(v.toUpperCase()) &&
+            !SKIP_WORDS.has(v.toUpperCase().split(' ')[0]) &&
+            !v.includes('/') && !v.match(/^\d/)) {
+          if (!empresa) empresa = v.trim();
+        }
       }
     }
   }
@@ -9918,13 +9944,16 @@ function parsearFlujoExcel(wb, XLSX) {
   for (const sn of wb.SheetNames) {
     const m = sn.match(/20\d\d/); if (m) { anio = parseInt(m[0]); break; }
   }
-  for (let r = 0; r <= Math.min(resumenRow, 5); r++) {
+  for (let r = 0; r <= Math.min(resumenRow, 10); r++) {
     for (let c = 0; c <= Math.min(10, rng.e.c); c++) {
       const v = String(getV(r,c)||'');
       const m = v.match(/20\d\d/); if (m) { anio = parseInt(m[0]); break; }
     }
   }
-  const periodoStr = meses.length ? meses.join('-') + ' ' + anio : snFlujo;
+  // Si hay etiqueta CUATRIMESTRE: v14, usarla como período; si no, armar desde meses
+  const periodoStr = cuatriStrV14
+    ? cuatriStrV14
+    : meses.length ? meses.join('-') + ' ' + anio : snFlujo;
 
   // ── PASO 4: Leer rubros ───────────────────────────────────────────
   const rubros = [];
@@ -9988,10 +10017,17 @@ function parsearFlujoExcel(wb, XLSX) {
       if (/^INGRESO/.test(lUP)) _seccion = 'ingreso';
       else if (/^EGRESO|^GASTO/.test(lUP)) _seccion = 'egreso';
     }
-    // Detectar tipo — usa _seccion para rubros sin pista en el label
+    // Detectar tipo — usa colCategoria (si existe) con prioridad, luego _seccion
+    let tipoDesdeCategoria = null;
+    if (colCategoria >= 0 && !esResultadoLbl && !esTotalizador) {
+      const cat = str(r, colCategoria).toLowerCase();
+      if (/cobro|ingreso|subsidio|transferencia recibida/.test(cat)) tipoDesdeCategoria = 'ingreso';
+      else if (/pago|egreso|gasto|remuner|honorar|servicio|proveedor|impuesto|transferencia realizada/.test(cat)) tipoDesdeCategoria = 'egreso';
+    }
     const tipo = esResultadoLbl ? 'resultado'
       : (esTotalizador && (lUP.includes('ING') || (_seccion==='ingreso' && !lUP.includes('EGR')))) ? 'ingreso'
       : (esTotalizador && (lUP.includes('EGR') || _seccion==='egreso')) ? 'total'
+      : tipoDesdeCategoria !== null ? tipoDesdeCategoria
       : _seccion === 'ingreso' ? 'ingreso'
       : 'egreso';
     // Actualizar sección después de total de ingresos
@@ -11397,7 +11433,7 @@ function buildComparacionFlujos() {
   };
   const gapMeses = _diffMesesFlujo(fA.periodo, fB.periodo);
   const durEsperada = (() => {
-    const p = _parsePeriodoFlujo(fA.periodo);
+    const p = _parsePeriodoFlujoStr(fA.periodo);
     return p ? { cuat:4, trim:3, mes:1, anio:12 }[p.tipo] || 4 : 4;
   })();
   // Mostrar / ocultar advertencia de gap
