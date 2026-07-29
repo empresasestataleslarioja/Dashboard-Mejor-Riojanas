@@ -9892,7 +9892,7 @@ function parsearFlujoExcel(wb, XLSX) {
     console.group('🔍 parsearFlujoExcel diagnóstico');
     console.log('Hoja:', snFlujo, '| resumenRow:', resumenRow);
     console.log('Columnas header:', hdrRow.join(' '));
-    console.log('colLabel:', colLabel, '| colTotal:', colTotal, '| meses:', JSON.stringify(colM));
+    console.log('colLabel:', colLabel, '| colCategoria:', colCategoria, '| colTotal:', colTotal, '| meses:', JSON.stringify(colM));
     const sample = [];
     for (let r = resumenRow+1; r <= Math.min(resumenRow+5, rng.e.r); r++) {
       sample.push(`row${r}: label="${str(r,colLabel)}" total=${getNum(r,colTotal)}`);
@@ -9960,7 +9960,14 @@ function parsearFlujoExcel(wb, XLSX) {
   let _seccion = 'egreso'; // tracking de sección activa
 
   for (let r = resumenRow + 1; r <= rng.e.r; r++) {
-    const lbl = str(r, colLabel).trim();
+    let lbl = str(r, colLabel).trim();
+    // Fallback: en formato v14 las filas de resumen (SUBTOTAL, RESULTADO NETO, IMP.CRED/DEB)
+    // tienen su label en col A en lugar de col B. Si col B está vacía, probar col A.
+    if (!lbl && colLabel > 0) {
+      const c0 = str(r, 0).trim();
+      // Aceptar solo si no es número de ítem ni marcador decorativo puro (▼▲►◄)
+      if (c0 && c0.length > 3 && !/^\d+$/.test(c0) && !/^[▼▲►◄\s]+$/.test(c0)) lbl = c0;
+    }
     if (!lbl) continue;
     const lUP = lbl.toUpperCase();
     // Actualizar sección según separadores
@@ -10036,6 +10043,8 @@ function parsearFlujoExcel(wb, XLSX) {
     const key = lUP.includes('TOTAL ING') ? 'total_ingresos'
       : lUP.includes('TOTAL EGR') ? 'total_egresos'
       : esResultadoLbl && (lUP.includes('FONDOS') || lUP.includes('NECESIDAD')) ? 'necesidad_fondos'
+      // SUBTOTAL (pre-ajustes) no es el resultado final — clave diferente para no pisar sup_def
+      : esResultadoLbl && esTotalizador ? 'subtotal_resultado'
       : esResultadoLbl ? 'sup_def'
       : lbl.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
             .replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').substring(0, 40);
@@ -11002,8 +11011,10 @@ function _flujoNecesidad(f) {
   // 2. rubro con key necesidad_fondos
   const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null);
   if (rNec) return Math.abs(rNec.actual);
-  // 3. Superávit/Déficit/Resultado o tipo resultado
-  const rDef = (f.rubros||[]).find(r => (r.key === 'sup_def' || r.tipo === 'resultado') && r.actual != null);
+  // 3. Superávit/Déficit/Resultado — preferir sup_def (RESULTADO NETO) sobre subtotal_resultado (SUBTOTAL pre-ajustes)
+  const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null)
+            ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null)
+            ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null);
   if (rDef) return Math.abs(rDef.actual);
   // 4. Cualquier rubro cuyo label contenga palabras clave de necesidad/resultado
   const rLbl = (f.rubros||[]).find(r => {
@@ -11650,15 +11661,20 @@ function buildComparacionFlujos() {
       scales:{ y:{ ticks:{ font:{ size:8 } } },
                x:{ ticks:{ callback: v=>v+'%', font:{size:8} } } } });
 
-  // Gráfico composición egresos
+  // Gráfico composición egresos — alineado por key para que ambos períodos coincidan
   const eA = fA.rubros.filter(r=>r.tipo==='egreso');
-  const eB = fB.rubros.filter(r=>r.tipo==='egreso');
+  const eBmap = new Map(fB.rubros.filter(r=>r.tipo==='egreso').map(r=>[r.key, r]));
+  // Incluir también rubros de B que no estén en A
+  const eBonly = fB.rubros.filter(r=>r.tipo==='egreso' && !eA.some(rA=>rA.key===r.key));
+  const eAll = [...eA, ...eBonly];
   mkChart('ch-flujo-egr','bar',{
-    labels: eA.map(r=>r.label.length>20?r.label.substring(0,18)+'…':r.label),
+    labels: eAll.map(r=>r.label.length>20?r.label.substring(0,18)+'…':r.label),
     datasets:[
-      { label: fA.periodo, data: eA.map(r=>Math.abs(r.actual||0)/1e6),
+      { label: fA.periodo,
+        data: eAll.map(r => { const rA = eA.find(x=>x.key===r.key); return rA ? Math.abs(rA.actual||0)/1e6 : 0; }),
         backgroundColor:'#47e8ffaa', borderRadius:3 },
-      { label: fB.periodo, data: eB.map(r=>Math.abs(r.actual||0)/1e6),
+      { label: fB.periodo,
+        data: eAll.map(r => { const rB = eBmap.get(r.key); return rB ? Math.abs(rB.actual||0)/1e6 : 0; }),
         backgroundColor:'#ff8c4766', borderRadius:3 },
     ]
   },{ plugins:{ legend:{ labels:{ font:{size:8} } } },
