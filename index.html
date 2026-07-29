@@ -10740,11 +10740,7 @@ function _renderListaFlujos() {
     return;
   }
 
-  // Retorna el valor con signo del resultado del flujo (necesidad_fondos se guarda abs)
-  const necSignada = f => {
-    const r = (f.rubros||[]).find(r2 => r2.tipo === 'resultado' && r2.actual != null);
-    return r != null ? r.actual : (f.necesidad_fondos != null ? -Math.abs(f.necesidad_fondos) : null);
-  };
+  const necSignada = f => _flujoNecesidadSignada(f);
   const fmt = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
   const fmtDim = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
 
@@ -11018,7 +11014,9 @@ function _flujoNecesidadSignada(f) {
             ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null);
   if (rDef) return rDef.actual;
   if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return -Math.abs(f.necesidad_fondos);
-  return null;
+  // Fallback final: calcular desde totales (deficit = negativo)
+  const abs = _flujoNecesidad(f);
+  return abs != null && abs !== 0 ? -abs : null;
 }
 
 function _flujoNecesidad(f) {
