@@ -11014,9 +11014,15 @@ function _flujoNecesidadSignada(f) {
             ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null);
   if (rDef) return rDef.actual;
   if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return -Math.abs(f.necesidad_fondos);
-  // Fallback final: calcular desde totales (deficit = negativo)
+  // Fallback: _flujoNecesidad con sus propios pasos (busca esTotal, etc.)
   const abs = _flujoNecesidad(f);
-  return abs != null && abs !== 0 ? -abs : null;
+  if (abs != null && abs !== 0) return -abs;
+  // Último recurso: sumar egresos - ingresos directamente (funciona con datos viejos sin esTotal)
+  const rubros = f.rubros || [];
+  const sumEgr = rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal).reduce((s,r)=>s+Math.abs(r.actual||0),0);
+  const sumIng = rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.actual||0),0);
+  if (sumEgr > 0) return sumIng - sumEgr; // negativo si déficit
+  return null;
 }
 
 function _flujoNecesidad(f) {
