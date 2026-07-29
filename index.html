@@ -9506,6 +9506,10 @@ function _aplicarMapeadoWizard() {
   // Combinar: confirmados del perfil se preservan; nuevos se mapean; el resto se ignora
   var rubrosNuevos = res.rubros.map(function(r, i) {
     if (r._tipoConfirmado) return r; // ya confirmado por perfil
+    // Auto-preservar totalizadores y rubros de resultado — no requieren mapeo manual
+    if (r.tipo === 'resultado' || (r.esTotal && (r.tipo === 'total' || r.tipo === 'ingreso'))) {
+      return Object.assign({}, r, { _tipoConfirmado: true });
+    }
     var tipoVal = rubroAssignByOrigIdx[i];
     if (!tipoVal) return null; // ignorar (sin mapeo asignado)
     var dec = _decodeTipoVal(tipoVal);
