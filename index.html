@@ -10014,7 +10014,8 @@ function parsearFlujoExcel(wb, XLSX) {
     // Detectar si es fila totalizadora (TOTAL, SUBTOTAL en el label)
     const esResultadoLbl = (lUP.includes('SUPER') && (lUP.includes('DÉF') || lUP.includes('DEF'))) ||
       lUP.includes('SUPERÁVIT') || lUP.includes('SUPERAVIT') ||
-      lUP.includes('FONDOS') || lUP.includes('SOLICIT') || lUP.includes('NECESIDAD') ||
+      lUP.includes('FONDOS') || lUP.includes('SOLICIT') ||
+      (lUP.includes('NECESIDAD') && !lUP.includes('SEMANAL') && !lUP.includes('MENSUAL') && !lUP.includes('DIARIA')) ||
       lUP.includes('RESULTADO') || lUP.includes('DÉFICIT') || lUP.includes('DEFICIT') ||
       lUP.includes('REQUERI') ||
       (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO')));
@@ -10046,7 +10047,7 @@ function parsearFlujoExcel(wb, XLSX) {
 
     const key = lUP.includes('TOTAL ING') ? 'total_ingresos'
       : lUP.includes('TOTAL EGR') ? 'total_egresos'
-      : esResultadoLbl && (lUP.includes('FONDOS') || lUP.includes('NECESIDAD')) ? 'necesidad_fondos'
+      : esResultadoLbl && (lUP.includes('FONDOS') || (lUP.includes('NECESIDAD') && !lUP.includes('SEMANAL') && !lUP.includes('MENSUAL') && !lUP.includes('DIARIA'))) ? 'necesidad_fondos'
       // SUBTOTAL (pre-ajustes) no es el resultado final — clave diferente para no pisar sup_def
       : esResultadoLbl && esTotalizador ? 'subtotal_resultado'
       : esResultadoLbl ? 'sup_def'
@@ -10831,7 +10832,7 @@ function _renderListaFlujos() {
       }
 
       const varPct = (necAct != null && necAnt != null && necAnt !== 0)
-        ? ((necAct - necAnt) / Math.abs(necAnt) * 100)
+        ? ((Math.abs(necAct) - Math.abs(necAnt)) / Math.abs(necAnt) * 100)
         : null;
       const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
 
@@ -11018,11 +11019,11 @@ function _matchEmpresaFlujo(nombreEmpresa) {
 // Devuelve la necesidad de fondos con signo real (negativo = déficit)
 function _flujoNecesidadSignada(f) {
   if (!f) return null;
-  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null);
+  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null && r.actual !== 0);
   if (rNec) return rNec.actual;
-  const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null)
-            ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null)
-            ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null);
+  const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
+            ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
+            ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null && r.actual !== 0);
   if (rDef) return rDef.actual;
   if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return -Math.abs(f.necesidad_fondos);
   // Fallback: _flujoNecesidad con sus propios pasos (busca esTotal, etc.)
@@ -11055,7 +11056,7 @@ function _flujoNecesidad(f) {
       u.includes('DÉFICIT') || u.includes('DEFICIT') ||
       u.includes('SUPERÁVIT') || u.includes('SUPERAVIT') ||
       u.includes('RESULTADO') ||
-      u.includes('NECESIDAD') ||
+      (u.includes('NECESIDAD') && !u.includes('SEMANAL') && !u.includes('MENSUAL') && !u.includes('DIARIA')) ||
       u.includes('REQUERIMIENTO') ||
       u.includes('FONDOS')
     );
