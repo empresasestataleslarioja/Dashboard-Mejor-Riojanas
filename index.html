@@ -14020,7 +14020,7 @@ function _persRenderMesesGrid() {
           </div>`).join('')}
       </div>
       <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-top:4px">
-        Promedio anual calculado: <span id="pers-mes-total-${y}" style="color:var(--pos);font-weight:600">
+        Último mes cargado (total anual): <span id="pers-mes-total-${y}" style="color:var(--pos);font-weight:600">
           ${totalActual || '—'}
         </span>
       </div>
@@ -14030,24 +14030,28 @@ function _persRenderMesesGrid() {
   grid.innerHTML = html;
 }
 
-// ── Calcular promedio al cambiar un mes (solo referencia — no modifica el total anual) ─────
+// ── Actualizar referencia al cambiar un mes (muestra último mes cargado como total anual) ─
 function _persActualizarTotalMes(y) {
   const MESES_LABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const vals = MESES_LABELS.map((m, i) => {
     const v = parseInt(document.getElementById(`pers-mes-${y}-${i}`)?.value);
     return isNaN(v) ? null : v;
   });
-  const filled = vals.filter(v => v != null);
-  const prom = filled.length ? Math.round(filled.reduce((s,v)=>s+v,0) / filled.length) : null;
+  // Último mes con dato ingresado
+  let ultimoVal = null, ultimoLbl = null;
+  for (let i = 11; i >= 0; i--) {
+    if (vals[i] != null) { ultimoVal = vals[i]; ultimoLbl = MESES_LABELS[i]; break; }
+  }
   const el = document.getElementById(`pers-mes-total-${y}`);
-  // El total anual ingresado tiene prioridad — este promedio es solo referencia visual
   const inpAño = document.getElementById(`pers-m-${y}`);
   const tieneAnual = inpAño && inpAño.value.trim() !== '';
   if (el) {
-    const txt = prom != null ? prom + ' prom. (' + filled.length + ' meses)' : '—';
+    const txt = ultimoVal != null ? ultimoVal + ' (' + ultimoLbl + ')' : '—';
     el.textContent = txt;
     el.style.color = tieneAnual ? 'var(--dim)' : 'var(--pos)';
-    el.title = tieneAnual ? 'El total anual ingresado manualmente tiene prioridad sobre este promedio' : 'Se usará este promedio como total anual al guardar';
+    el.title = tieneAnual
+      ? 'El total anual ingresado manualmente tiene prioridad'
+      : 'Se informará ' + (ultimoVal != null ? ultimoVal + ' (' + ultimoLbl + ') como total anual' : '—');
   }
 }
 
@@ -14120,13 +14124,11 @@ function guardarPersonalManual() {
       }
       if (alguno) {
         mData[y] = meses;
-        // Solo usar promedio mensual si el usuario NO ingresó el total anual manualmente
+        // Solo usar último mes cargado si el usuario NO ingresó el total anual manualmente
         if (!yConValorExplicito.has(y)) {
-          const filled = meses.filter(v => v != null);
-          if (filled.length) {
-            yData[y] = Math.round(filled.reduce((s,v)=>s+v,0) / filled.length);
-            algunoIngresado = true;
-          }
+          let ultimoMes = null;
+          for (let i = 11; i >= 0; i--) { if (meses[i] != null) { ultimoMes = meses[i]; break; } }
+          if (ultimoMes != null) { yData[y] = ultimoMes; algunoIngresado = true; }
         }
       }
     });
@@ -14171,7 +14173,7 @@ function guardarPersonalManual() {
     const nAnios = Object.keys(yData).length;
     const nDeriv = Object.keys(yData).filter(y => !yConValorExplicito.has(y)).length;
     let txt = '✓ ' + empresa + ' guardada con ' + nAnios + ' año' + (nAnios !== 1 ? 's' : '') + ' de datos.';
-    if (nDeriv > 0) txt += ' (' + nDeriv + ' total' + (nDeriv !== 1 ? 'es' : '') + ' calculado' + (nDeriv !== 1 ? 's' : '') + ' del promedio mensual)';
+    if (nDeriv > 0) txt += ' (' + nDeriv + ' total' + (nDeriv !== 1 ? 'es' : '') + ' tomado' + (nDeriv !== 1 ? 's' : '') + ' del último mes cargado)';
     msg.textContent = txt;
     msg.style.color = '#47ffb4';
     setTimeout(function() { if (msg) msg.textContent = ''; }, 5000);
