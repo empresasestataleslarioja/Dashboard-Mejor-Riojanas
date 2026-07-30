@@ -2488,22 +2488,29 @@ self.onmessage = async (e) => {
               <datalist id="pers-manual-emp-list"></datalist>
             </div>
           </div>
-          <div id="pers-manual-años" style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
-            <!-- Inputs de años generados por JS -->
+          <div style="display:flex;flex-direction:column;gap:3px">
+            <label style="font-size:8.5px;color:#ff8c47;font-family:var(--mono);font-weight:600;letter-spacing:.04em">
+              Total por año <span style="color:var(--dim);font-weight:400">(dato principal)</span>
+            </label>
+            <div id="pers-manual-años" style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+              <!-- Inputs de años generados por JS -->
+            </div>
           </div>
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono);
-            display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:4px">
+            display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:4px;align-self:flex-end;padding-bottom:2px">
             <input type="checkbox" id="pers-manual-detalle-mes"
               onchange="_persToggleDetalleMes(this.checked)"
               style="cursor:pointer">
-            Detalle mensual
+            Detalle por mes
           </label>
           <!-- Detalle mensual por año -->
           <div id="pers-manual-meses-wrap" style="display:none;width:100%;
             margin-top:10px;padding:10px 12px;background:var(--s2);
             border:1px solid var(--bd);border-radius:4px">
             <div style="font-size:8.5px;color:var(--dim);font-family:var(--mono);
-              margin-bottom:8px">Detalle mensual — empleados por mes</div>
+              margin-bottom:8px">Detalle mensual por mes
+              <span style="color:var(--dim);margin-left:6px;opacity:.7">(complementario — el total anual ingresado tiene prioridad)</span>
+            </div>
             <div id="pers-manual-meses-grid"></div>
           </div>
 
@@ -6545,6 +6552,37 @@ function _rptPersonal(autoPrint) {
       + '<th style="font-size:9pt">Var. vs base '+baseYearEmp+'</th>'
       + '</tr></thead>');
     _h.push('<tbody>'+tablaRows+'</tbody></table></div>');
+
+    // ── Detalle mensual si hay datos ────────────────────────────────
+    const MESES_RPT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const añosConMeses = pYrsEmp.filter(y => _persGetMeses(pd, y).some(v => v != null));
+    if (añosConMeses.length) {
+      _h.push('<div class="st" id="sec_mensual">Detalle mensual de empleados</div>');
+      añosConMeses.forEach(function(y) {
+        const mArr = _persGetMeses(pd, y);
+        const mFilled = mArr.map((v, i) => ({ m: MESES_RPT[i], v, i })).filter(x => x.v != null);
+        if (!mFilled.length) return;
+        const mVals = mFilled.map(x => x.v);
+        const mProm = Math.round(mVals.reduce((s,v) => s+v, 0) / mVals.length);
+        const mMax  = Math.max(...mVals); const mMin = Math.min(...mVals);
+        const mMaxLbl = MESES_RPT[mArr.indexOf(mMax)]; const mMinLbl = MESES_RPT[mArr.indexOf(mMin)];
+        _h.push('<div class="st2" style="font-size:10pt;color:#185fa5;margin:10px 0 4px">'+y+'</div>');
+        _h.push('<div class="tw"><table style="font-size:11pt">');
+        _h.push('<thead><tr>'+MESES_RPT.map(m=>'<th style="font-size:8pt">'+m+'</th>').join('')
+          +'<th style="font-size:8pt;border-left:2px solid #ddd">Prom.</th>'
+          +'<th style="font-size:8pt">Máx.</th><th style="font-size:8pt">Mín.</th></tr></thead>');
+        _h.push('<tbody><tr>'+mArr.map(function(v,i){
+          const isMax=v===mMax,isMin=v===mMin&&v!==mMax;
+          const bg=isMax?'background:#e8f8f0':'';const fc=isMax?'color:#0f6e56':isMin?'color:#c0392b':'';
+          return '<td style="'+bg+';'+fc+';font-size:11pt">'+(v!=null?v:'—')+'</td>';
+        }).join('')
+          +'<td style="font-weight:700;border-left:2px solid #ddd">'+mProm+'</td>'
+          +'<td style="color:#0f6e56;font-weight:700">'+mMax+' <span style="font-size:8pt;color:#888">('+mMaxLbl+')</span></td>'
+          +'<td style="color:#c0392b">'+mMin+' <span style="font-size:8pt;color:#888">('+mMinLbl+')</span></td>'
+          +'</tr></tbody></table></div>');
+      });
+    }
+
     _h.push(_rptFooter());
     _h.push('</div></body></html>');
     return _h.join('');
@@ -6593,20 +6631,21 @@ function _rptPersonal(autoPrint) {
     const tablaRows = sorted.map(d=>{
       // Año base propio: primer año con datos de la empresa
       const empPYrs  = pYrs.filter(y => _persGetTotal(d,y) > 0);
-      const empBase  = empPYrs[0];           // primer año con dato
+      const empBase  = empPYrs[0];
       const empLast  = empPYrs.length ? empPYrs[empPYrs.length-1] : lastY;
       const vL       = _persGetTotal(d, empLast);
       const v0       = empBase ? _persGetTotal(d, empBase) : 0;
       const vP       = _persGetTotal(d, pYrs[pYrs.length-2]);
       const vi       = vP && vL ? ((vL-vP)/vP*100).toFixed(1) : null;
-      // Variación vs base PROPIA de la empresa
       const vb       = v0 && vL && empBase !== empLast ? ((vL-v0)/v0*100).toFixed(1) : null;
       const ic       = vi===null?'':(parseFloat(vi)>=0?'up':'dn');
       const bc       = vb===null?'':(parseFloat(vb)>=0?'up':'dn');
-      // Columna de año base — mostrar qué año usa como base
       const baseCol  = empBase ? `<span style="font-size:7pt;color:#555">${empBase}</span>` : '—';
+      // % del total en último año disponible
+      const pctTot   = totLast && vL ? (vL/totLast*100).toFixed(1)+'%' : '—';
       return `<tr><td>${d.e}</td>
         ${pYrs.map(y=>`<td>${_persGetTotal(d,y)||'—'}</td>`).join('')}
+        <td style="font-size:9pt;color:#555">${pctTot}</td>
         <td>${baseCol}</td>
         <td class="${ic}">${vi===null?'—':(parseFloat(vi)>=0?'+':'')+vi+'%'}</td>
         <td class="${bc}">${vb===null?'—':(parseFloat(vb)>=0?'+':'')+vb+'%'}</td>
@@ -6615,6 +6654,7 @@ function _rptPersonal(autoPrint) {
 
     const totRow = `<tr class="trf"><td>TOTAL PORTAFOLIO</td>
       ${pYrs.map(y=>`<td>${(totals[y]||0).toLocaleString('es-AR')}</td>`).join('')}
+      <td style="font-size:9pt">100%</td>
       <td>${baseYear}</td>
       <td class="${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
       <td class="${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
@@ -6641,7 +6681,7 @@ function _rptPersonal(autoPrint) {
     _h2.push('</div>');
     _h2.push('<div class="st" id="sec_tabla">Detalle por empresa</div>');
     _h2.push('<div class="tw"><table>');
-    _h2.push('<thead><tr><th style="width:22%">Empresa</th>'+thYears+'<th>Base</th><th>Var. interanual</th><th>Var. vs base propia</th></tr></thead>');
+    _h2.push('<thead><tr><th style="width:22%">Empresa</th>'+thYears+'<th>% Total</th><th>Base</th><th>Var. interanual</th><th>Var. vs base propia</th></tr></thead>');
     _h2.push('<tbody>'+tablaRows+totRow+'</tbody></table></div>');
     _h2.push(_rptFooter());
     _h2.push('</div></body></html>');
@@ -13990,7 +14030,7 @@ function _persRenderMesesGrid() {
   grid.innerHTML = html;
 }
 
-// ── Calcular promedio al cambiar un mes ───────────────────────────
+// ── Calcular promedio al cambiar un mes (solo referencia — no modifica el total anual) ─────
 function _persActualizarTotalMes(y) {
   const MESES_LABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const vals = MESES_LABELS.map((m, i) => {
@@ -14000,12 +14040,15 @@ function _persActualizarTotalMes(y) {
   const filled = vals.filter(v => v != null);
   const prom = filled.length ? Math.round(filled.reduce((s,v)=>s+v,0) / filled.length) : null;
   const el = document.getElementById(`pers-mes-total-${y}`);
+  // El total anual ingresado tiene prioridad — este promedio es solo referencia visual
+  const inpAño = document.getElementById(`pers-m-${y}`);
+  const tieneAnual = inpAño && inpAño.value.trim() !== '';
   if (el) {
-    el.textContent = prom != null ? prom + ' (prom. ' + filled.length + ' meses)' : '—';
+    const txt = prom != null ? prom + ' prom. (' + filled.length + ' meses)' : '—';
+    el.textContent = txt;
+    el.style.color = tieneAnual ? 'var(--dim)' : 'var(--pos)';
+    el.title = tieneAnual ? 'El total anual ingresado manualmente tiene prioridad sobre este promedio' : 'Se usará este promedio como total anual al guardar';
   }
-  // Actualizar el input del total del año si existe
-  const inpAño = document.getElementById(`pers-manual-y-${y}`);
-  if (inpAño && prom != null) inpAño.value = prom;
 }
 
 
@@ -14037,14 +14080,14 @@ function guardarPersonalManual() {
   ])].sort();
   const yData = {};
   let algunoIngresado = false;
+  let yConValorExplicito = new Set(); // años donde el usuario ingresó total manualmente
   años.forEach(function(y) {
     const raw = document.getElementById('pers-m-' + y)?.value ?? '';
     if (raw.trim() === '') {
       // Campo vacío → si tenía dato antes, eliminarlo (yData no incluye el año)
-      // El Object.assign posterior solo pisa los años presentes en yData
     } else {
       const v = parseInt(raw);
-      if (!isNaN(v) && v >= 0 && v <= 1000000) { yData[y] = v; algunoIngresado = true; }
+      if (!isNaN(v) && v >= 0 && v <= 1000000) { yData[y] = v; yConValorExplicito.add(y); algunoIngresado = true; }
       else if (!isNaN(v) && v > 1000000) {
         if (msg) { msg.textContent = `⚠ Valor para ${y} fuera de rango (máx. 1.000.000 empleados).`; msg.style.color = '#ff8c47'; }
         return;
@@ -14077,10 +14120,13 @@ function guardarPersonalManual() {
       }
       if (alguno) {
         mData[y] = meses;
-        // Si no se ingresó total anual, calcular como promedio de meses con dato
-        if (!yData[y]) {
+        // Solo usar promedio mensual si el usuario NO ingresó el total anual manualmente
+        if (!yConValorExplicito.has(y)) {
           const filled = meses.filter(v => v != null);
-          if (filled.length) yData[y] = Math.round(filled.reduce((s,v)=>s+v,0) / filled.length);
+          if (filled.length) {
+            yData[y] = Math.round(filled.reduce((s,v)=>s+v,0) / filled.length);
+            algunoIngresado = true;
+          }
         }
       }
     });
@@ -14122,9 +14168,13 @@ function guardarPersonalManual() {
   buildPersonal();
 
   if (msg) {
-    msg.textContent = '✓ ' + empresa + ' guardada con ' + Object.keys(yData).length + ' años de datos.';
+    const nAnios = Object.keys(yData).length;
+    const nDeriv = Object.keys(yData).filter(y => !yConValorExplicito.has(y)).length;
+    let txt = '✓ ' + empresa + ' guardada con ' + nAnios + ' año' + (nAnios !== 1 ? 's' : '') + ' de datos.';
+    if (nDeriv > 0) txt += ' (' + nDeriv + ' total' + (nDeriv !== 1 ? 'es' : '') + ' calculado' + (nDeriv !== 1 ? 's' : '') + ' del promedio mensual)';
+    msg.textContent = txt;
     msg.style.color = '#47ffb4';
-    setTimeout(function() { if (msg) msg.textContent = ''; }, 4000);
+    setTimeout(function() { if (msg) msg.textContent = ''; }, 5000);
   }
   // Limpiar para próxima carga
   limpiarPersonalManual();
