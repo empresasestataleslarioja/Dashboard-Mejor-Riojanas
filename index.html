@@ -11019,7 +11019,8 @@ function _matchEmpresaFlujo(nombreEmpresa) {
 // Devuelve la necesidad de fondos con signo real (negativo = déficit)
 function _flujoNecesidadSignada(f) {
   if (!f) return null;
-  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null && r.actual !== 0);
+  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null && r.actual !== 0
+    && !/(SEMANAL|MENSUAL|DIARIA)/i.test(r.label||''));
   if (rNec) return rNec.actual;
   const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
             ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
@@ -11034,6 +11035,10 @@ function _flujoNecesidadSignada(f) {
   const sumEgr = rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal).reduce((s,r)=>s+Math.abs(r.actual||0),0);
   const sumIng = rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.actual||0),0);
   if (sumEgr > 0) return sumIng - sumEgr; // negativo si déficit
+  // Fallback adicional: usar totalizadores esTotal si no hay rubros detalle tipados
+  const totalEgr = rubros.find(r=>r.tipo==='total'&&r.esTotal&&r.actual!=null&&r.actual!==0);
+  const totalIng = rubros.find(r=>r.tipo==='ingreso'&&r.esTotal&&r.actual!=null&&r.actual!==0);
+  if (totalEgr) return (totalIng ? totalIng.actual : 0) - Math.abs(totalEgr.actual);
   return null;
 }
 
@@ -11042,7 +11047,8 @@ function _flujoNecesidad(f) {
   // 1. campo necesidad_fondos explícito
   if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return Math.abs(f.necesidad_fondos);
   // 2. rubro con key necesidad_fondos
-  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null);
+  const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null
+    && !/(SEMANAL|MENSUAL|DIARIA)/i.test(r.label||''));
   if (rNec) return Math.abs(rNec.actual);
   // 3. Superávit/Déficit/Resultado — preferir sup_def (RESULTADO NETO) sobre subtotal_resultado (SUBTOTAL pre-ajustes)
   const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null)
