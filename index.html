@@ -11954,9 +11954,9 @@ function exportarFlujoExcel() {
   const labA  = _flujoLaboral(fA),    labB  = _flujoLaboral(fB);
   const covA  = (ingA&&egrA) ? ingA/Math.abs(egrA)*100 : null;
   const covB  = (ingB&&egrB) ? ingB/Math.abs(egrB)*100 : null;
-  const varNom  = (necA!=null&&necB&&necB!==0) ? (necA-necB)/Math.abs(necB)*100 : null;
+  const varNom  = (necA!=null&&necB&&necB!==0) ? (Math.abs(necA)-Math.abs(necB))/Math.abs(necB)*100 : null;
   const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
-  const labVarNom  = (labA!=null&&labB&&labB!==0) ? (labA-labB)/Math.abs(labB)*100 : null;
+  const labVarNom  = (labA!=null&&labB&&labB!==0) ? (Math.abs(labA)-Math.abs(labB))/Math.abs(labB)*100 : null;
   const labVarReal = (labVarNom!=null&&ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
 
   const labelsA = new Map(fA.rubros.map(r=>[r.key,r]));
@@ -12013,7 +12013,7 @@ function exportarFlujoExcel() {
   const svgVariacion = (() => {
     const items = allKeys
       .filter(k=>labelsA.has(k)&&labelsB.has(k))
-      .map(k=>{ const rA=labelsA.get(k),rB=labelsB.get(k); const vn=(rA?.actual&&rB?.actual&&rB.actual!==0)?(rA.actual-rB.actual)/Math.abs(rB.actual)*100:null; return {lbl:rA?.label||k,vn}; })
+      .map(k=>{ const rA=labelsA.get(k),rB=labelsB.get(k); const vn=(rA?.actual&&rB?.actual&&rB.actual!==0)?(Math.abs(rA.actual)-Math.abs(rB.actual))/Math.abs(rB.actual)*100:null; return {lbl:rA?.label||k,vn}; })
       .filter(d=>d.vn!=null);
     if (!items.length) return '';
     const maxAbs = Math.max(...items.map(d=>Math.abs(d.vn)));
@@ -12044,7 +12044,7 @@ function exportarFlujoExcel() {
     const vA=rA?.actual??null, vB=rB?.actual??null;
     const lbl=rA?.label||rB?.label||k;
     const tipo=rA?.tipo||rB?.tipo||'egreso';
-    const vn=(vA!=null&&vB!=null&&vB!==0)?(vA-vB)/Math.abs(vB)*100:null;
+    const vn=(vA!=null&&vB!=null&&vB!==0)?(Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100:null;
     const vr=(vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
     const isIng=tipo==='ingreso'; const isRes=tipo==='resultado'||tipo==='total';
     const bg=isRes?'#fffde7':isIng?'#f0faf5':'#fafafa';
@@ -12521,14 +12521,14 @@ async function generarInformeFlujo() {
     const ipc = ipcInput > 0 ? ipcInput : (fA.ipc || 0);
     const necA = _flujoNecesidad(fA);
     const necB = _flujoNecesidad(fB);
-    const varNom  = (necA!=null&&necB&&necB!==0) ? (necA-necB)/necB*100 : null;
+    const varNom  = (necA!=null&&necB&&necB!==0) ? (Math.abs(necA)-Math.abs(necB))/Math.abs(necB)*100 : null;
     const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
     const ingA = _flujoIngTotal(fA);
     const ingB = _flujoIngTotal(fB);
-    const varIng = (ingA!=null&&ingB&&ingB!==0) ? (ingA-ingB)/Math.abs(ingB)*100 : null;
+    const varIng = (ingA!=null&&ingB&&ingB!==0) ? (Math.abs(ingA)-Math.abs(ingB))/Math.abs(ingB)*100 : null;
     const egrA = _flujoEgrTotal(fA);
     const egrB = _flujoEgrTotal(fB);
-    const varEgr = (egrA!=null&&egrB&&egrB!==0) ? (egrA-egrB)/Math.abs(egrB)*100 : null;
+    const varEgr = (egrA!=null&&egrB&&egrB!==0) ? (Math.abs(egrA)-Math.abs(egrB))/Math.abs(egrB)*100 : null;
     const covA = (ingA&&egrA) ? ingA/Math.abs(egrA)*100 : null;
     const covB = (ingB&&egrB) ? ingB/Math.abs(egrB)*100 : null;
     const labA = _flujoLaboral(fA);
