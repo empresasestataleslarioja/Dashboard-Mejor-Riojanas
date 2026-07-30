@@ -9546,12 +9546,20 @@ function _aplicarMapeadoWizard() {
   // Combinar: confirmados del perfil se preservan; nuevos se mapean; el resto se ignora
   var rubrosNuevos = res.rubros.map(function(r, i) {
     if (r._tipoConfirmado) return r; // ya confirmado por perfil
-    // Auto-preservar totalizadores y rubros de resultado — no requieren mapeo manual
-    if (r.tipo === 'resultado' || (r.esTotal && (r.tipo === 'total' || r.tipo === 'ingreso'))) {
+    // Auto-preservar cualquier rubro con tipo detectado por el parser — el wizard puede
+    // corregir el tipo explícitamente, pero no debe descartar lo que el parser ya clasificó
+    if (r.tipo === 'resultado' || r.tipo === 'egreso' || r.tipo === 'ingreso' ||
+        (r.esTotal && (r.tipo === 'total' || r.tipo === 'ingreso'))) {
+      // Si el wizard asignó explícitamente un tipo diferente, aplicarlo
+      var tipoExpl = rubroAssignByOrigIdx[i];
+      if (tipoExpl) {
+        var decExpl = _decodeTipoVal(tipoExpl);
+        if (decExpl) return Object.assign({}, r, decExpl, { _tipoConfirmado: true });
+      }
       return Object.assign({}, r, { _tipoConfirmado: true });
     }
     var tipoVal = rubroAssignByOrigIdx[i];
-    if (!tipoVal) return null; // ignorar (sin mapeo asignado)
+    if (!tipoVal) return null; // ignorar (tipo desconocido y sin mapeo manual)
     var dec = _decodeTipoVal(tipoVal);
     if (!dec) return r;
     return Object.assign({}, r, dec, { _tipoConfirmado: true });
