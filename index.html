@@ -10815,9 +10815,20 @@ function _renderListaFlujos() {
     }
     fEmp.forEach(f => {
       const necAct = necSignada(f);
-      // Para período anterior: usar el signo del resultado del flujo anterior si está disponible,
-      // si no, asumir negativo (déficit) como convención
-      const necAnt = f.necesidad_fondos_ant != null ? -Math.abs(f.necesidad_fondos_ant) : null;
+      // Período anterior: primero el campo guardado, luego buscar on-the-fly por fecha
+      let necAnt = f.necesidad_fondos_ant != null ? -Math.abs(f.necesidad_fondos_ant) : null;
+      if (necAnt == null) {
+        const _thisP = _parsePeriodoFlujoStr(f.periodo);
+        const _thisAbs = _thisP ? _absInicioPeriodo(_thisP) : null;
+        if (_thisAbs != null) {
+          const _prev = Object.values(DATA.flujos)
+            .filter(f2 => f2.empresa === f.empresa && f2.tipo === f.tipo && f2.clave !== f.clave)
+            .map(f2 => ({ nec: _flujoNecesidadSignada(f2), abs: _absInicioPeriodo(_parsePeriodoFlujoStr(f2.periodo)) }))
+            .filter(x => x.abs != null && x.abs < _thisAbs && x.nec != null)
+            .sort((a, b) => b.abs - a.abs);
+          if (_prev.length) necAnt = _prev[0].nec;
+        }
+      }
 
       const varPct = (necAct != null && necAnt != null && necAnt !== 0)
         ? ((necAct - necAnt) / Math.abs(necAnt) * 100)
