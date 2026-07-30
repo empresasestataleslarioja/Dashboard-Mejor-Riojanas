@@ -11575,7 +11575,7 @@ function buildComparacionFlujos() {
   // KPIs — helpers robustos para cualquier estructura de flujo
   const necA = _flujoNecesidadSignada(fA); // signed: negativo = déficit
   const necB = _flujoNecesidadSignada(fB);
-  const varNom  = (necA!=null && necB && necB!==0) ? (necA - necB) / Math.abs(necB) * 100 : null;
+  const varNom  = (necA!=null && necB && necB!==0) ? (Math.abs(necA) - Math.abs(necB)) / Math.abs(necB) * 100 : null;
   // Fisher: var real = (1+varNom/100)/(1+ipc/100) - 1
   const varReal = (varNom!=null && ipc) ? ((1 + varNom/100) / (1 + ipc/100) - 1) * 100 : null;
 
@@ -11634,7 +11634,7 @@ function buildComparacionFlujos() {
   (() => {
     // Bloque comparativo costo laboral
     if (!labA && !labB) return '';
-    const labVarNom = (labA!=null&&labB&&labB!==0) ? (labA-labB)/Math.abs(labB)*100 : null;
+    const labVarNom = (labA!=null&&labB&&labB!==0) ? (Math.abs(labA)-Math.abs(labB))/Math.abs(labB)*100 : null;
     const labVarReal = (labVarNom!=null&&ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
     const labPctEgrA = (egrA&&labA) ? Math.abs(labA)/Math.abs(egrA)*100 : null;
     const labPctEgrB = (egrB&&labB) ? Math.abs(labB)/Math.abs(egrB)*100 : null;
@@ -11700,7 +11700,7 @@ function buildComparacionFlujos() {
     const vB = rB?.actual ?? null;
     const lbl = rA?.label || rB?.label || k;
     const tipo = rA?.tipo || rB?.tipo || 'egreso';
-    const vn = (vA!=null&&vB!=null&&vB!==0) ? (vA-vB)/Math.abs(vB)*100 : null;
+    const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
     // Fisher formula for real variation
     const vr = (vn!=null&&ipc) ? ((1 + vn/100) / (1 + ipc/100) - 1) * 100 : null;
     // Equivalent: vB adjusted by inflation (what vB would be at current prices)
@@ -11730,7 +11730,7 @@ function buildComparacionFlujos() {
     .map(k => {
       const rA = labelsA.get(k), rB = labelsB.get(k);
       if (!rA?.actual || !rB?.actual || rB.actual === 0) return 0;
-      return parseFloat(((rA.actual - rB.actual)/Math.abs(rB.actual)*100).toFixed(2));
+      return parseFloat(((Math.abs(rA.actual) - Math.abs(rB.actual))/Math.abs(rB.actual)*100).toFixed(2));
     });
 
   mkChart('ch-flujo-var','bar',{
