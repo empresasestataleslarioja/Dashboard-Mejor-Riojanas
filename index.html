@@ -11069,11 +11069,16 @@ function _flujoNecesidadSignada(f) {
   if (!f) return null;
   const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null && r.actual !== 0
     && !/(SEMANAL|MENSUAL|DIARIA)/i.test(r.label||''));
-  if (rNec) return rNec.actual;
-  const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
-            ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
-            ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null && r.actual !== 0);
-  if (rDef) return rDef.actual;
+  // Detectar si el flujo tiene ingresos reales (para corregir signo cuando no hay)
+  const _rubros = f.rubros || [];
+  const _hasIngresos = _rubros.some(r => r.tipo === 'ingreso' && (r.actual||0) > 0);
+  const _signResult = v => (!_hasIngresos && v > 0) ? -v : v; // sin ingresos: resultado positivo = déficit
+
+  if (rNec) return _signResult(rNec.actual);
+  const rDef = _rubros.find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
+            ?? _rubros.find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
+            ?? _rubros.find(r => r.tipo === 'resultado' && r.actual != null && r.actual !== 0);
+  if (rDef) return _signResult(rDef.actual);
   if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return -Math.abs(f.necesidad_fondos);
   // Fallback: _flujoNecesidad con sus propios pasos (busca esTotal, etc.)
   const abs = _flujoNecesidad(f);
@@ -11575,10 +11580,28 @@ function buildComparacionFlujos() {
   if (_btnInd)  _btnInd.style.display  = 'none';
   if (_btnComp) _btnComp.style.display = '';
 
-  // Combinar rubros de ambos períodos
+  // Combinar rubros de ambos períodos con fallback por label normalizado
+  const _normLbl = s => (s||'').toLowerCase()
+    .replace(/[áàäâã]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+    .replace(/[óòöôõ]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().substring(0,60);
   const labelsA = new Map(fA.rubros.map(r => [r.key, r]));
   const labelsB = new Map(fB.rubros.map(r => [r.key, r]));
-  const allKeys = [...new Set([...labelsA.keys(), ...labelsB.keys()])];
+  const labelsBByNorm = new Map(fB.rubros.map(r => [_normLbl(r.label), r]));
+  // Merge: para cada rubro A buscar su par en B por key o por label normalizado
+  const _bMatched = new Set();
+  const _merged = fA.rubros.map(rA => {
+    let rB = labelsB.get(rA.key);
+    if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label)) || null;
+    if (rB) _bMatched.add(rB.key);
+    return { rA, rB };
+  });
+  // Agregar rubros B que no tuvieron par en A
+  fB.rubros.forEach(rB => { if (!_bMatched.has(rB.key)) _merged.push({ rA: null, rB }); });
+  // Compatibilidad: allKeys para gráficos que aún lo usan
+  const labelsA_compat = labelsA;
+  const labelsB_compat = new Map(_merged.map(({rA,rB}) => rA && rB ? [rA.key, rB] : rB ? [rB.key, rB] : null).filter(Boolean));
+  const allKeys = _merged.map(({rA,rB}) => rA?.key ?? rB?.key);
 
   // KPIs — helpers robustos para cualquier estructura de flujo
   const necA = _flujoNecesidadSignada(fA); // signed: negativo = déficit
@@ -11701,12 +11724,10 @@ function buildComparacionFlujos() {
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:#e8c84a;font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Variación real usando fórmula Fisher: (1+nom)/(1+ipc)−1">Var. real</th>
     ${ipcProy?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Proyección del período siguiente aplicando IPC ${ipcProy}% sobre el período actual">Proyec. +${ipcProy}%</th>`:''}
   </tr></thead><tbody>` +
-  allKeys.map(k => {
-    const rA = labelsA.get(k);
-    const rB = labelsB.get(k);
+  _merged.map(({rA, rB}) => {
     const vA = rA?.actual ?? null;
     const vB = rB?.actual ?? null;
-    const lbl = rA?.label || rB?.label || k;
+    const lbl = rA?.label || rB?.label || '';
     const tipo = rA?.tipo || rB?.tipo || 'egreso';
     const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
     // Fisher formula for real variation
@@ -11729,17 +11750,11 @@ function buildComparacionFlujos() {
     </tr>`;
   }).join('') + '</tbody>';
 
-  // Gráfico variación
-  const labVarChart = allKeys
-    .filter(k => labelsA.has(k) && labelsB.has(k))
-    .map(k => labelsA.get(k)?.label || k);
-  const datVarChart = allKeys
-    .filter(k => labelsA.has(k) && labelsB.has(k))
-    .map(k => {
-      const rA = labelsA.get(k), rB = labelsB.get(k);
-      if (!rA?.actual || !rB?.actual || rB.actual === 0) return 0;
-      return parseFloat(((Math.abs(rA.actual) - Math.abs(rB.actual))/Math.abs(rB.actual)*100).toFixed(2));
-    });
+  // Gráfico variación — usa _merged para respetar la alineación por label
+  const _mergedPares = _merged.filter(({rA,rB}) => rA?.actual && rB?.actual && rB.actual !== 0);
+  const labVarChart = _mergedPares.map(({rA,rB}) => rA?.label || rB?.label || '');
+  const datVarChart = _mergedPares.map(({rA,rB}) =>
+    parseFloat(((Math.abs(rA.actual) - Math.abs(rB.actual))/Math.abs(rB.actual)*100).toFixed(2)));
 
   mkChart('ch-flujo-var','bar',{
     labels: labVarChart,
@@ -11749,20 +11764,16 @@ function buildComparacionFlujos() {
       scales:{ y:{ ticks:{ font:{ size:8 } } },
                x:{ ticks:{ callback: v=>v+'%', font:{size:8} } } } });
 
-  // Gráfico composición egresos — alineado por key para que ambos períodos coincidan
-  const eA = fA.rubros.filter(r=>r.tipo==='egreso');
-  const eBmap = new Map(fB.rubros.filter(r=>r.tipo==='egreso').map(r=>[r.key, r]));
-  // Incluir también rubros de B que no estén en A
-  const eBonly = fB.rubros.filter(r=>r.tipo==='egreso' && !eA.some(rA=>rA.key===r.key));
-  const eAll = [...eA, ...eBonly];
+  // Gráfico composición egresos — alineado por _merged (label fallback incluido)
+  const eAll = _merged.filter(({rA,rB}) => (rA?.tipo==='egreso') || (rB?.tipo==='egreso'));
   mkChart('ch-flujo-egr','bar',{
-    labels: eAll.map(r=>r.label.length>20?r.label.substring(0,18)+'…':r.label),
+    labels: eAll.map(({rA,rB})=>{ const l=rA?.label||rB?.label||''; return l.length>20?l.substring(0,18)+'…':l; }),
     datasets:[
       { label: fA.periodo,
-        data: eAll.map(r => { const rA = eA.find(x=>x.key===r.key); return rA ? Math.abs(rA.actual||0)/1e6 : 0; }),
+        data: eAll.map(({rA}) => rA?.actual ? Math.abs(rA.actual)/1e6 : 0),
         backgroundColor:'#47e8ffaa', borderRadius:3 },
       { label: fB.periodo,
-        data: eAll.map(r => { const rB = eBmap.get(r.key); return rB ? Math.abs(rB.actual||0)/1e6 : 0; }),
+        data: eAll.map(({rB}) => rB?.actual ? Math.abs(rB.actual)/1e6 : 0),
         backgroundColor:'#ff8c4766', borderRadius:3 },
     ]
   },{ plugins:{ legend:{ labels:{ font:{size:8} } } },
@@ -11969,7 +11980,20 @@ function exportarFlujoExcel() {
 
   const labelsA = new Map(fA.rubros.map(r=>[r.key,r]));
   const labelsB = new Map(fB.rubros.map(r=>[r.key,r]));
-  const allKeys = [...new Set([...labelsA.keys(),...labelsB.keys()])];
+  const _normLblExp = s => (s||'').toLowerCase()
+    .replace(/[áàäâã]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+    .replace(/[óòöôõ]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().substring(0,60);
+  const labelsBByNormExp = new Map(fB.rubros.map(r=>[_normLblExp(r.label),r]));
+  const _bMatchedExp = new Set();
+  const _mergedExp = fA.rubros.map(rA => {
+    let rB = labelsB.get(rA.key);
+    if (!rB) rB = labelsBByNormExp.get(_normLblExp(rA.label)) || null;
+    if (rB) _bMatchedExp.add(rB.key);
+    return { rA, rB };
+  });
+  fB.rubros.forEach(rB => { if (!_bMatchedExp.has(rB.key)) _mergedExp.push({ rA:null, rB }); });
+  const allKeys = _mergedExp.map(({rA,rB})=>rA?.key??rB?.key);
 
   const rubEgr = fA.rubros.filter(r=>r.tipo==='egreso'&&r.actual)
     .sort((a,b)=>Math.abs(b.actual)-Math.abs(a.actual));
@@ -12019,9 +12043,9 @@ function exportarFlujoExcel() {
 
   // ── SVG bar chart: variación por rubro ───────────────────────────
   const svgVariacion = (() => {
-    const items = allKeys
-      .filter(k=>labelsA.has(k)&&labelsB.has(k))
-      .map(k=>{ const rA=labelsA.get(k),rB=labelsB.get(k); const vn=(rA?.actual&&rB?.actual&&rB.actual!==0)?(Math.abs(rA.actual)-Math.abs(rB.actual))/Math.abs(rB.actual)*100:null; return {lbl:rA?.label||k,vn}; })
+    const items = _mergedExp
+      .filter(({rA,rB})=>rA?.actual&&rB?.actual&&rB.actual!==0)
+      .map(({rA,rB})=>{ const vn=(Math.abs(rA.actual)-Math.abs(rB.actual))/Math.abs(rB.actual)*100; return {lbl:rA?.label||rB?.label||'',vn}; })
       .filter(d=>d.vn!=null);
     if (!items.length) return '';
     const maxAbs = Math.max(...items.map(d=>Math.abs(d.vn)));
@@ -12047,10 +12071,9 @@ function exportarFlujoExcel() {
   })();
 
   // ── build comparison table rows ───────────────────────────────────
-  const compTableRows = allKeys.map(k=>{
-    const rA=labelsA.get(k),rB=labelsB.get(k);
+  const compTableRows = _mergedExp.map(({rA,rB})=>{
     const vA=rA?.actual??null, vB=rB?.actual??null;
-    const lbl=rA?.label||rB?.label||k;
+    const lbl=rA?.label||rB?.label||'';
     const tipo=rA?.tipo||rB?.tipo||'egreso';
     const vn=(vA!=null&&vB!=null&&vB!==0)?(Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100:null;
     const vr=(vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
