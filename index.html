@@ -11625,26 +11625,83 @@ function buildComparacionFlujos() {
   const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v<0?')':'');
   const colVar = v => v==null ? 'var(--dim)' : v>0 ? 'var(--neg)' : 'var(--pos)';
 
-  // Advertencia si período B no tiene rubros con datos (ej: cargado de Sheets sin rubros_json)
+  // ── Compatibilidad de formatos ───────────────────────────────────
   const bSinRubros = !fB_raw.rubros?.some(r => r.actual != null);
+  const nMatched = _merged.filter(({rA,rB}) => rA && rB).length;
+  const nAonly   = _merged.filter(({rA,rB}) => rA && !rB).length;
+  const nBonly   = _merged.filter(({rA,rB}) => !rA && rB).length;
+  const totalRubros = _merged.length;
+  const pctMatch = totalRubros ? Math.round(nMatched / Math.max(fA.rubros.length, fB.rubros.length) * 100) : 0;
+  const formatoDif = !bSinRubros && pctMatch < 60; // formatos distintos si <60% de rubros matchean
+
+  let warnB = document.getElementById('flujo-warn-b-sinrubros');
+  if (!warnB) {
+    warnB = document.createElement('div');
+    warnB.id = 'flujo-warn-b-sinrubros';
+    warnB.style.cssText = 'margin:0 0 10px';
+    wrap.insertBefore(warnB, wrap.firstChild);
+  }
   if (bSinRubros) {
-    let warnB = document.getElementById('flujo-warn-b-sinrubros');
-    if (!warnB) {
-      warnB = document.createElement('div');
-      warnB.id = 'flujo-warn-b-sinrubros';
-      warnB.style.cssText = 'margin:0 0 10px';
-      wrap.insertBefore(warnB, wrap.firstChild);
-    }
     warnB.innerHTML = `<div style="background:#2a1000;border:1px solid #ff8c47;border-radius:4px;
       padding:8px 14px;font-size:8.5pt;font-family:var(--mono);color:#ff8c47">
       ⚠ El período anterior (<strong>${fB_raw.periodo}</strong>) no tiene detalle de rubros cargado —
-      fue restaurado desde Sheets sin datos de rubros. Re-importá el Excel de ese período para
-      recuperar el desglose completo.
+      fue restaurado desde Sheets sin datos de rubros. Re-importá el Excel de ese período para recuperar el desglose completo.
+    </div>`;
+  } else if (formatoDif) {
+    warnB.innerHTML = `<div style="background:#1a1400;border:1px solid #e8c84a55;border-radius:4px;
+      padding:10px 16px;font-size:8.5px;font-family:var(--mono);color:#e8c84a;line-height:1.6">
+      ⚡ Formatos distintos entre períodos — ${nMatched} concepto${nMatched!==1?'s':''} en común,
+      ${nAonly} solo en <strong>${fA.periodo}</strong>, ${nBonly} solo en <strong>${fB.periodo}</strong>.
+      <span style="color:var(--dim)">El resumen agregado (totales) es siempre comparable.
+      El detalle de rubros marca en gris los conceptos sin par.</span>
     </div>`;
   } else {
-    const warnB = document.getElementById('flujo-warn-b-sinrubros');
-    if (warnB) warnB.innerHTML = '';
+    warnB.innerHTML = '';
   }
+
+  // ── Resumen agregado — siempre comparable independientemente del formato ──
+  const _fmtMabs = v => v==null ? '—' : '$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
+  const _varPct  = (a,b) => (a!=null&&b!=null&&b!==0) ? (Math.abs(a)-Math.abs(b))/Math.abs(b)*100 : null;
+  const _varStr  = v => v==null ? '' : ` <span style="color:${v>0?'var(--neg)':'var(--pos)'};font-size:8px">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  let resumenEl = document.getElementById('flujo-resumen-agregado');
+  if (!resumenEl) {
+    resumenEl = document.createElement('div');
+    resumenEl.id = 'flujo-resumen-agregado';
+    resumenEl.style.cssText = 'margin-bottom:10px';
+    const kpisEl = document.getElementById('flujo-kpis');
+    if (kpisEl && kpisEl.parentNode) kpisEl.parentNode.insertBefore(resumenEl, kpisEl.nextSibling);
+  }
+  const _resRows = [
+    { lbl:'Total egresos',  vA: egrA, vB: egrB,  acento:'var(--neg)' },
+    ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)' }] : []),
+    { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)' },
+    ...(ipc&&necB ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: null, vB: necB*(1+ipc/100), acento:'var(--dim)', note:true }] : []),
+  ];
+  resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
+    padding:10px 16px;font-family:var(--mono)">
+    <div style="font-size:8px;color:var(--dim);letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">
+      Resumen comparativo — totales
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;font-size:8px;color:var(--dim);padding:3px 8px 3px 0;border-bottom:1px solid var(--bd2)">Concepto</th>
+        <th style="text-align:right;font-size:8px;color:var(--acc);padding:3px 8px;border-bottom:1px solid var(--bd2)">${fA.periodo}</th>
+        <th style="text-align:right;font-size:8px;color:var(--dim);padding:3px 8px;border-bottom:1px solid var(--bd2)">${fB.periodo}</th>
+        <th style="text-align:right;font-size:8px;color:var(--dim);padding:3px 8px;border-bottom:1px solid var(--bd2)">Var.</th>
+      </tr></thead>
+      <tbody>${_resRows.map(row => {
+        const vp = _varPct(row.vA, row.vB);
+        const nota = row.note ? ' style="opacity:.6;font-style:italic"' : '';
+        return `<tr${nota}>
+          <td style="padding:4px 8px 4px 0;font-size:9px;color:var(--dim)">${row.lbl}</td>
+          <td style="text-align:right;padding:4px 8px;font-size:9.5px;font-weight:700;color:${row.acento}">${_fmtMabs(row.vA)}</td>
+          <td style="text-align:right;padding:4px 8px;font-size:9.5px;color:var(--dim)">${_fmtMabs(row.vB)}</td>
+          <td style="text-align:right;padding:4px 8px;font-size:9px">${vp!=null?`<span style="color:${vp>0?'var(--neg)':'var(--pos)'};font-weight:600">${vp>0?'+':''}${vp.toFixed(1)}%</span>`:'—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Necesidad actual',     v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
@@ -11729,23 +11786,32 @@ function buildComparacionFlujos() {
     const vB = rB?.actual ?? null;
     const lbl = rA?.label || rB?.label || '';
     const tipo = rA?.tipo || rB?.tipo || 'egreso';
+    const soloA = rA && !rB;  // concepto solo en período actual
+    const soloB = !rA && rB;  // concepto solo en período anterior
+    const sinPar = soloA || soloB;
     const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
-    // Fisher formula for real variation
     const vr = (vn!=null&&ipc) ? ((1 + vn/100) / (1 + ipc/100) - 1) * 100 : null;
-    // Equivalent: vB adjusted by inflation (what vB would be at current prices)
     const vBEq = (vB!=null&&ipc) ? vB * (1 + ipc/100) : null;
-    const st = _estComp(lbl, tipo);
+    // Estilo atenuado para rubros sin par (formato diferente)
+    const st = sinPar
+      ? {bg:'', bt:'', fw:'400', c:'var(--dim)'}
+      : _estComp(lbl, tipo);
     const isIng = tipo === 'ingreso';
-    // ingresos: sube = verde, baja = rojo  |  egresos/resultado: sube = rojo, baja = verde
     const cv = vn==null?'var(--dim)': isIng ? (vn>0?'var(--pos)':'var(--neg)') : (vn>0?'var(--neg)':'var(--pos)');
     const cr = vr==null?'var(--dim)': isIng ? (vr>0?'var(--pos)':'var(--neg)') : (vr>0?'var(--neg)':'var(--pos)');
-    return `<tr style="background:${st.bg};${st.bt}">
-      <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}</td>
+    const etiquetaSinPar = soloA
+      ? `<span style="font-size:7.5px;color:var(--dim);opacity:.6;margin-left:5px" title="Concepto sin equivalente en el período anterior">solo ${fA.periodo}</span>`
+      : soloB
+      ? `<span style="font-size:7.5px;color:var(--dim);opacity:.6;margin-left:5px" title="Concepto sin equivalente en el período actual">solo ${fB.periodo}</span>`
+      : '';
+    const opacidad = sinPar ? 'opacity:.55' : '';
+    return `<tr style="background:${st.bg};${st.bt};${opacidad}">
+      <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${etiquetaSinPar}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};border-bottom:1px solid var(--bd2)">${fmtM(vA)}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtM(vB)}</td>
       ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtMEq(vBEq)}</td>`:''}
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${fmtP(vn)}</td>
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${fmtP(vr)}</td>
+      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${sinPar?'<span style="color:var(--dim);font-size:8px">—</span>':fmtP(vn)}</td>
+      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${sinPar?'':fmtP(vr)}</td>
       ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd2)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
     </tr>`;
   }).join('') + '</tbody>';
