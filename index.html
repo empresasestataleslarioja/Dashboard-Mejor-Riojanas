@@ -11490,6 +11490,78 @@ function _normalizarFlujoMeses(f, targetMeses) {
   });
 }
 
+// ── Mapeo manual de rubros entre períodos con distinto formato ────────────────
+var _mapeoState = { selKeyA: null, empresa: null, claveA: null, claveB: null };
+
+function _loadMapeosFlujo() {
+  try { return JSON.parse(localStorage.getItem('lr_flujos_mapeos_v1') || '{}'); } catch(e) { return {}; }
+}
+function _saveMapeosFlujoLS(m) {
+  try { localStorage.setItem('lr_flujos_mapeos_v1', JSON.stringify(m)); } catch(e) {}
+}
+function _getMapeosFlujo(empresa, cA, cB) {
+  return ((_loadMapeosFlujo()[empresa] || {})[cA + '|' + cB]) || [];
+}
+function _guardarMapeoFlujoLS(empresa, cA, cB, keyA, keyB) {
+  const all = _loadMapeosFlujo();
+  if (!all[empresa]) all[empresa] = {};
+  const k = cA + '|' + cB;
+  const arr = (all[empresa][k] || []).filter(m => m.keyA !== keyA && m.keyB !== keyB);
+  arr.push({ keyA, keyB });
+  all[empresa][k] = arr;
+  _saveMapeosFlujoLS(all);
+}
+function _borrarMapeoFlujoLS(empresa, cA, cB, keyA) {
+  const all = _loadMapeosFlujo();
+  const k = cA + '|' + cB;
+  if (!all[empresa]?.[k]) return;
+  all[empresa][k] = all[empresa][k].filter(m => m.keyA !== keyA);
+  _saveMapeosFlujoLS(all);
+}
+function _borrarTodosMapeosFlujoLS(empresa, cA, cB) {
+  const all = _loadMapeosFlujo();
+  if (all[empresa]) delete all[empresa][cA + '|' + cB];
+  _saveMapeosFlujoLS(all);
+}
+function _mapeoClickA(keyA) {
+  _mapeoState.selKeyA = (_mapeoState.selKeyA === keyA) ? null : keyA;
+  document.querySelectorAll('[data-mapeo-a]').forEach(el => {
+    const act = el.dataset.mapeoA === _mapeoState.selKeyA;
+    el.style.background   = act ? 'rgba(71,255,180,.18)' : '';
+    el.style.borderColor  = act ? '#2ecc8a' : 'var(--bd)';
+    el.style.color        = act ? '#1a9e68' : 'var(--text)';
+  });
+  const inst = document.getElementById('mapeo-instruccion');
+  if (inst) inst.textContent = _mapeoState.selKeyA
+    ? 'Ahora seleccioná el concepto equivalente del período anterior (derecha).'
+    : 'Seleccioná un concepto del período actual (izquierda), luego su equivalente en el período anterior (derecha).';
+}
+function _mapeoClickB(keyB) {
+  if (!_mapeoState.selKeyA) {
+    const inst = document.getElementById('mapeo-instruccion');
+    if (inst) {
+      const orig = inst.textContent;
+      inst.textContent = '⚠ Primero seleccioná un concepto de la izquierda.';
+      inst.style.color = 'var(--neg)';
+      setTimeout(() => { if (inst) { inst.textContent = orig; inst.style.color = 'var(--dim)'; } }, 2500);
+    }
+    return;
+  }
+  _guardarMapeoFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, _mapeoState.selKeyA, keyB);
+  _mapeoState.selKeyA = null;
+  buildComparacionFlujos();
+}
+function _mapeoBorrar(keyA) {
+  _borrarMapeoFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, keyA);
+  buildComparacionFlujos();
+}
+function _mapeoBorrarTodos() {
+  if (!confirm('¿Borrar todos los vínculos manuales para esta comparación?')) return;
+  _borrarTodosMapeosFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB);
+  buildComparacionFlujos();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildComparacionFlujos() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
@@ -11514,6 +11586,13 @@ function buildComparacionFlujos() {
   const fA_raw = DATA.flujos[claveA]; // actual
   const fB_raw = DATA.flujos[claveB]; // anterior
   if (!fA_raw || !fB_raw) return;
+
+  // Manual rubro mappings
+  const _mapeos = _getMapeosFlujo(fA_raw.empresa, claveA, claveB);
+  _mapeoState.empresa = fA_raw.empresa;
+  _mapeoState.claveA  = claveA;
+  _mapeoState.claveB  = claveB;
+  const _manualByKeyA = new Map(_mapeos.map(m => [m.keyA, m.keyB]));
 
   // ── Normalizar a la misma cantidad de meses ───────────────────────
   const mesA = _mesesFlujo(fA_raw), mesB = _mesesFlujo(fB_raw);
@@ -11599,9 +11678,20 @@ function buildComparacionFlujos() {
   const labelsBByShort = new Map(fB.rubros.map(r => [_normShort(r.label), r]));
   const labelsBByWords = new Map(fB.rubros.map(r => [_normWords(r.label), r]));
 
-  // Merge: para cada rubro A buscar su par en B por key → label completo → prefijo → palabras clave
+  // Merge: para cada rubro A buscar su par en B:
+  //   0. Mapeo manual explícito (usuario)
+  //   1. Key exacto
+  //   2. Label completo normalizado
+  //   3. Prefijo 28 chars
+  //   4. Conjunto de palabras clave
   const _bMatched = new Set();
   const _merged = fA.rubros.map(rA => {
+    // 0. Manual override
+    if (_manualByKeyA.has(rA.key)) {
+      const bKey = _manualByKeyA.get(rA.key);
+      const rB_man = fB.rubros.find(r => r.key === bKey);
+      if (rB_man) { _bMatched.add(rB_man.key); return { rA, rB: rB_man, _manual: true }; }
+    }
     let rB = labelsB.get(rA.key);
     if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label).substring(0,60)) || null;
     if (!rB) rB = labelsBByShort.get(_normShort(rA.label)) || null;
@@ -11654,22 +11744,86 @@ function buildComparacionFlujos() {
     warnB.style.cssText = 'margin:0 0 10px';
     wrap.insertBefore(warnB, wrap.firstChild);
   }
+  // Build mapping panel data
+  const _soloA = _merged.filter(({rA,rB}) => rA && !rB); // A unmatched
+  const _soloB = _merged.filter(({rA,rB}) => !rA && rB); // B unmatched
+  const _manPares = _merged.filter(({_manual}) => _manual); // manually linked
+
   if (bSinRubros) {
     warnB.innerHTML = `<div style="background:#2a1000;border:1px solid #ff8c47;border-radius:4px;
       padding:8px 14px;font-size:8.5pt;font-family:var(--mono);color:#ff8c47">
       ⚠ El período anterior (<strong>${fB_raw.periodo}</strong>) no tiene detalle de rubros cargado —
       fue restaurado desde Sheets sin datos de rubros. Re-importá el Excel de ese período para recuperar el desglose completo.
     </div>`;
-  } else if (formatoDif) {
-    warnB.innerHTML = `<div style="background:#1a1400;border:1px solid #e8c84a55;border-radius:4px;
-      padding:10px 16px;font-size:8.5px;font-family:var(--mono);color:#e8c84a;line-height:1.6">
-      ⚡ Formatos distintos entre períodos — ${nMatched} concepto${nMatched!==1?'s':''} en común,
-      ${nAonly} solo en <strong>${fA.periodo}</strong>, ${nBonly} solo en <strong>${fB.periodo}</strong>.
-      <span style="color:var(--dim)">El resumen agregado (totales) es siempre comparable.
-      El detalle de rubros marca en gris los conceptos sin par.</span>
-    </div>`;
   } else {
-    warnB.innerHTML = '';
+    // Always show format status + mapping panel when there are unmatched rubros or manual links
+    const hasUnmatched = _soloA.length > 0 || _soloB.length > 0;
+    const showPanel = formatoDif || _mapeos.length > 0 || hasUnmatched;
+    const panelExpanded = formatoDif || _mapeos.length > 0;
+
+    const _btnRubroA = (rA) => `<button data-mapeo-a="${rA.key}" onclick="_mapeoClickA('${rA.key.replace(/'/g,'\\\'')}')"
+      style="display:block;width:100%;text-align:left;padding:5px 8px;margin-bottom:3px;background:;border:1px solid var(--bd);
+      border-radius:3px;font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .15s"
+      title="${(rA.label||'').replace(/"/g,'&quot;')}">${(rA.label||'').substring(0,46)}${(rA.label||'').length>46?'…':''}</button>`;
+    const _btnRubroB = (rB) => `<button onclick="_mapeoClickB('${rB.key.replace(/'/g,'\\\'')}')"
+      style="display:block;width:100%;text-align:left;padding:5px 8px;margin-bottom:3px;background:;border:1px solid var(--bd);
+      border-radius:3px;font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .15s"
+      onmouseover="this.style.background='rgba(71,200,255,.12)'" onmouseout="this.style.background=''"
+      title="${(rB.label||'').replace(/"/g,'&quot;')}">${(rB.label||'').substring(0,46)}${(rB.label||'').length>46?'…':''}</button>`;
+
+    const _manualSection = _manPares.length ? `
+      <div style="margin-bottom:10px">
+        <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">
+          Vínculos definidos (${_manPares.length})
+          <button onclick="_mapeoBorrarTodos()" style="margin-left:8px;padding:1px 6px;background:rgba(255,71,102,.1);
+            border:1px solid rgba(255,71,102,.3);border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer">
+            Borrar todos
+          </button>
+        </div>
+        ${_manPares.map(({rA,rB}) => `
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:8px;font-family:var(--mono)">
+            <span style="flex:1;color:#2ecc8a;padding:3px 6px;background:rgba(71,255,180,.06);border-radius:2px">${(rA.label||'').substring(0,38)}</span>
+            <span style="color:var(--dim)">↔</span>
+            <span style="flex:1;color:var(--dim);padding:3px 6px;background:var(--s3);border-radius:2px">${(rB.label||'').substring(0,38)}</span>
+            <button onclick="_mapeoBorrar('${(rA.key||'').replace(/'/g,'\\\'')}' )" style="padding:1px 5px;background:rgba(255,71,102,.1);
+              border:1px solid rgba(255,71,102,.3);border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer" title="Quitar vínculo">✕</button>
+          </div>`).join('')}
+      </div>` : '';
+
+    const _columnsSection = (hasUnmatched && showPanel) ? `
+      <div id="mapeo-instruccion" style="font-size:8px;color:var(--dim);margin-bottom:8px">
+        Seleccioná un concepto del período actual (izquierda), luego su equivalente en el período anterior (derecha).
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:7.5px;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;font-family:var(--mono)">
+            Sin equivalente — ${fA.periodo} (${_soloA.length})
+          </div>
+          ${_soloA.length ? _soloA.map(({rA}) => _btnRubroA(rA)).join('') : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
+        </div>
+        <div>
+          <div style="font-size:7.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;font-family:var(--mono)">
+            Sin equivalente — ${fB.periodo} (${_soloB.length})
+          </div>
+          ${_soloB.length ? _soloB.map(({rB}) => _btnRubroB(rB)).join('') : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
+        </div>
+      </div>` : '';
+
+    const warnMsg = formatoDif ? `<div style="font-size:8.5px;color:#e8c84a;line-height:1.6;margin-bottom:${showPanel?'10px':'0'}">
+      ⚡ Formatos distintos — ${nMatched} concepto${nMatched!==1?'s':''} en común,
+      ${nAonly} solo en <strong>${fA.periodo}</strong>, ${nBonly} solo en <strong>${fB.periodo}</strong>.
+      <span style="color:var(--dim)">Usá el panel de abajo para vincular conceptos equivalentes.</span>
+    </div>` : (hasUnmatched ? `<div style="font-size:8px;color:var(--dim);line-height:1.5;margin-bottom:${showPanel?'10px':'0'}">
+      ${nAonly+nBonly} concepto${nAonly+nBonly!==1?'s':''} sin equivalente — podés vincularlos manualmente abajo.
+    </div>` : '');
+
+    warnB.innerHTML = showPanel ? `
+      <div style="background:var(--s2);border:1px solid ${formatoDif?'#e8c84a55':'var(--bd)'};border-radius:4px;
+        padding:12px 16px;font-family:var(--mono);margin-bottom:6px">
+        ${warnMsg}
+        ${_manualSection}
+        ${_columnsSection}
+      </div>` : warnMsg;
   }
 
   // ── Resumen agregado — siempre comparable independientemente del formato ──
@@ -11794,7 +11948,7 @@ function buildComparacionFlujos() {
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:#e8c84a;font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Variación real usando fórmula Fisher: (1+nom)/(1+ipc)−1">Var. real</th>
     ${ipcProy?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Proyección del período siguiente aplicando IPC ${ipcProy}% sobre el período actual">Proyec. +${ipcProy}%</th>`:''}
   </tr></thead><tbody>` +
-  _merged.map(({rA, rB}) => {
+  _merged.map(({rA, rB, _manual}) => {
     const vA = rA?.actual ?? null;
     const vB = rB?.actual ?? null;
     const lbl = rA?.label || rB?.label || '';
@@ -11812,6 +11966,13 @@ function buildComparacionFlujos() {
     const isIng = tipo === 'ingreso';
     const cv = vn==null?'var(--dim)': isIng ? (vn>0?'var(--pos)':'var(--neg)') : (vn>0?'var(--neg)':'var(--pos)');
     const cr = vr==null?'var(--dim)': isIng ? (vr>0?'var(--pos)':'var(--neg)') : (vr>0?'var(--neg)':'var(--pos)');
+    // Show B label separately when manually linked (different terminology)
+    const bLabelDif = _manual && rB && rB.label !== rA.label
+      ? `<span style="font-size:7px;color:var(--dim);margin-left:5px;opacity:.7" title="Vinculado manualmente a: ${(rB.label||'').replace(/"/g,'&quot;')}">↔ ${(rB.label||'').substring(0,30)}${(rB.label||'').length>30?'…':''}</span>`
+      : '';
+    const manualTag = _manual
+      ? `<span style="font-size:6.5px;color:#e8c84a;margin-left:4px;opacity:.8" title="Vínculo manual">⚙</span>`
+      : '';
     const etiquetaSinPar = soloA
       ? `<span style="font-size:7.5px;color:var(--dim);opacity:.6;margin-left:5px" title="Concepto sin equivalente en el período anterior">solo ${fA.periodo}</span>`
       : soloB
@@ -11819,7 +11980,7 @@ function buildComparacionFlujos() {
       : '';
     const opacidad = sinPar ? 'opacity:.55' : '';
     return `<tr style="background:${st.bg};${st.bt};${opacidad}">
-      <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${etiquetaSinPar}</td>
+      <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${bLabelDif}${etiquetaSinPar}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};border-bottom:1px solid var(--bd2)">${fmtM(vA)}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtM(vB)}</td>
       ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtMEq(vBEq)}</td>`:''}
