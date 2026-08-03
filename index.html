@@ -11490,8 +11490,8 @@ function _normalizarFlujoMeses(f, targetMeses) {
   });
 }
 
-// ── Mapeo manual de rubros entre períodos con distinto formato ────────────────
-var _mapeoState = { selKeyA: null, empresa: null, claveA: null, claveB: null };
+// ── Mapeo manual de rubros entre períodos — selección múltiple N:M ───────────
+var _mapeoState = { selA: new Set(), selB: new Set(), empresa: null, claveA: null, claveB: null };
 
 function _loadMapeosFlujo() {
   try { return JSON.parse(localStorage.getItem('lr_flujos_mapeos_v1') || '{}'); } catch(e) { return {}; }
@@ -11500,22 +11500,32 @@ function _saveMapeosFlujoLS(m) {
   try { localStorage.setItem('lr_flujos_mapeos_v1', JSON.stringify(m)); } catch(e) {}
 }
 function _getMapeosFlujo(empresa, cA, cB) {
-  return ((_loadMapeosFlujo()[empresa] || {})[cA + '|' + cB]) || [];
+  const raw = ((_loadMapeosFlujo()[empresa] || {})[cA + '|' + cB]) || [];
+  // Normalizar formato antiguo {keyA,keyB} → nuevo {keysA,keysB}
+  return raw.map(g => ({
+    keysA: g.keysA || (g.keyA ? [g.keyA] : []),
+    keysB: g.keysB || (g.keyB ? [g.keyB] : []),
+  })).filter(g => g.keysA.length > 0 && g.keysB.length > 0);
 }
-function _guardarMapeoFlujoLS(empresa, cA, cB, keyA, keyB) {
+function _guardarMapeoFlujoLS(empresa, cA, cB, keysA, keysB) {
   const all = _loadMapeosFlujo();
   if (!all[empresa]) all[empresa] = {};
   const k = cA + '|' + cB;
-  const arr = (all[empresa][k] || []).filter(m => m.keyA !== keyA && m.keyB !== keyB);
-  arr.push({ keyA, keyB });
+  // Eliminar grupos existentes que solapen con las keys nuevas
+  const arr = (all[empresa][k] || []).filter(g => {
+    const gA = g.keysA || (g.keyA ? [g.keyA] : []);
+    const gB = g.keysB || (g.keyB ? [g.keyB] : []);
+    return !gA.some(x => keysA.includes(x)) && !gB.some(x => keysB.includes(x));
+  });
+  arr.push({ keysA, keysB });
   all[empresa][k] = arr;
   _saveMapeosFlujoLS(all);
 }
-function _borrarMapeoFlujoLS(empresa, cA, cB, keyA) {
+function _borrarMapeoFlujoLS(empresa, cA, cB, idx) {
   const all = _loadMapeosFlujo();
   const k = cA + '|' + cB;
   if (!all[empresa]?.[k]) return;
-  all[empresa][k] = all[empresa][k].filter(m => m.keyA !== keyA);
+  all[empresa][k].splice(idx, 1);
   _saveMapeosFlujoLS(all);
 }
 function _borrarTodosMapeosFlujoLS(empresa, cA, cB) {
@@ -11523,36 +11533,63 @@ function _borrarTodosMapeosFlujoLS(empresa, cA, cB) {
   if (all[empresa]) delete all[empresa][cA + '|' + cB];
   _saveMapeosFlujoLS(all);
 }
-function _mapeoClickA(keyA) {
-  _mapeoState.selKeyA = (_mapeoState.selKeyA === keyA) ? null : keyA;
-  document.querySelectorAll('[data-mapeo-a]').forEach(el => {
-    const act = el.dataset.mapeoA === _mapeoState.selKeyA;
-    el.style.background   = act ? 'rgba(71,255,180,.18)' : '';
-    el.style.borderColor  = act ? '#2ecc8a' : 'var(--bd)';
-    el.style.color        = act ? '#1a9e68' : 'var(--text)';
-  });
-  const inst = document.getElementById('mapeo-instruccion');
-  if (inst) inst.textContent = _mapeoState.selKeyA
-    ? 'Ahora seleccioná el concepto equivalente del período anterior (derecha).'
-    : 'Seleccioná un concepto del período actual (izquierda), luego su equivalente en el período anterior (derecha).';
+
+function _mapeoToggleA(keyA) {
+  if (_mapeoState.selA.has(keyA)) _mapeoState.selA.delete(keyA);
+  else _mapeoState.selA.add(keyA);
+  _mapeoRefreshUI();
 }
-function _mapeoClickB(keyB) {
-  if (!_mapeoState.selKeyA) {
-    const inst = document.getElementById('mapeo-instruccion');
-    if (inst) {
-      const orig = inst.textContent;
-      inst.textContent = '⚠ Primero seleccioná un concepto de la izquierda.';
-      inst.style.color = 'var(--neg)';
-      setTimeout(() => { if (inst) { inst.textContent = orig; inst.style.color = 'var(--dim)'; } }, 2500);
-    }
-    return;
+function _mapeoToggleB(keyB) {
+  if (_mapeoState.selB.has(keyB)) _mapeoState.selB.delete(keyB);
+  else _mapeoState.selB.add(keyB);
+  _mapeoRefreshUI();
+}
+function _mapeoRefreshUI() {
+  document.querySelectorAll('[data-mapeo-a]').forEach(el => {
+    const act = _mapeoState.selA.has(el.dataset.mapeoA);
+    el.style.background  = act ? 'rgba(71,255,180,.18)' : '';
+    el.style.borderColor = act ? '#2ecc8a' : 'var(--bd)';
+    el.style.color       = act ? '#1a9e68' : 'var(--text)';
+    el.style.fontWeight  = act ? '600' : '400';
+  });
+  document.querySelectorAll('[data-mapeo-b]').forEach(el => {
+    const act = _mapeoState.selB.has(el.dataset.mapeoB);
+    el.style.background  = act ? 'rgba(71,200,255,.18)' : '';
+    el.style.borderColor = act ? '#47e8ff' : 'var(--bd)';
+    el.style.color       = act ? '#47e8ff' : 'var(--text)';
+    el.style.fontWeight  = act ? '600' : '400';
+  });
+  const nA = _mapeoState.selA.size, nB = _mapeoState.selB.size;
+  const btn = document.getElementById('mapeo-btn-vincular');
+  if (btn) {
+    const listo = nA > 0 && nB > 0;
+    btn.disabled = !listo;
+    btn.style.opacity = listo ? '1' : '.35';
+    btn.style.cursor  = listo ? 'pointer' : 'default';
+    btn.textContent   = listo
+      ? `Vincular (${nA} actual${nA!==1?'s':''} + ${nB} anterior${nB!==1?'s':''})`
+      : 'Vincular seleccionados';
   }
-  _guardarMapeoFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, _mapeoState.selKeyA, keyB);
-  _mapeoState.selKeyA = null;
+  const inst = document.getElementById('mapeo-instruccion');
+  if (!inst) return;
+  inst.style.color = 'var(--dim)';
+  if (nA > 0 && nB > 0) inst.textContent = `${nA} concepto${nA!==1?'s':''} del período actual y ${nB} del anterior seleccionados. Hacé clic en Vincular.`;
+  else if (nA > 0)       inst.textContent = `${nA} seleccionado${nA!==1?'s':''}. Ahora elegí uno o más del período anterior (derecha).`;
+  else if (nB > 0)       inst.textContent = `${nB} del período anterior seleccionado${nB!==1?'s':''}. Ahora elegí uno o más del período actual (izquierda).`;
+  else                   inst.textContent = 'Seleccioná uno o más conceptos de cada período y hacé clic en Vincular.';
+}
+function _mapeoVincular() {
+  if (_mapeoState.selA.size === 0 || _mapeoState.selB.size === 0) return;
+  _guardarMapeoFlujoLS(
+    _mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB,
+    [..._mapeoState.selA], [..._mapeoState.selB]
+  );
+  _mapeoState.selA.clear();
+  _mapeoState.selB.clear();
   buildComparacionFlujos();
 }
-function _mapeoBorrar(keyA) {
-  _borrarMapeoFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, keyA);
+function _mapeoBorrar(idx) {
+  _borrarMapeoFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, idx);
   buildComparacionFlujos();
 }
 function _mapeoBorrarTodos() {
@@ -11587,12 +11624,14 @@ function buildComparacionFlujos() {
   const fB_raw = DATA.flujos[claveB]; // anterior
   if (!fA_raw || !fB_raw) return;
 
-  // Manual rubro mappings
+  // Manual rubro mappings (N:M groups)
   const _mapeos = _getMapeosFlujo(fA_raw.empresa, claveA, claveB);
   _mapeoState.empresa = fA_raw.empresa;
   _mapeoState.claveA  = claveA;
   _mapeoState.claveB  = claveB;
-  const _manualByKeyA = new Map(_mapeos.map(m => [m.keyA, m.keyB]));
+  // Sets of keys belonging to any manual group
+  const _manualKeySetA = new Set(_mapeos.flatMap(g => g.keysA));
+  const _manualKeySetB = new Set(_mapeos.flatMap(g => g.keysB));
 
   // ── Normalizar a la misma cantidad de meses ───────────────────────
   const mesA = _mesesFlujo(fA_raw), mesB = _mesesFlujo(fB_raw);
@@ -11678,28 +11717,42 @@ function buildComparacionFlujos() {
   const labelsBByShort = new Map(fB.rubros.map(r => [_normShort(r.label), r]));
   const labelsBByWords = new Map(fB.rubros.map(r => [_normWords(r.label), r]));
 
-  // Merge: para cada rubro A buscar su par en B:
-  //   0. Mapeo manual explícito (usuario)
-  //   1. Key exacto
-  //   2. Label completo normalizado
-  //   3. Prefijo 28 chars
-  //   4. Conjunto de palabras clave
+  // Merge: grupos manuales primero, luego auto-matching para el resto
   const _bMatched = new Set();
-  const _merged = fA.rubros.map(rA => {
-    // 0. Manual override
-    if (_manualByKeyA.has(rA.key)) {
-      const bKey = _manualByKeyA.get(rA.key);
-      const rB_man = fB.rubros.find(r => r.key === bKey);
-      if (rB_man) { _bMatched.add(rB_man.key); return { rA, rB: rB_man, _manual: true }; }
-    }
-    let rB = labelsB.get(rA.key);
-    if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label).substring(0,60)) || null;
-    if (!rB) rB = labelsBByShort.get(_normShort(rA.label)) || null;
-    if (!rB) { const w = _normWords(rA.label); if (w.length > 4) rB = labelsBByWords.get(w) || null; }
-    if (rB) _bMatched.add(rB.key);
-    return { rA, rB };
+
+  // 0. Grupos manuales N:M — se pre-registran en _bMatched y generan filas sintéticas
+  const _groupRows = [];
+  _mapeos.forEach(g => {
+    const rubrosA = g.keysA.map(k => fA.rubros.find(r => r.key === k)).filter(Boolean);
+    const rubrosB = g.keysB.map(k => fB.rubros.find(r => r.key === k)).filter(Boolean);
+    g.keysB.forEach(k => _bMatched.add(k)); // marcar B como pareados
+    if (!rubrosA.length && !rubrosB.length) return;
+    const sumA = rubrosA.reduce((s, r) => s + (r.actual || 0), 0);
+    const sumB = rubrosB.reduce((s, r) => s + (r.actual || 0), 0);
+    const tipo = (rubrosA[0] || rubrosB[0])?.tipo || 'egreso';
+    const lblA = rubrosA.map(r => r.label || '').join(' + ');
+    const lblB = rubrosB.map(r => r.label || '').join(' + ');
+    // Rubros sintéticos que representan la suma del grupo
+    const synA = rubrosA.length ? { key: g.keysA[0], label: lblA, actual: sumA, tipo, esTotal: false } : null;
+    const synB = rubrosB.length ? { key: g.keysB[0], label: lblB, actual: sumB, tipo, esTotal: false } : null;
+    _groupRows.push({ rA: synA, rB: synB, _manual: true });
   });
-  // Agregar rubros B que no tuvieron par en A
+
+  // 1–4. Auto-matching para rubros que no pertenecen a ningún grupo manual
+  const _autoMerged = fA.rubros
+    .filter(rA => !_manualKeySetA.has(rA.key))
+    .map(rA => {
+      let rB = labelsB.get(rA.key);
+      if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label).substring(0,60)) || null;
+      if (!rB) rB = labelsBByShort.get(_normShort(rA.label)) || null;
+      if (!rB) { const w = _normWords(rA.label); if (w.length > 4) rB = labelsBByWords.get(w) || null; }
+      if (rB) _bMatched.add(rB.key);
+      return { rA, rB };
+    });
+
+  const _merged = [..._groupRows, ..._autoMerged];
+
+  // Agregar rubros B sin par (excluye los de grupos manuales que ya están en _bMatched)
   fB.rubros.forEach(rB => { if (!_bMatched.has(rB.key)) _merged.push({ rA: null, rB }); });
   // Compatibilidad: allKeys para gráficos que aún lo usan
   const labelsA_compat = labelsA;
@@ -11744,10 +11797,13 @@ function buildComparacionFlujos() {
     warnB.style.cssText = 'margin:0 0 10px';
     wrap.insertBefore(warnB, wrap.firstChild);
   }
-  // Build mapping panel data
-  const _soloA = _merged.filter(({rA,rB}) => rA && !rB); // A unmatched
-  const _soloB = _merged.filter(({rA,rB}) => !rA && rB); // B unmatched
-  const _manPares = _merged.filter(({_manual}) => _manual); // manually linked
+  // ── Panel de mapeo manual ─────────────────────────────────────────
+  // Rubros sin equivalente (excluir los que son miembros de grupos manuales)
+  const _soloA = _merged.filter(({rA,rB}) => rA && !rB && !_manualKeySetA.has(rA.key));
+  const _soloB = _merged.filter(({rA,rB}) => !rA && rB && !_manualKeySetB.has(rB.key));
+  // Grupos manuales definidos (usa _mapeos directamente para mostrar keys originales)
+  const hasUnmatched = _soloA.length > 0 || _soloB.length > 0;
+  const showPanel    = !bSinRubros && (formatoDif || _mapeos.length > 0 || hasUnmatched);
 
   if (bSinRubros) {
     warnB.innerHTML = `<div style="background:#2a1000;border:1px solid #ff8c47;border-radius:4px;
@@ -11756,72 +11812,108 @@ function buildComparacionFlujos() {
       fue restaurado desde Sheets sin datos de rubros. Re-importá el Excel de ese período para recuperar el desglose completo.
     </div>`;
   } else {
-    // Always show format status + mapping panel when there are unmatched rubros or manual links
-    const hasUnmatched = _soloA.length > 0 || _soloB.length > 0;
-    const showPanel = formatoDif || _mapeos.length > 0 || hasUnmatched;
-    const panelExpanded = formatoDif || _mapeos.length > 0;
+    const _esc = s => (s||'').replace(/'/g,'\\\'').replace(/"/g,'&quot;');
+    const _lbl = (s, n) => { const t = (s||'').trim(); return t.length > n ? t.substring(0,n)+'…' : t; };
 
-    const _btnRubroA = (rA) => `<button data-mapeo-a="${rA.key}" onclick="_mapeoClickA('${rA.key.replace(/'/g,'\\\'')}')"
-      style="display:block;width:100%;text-align:left;padding:5px 8px;margin-bottom:3px;background:;border:1px solid var(--bd);
-      border-radius:3px;font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .15s"
-      title="${(rA.label||'').replace(/"/g,'&quot;')}">${(rA.label||'').substring(0,46)}${(rA.label||'').length>46?'…':''}</button>`;
-    const _btnRubroB = (rB) => `<button onclick="_mapeoClickB('${rB.key.replace(/'/g,'\\\'')}')"
-      style="display:block;width:100%;text-align:left;padding:5px 8px;margin-bottom:3px;background:;border:1px solid var(--bd);
-      border-radius:3px;font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .15s"
-      onmouseover="this.style.background='rgba(71,200,255,.12)'" onmouseout="this.style.background=''"
-      title="${(rB.label||'').replace(/"/g,'&quot;')}">${(rB.label||'').substring(0,46)}${(rB.label||'').length>46?'…':''}</button>`;
+    // Botón de rubro A (toggle)
+    const _btnA = (rA) => `<button data-mapeo-a="${_esc(rA.key)}"
+      onclick="_mapeoToggleA('${_esc(rA.key)}')"
+      style="display:block;width:100%;text-align:left;padding:5px 9px;margin-bottom:3px;
+      background:;border:1px solid var(--bd);border-radius:3px;
+      font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .12s"
+      title="${_esc(rA.label)}">${_lbl(rA.label, 48)}</button>`;
 
-    const _manualSection = _manPares.length ? `
+    // Botón de rubro B (toggle)
+    const _btnB = (rB) => `<button data-mapeo-b="${_esc(rB.key)}"
+      onclick="_mapeoToggleB('${_esc(rB.key)}')"
+      style="display:block;width:100%;text-align:left;padding:5px 9px;margin-bottom:3px;
+      background:;border:1px solid var(--bd);border-radius:3px;
+      font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .12s"
+      title="${_esc(rB.label)}">${_lbl(rB.label, 48)}</button>`;
+
+    // Sección de vínculos existentes
+    const _gruposSection = _mapeos.length ? `
       <div style="margin-bottom:10px">
-        <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px">
-          Vínculos definidos (${_manPares.length})
-          <button onclick="_mapeoBorrarTodos()" style="margin-left:8px;padding:1px 6px;background:rgba(255,71,102,.1);
-            border:1px solid rgba(255,71,102,.3);border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer">
-            Borrar todos
-          </button>
+        <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;
+          margin-bottom:5px;display:flex;align-items:center;gap:8px">
+          Vínculos definidos (${_mapeos.length})
+          <button onclick="_mapeoBorrarTodos()" style="padding:1px 7px;background:rgba(255,71,102,.1);
+            border:1px solid rgba(255,71,102,.25);border-radius:2px;font-size:7px;color:var(--neg);
+            cursor:pointer;letter-spacing:0;text-transform:none">Borrar todos</button>
         </div>
-        ${_manPares.map(({rA,rB}) => `
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:8px;font-family:var(--mono)">
-            <span style="flex:1;color:#2ecc8a;padding:3px 6px;background:rgba(71,255,180,.06);border-radius:2px">${(rA.label||'').substring(0,38)}</span>
-            <span style="color:var(--dim)">↔</span>
-            <span style="flex:1;color:var(--dim);padding:3px 6px;background:var(--s3);border-radius:2px">${(rB.label||'').substring(0,38)}</span>
-            <button onclick="_mapeoBorrar('${(rA.key||'').replace(/'/g,'\\\'')}' )" style="padding:1px 5px;background:rgba(255,71,102,.1);
-              border:1px solid rgba(255,71,102,.3);border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer" title="Quitar vínculo">✕</button>
-          </div>`).join('')}
+        ${_mapeos.map((g, idx) => {
+          const lblA = g.keysA.map(k => {
+            const r = fA.rubros.find(r => r.key === k);
+            return r ? _lbl(r.label, 30) : k;
+          }).join(' <span style="opacity:.5">+</span> ');
+          const lblB = g.keysB.map(k => {
+            const r = fB.rubros.find(r => r.key === k);
+            return r ? _lbl(r.label, 30) : k;
+          }).join(' <span style="opacity:.5">+</span> ');
+          return `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;
+            font-size:8px;font-family:var(--mono)">
+            <span style="flex:1;color:#2ecc8a;padding:3px 6px;background:rgba(71,255,180,.06);
+              border-radius:2px;line-height:1.4">${lblA}</span>
+            <span style="color:var(--dim);padding-top:3px;flex-shrink:0">↔</span>
+            <span style="flex:1;color:var(--dim);padding:3px 6px;background:var(--s3);
+              border-radius:2px;line-height:1.4">${lblB}</span>
+            <button onclick="_mapeoBorrar(${idx})" style="padding:1px 5px;flex-shrink:0;
+              background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);
+              border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer;margin-top:1px"
+              title="Quitar vínculo">✕</button>
+          </div>`;
+        }).join('')}
       </div>` : '';
 
-    const _columnsSection = (hasUnmatched && showPanel) ? `
-      <div id="mapeo-instruccion" style="font-size:8px;color:var(--dim);margin-bottom:8px">
-        Seleccioná un concepto del período actual (izquierda), luego su equivalente en el período anterior (derecha).
+    // Columnas de selección
+    const _columnsSection = hasUnmatched ? `
+      <div id="mapeo-instruccion" style="font-size:8px;color:var(--dim);margin-bottom:8px;line-height:1.5">
+        Seleccioná uno o más conceptos de cada período y hacé clic en <strong>Vincular</strong>.
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
         <div>
-          <div style="font-size:7.5px;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;font-family:var(--mono)">
+          <div style="font-size:7.5px;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;
+            margin-bottom:5px;font-family:var(--mono)">
             Sin equivalente — ${fA.periodo} (${_soloA.length})
           </div>
-          ${_soloA.length ? _soloA.map(({rA}) => _btnRubroA(rA)).join('') : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
+          ${_soloA.length
+            ? _soloA.map(({rA}) => _btnA(rA)).join('')
+            : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
         </div>
         <div>
-          <div style="font-size:7.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;font-family:var(--mono)">
+          <div style="font-size:7.5px;color:#47e8ff99;letter-spacing:.08em;text-transform:uppercase;
+            margin-bottom:5px;font-family:var(--mono)">
             Sin equivalente — ${fB.periodo} (${_soloB.length})
           </div>
-          ${_soloB.length ? _soloB.map(({rB}) => _btnRubroB(rB)).join('') : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
+          ${_soloB.length
+            ? _soloB.map(({rB}) => _btnB(rB)).join('')
+            : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
         </div>
-      </div>` : '';
+      </div>
+      <button id="mapeo-btn-vincular" onclick="_mapeoVincular()" disabled
+        style="padding:6px 16px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
+        border-radius:3px;font-family:var(--mono);font-size:8.5px;color:#2ecc8a;
+        cursor:default;opacity:.35;transition:all .15s;display:block">
+        Vincular seleccionados
+      </button>` : '';
 
-    const warnMsg = formatoDif ? `<div style="font-size:8.5px;color:#e8c84a;line-height:1.6;margin-bottom:${showPanel?'10px':'0'}">
-      ⚡ Formatos distintos — ${nMatched} concepto${nMatched!==1?'s':''} en común,
-      ${nAonly} solo en <strong>${fA.periodo}</strong>, ${nBonly} solo en <strong>${fB.periodo}</strong>.
-      <span style="color:var(--dim)">Usá el panel de abajo para vincular conceptos equivalentes.</span>
-    </div>` : (hasUnmatched ? `<div style="font-size:8px;color:var(--dim);line-height:1.5;margin-bottom:${showPanel?'10px':'0'}">
-      ${nAonly+nBonly} concepto${nAonly+nBonly!==1?'s':''} sin equivalente — podés vincularlos manualmente abajo.
-    </div>` : '');
+    const warnMsg = formatoDif
+      ? `<div style="font-size:8.5px;color:#e8c84a;line-height:1.6;margin-bottom:10px">
+          ⚡ Formatos distintos — ${nMatched} concepto${nMatched!==1?'s':''} en común,
+          ${nAonly} solo en <strong>${fA.periodo}</strong>, ${nBonly} solo en <strong>${fB.periodo}</strong>.
+          <span style="color:var(--dim)">El resumen de totales es siempre comparable. Usá el panel de abajo para vincular conceptos equivalentes.</span>
+        </div>`
+      : (hasUnmatched
+          ? `<div style="font-size:8px;color:var(--dim);line-height:1.5;margin-bottom:10px">
+              ${nAonly+nBonly} concepto${nAonly+nBonly!==1?'s':''} sin equivalente — podés vincularlos manualmente abajo.
+            </div>`
+          : '');
 
     warnB.innerHTML = showPanel ? `
-      <div style="background:var(--s2);border:1px solid ${formatoDif?'#e8c84a55':'var(--bd)'};border-radius:4px;
-        padding:12px 16px;font-family:var(--mono);margin-bottom:6px">
+      <div style="background:var(--s2);border:1px solid ${formatoDif?'#e8c84a55':'var(--bd)'};
+        border-radius:4px;padding:12px 16px;font-family:var(--mono);margin-bottom:6px">
         ${warnMsg}
-        ${_manualSection}
+        ${_gruposSection}
         ${_columnsSection}
       </div>` : warnMsg;
   }
