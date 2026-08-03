@@ -11581,18 +11581,31 @@ function buildComparacionFlujos() {
   if (_btnComp) _btnComp.style.display = '';
 
   // Combinar rubros de ambos períodos con fallback por label normalizado
+  // Normalización multinivel para matching tolerante entre formatos
   const _normLbl = s => (s||'').toLowerCase()
     .replace(/[áàäâã]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
     .replace(/[óòöôõ]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
-    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().substring(0,60);
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  // Prefijo corto: primeras 28 chars — captura diferencias como "(SAC)" vs texto extra al final
+  const _normShort = s => _normLbl(s).substring(0, 28);
+  // Palabras clave: filtra stopwords y ordena — captura diferencias de orden o palabras extra
+  const _STOP = new Set(['de','del','la','las','el','los','y','a','en','por','con','sin','al','o','un','una']);
+  const _normWords = s => _normLbl(s).split(' ').filter(w => w.length > 2 && !_STOP.has(w)).sort().join(' ');
+
   const labelsA = new Map(fA.rubros.map(r => [r.key, r]));
   const labelsB = new Map(fB.rubros.map(r => [r.key, r]));
-  const labelsBByNorm = new Map(fB.rubros.map(r => [_normLbl(r.label), r]));
-  // Merge: para cada rubro A buscar su par en B por key o por label normalizado
+  // Tres mapas de B para los tres niveles de fallback
+  const labelsBByNorm  = new Map(fB.rubros.map(r => [_normLbl(r.label).substring(0,60), r]));
+  const labelsBByShort = new Map(fB.rubros.map(r => [_normShort(r.label), r]));
+  const labelsBByWords = new Map(fB.rubros.map(r => [_normWords(r.label), r]));
+
+  // Merge: para cada rubro A buscar su par en B por key → label completo → prefijo → palabras clave
   const _bMatched = new Set();
   const _merged = fA.rubros.map(rA => {
     let rB = labelsB.get(rA.key);
-    if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label)) || null;
+    if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label).substring(0,60)) || null;
+    if (!rB) rB = labelsBByShort.get(_normShort(rA.label)) || null;
+    if (!rB) { const w = _normWords(rA.label); if (w.length > 4) rB = labelsBByWords.get(w) || null; }
     if (rB) _bMatched.add(rB.key);
     return { rA, rB };
   });
@@ -12046,15 +12059,22 @@ function exportarFlujoExcel() {
 
   const labelsA = new Map(fA.rubros.map(r=>[r.key,r]));
   const labelsB = new Map(fB.rubros.map(r=>[r.key,r]));
-  const _normLblExp = s => (s||'').toLowerCase()
+  const _normLblExp  = s => (s||'').toLowerCase()
     .replace(/[áàäâã]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
     .replace(/[óòöôõ]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
-    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim().substring(0,60);
-  const labelsBByNormExp = new Map(fB.rubros.map(r=>[_normLblExp(r.label),r]));
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const _normShortExp = s => _normLblExp(s).substring(0, 28);
+  const _STOP_E = new Set(['de','del','la','las','el','los','y','a','en','por','con','sin','al','o','un','una']);
+  const _normWordsExp = s => _normLblExp(s).split(' ').filter(w=>w.length>2&&!_STOP_E.has(w)).sort().join(' ');
+  const labelsBByNormExp  = new Map(fB.rubros.map(r=>[_normLblExp(r.label).substring(0,60),r]));
+  const labelsBByShortExp = new Map(fB.rubros.map(r=>[_normShortExp(r.label),r]));
+  const labelsBByWordsExp = new Map(fB.rubros.map(r=>[_normWordsExp(r.label),r]));
   const _bMatchedExp = new Set();
   const _mergedExp = fA.rubros.map(rA => {
     let rB = labelsB.get(rA.key);
-    if (!rB) rB = labelsBByNormExp.get(_normLblExp(rA.label)) || null;
+    if (!rB) rB = labelsBByNormExp.get(_normLblExp(rA.label).substring(0,60)) || null;
+    if (!rB) rB = labelsBByShortExp.get(_normShortExp(rA.label)) || null;
+    if (!rB) { const w=_normWordsExp(rA.label); if(w.length>4) rB=labelsBByWordsExp.get(w)||null; }
     if (rB) _bMatchedExp.add(rB.key);
     return { rA, rB };
   });
