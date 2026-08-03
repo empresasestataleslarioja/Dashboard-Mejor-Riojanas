@@ -11134,9 +11134,12 @@ function _flujoIngTotal(f) {
   // Prioridad: totalizador de ingresos explícito
   const r = f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.esTotal)
          ?? f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.label?.toUpperCase().includes('TOTAL'))
-         ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL ING'))
-         ?? f.rubros.find(r2 => r2.tipo === 'ingreso');
-  return r?.actual ?? null;
+         ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL ING'));
+  if (r) return r.actual ?? null;
+  // Fallback: sumar todos los rubros de ingreso no-totalizadores (igual que _flujoEgrTotal)
+  const ingRows = (f.rubros||[]).filter(r2 => r2.tipo === 'ingreso' && !r2.esTotal && r2.actual != null);
+  if (ingRows.length) return ingRows.reduce((s, r2) => s + r2.actual, 0);
+  return null;
 }
 
 function _flujoEgrTotal(f) {
@@ -11970,11 +11973,12 @@ function buildComparacionFlujos() {
     const kpisEl = document.getElementById('flujo-kpis');
     if (kpisEl && kpisEl.parentNode) kpisEl.parentNode.insertBefore(resumenEl, kpisEl.nextSibling);
   }
+  // posEsBueno: para egresos/déficit, subir es malo; para ingresos, subir es bueno
   const _resRows = [
-    { lbl:'Total egresos',  vA: egrA, vB: egrB,  acento:'var(--neg)' },
-    ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)' }] : []),
-    { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)' },
-    ...(ipc&&necB ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: null, vB: necB*(1+ipc/100), acento:'var(--dim)', note:true }] : []),
+    { lbl:'Total egresos',  vA: egrA, vB: egrB,  acento:'var(--neg)', posEsBueno: false },
+    ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
+    { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
+    ...(ipc&&necB ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: necA, vB: necB*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
   ];
   resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
     padding:10px 16px;font-family:var(--mono)">
@@ -11989,13 +11993,30 @@ function buildComparacionFlujos() {
         <th style="text-align:right;font-size:8px;color:var(--dim);padding:3px 8px;border-bottom:1px solid var(--bd2)">Var.</th>
       </tr></thead>
       <tbody>${_resRows.map(row => {
-        const vp = _varPct(row.vA, row.vB);
         const nota = row.note ? ' style="opacity:.6;font-style:italic"' : '';
+        // Para fila resultado: detectar cambio de signo (déficit↔superávit)
+        let varCell;
+        if (row.esResultado && row.vA != null && row.vB != null) {
+          const aEsDeficit = row.vA < 0;
+          const bEsDeficit = row.vB < 0;
+          if (aEsDeficit !== bEsDeficit) {
+            // Cambio de signo: mostrar etiqueta cualitativa
+            varCell = `<span style="font-size:8px;font-weight:600;color:${aEsDeficit?'var(--neg)':'var(--pos)'}">${aEsDeficit?'→ DÉFICIT':'→ SUPERÁVIT'}</span>`;
+          } else {
+            const vp = _varPct(row.vA, row.vB);
+            const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
+            varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(1)}%</span>` : '—';
+          }
+        } else {
+          const vp = _varPct(row.vA, row.vB);
+          const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
+          varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(1)}%</span>` : '—';
+        }
         return `<tr${nota}>
           <td style="padding:4px 8px 4px 0;font-size:9px;color:var(--dim)">${row.lbl}</td>
           <td style="text-align:right;padding:4px 8px;font-size:9.5px;font-weight:700;color:${row.acento}">${_fmtMabs(row.vA)}</td>
           <td style="text-align:right;padding:4px 8px;font-size:9.5px;color:var(--dim)">${_fmtMabs(row.vB)}</td>
-          <td style="text-align:right;padding:4px 8px;font-size:9px">${vp!=null?`<span style="color:${vp>0?'var(--neg)':'var(--pos)'};font-weight:600">${vp>0?'+':''}${vp.toFixed(1)}%</span>`:'—'}</td>
+          <td style="text-align:right;padding:4px 8px;font-size:9px">${varCell}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -12005,7 +12026,7 @@ function buildComparacionFlujos() {
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Necesidad actual',     v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
     { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
-    { l:'Var. real (−IPC)',     v:fmtP(varReal),                                                 c:colVar(varReal) },
+    { l:'Var. real (Fisher)',   v:fmtP(varReal),                                                 c:colVar(varReal) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
     ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(1)+'%', c:'#e8c84a', title:'Ingresos totales sobre costo laboral del período actual' }] : []),
@@ -12049,7 +12070,7 @@ function buildComparacionFlujos() {
           <div style="font-size:12px;font-weight:700;color:${colLab}">${fmtP(labVarNom)}</div>
         </div>
         <div style="padding-top:4px;border-top:1px solid var(--bd)">
-          <div style="font-size:7px;color:var(--dim);margin-bottom:2px">Var. real (−IPC)</div>
+          <div style="font-size:7px;color:var(--dim);margin-bottom:2px">Var. real (Fisher)</div>
           <div style="font-size:12px;font-weight:700;color:${labVarReal==null?'var(--dim)':labVarReal>0?'var(--neg)':'var(--pos)'}">${fmtP(labVarReal)}</div>
         </div>
       </div>
@@ -12127,11 +12148,16 @@ function buildComparacionFlujos() {
   const labVarChart = _mergedPares.map(({rA,rB}) => rA?.label || rB?.label || '');
   const datVarChart = _mergedPares.map(({rA,rB}) =>
     parseFloat(((Math.abs(rA.actual) - Math.abs(rB.actual))/Math.abs(rB.actual)*100).toFixed(2)));
+  // Para ingresos, subir es bueno (verde); para egresos, subir es malo (rojo)
+  const _chartTipos = _mergedPares.map(({rA,rB}) => rA?.tipo || rB?.tipo || 'egreso');
 
   mkChart('ch-flujo-var','bar',{
     labels: labVarChart,
     datasets:[{ label:'Var. nominal %', data: datVarChart,
-      backgroundColor: datVarChart.map(v=>v>=0?'#ff476699':'#47ffb499'), borderRadius:3 }]
+      backgroundColor: datVarChart.map((v,i) => {
+        const esIng = _chartTipos[i] === 'ingreso';
+        return (esIng ? v>=0 : v<0) ? '#47ffb499' : '#ff476699';
+      }), borderRadius:3 }]
   },{ indexAxis:'y', plugins:{ legend:{ display:false } },
       scales:{ y:{ ticks:{ font:{ size:8 } } },
                x:{ ticks:{ callback: v=>v+'%', font:{size:8} } } } });
