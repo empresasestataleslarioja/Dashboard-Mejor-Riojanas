@@ -11511,15 +11511,31 @@ function _guardarMapeoFlujoLS(empresa, cA, cB, keysA, keysB) {
   const all = _loadMapeosFlujo();
   if (!all[empresa]) all[empresa] = {};
   const k = cA + '|' + cB;
-  // Eliminar grupos existentes que solapen con las keys nuevas
-  const arr = (all[empresa][k] || []).filter(g => {
+  const existing = all[empresa][k] || [];
+  // Si hay grupos que solapan con las keys nuevas, fusionarlos en uno solo
+  const solapan = existing.filter(g => {
+    const gA = g.keysA || (g.keyA ? [g.keyA] : []);
+    const gB = g.keysB || (g.keyB ? [g.keyB] : []);
+    return gA.some(x => keysA.includes(x)) || gB.some(x => keysB.includes(x));
+  });
+  const fusionKeysA = [...new Set([...keysA, ...solapan.flatMap(g => g.keysA || (g.keyA ? [g.keyA] : []))])];
+  const fusionKeysB = [...new Set([...keysB, ...solapan.flatMap(g => g.keysB || (g.keyB ? [g.keyB] : []))])];
+  const arr = existing.filter(g => {
     const gA = g.keysA || (g.keyA ? [g.keyA] : []);
     const gB = g.keysB || (g.keyB ? [g.keyB] : []);
     return !gA.some(x => keysA.includes(x)) && !gB.some(x => keysB.includes(x));
   });
-  arr.push({ keysA, keysB });
+  arr.push({ keysA: fusionKeysA, keysB: fusionKeysB });
   all[empresa][k] = arr;
   _saveMapeosFlujoLS(all);
+}
+function _mapeoExpandirGrupo(idx) {
+  const g = _getMapeosFlujo(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB)[idx];
+  if (!g) return;
+  // Pre-seleccionar los rubros del grupo para poder agregar más
+  g.keysA.forEach(k => _mapeoState.selA.add(k));
+  g.keysB.forEach(k => _mapeoState.selB.add(k));
+  buildComparacionFlujos(); // re-renderiza mostrando los rubros del grupo en las columnas
 }
 function _borrarMapeoFlujoLS(empresa, cA, cB, idx) {
   const all = _loadMapeosFlujo();
@@ -11798,11 +11814,19 @@ function buildComparacionFlujos() {
     wrap.insertBefore(warnB, wrap.firstChild);
   }
   // ── Panel de mapeo manual ─────────────────────────────────────────
-  // Rubros sin equivalente (excluir los que son miembros de grupos manuales)
+  // Rubros sin equivalente (excluir miembros de grupos manuales a menos que estén pre-seleccionados)
   const _soloA = _merged.filter(({rA,rB}) => rA && !rB && !_manualKeySetA.has(rA.key));
   const _soloB = _merged.filter(({rA,rB}) => !rA && rB && !_manualKeySetB.has(rB.key));
-  // Grupos manuales definidos (usa _mapeos directamente para mostrar keys originales)
+  // Miembros de grupos pre-seleccionados para expansión (no están en soloA/soloB)
+  const _expandA = [..._mapeoState.selA]
+    .filter(k => _manualKeySetA.has(k))
+    .map(k => fA.rubros.find(r => r.key === k)).filter(Boolean);
+  const _expandB = [..._mapeoState.selB]
+    .filter(k => _manualKeySetB.has(k))
+    .map(k => fB.rubros.find(r => r.key === k)).filter(Boolean);
+
   const hasUnmatched = _soloA.length > 0 || _soloB.length > 0;
+  const hasExpandable = _expandA.length > 0 || _expandB.length > 0;
   const showPanel    = !bSinRubros && (formatoDif || _mapeos.length > 0 || hasUnmatched);
 
   if (bSinRubros) {
@@ -11815,97 +11839,113 @@ function buildComparacionFlujos() {
     const _esc = s => (s||'').replace(/'/g,'\\\'').replace(/"/g,'&quot;');
     const _lbl = (s, n) => { const t = (s||'').trim(); return t.length > n ? t.substring(0,n)+'…' : t; };
 
-    // Botón de rubro A (toggle)
-    const _btnA = (rA) => `<button data-mapeo-a="${_esc(rA.key)}"
+    // Botón de rubro A (toggle, acepta pre-seleccionado)
+    const _btnA = (rA, presel) => `<button data-mapeo-a="${_esc(rA.key)}"
       onclick="_mapeoToggleA('${_esc(rA.key)}')"
       style="display:block;width:100%;text-align:left;padding:5px 9px;margin-bottom:3px;
-      background:;border:1px solid var(--bd);border-radius:3px;
-      font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .12s"
+      ${presel ? 'background:rgba(71,255,180,.18);border:1px solid #2ecc8a;color:#1a9e68;font-weight:600;' : 'background:;border:1px solid var(--bd);color:var(--text);'}
+      border-radius:3px;font-family:var(--mono);font-size:8px;cursor:pointer;transition:all .12s"
       title="${_esc(rA.label)}">${_lbl(rA.label, 48)}</button>`;
 
-    // Botón de rubro B (toggle)
-    const _btnB = (rB) => `<button data-mapeo-b="${_esc(rB.key)}"
+    // Botón de rubro B (toggle, acepta pre-seleccionado)
+    const _btnB = (rB, presel) => `<button data-mapeo-b="${_esc(rB.key)}"
       onclick="_mapeoToggleB('${_esc(rB.key)}')"
       style="display:block;width:100%;text-align:left;padding:5px 9px;margin-bottom:3px;
-      background:;border:1px solid var(--bd);border-radius:3px;
-      font-family:var(--mono);font-size:8px;color:var(--text);cursor:pointer;transition:all .12s"
+      ${presel ? 'background:rgba(71,200,255,.18);border:1px solid #47e8ff;color:#47e8ff;font-weight:600;' : 'background:;border:1px solid var(--bd);color:var(--text);'}
+      border-radius:3px;font-family:var(--mono);font-size:8px;cursor:pointer;transition:all .12s"
       title="${_esc(rB.label)}">${_lbl(rB.label, 48)}</button>`;
 
-    // Sección de vínculos existentes
-    const _gruposSection = _mapeos.length ? `
+    // Botón Vincular (inline, deshabilitado hasta tener selección en ambos lados)
+    const _btnVincular = `<button id="mapeo-btn-vincular" onclick="_mapeoVincular()" disabled
+      style="padding:2px 10px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
+      border-radius:3px;font-family:var(--mono);font-size:7.5px;color:#2ecc8a;
+      cursor:default;opacity:.35;transition:all .15s;flex-shrink:0;letter-spacing:0;text-transform:none">
+      Vincular seleccionados
+    </button>`;
+
+    // Vínculos existentes — header con Vincular + Borrar todos, filas con + y ✕
+    const _gruposSection = `
       <div style="margin-bottom:10px">
         <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;
-          margin-bottom:5px;display:flex;align-items:center;gap:8px">
-          Vínculos definidos (${_mapeos.length})
-          <button onclick="_mapeoBorrarTodos()" style="padding:1px 7px;background:rgba(255,71,102,.1);
-            border:1px solid rgba(255,71,102,.25);border-radius:2px;font-size:7px;color:var(--neg);
-            cursor:pointer;letter-spacing:0;text-transform:none">Borrar todos</button>
+          margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span>Vínculos definidos (${_mapeos.length})</span>
+          ${_btnVincular}
+          ${_mapeos.length ? `<button onclick="_mapeoBorrarTodos()" style="padding:2px 7px;
+            background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);border-radius:2px;
+            font-size:7px;color:var(--neg);cursor:pointer;letter-spacing:0;text-transform:none">
+            Borrar todos</button>` : ''}
         </div>
         ${_mapeos.map((g, idx) => {
           const lblA = g.keysA.map(k => {
             const r = fA.rubros.find(r => r.key === k);
-            return r ? _lbl(r.label, 30) : k;
+            return r ? _lbl(r.label, 28) : k;
           }).join(' <span style="opacity:.5">+</span> ');
           const lblB = g.keysB.map(k => {
             const r = fB.rubros.find(r => r.key === k);
-            return r ? _lbl(r.label, 30) : k;
+            return r ? _lbl(r.label, 28) : k;
           }).join(' <span style="opacity:.5">+</span> ');
-          return `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px;
+          return `<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:4px;
             font-size:8px;font-family:var(--mono)">
             <span style="flex:1;color:#2ecc8a;padding:3px 6px;background:rgba(71,255,180,.06);
               border-radius:2px;line-height:1.4">${lblA}</span>
             <span style="color:var(--dim);padding-top:3px;flex-shrink:0">↔</span>
             <span style="flex:1;color:var(--dim);padding:3px 6px;background:var(--s3);
               border-radius:2px;line-height:1.4">${lblB}</span>
+            <button onclick="_mapeoExpandirGrupo(${idx})" style="padding:1px 5px;flex-shrink:0;
+              background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.2);
+              border-radius:2px;font-size:7px;color:#2ecc8a;cursor:pointer;margin-top:1px"
+              title="Agregar conceptos a este vínculo">+</button>
             <button onclick="_mapeoBorrar(${idx})" style="padding:1px 5px;flex-shrink:0;
               background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);
               border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer;margin-top:1px"
               title="Quitar vínculo">✕</button>
           </div>`;
         }).join('')}
-      </div>` : '';
+      </div>`;
 
-    // Columnas de selección
-    const _columnsSection = hasUnmatched ? `
-      <div id="mapeo-instruccion" style="font-size:8px;color:var(--dim);margin-bottom:8px;line-height:1.5">
-        Seleccioná uno o más conceptos de cada período y hacé clic en <strong>Vincular</strong>.
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
-        <div>
-          <div style="font-size:7.5px;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;
-            margin-bottom:5px;font-family:var(--mono)">
-            Sin equivalente — ${fA.periodo} (${_soloA.length})
-          </div>
-          ${_soloA.length
-            ? _soloA.map(({rA}) => _btnA(rA)).join('')
-            : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
+    // Columnas de selección (incluye miembros de grupos pre-seleccionados para expansión)
+    const _showCols = hasUnmatched || hasExpandable;
+    const _columnsSection = _showCols ? (() => {
+      const colA_extra = _expandA.map(rA => _btnA(rA, true)).join('');
+      const colB_extra = _expandB.map(rB => _btnB(rB, true)).join('');
+      const colA_solo  = _soloA.map(({rA}) => _btnA(rA, _mapeoState.selA.has(rA.key))).join('');
+      const colB_solo  = _soloB.map(({rB}) => _btnB(rB, _mapeoState.selB.has(rB.key))).join('');
+      const sepA = (colA_extra && colA_solo) ? `<div style="border-top:1px dashed var(--bd);margin:4px 0 5px"></div>` : '';
+      const sepB = (colB_extra && colB_solo) ? `<div style="border-top:1px dashed var(--bd);margin:4px 0 5px"></div>` : '';
+      const instruccion = hasExpandable
+        ? 'Rubros del vínculo pre-seleccionados. Marcá más conceptos y hacé clic en <strong>Vincular</strong> para ampliar el grupo.'
+        : 'Seleccioná uno o más conceptos de cada período y hacé clic en <strong>Vincular</strong>.';
+      return `
+        <div id="mapeo-instruccion" style="font-size:8px;color:var(--dim);margin-bottom:8px;line-height:1.5">
+          ${instruccion}
         </div>
-        <div>
-          <div style="font-size:7.5px;color:#47e8ff99;letter-spacing:.08em;text-transform:uppercase;
-            margin-bottom:5px;font-family:var(--mono)">
-            Sin equivalente — ${fB.periodo} (${_soloB.length})
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:7.5px;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;
+              margin-bottom:5px;font-family:var(--mono)">
+              ${fA.periodo} — sin equivalente (${_soloA.length}${_expandA.length ? ' + '+_expandA.length+' en vínculo' : ''})
+            </div>
+            ${colA_extra}${sepA}${colA_solo || (!colA_extra ? '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>' : '')}
           </div>
-          ${_soloB.length
-            ? _soloB.map(({rB}) => _btnB(rB)).join('')
-            : '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>'}
-        </div>
-      </div>
-      <button id="mapeo-btn-vincular" onclick="_mapeoVincular()" disabled
-        style="padding:6px 16px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
-        border-radius:3px;font-family:var(--mono);font-size:8.5px;color:#2ecc8a;
-        cursor:default;opacity:.35;transition:all .15s;display:block">
-        Vincular seleccionados
-      </button>` : '';
+          <div>
+            <div style="font-size:7.5px;color:#47e8ff99;letter-spacing:.08em;text-transform:uppercase;
+              margin-bottom:5px;font-family:var(--mono)">
+              ${fB.periodo} — sin equivalente (${_soloB.length}${_expandB.length ? ' + '+_expandB.length+' en vínculo' : ''})
+            </div>
+            ${colB_extra}${sepB}${colB_solo || (!colB_extra ? '<span style="font-size:8px;color:var(--dim)">— todos vinculados —</span>' : '')}
+          </div>
+        </div>`;
+    })() : '';
 
     const warnMsg = formatoDif
       ? `<div style="font-size:8.5px;color:#e8c84a;line-height:1.6;margin-bottom:10px">
           ⚡ Formatos distintos — ${nMatched} concepto${nMatched!==1?'s':''} en común,
           ${nAonly} solo en <strong>${fA.periodo}</strong>, ${nBonly} solo en <strong>${fB.periodo}</strong>.
-          <span style="color:var(--dim)">El resumen de totales es siempre comparable. Usá el panel de abajo para vincular conceptos equivalentes.</span>
+          <span style="color:var(--dim)">El resumen de totales es siempre comparable.</span>
         </div>`
       : (hasUnmatched
           ? `<div style="font-size:8px;color:var(--dim);line-height:1.5;margin-bottom:10px">
-              ${nAonly+nBonly} concepto${nAonly+nBonly!==1?'s':''} sin equivalente — podés vincularlos manualmente abajo.
+              ${nAonly+nBonly} concepto${nAonly+nBonly!==1?'s':''} sin equivalente — podés vincularlos abajo.
             </div>`
           : '');
 
