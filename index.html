@@ -4312,7 +4312,7 @@ self.onmessage = async (e) => {
         <div style="display:flex;flex-direction:column;gap:4px;min-width:70px">
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Año</label>
           <input id="fm-año" type="number" min="2020" max="2035"
-            placeholder="${new Date().getFullYear()}"
+            placeholder="2026"
             style="width:72px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
             oninput="_fmActualizarIpcAuto()">
@@ -4338,12 +4338,18 @@ self.onmessage = async (e) => {
           Meses del período <span style="color:var(--acc)">(seleccioná para calcular IPC automáticamente)</span>
         </label>
         <div id="fm-meses-grid" style="display:flex;flex-wrap:wrap;gap:4px">
-          ${['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'].map((m,i) => `
-          <button type="button" data-mes-idx="${i}"
-            onclick="_fmToggleMes(${i})"
-            style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;
-            cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);
-            transition:all .15s" id="fm-mes-btn-${i}">${m}</button>`).join('')}
+          <button type="button" data-mes-idx="0"  id="fm-mes-btn-0"  onclick="_fmToggleMes(0)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">ENE</button>
+          <button type="button" data-mes-idx="1"  id="fm-mes-btn-1"  onclick="_fmToggleMes(1)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">FEB</button>
+          <button type="button" data-mes-idx="2"  id="fm-mes-btn-2"  onclick="_fmToggleMes(2)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">MAR</button>
+          <button type="button" data-mes-idx="3"  id="fm-mes-btn-3"  onclick="_fmToggleMes(3)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">ABR</button>
+          <button type="button" data-mes-idx="4"  id="fm-mes-btn-4"  onclick="_fmToggleMes(4)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">MAY</button>
+          <button type="button" data-mes-idx="5"  id="fm-mes-btn-5"  onclick="_fmToggleMes(5)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">JUN</button>
+          <button type="button" data-mes-idx="6"  id="fm-mes-btn-6"  onclick="_fmToggleMes(6)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">JUL</button>
+          <button type="button" data-mes-idx="7"  id="fm-mes-btn-7"  onclick="_fmToggleMes(7)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">AGO</button>
+          <button type="button" data-mes-idx="8"  id="fm-mes-btn-8"  onclick="_fmToggleMes(8)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">SEP</button>
+          <button type="button" data-mes-idx="9"  id="fm-mes-btn-9"  onclick="_fmToggleMes(9)"  style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">OCT</button>
+          <button type="button" data-mes-idx="10" id="fm-mes-btn-10" onclick="_fmToggleMes(10)" style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">NOV</button>
+          <button type="button" data-mes-idx="11" id="fm-mes-btn-11" onclick="_fmToggleMes(11)" style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);transition:all .15s">DIC</button>
         </div>
         <div id="fm-ipc-info" style="font-size:8px;font-family:var(--mono);color:var(--dim);margin-top:4px;line-height:1.4"></div>
       </div>
@@ -12745,7 +12751,7 @@ function exportarFlujoExcel() {
   <div class="header">
     <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
     <h1>${fA.empresa}</h1>
-    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC acumulado '+ipc+'%'+(ipcManual>0?' (manual)':(ipcAuto!=null?' (INDEC)':' (guardado)')):''}  </div>
+    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC acumulado '+ipc+'%'+(ipcManual>0?' (manual)':(ipcAutoMeses!=null||ipcAutoStr!=null?' (INDEC+REM)':' (guardado)')):''}  </div>
     <div class="periods">
       <span class="period-tag">▶ ${fA.periodo}</span>
       <span style="color:rgba(255,255,255,.4);font-size:10px;align-self:center">vs</span>
