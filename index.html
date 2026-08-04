@@ -4207,6 +4207,13 @@ self.onmessage = async (e) => {
             style="padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none">
         </div>
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:70px">
+          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Año</label>
+          <input id="fc-año" type="number" min="2020" max="2035"
+            style="width:72px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
+            onchange="_fcActualizarIpc()">
+        </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Tipo</label>
           <select id="fc-tipo"
@@ -4302,6 +4309,14 @@ self.onmessage = async (e) => {
             style="padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none">
         </div>
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:70px">
+          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Año</label>
+          <input id="fm-año" type="number" min="2020" max="2035"
+            placeholder="${new Date().getFullYear()}"
+            style="width:72px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
+            oninput="_fmActualizarIpcAuto()">
+        </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Tipo</label>
           <select id="fm-tipo"
@@ -4312,11 +4327,25 @@ self.onmessage = async (e) => {
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">IPC %</label>
-          <input id="fm-ipc" type="number" step="0.1" placeholder="0.0"
+          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">IPC % <span style="color:var(--acc);font-weight:400">(auto)</span></label>
+          <input id="fm-ipc" type="number" step="0.1" placeholder="auto"
             style="width:80px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none">
         </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono);display:block;margin-bottom:5px">
+          Meses del período <span style="color:var(--acc)">(seleccioná para calcular IPC automáticamente)</span>
+        </label>
+        <div id="fm-meses-grid" style="display:flex;flex-wrap:wrap;gap:4px">
+          ${['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'].map((m,i) => `
+          <button type="button" data-mes-idx="${i}"
+            onclick="_fmToggleMes(${i})"
+            style="padding:3px 7px;font-size:8.5px;font-family:var(--mono);border-radius:3px;
+            cursor:pointer;border:1px solid var(--bd2);background:var(--s3);color:var(--dim);
+            transition:all .15s" id="fm-mes-btn-${i}">${m}</button>`).join('')}
+        </div>
+        <div id="fm-ipc-info" style="font-size:8px;font-family:var(--mono);color:var(--dim);margin-top:4px;line-height:1.4"></div>
       </div>
       <div id="fm-rubros-grid" style="display:grid;grid-template-columns:repeat(3,1fr);
         gap:8px;margin-bottom:12px"></div>
@@ -4362,10 +4391,11 @@ self.onmessage = async (e) => {
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="Inflación acumulada entre el período anterior y el actual. Permite calcular la variación real (Fisher) y el equivalente del período anterior a precios actuales.">IPC acumulado % <span style="color:var(--y21)">ℹ</span></label>
+          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="IPC acumulado de los meses del período actual. Se calcula automáticamente desde la tabla INDEC+REM si el flujo tiene meses y año registrados.">IPC acumulado % <span style="color:var(--y21)">ℹ</span></label>
           <input id="comp-flujo-ipc" type="number" step="0.1" placeholder="auto"
             style="width:75px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:4px;outline:none">
+          <div id="comp-flujo-ipc-src" style="font-size:7.5px;font-family:var(--mono);color:var(--dim);max-width:160px;line-height:1.4"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:8px;color:var(--y21);font-family:var(--mono)" title="Inflación esperada para el próximo período. Se aplica sobre los valores actuales para proyectar la necesidad de fondos del siguiente período.">IPC proyectado % <span style="color:var(--y21)">↗</span></label>
@@ -10319,16 +10349,16 @@ function _confirmarImportFlujo(res) {
   }
   const per = document.getElementById('fc-periodo');
   const ipc = document.getElementById('fc-ipc');
+  const añoEl = document.getElementById('fc-año');
   if (per) per.value = mesesStr;
+  if (añoEl) añoEl.value = añoDetect;
   if (ipc) {
-    // FIX 7: ipcCalc puede ser null si datos no disponibles
     ipc.value = ipcCalc != null ? ipcCalc : '';
-    // Mostrar origen del IPC
     const ipcInfo = document.getElementById('fc-ipc-info');
     if (ipcInfo) {
       ipcInfo.textContent = ipcCalc != null
-        ? '✓ IPC calculado desde INDEC · ' + res.meses.join('/') + ' ' + añoDetect
-        : '— IPC no disponible — ingresalo manualmente o abrí el módulo Inflación primero';
+        ? '✓ IPC calculado desde INDEC+REM · ' + res.meses.join('/') + ' ' + añoDetect
+        : '— IPC no disponible para este período — ingresalo manualmente';
       ipcInfo.style.color = ipcCalc != null ? 'var(--pos)' : 'var(--dim)';
     }
   }
@@ -10374,6 +10404,7 @@ function confirmarGuardarFlujo() {
   const periodo = (document.getElementById('fc-periodo')?.value || '').trim().toUpperCase();
   const tipo    = document.getElementById('fc-tipo')?.value || 'proyectado';
   const ipc     = parseFloat(document.getElementById('fc-ipc')?.value || '0') || 0;
+  const año     = parseInt(document.getElementById('fc-año')?.value || '0') || null;
 
   // Verificar si ya existe un flujo con la misma clave
   const claveNueva = _claveFlujo(empresa, periodo, tipo);
@@ -10394,7 +10425,7 @@ function confirmarGuardarFlujo() {
   }
 
   _guardarFlujoData({
-    empresa, periodo, tipo, ipc,
+    empresa, periodo, tipo, ipc, año,
     meses: _flujoExcelPendiente.meses || [],
     rubros: _flujoExcelPendiente.rubros,
     necesidad_fondos:     _flujoExcelPendiente.necesidad_fondos,
@@ -10417,13 +10448,14 @@ function _revisarRubrosFlujoConfirm() {
   const periodo = (document.getElementById('fc-periodo')?.value || '').trim().toUpperCase();
   const tipo    = document.getElementById('fc-tipo')?.value || 'proyectado';
   const ipc     = parseFloat(document.getElementById('fc-ipc')?.value || '0') || 0;
+  const año     = parseInt(document.getElementById('fc-año')?.value || '0') || null;
   if (!empresa || !periodo) {
     alert('Completá empresa y período antes de revisar los rubros.');
     return;
   }
   // Guardar temporalmente sin cerrar el confirm (marcado como borrador)
   _guardarFlujoData({
-    empresa, periodo, tipo, ipc,
+    empresa, periodo, tipo, ipc, año,
     meses: _flujoExcelPendiente.meses || [],
     rubros: _flujoExcelPendiente.rubros,
     necesidad_fondos:     _flujoExcelPendiente.necesidad_fondos,
@@ -10479,7 +10511,12 @@ function guardarFlujoManual() {
   const empresa = (document.getElementById('fm-empresa')?.value || '').trim().toUpperCase();
   const periodo = (document.getElementById('fm-periodo')?.value || '').trim().toUpperCase();
   const tipo    = document.getElementById('fm-tipo')?.value || 'proyectado';
-  const ipc     = parseFloat(document.getElementById('fm-ipc')?.value || '0') || 0;
+  const año     = parseInt(document.getElementById('fm-año')?.value || '0') || null;
+  const MESES_NOM_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  const mesesSel = Array.from(document.querySelectorAll('#fm-meses-grid button[data-mes-idx]'))
+    .filter(b => b.dataset.activo === '1').map(b => MESES_NOM_ES[parseInt(b.getAttribute('data-mes-idx'))]);
+  const ipcAuto = (año && mesesSel.length) ? calcularIPCFlujo(mesesSel, año) : null;
+  const ipc     = parseFloat(document.getElementById('fm-ipc')?.value || '0') || ipcAuto || 0;
   const msg     = document.getElementById('fm-msg');
   if (!empresa || !periodo) {
     if (msg) { msg.textContent = '⚠ Empresa y período son obligatorios.'; msg.style.color='var(--neg)'; }
@@ -10547,9 +10584,11 @@ function guardarFlujoManual() {
   const nec = rubrosFinales.find(r => r.key === 'necesidad_fondos');
   const defRub = rubrosFinales.find(r => r.tipo === 'resultado' && r.actual != null);
   const necValor = nec?.actual ?? defRub?.actual ?? _flujoNecesidad({ rubros: rubrosFinales }) ?? null;
+  const mesesFinal = mesesSel.length ? mesesSel : (_fOrig?.meses || []);
+  const añoFinal = año || _fOrig?.año || null;
   _guardarFlujoData({
-    empresa, periodo, tipo, ipc, rubros: rubrosFinales,
-    meses: _fOrig?.meses || [],
+    empresa, periodo, tipo, ipc, año: añoFinal, rubros: rubrosFinales,
+    meses: mesesFinal,
     necesidad_fondos:     necValor,
     necesidad_fondos_ant: _fOrig?.necesidad_fondos_ant ?? null,
     fuente: _fOrig?.fuente || 'manual',
@@ -10612,9 +10651,15 @@ function _absInicioPeriodo(p) {
 // ── GUARDAR datos del flujo (core) ────────────────────────────────
 function _guardarFlujoData(data) {
   // Usar rubrosArr para evitar colisión con el objeto global `rubros` (empresa→sector)
-  const { empresa, periodo, tipo, ipc, necesidad_fondos, necesidad_fondos_ant } = data;
+  const { empresa, periodo, tipo, necesidad_fondos, necesidad_fondos_ant } = data;
   const rubrosArr = data.rubros;
   const clave = _claveFlujo(empresa, periodo, tipo);
+  // Año explícito: del campo data.año → extraído del periodo → año actual
+  const año = data.año ? parseInt(data.año) : (parseInt((periodo||'').match(/20\d\d/)?.[0]) || null);
+  const mesesArr = data.meses || [];
+  // IPC: usar valor guardado si fue calculado; si no, auto-calcular desde tabla INDEC+REM
+  const ipcCalcAuto = (año && mesesArr.length) ? calcularIPCFlujo(mesesArr, año) : null;
+  const ipc = (data.ipc != null && data.ipc !== 0) ? data.ipc : (ipcCalcAuto ?? 0);
 
   // Vincular empresa al portafolio si no existe ya (usa el objeto global `rubros`, no rubrosArr)
   if (empresa && !rubros[empresa]) {
@@ -10646,8 +10691,8 @@ function _guardarFlujoData(data) {
   }
 
   DATA.flujos[clave] = {
-    clave, empresa, periodo, tipo, ipc,
-    meses: data.meses || [],
+    clave, empresa, periodo, tipo, año, ipc,
+    meses: mesesArr,
     rubros: rubrosArr, necesidad_fondos, necesidad_fondos_ant: necAnt,
     timestamp: Date.now(),
     cargadoEl: nowAR(),
@@ -11047,6 +11092,57 @@ function calcularIPCFlujo(meses, anio) {
   return encontrados ? parseFloat(((acum - 1) * 100).toFixed(2)) : null;
 }
 
+// ── Selección de meses en panel manual ────────────────────────────
+const _MESES_NOM_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+function _fmToggleMes(idx) {
+  const btn = document.getElementById('fm-mes-btn-' + idx);
+  if (!btn) return;
+  const activo = btn.dataset.activo === '1';
+  btn.dataset.activo = activo ? '0' : '1';
+  btn.style.background = activo ? 'var(--s3)' : 'rgba(71,232,255,.18)';
+  btn.style.color       = activo ? 'var(--dim)' : 'var(--acc)';
+  btn.style.borderColor = activo ? 'var(--bd2)' : 'var(--acc)';
+  btn.style.fontWeight  = activo ? '400' : '700';
+  _fmActualizarIpcAuto();
+}
+
+function _fmActualizarIpcAuto() {
+  const año = parseInt(document.getElementById('fm-año')?.value || '0');
+  const mesesSel = Array.from(document.querySelectorAll('#fm-meses-grid button[data-mes-idx]'))
+    .filter(b => b.dataset.activo === '1')
+    .map(b => _MESES_NOM_ES[parseInt(b.getAttribute('data-mes-idx'))]);
+  const info = document.getElementById('fm-ipc-info');
+  const ipcEl = document.getElementById('fm-ipc');
+  if (!año || !mesesSel.length) {
+    if (info) info.textContent = mesesSel.length && !año ? '← Ingresá el año para calcular el IPC' : '';
+    return;
+  }
+  const ipcCalc = calcularIPCFlujo(mesesSel, año);
+  if (ipcEl && !ipcEl.value) ipcEl.value = ipcCalc != null ? ipcCalc : '';
+  if (info) {
+    info.textContent = ipcCalc != null
+      ? '✓ IPC ' + ipcCalc + '% — ' + mesesSel.join('/') + ' ' + año + ' (INDEC+REM)'
+      : '— Sin datos IPC para ' + mesesSel.join('/') + ' ' + año + ' — ingresá manualmente';
+    info.style.color = ipcCalc != null ? 'var(--pos)' : 'var(--dim)';
+  }
+}
+
+// Recalcular IPC del panel de confirmación cuando cambia el año
+function _fcActualizarIpc() {
+  const año = parseInt(document.getElementById('fc-año')?.value || '0');
+  if (!año || !_flujoExcelPendiente) return;
+  const ipcCalc = calcularIPCFlujo(_flujoExcelPendiente.meses || [], año);
+  const ipcEl = document.getElementById('fc-ipc');
+  if (ipcEl) ipcEl.value = ipcCalc != null ? ipcCalc : '';
+  const ipcInfo = document.getElementById('fc-ipc-info');
+  if (ipcInfo) {
+    ipcInfo.textContent = ipcCalc != null
+      ? '✓ IPC calculado desde INDEC+REM · ' + (_flujoExcelPendiente.meses||[]).join('/') + ' ' + año
+      : '— Sin datos para este año/meses — ingresá el IPC manualmente';
+    ipcInfo.style.color = ipcCalc != null ? 'var(--pos)' : 'var(--dim)';
+  }
+}
+
 // ── Matchear empresa del flujo con el portafolio ──────────────────
 function _matchEmpresaFlujo(nombreEmpresa) {
   if (!nombreEmpresa) return '';
@@ -11388,9 +11484,22 @@ function editarFlujo(clave) {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('fm-empresa', f.empresa);
   set('fm-periodo', f.periodo);
+  set('fm-año',     f.año || parseInt((f.periodo||'').match(/20\d\d/)?.[0]) || '');
   set('fm-ipc',     f.ipc || '');
   const tipoEl = document.getElementById('fm-tipo');
   if (tipoEl) tipoEl.value = f.tipo || 'proyectado';
+
+  // Marcar meses del flujo en los botones de selección
+  const MESES_IDX_MAP = {ENERO:0,FEBRERO:1,MARZO:2,ABRIL:3,MAYO:4,JUNIO:5,JULIO:6,AGOSTO:7,SEPTIEMBRE:8,OCTUBRE:9,NOVIEMBRE:10,DICIEMBRE:11};
+  document.querySelectorAll('#fm-meses-grid button[data-mes-idx]').forEach(btn => {
+    btn.dataset.activo = '0';
+    btn.style.background = 'var(--s3)'; btn.style.color = 'var(--dim)';
+    btn.style.borderColor = 'var(--bd2)'; btn.style.fontWeight = '400';
+  });
+  (f.meses || []).forEach(m => {
+    const idx = MESES_IDX_MAP[m.toUpperCase()];
+    if (idx !== undefined) _fmToggleMes(idx);
+  });
 
   const TIPO_OPTS_EDIT = [
     { val:'ingreso',     lbl:'Ingreso',             c:'#2ecc8a' },
@@ -11621,18 +11730,40 @@ function _mapeoBorrarTodos() {
 function buildComparacionFlujos() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
-  // IPC acumulado entre períodos: manual > INDEC auto > guardado en flujo A
+  // IPC acumulado entre períodos: manual > meses+año de fA > string-parsing > guardado en flujo A
   const ipcInput = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
   // IPC proyectado para el siguiente período (ingresado manualmente)
   const ipcProy  = parseFloat(document.getElementById('comp-flujo-ipc-proy')?.value || '0') || 0;
   const fA_prev  = DATA.flujos[claveA];
   const fB_prev  = DATA.flujos[claveB];
-  const ipcAuto  = (fA_prev && fB_prev) ? _ipcAcumEntrePeriodos(fA_prev.periodo, fB_prev.periodo) : null;
+  // Fuente 1: calcular desde tabla INDEC+REM usando meses y año explícitos del flujo A
+  const _añoA   = fA_prev?.año || parseInt((fA_prev?.periodo||'').match(/20\d\d/)?.[0]);
+  const ipcDeMeses = (fA_prev?.meses?.length && _añoA) ? calcularIPCFlujo(fA_prev.meses, _añoA) : null;
+  // Fuente 2: calcular desde strings de período (fallback para flujos sin meses explícitos)
+  const ipcDeStrings = (fA_prev && fB_prev) ? _ipcAcumEntrePeriodos(fA_prev.periodo, fB_prev.periodo) : null;
+  // Fuente 3: IPC guardado en el flujo A cuando fue importado
+  const ipcAuto = ipcDeMeses ?? ipcDeStrings ?? null;
   const ipc = ipcInput > 0 ? ipcInput : (ipcAuto ?? fA_prev?.ipc ?? 0);
-  // Actualizar el input con el valor calculado para que sea visible
+  // Actualizar el input con el valor calculado y mostrar origen
   if (ipc > 0 && ipcInput === 0) {
     const ipcEl = document.getElementById('comp-flujo-ipc');
-    if (ipcEl) { ipcEl.value = ipc; ipcEl.title = ipcAuto != null ? 'Calculado automáticamente desde INDEC' : 'Valor guardado en el flujo'; }
+    if (ipcEl) {
+      ipcEl.value = ipc;
+      const origen = ipcDeMeses != null ? 'INDEC+REM · meses de ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA
+                   : ipcDeStrings != null ? 'INDEC+REM · calculado entre períodos'
+                   : 'guardado en el flujo';
+      ipcEl.title = 'IPC auto: ' + origen;
+    }
+  }
+  // Mostrar fuente del IPC debajo del campo
+  const ipcSrcEl = document.getElementById('comp-flujo-ipc-src');
+  if (ipcSrcEl) {
+    ipcSrcEl.textContent = ipc > 0
+      ? (ipcDeMeses != null ? '✓ Meses ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' — INDEC+REM'
+       : ipcDeStrings != null ? '✓ Entre períodos — INDEC+REM'
+       : '— Guardado en flujo (sin meses/año)')
+      : '';
+    ipcSrcEl.style.color = ipcDeMeses != null || ipcDeStrings != null ? 'var(--pos)' : 'var(--dim)';
   }
   const wrap   = document.getElementById('flujo-comp-wrap');
 
@@ -12291,13 +12422,22 @@ function buildComparacionFlujos() {
 // Retorna el % acumulado desde el mes siguiente al cierre de pB hasta el cierre de pA
 function _ipcAcumEntrePeriodos(pA, pB) {
   if (!pA || !pB || !INFL || !INFL.mensual) return null;
-  const MESES_NOM = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
-                     julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12};
+  // Soporte para nombres completos Y abreviaturas de 3 letras
+  const MESES_NOM = {
+    enero:1, ene:1, feb:2, febrero:2, marzo:3, mar:3, abril:4, abr:4,
+    mayo:5, may:5, junio:6, jun:6, julio:7, jul:7, agosto:8, ago:8,
+    septiembre:9, sep:9, sept:9, octubre:10, oct:10, noviembre:11, nov:11,
+    diciembre:12, dic:12
+  };
+  // Detecta el ÚLTIMO mes mencionado en el string (ej. "MAY-AGO 2026" → agosto=8)
   const parsePer = p => {
     const s = (p||'').toLowerCase();
     const anio = parseInt(s.match(/20\d\d/)?.[0]);
-    const mesNom = Object.keys(MESES_NOM).find(m => s.includes(m));
-    const mes = mesNom ? MESES_NOM[mesNom] : 12; // sin mes → diciembre (cierre anual)
+    // Buscar todos los meses mencionados y tomar el mayor (el cierre del período)
+    const matches = Object.entries(MESES_NOM)
+      .filter(([k]) => s.includes(k))
+      .map(([,v]) => v);
+    const mes = matches.length ? Math.max(...matches) : 12;
     return anio ? { anio, mes } : null;
   };
   const ppa = parsePer(pA), ppb = parsePer(pB);
@@ -12360,10 +12500,12 @@ function exportarFlujoExcel() {
     showStorageStatus('⚠ El flujo seleccionado (B) no tiene rubros detallados para exportar.', '#ff8c47');
     return;
   }
-  // IPC: manual > auto-calculado entre períodos > guardado en flujo A
+  // IPC: manual > meses+año de fA > string-parsing > guardado en flujo A
   const ipcManual = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
-  const ipcAuto   = _ipcAcumEntrePeriodos(fA.periodo, fB.periodo);
-  const ipc = ipcManual > 0 ? ipcManual : (ipcAuto ?? fA.ipc ?? 0);
+  const _añoExA = fA.año || parseInt((fA.periodo||'').match(/20\d\d/)?.[0]);
+  const ipcAutoMeses = (fA.meses?.length && _añoExA) ? calcularIPCFlujo(fA.meses, _añoExA) : null;
+  const ipcAutoStr   = _ipcAcumEntrePeriodos(fA.periodo, fB.periodo);
+  const ipc = ipcManual > 0 ? ipcManual : (ipcAutoMeses ?? ipcAutoStr ?? fA.ipc ?? 0);
 
   const necA  = _flujoNecesidad(fA),  necB  = _flujoNecesidad(fB);
   const ingA  = _flujoIngTotal(fA),   ingB  = _flujoIngTotal(fB);
@@ -19105,10 +19247,10 @@ const INFL = {
     2022:[3.9,4.7,6.7,6.0,5.1,5.3,7.4,7.0,6.2,6.3,4.9,5.1],
     2023:[6.0,6.6,7.7,8.4,8.4,6.0,6.3,12.4,12.7,8.3,12.8,25.5],
     2024:[20.6,13.2,11.0,8.8,4.2,4.6,4.0,4.2,3.5,2.4,2.4,2.7],
-    // 2025: datos publicados INDEC (año completo)
-    2025:[2.3,2.4,3.7,3.0,3.3,3.0,3.0,4.1,5.8,3.5,3.2,2.7],
-    // ── 2026: ACTUALIZAR MES A MES — agregar valor al array cuando INDEC publique ──
-    2026:[2.4,2.3,3.7,2.6,2.1],  // ene 2.4 · feb 2.3 · mar 3.7 · abr 2.6 · may 2.1 (INDEC jun/2026)
+    // 2025: INDEC oficial completo (acum 31.6%)
+    2025:[2.2,2.4,3.7,3.0,1.5,1.6,2.0,1.9,2.1,2.2,2.5,2.8],
+    // 2026: ene–jun INDEC · jul: BCRA est. 2.0% · ago–dic: REM BCRA jun/2026
+    2026:[2.9,2.9,3.4,2.6,2.1,1.9,2.0,1.8,1.8,1.7,1.7,1.8],
   },
 };
 
