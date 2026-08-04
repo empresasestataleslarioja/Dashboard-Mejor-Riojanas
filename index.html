@@ -12523,6 +12523,8 @@ function exportarFlujoExcel() {
   const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
   const labVarNom  = (labA!=null&&labB&&labB!==0) ? (Math.abs(labA)-Math.abs(labB))/Math.abs(labB)*100 : null;
   const labVarReal = (labVarNom!=null&&ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
+  const labCovA = (ingA && labA) ? ingA / Math.abs(labA) * 100 : null;
+  const labCovB = (ingB && labB) ? ingB / Math.abs(labB) * 100 : null;
 
   const labelsA = new Map(fA.rubros.map(r=>[r.key,r]));
   const labelsB = new Map(fB.rubros.map(r=>[r.key,r]));
