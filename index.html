@@ -12914,9 +12914,9 @@ function exportarFlujoExcel() {
   overlay.appendChild(iframe);
   document.body.appendChild(overlay);
 
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
+  const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
+  _ifrDoc.open(); _ifrDoc.write(html); _ifrDoc.close();
 }
 
 // ── REPORTE IMPRIMIBLE FLUJO INDIVIDUAL ──────────────────────────
@@ -13078,9 +13078,8 @@ function _rptFlujoIndividual() {
   overlay.appendChild(bar);
   overlay.appendChild(iframe);
   document.body.appendChild(overlay);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
+  const _ifrDoc2 = iframe.contentDocument || iframe.contentWindow?.document;
+  if (_ifrDoc2) { _ifrDoc2.open(); _ifrDoc2.write(html); _ifrDoc2.close(); }
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
@@ -16779,9 +16778,8 @@ function _informeEjecutivoRender(emp) {
   bar.appendChild(tit); bar.appendChild(bPrint); bar.appendChild(bClose);
   overlay.appendChild(bar); overlay.appendChild(iframe);
   document.body.appendChild(overlay);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(html);
-  iframe.contentDocument.close();
+  const _ifrDoc3 = iframe.contentDocument || iframe.contentWindow?.document;
+  if (_ifrDoc3) { _ifrDoc3.open(); _ifrDoc3.write(html); _ifrDoc3.close(); }
 }
 
 // ── INFORME: ESTADO DE PRESENTACIÓN DE ER PROVISORIO ────────────────────────
