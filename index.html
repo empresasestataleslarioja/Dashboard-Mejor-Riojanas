@@ -11555,8 +11555,8 @@ function buildVistaIndividualFlujo(claveOverride) {
           m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0),
           '#1a9e68')
       + rubrosEgrDet.map(_mkDetRow).join('')
-      + _mkTotRow('TOTAL EGRESOS', egrA,
-          m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0),
+      + _mkTotRow('TOTAL EGRESOS', egrA != null ? -Math.abs(egrA) : null,
+          m => { const v = f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0); return v > 0 ? -v : v; },
           'var(--neg)');
   })() + `</tbody><tfoot>${pieHtml}</tfoot>`;
 }
@@ -12444,7 +12444,7 @@ function buildComparacionFlujos() {
     return _ingRows.map(_mkRow).join('')
       + _mkTotalRow('TOTAL INGRESOS', ingA ?? 0, ingB ?? 0, '#1a9e68', '#1a9e68')
       + _egrRows.map(_mkRow).join('')
-      + _mkTotalRow('TOTAL EGRESOS', egrA, egrB, 'var(--neg)', 'var(--neg)');
+      + _mkTotalRow('TOTAL EGRESOS', egrA != null ? -Math.abs(egrA) : null, egrB != null ? -Math.abs(egrB) : null, 'var(--neg)', 'var(--neg)');
   })() + (() => {
     // Filas computadas tfoot: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
     const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
