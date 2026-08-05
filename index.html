@@ -12349,6 +12349,9 @@ function buildComparacionFlujos() {
     if (!r) return true;
     if (r.tipo === 'resultado') return false;
     if (_esImpCredDeb(r.label)) return false;
+    // Subtotales intermedios de egresos (esTotal en egreso): son parciales, no el TOTAL EGRESOS
+    // El TOTAL EGRESOS real tiene tipo='total'; estos tienen tipo='egreso' y esTotal=true
+    if (r.tipo === 'egreso' && r.esTotal) return false;
     return true;
   }).map(({rA, rB, _manual}) => {
     const vA = rA?.actual ?? null;
@@ -12393,16 +12396,10 @@ function buildComparacionFlujos() {
     </tr>`;
   }).join('') + (() => {
     // Filas computadas: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
-    // Leer los totales desde los rubros que ya aparecen en la tabla (no recomputar)
-    // para que el tfoot sea siempre consistente con las filas mostradas arriba.
-    const _tIngRow = _merged.find(({rA,rB}) => (rA||rB)?.tipo==='ingreso' && (rA||rB)?.esTotal);
-    const _tEgrRow = _merged.find(({rA,rB}) => { const r=rA||rB; return r?.tipo==='total' || (r?.tipo==='egreso'&&r?.esTotal&&!/SUBTOTAL|APORTES/i.test(r?.label||'')); });
-    const _ingAComp = _tIngRow?.rA?.actual ?? ingA;
-    const _ingBComp = _tIngRow?.rB?.actual ?? ingB;
-    const _egrAComp = _tEgrRow?.rA?.actual ?? egrA;
-    const _egrBComp = _tEgrRow?.rB?.actual ?? egrB;
-    const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(_ingAComp, _egrAComp);
-    const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(_ingBComp, _egrBComp);
+    // ingA/egrA ya están calculados por _flujoIngTotal/_flujoEgrTotal al inicio de la función,
+    // con prioridad correcta (tipo='total' esTotal primero, sin sumar subtotales intermedios).
+    const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
+    const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
     const _vn = (a, b) => (a!=null&&b!=null&&b!==0) ? (a-b)/Math.abs(b)*100 : null;
     const _vr = (vn) => (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
     const _cv = (vn, pos) => vn==null?'var(--dim)': (pos?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)'));
@@ -12781,6 +12778,7 @@ function exportarFlujoExcel() {
     const r=rA||rB; if(!r) return true;
     if(r.tipo==='resultado') return false;
     if(_esImpCredDeb(r.label)) return false;
+    if(r.tipo==='egreso' && r.esTotal) return false; // subtotales intermedios de egresos
     return true;
   }).map(({rA,rB})=>{
     const vA=rA?.actual??null, vB=rB?.actual??null;
@@ -13015,14 +13013,8 @@ function exportarFlujoExcel() {
       </tr></thead>
       <tbody>${compTableRows}</tbody>
       <tfoot>${(()=>{
-        const _tIR = _mergedExp.find(({rA,rB}) => (rA||rB)?.tipo==='ingreso' && (rA||rB)?.esTotal);
-        const _tER = _mergedExp.find(({rA,rB}) => { const r=rA||rB; return r?.tipo==='total' || (r?.tipo==='egreso'&&r?.esTotal&&!/SUBTOTAL|APORTES/i.test(r?.label||'')); });
-        const _iA = _tIR?.rA?.actual ?? ingA;
-        const _iB = _tIR?.rB?.actual ?? ingB;
-        const _eA = _tER?.rA?.actual ?? egrA;
-        const _eB = _tER?.rB?.actual ?? egrB;
-        const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(_iA, _eA);
-        const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(_iB, _eB);
+        const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
+        const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
         const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(a-b)/Math.abs(b)*100:null;
         const _vr2 = (vn) => (vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
         const pC = (v,posGood) => v==null?T.dim:(posGood?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos));
