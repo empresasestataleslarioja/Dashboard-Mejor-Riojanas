@@ -4397,14 +4397,17 @@ self.onmessage = async (e) => {
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="IPC acumulado de los meses del período actual. Se calcula automáticamente desde la tabla INDEC+REM si el flujo tiene meses y año registrados.">IPC acumulado % <span style="color:var(--y21)">ℹ</span></label>
+          <label style="font-size:8px;color:var(--dim);font-family:var(--mono)" title="Inflación acumulada del período del flujo actual (fA). Usos:
+• Flujos históricos: IPC realizado de los meses del período actual.
+• Flujos proyectados consecutivos: IPC proyectado acumulado de los meses del período actual (ej: sep-dic = inflación proyectada de esos 4 meses).
+Se calcula automáticamente desde tabla INDEC+REM cuando el flujo tiene meses y año registrados.">IPC acumulado % <span style="color:var(--y21)">ℹ</span></label>
           <input id="comp-flujo-ipc" type="number" step="0.1" placeholder="auto"
             style="width:75px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:4px;outline:none">
           <div id="comp-flujo-ipc-src" style="font-size:7.5px;font-family:var(--mono);color:var(--dim);max-width:160px;line-height:1.4"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8px;color:var(--y21);font-family:var(--mono)" title="Inflación esperada para el próximo período. Se aplica sobre los valores actuales para proyectar la necesidad de fondos del siguiente período.">IPC proyectado % <span style="color:var(--y21)">↗</span></label>
+          <label style="font-size:8px;color:var(--y21);font-family:var(--mono)" title="Proyección hacia el período siguiente: aplica esta inflación sobre los valores del flujo actual para estimar el próximo período. No completar si ya estás comparando dos flujos proyectados consecutivos (en ese caso la comparación directa ya refleja la proyección).">IPC próx. período % <span style="color:var(--y21)">↗</span></label>
           <input id="comp-flujo-ipc-proy" type="number" step="0.1" placeholder="ej: 15"
             style="width:75px;padding:5px 9px;background:var(--s2);border:1px solid #e8c84a44;
             color:var(--y21);font-family:var(--mono);font-size:9px;border-radius:4px;outline:none">
@@ -11880,7 +11883,7 @@ function buildComparacionFlujos() {
     const ipcEl = document.getElementById('comp-flujo-ipc');
     if (ipcEl) {
       ipcEl.value = ipc;
-      const origen = ipcDeMeses != null ? 'INDEC+REM · meses de ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA
+      const origen = ipcDeMeses != null ? 'INDEC+REM · meses ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' (período actual)'
                    : ipcDeStrings != null ? 'INDEC+REM · calculado entre períodos'
                    : 'guardado en el flujo';
       ipcEl.title = 'IPC auto: ' + origen;
@@ -11890,7 +11893,7 @@ function buildComparacionFlujos() {
   const ipcSrcEl = document.getElementById('comp-flujo-ipc-src');
   if (ipcSrcEl) {
     ipcSrcEl.textContent = ipc > 0
-      ? (ipcDeMeses != null ? '✓ Meses ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' — INDEC+REM'
+      ? (ipcDeMeses != null ? '✓ ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' · período actual — INDEC+REM'
        : ipcDeStrings != null ? '✓ Entre períodos — INDEC+REM'
        : '— Guardado en flujo (sin meses/año)')
       : '';
