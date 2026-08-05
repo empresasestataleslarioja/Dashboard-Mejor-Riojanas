@@ -12332,13 +12332,21 @@ function buildComparacionFlujos() {
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:#e8c84a;font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Variación real usando fórmula Fisher: (1+nom)/(1+ipc)−1">Var. real</th>
     ${ipcProy?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Proyección del período siguiente aplicando IPC ${ipcProy}% sobre el período actual">Proyec. +${ipcProy}%</th>`:''}
   </tr></thead><tbody>` +
-  _merged.map(({rA, rB, _manual}) => {
+  _merged.filter(({rA, rB}) => {
+    // Excluir rubros que irán en el tfoot computado
+    const r = rA || rB;
+    if (!r) return true;
+    if (r.tipo === 'resultado') return false;
+    if (_esImpCredDeb(r.label)) return false;
+    return true;
+  }).map(({rA, rB, _manual}) => {
     const vA = rA?.actual ?? null;
     const vB = rB?.actual ?? null;
     const lbl = rA?.label || rB?.label || '';
     const tipo = rA?.tipo || rB?.tipo || 'egreso';
-    const soloA = rA && !rB;  // concepto solo en período actual
-    const soloB = !rA && rB;  // concepto solo en período anterior
+    const esEstructural = !!(rA?.esTotal || rB?.esTotal);  // totales estructurales no son conceptos
+    const soloA = rA && !rB && !esEstructural;  // concepto solo en período actual
+    const soloB = !rA && rB && !esEstructural;  // concepto solo en período anterior
     const sinPar = soloA || soloB;
     const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
     const vr = (vn!=null&&ipc) ? ((1 + vn/100) / (1 + ipc/100) - 1) * 100 : null;
@@ -12750,7 +12758,12 @@ function exportarFlujoExcel() {
   })();
 
   // ── build comparison table rows ───────────────────────────────────
-  const compTableRows = _mergedExp.map(({rA,rB})=>{
+  const compTableRows = _mergedExp.filter(({rA,rB})=>{
+    const r=rA||rB; if(!r) return true;
+    if(r.tipo==='resultado') return false;
+    if(_esImpCredDeb(r.label)) return false;
+    return true;
+  }).map(({rA,rB})=>{
     const vA=rA?.actual??null, vB=rB?.actual??null;
     const lbl=rA?.label||rB?.label||'';
     const tipo=rA?.tipo||rB?.tipo||'egreso';
