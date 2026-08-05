@@ -11251,11 +11251,12 @@ function _flujoIngTotal(f) {
 
 function _flujoEgrTotal(f) {
   if (!f) return null;
-  // Prioridad: totalizador de egresos explícito
-  const r = f.rubros.find(r2 => r2.tipo === 'total' && r2.esTotal)
-         ?? f.rubros.find(r2 => r2.tipo === 'total')
-         ?? f.rubros.find(r2 => /TOTAL\s*(DE\s*)?EGR/i.test(r2.label||''))
-         ?? f.rubros.find(r2 => r2.tipo === 'egreso' && r2.esTotal);
+  // Usar el ÚLTIMO rubro tipo='total': el grand total siempre cierra la lista de egresos
+  // (los intermedios como SUBTOTAL APORTES y TOTAL GASTOS OPERATIVOS van antes)
+  const totRows = (f.rubros||[]).filter(r2 => r2.tipo === 'total');
+  const r = totRows.length ? totRows[totRows.length - 1]
+          : (f.rubros||[]).find(r2 => /TOTAL\s*(DE\s*)?EGR/i.test(r2.label||''))
+          ?? (f.rubros||[]).find(r2 => r2.tipo === 'egreso' && r2.esTotal);
   // Fallback: sumar conceptos de egreso excluyendo totalizadores intermedios
   if (!r) {
     const egrRows = (f.rubros||[]).filter(r2 => {
@@ -11469,15 +11470,22 @@ function buildVistaIndividualFlujo(claveOverride) {
   const rubrosOrdenados = (() => {
     const rk = r => {
       if (r.tipo==='ingreso'  && !r.esTotal) return 1;
-      if (r.tipo==='egreso'   && !r.esTotal && !_esImpCredDeb(r.label)) return 2;
-      if (r.tipo==='ingreso'  &&  r.esTotal) return 3;
+      if (r.tipo==='ingreso'  &&  r.esTotal) return 2; // TOTAL INGRESOS antes de egresos
+      if (r.tipo==='egreso'   && !r.esTotal && !_esImpCredDeb(r.label)) return 3;
       if (r.tipo==='total'    ||  (r.tipo==='egreso' && r.esTotal)) return 4;
       if (r.tipo==='resultado' || _esImpCredDeb(r.label)) return 9; // al pie
-      return 2;
+      return 3;
     };
     return [...f.rubros].sort((a,b) => rk(a) - rk(b));
   })();
-  const rubrosMain = rubrosOrdenados.filter(r => r.tipo !== 'resultado' && !_esImpCredDeb(r.label));
+  // De los tipo='total', conservar solo el último (grand total); filtrar los intermedios
+  const _lastTotalKey = (f.rubros||[]).filter(r => r.tipo==='total').slice(-1)[0]?.key;
+  const rubrosMain = rubrosOrdenados.filter(r => {
+    if (r.tipo === 'resultado' || _esImpCredDeb(r.label)) return false;
+    if (r.tipo === 'egreso' && r.esTotal) return false; // subtotales intermedios de egresos
+    if (r.tipo === 'total') return r.key === _lastTotalKey; // solo el grand total
+    return true;
+  });
 
   // Calcular pie computado
   const { subtotal, impCredDeb, resultado } = _calcResultadoNeto(ingA, egrA);
@@ -12343,15 +12351,22 @@ function buildComparacionFlujos() {
     <th style="padding:8px 10px;text-align:right;font-size:9px;color:#e8c84a;font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Variación real usando fórmula Fisher: (1+nom)/(1+ipc)−1">Var. real</th>
     ${ipcProy?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Proyección del período siguiente aplicando IPC ${ipcProy}% sobre el período actual">Proyec. +${ipcProy}%</th>`:''}
   </tr></thead><tbody>` +
+  // Identificar el ÚLTIMO tipo='total' de cada flujo (el grand total, no los intermedios)
+  const _lastTotalKeyA = fA.rubros.filter(r => r.tipo==='total').slice(-1)[0]?.key;
+  const _lastTotalKeyB = fB.rubros.filter(r => r.tipo==='total').slice(-1)[0]?.key;
+  const _keepTotalKeys = new Set([_lastTotalKeyA, _lastTotalKeyB].filter(Boolean));
+
   _merged.filter(({rA, rB}) => {
-    // Excluir rubros que irán en el tfoot computado
     const r = rA || rB;
     if (!r) return true;
     if (r.tipo === 'resultado') return false;
     if (_esImpCredDeb(r.label)) return false;
-    // Subtotales intermedios de egresos (esTotal en egreso): son parciales, no el TOTAL EGRESOS
-    // El TOTAL EGRESOS real tiene tipo='total'; estos tienen tipo='egreso' y esTotal=true
     if (r.tipo === 'egreso' && r.esTotal) return false;
+    // De los tipo='total', mostrar solo el último (grand total), filtrar intermedios
+    if (r.tipo === 'total') {
+      const key = rA?.key ?? rB?.key;
+      return _keepTotalKeys.has(key);
+    }
     return true;
   }).map(({rA, rB, _manual}) => {
     const vA = rA?.actual ?? null;
@@ -12774,11 +12789,15 @@ function exportarFlujoExcel() {
   })();
 
   // ── build comparison table rows ───────────────────────────────────
+  const _rLastTotA = fA.rubros.filter(r=>r.tipo==='total').slice(-1)[0]?.key;
+  const _rLastTotB = fB.rubros.filter(r=>r.tipo==='total').slice(-1)[0]?.key;
+  const _rKeepTot = new Set([_rLastTotA,_rLastTotB].filter(Boolean));
   const compTableRows = _mergedExp.filter(({rA,rB})=>{
     const r=rA||rB; if(!r) return true;
     if(r.tipo==='resultado') return false;
     if(_esImpCredDeb(r.label)) return false;
-    if(r.tipo==='egreso' && r.esTotal) return false; // subtotales intermedios de egresos
+    if(r.tipo==='egreso' && r.esTotal) return false;
+    if(r.tipo==='total') { const k=rA?.key??rB?.key; return _rKeepTot.has(k); }
     return true;
   }).map(({rA,rB})=>{
     const vA=rA?.actual??null, vB=rB?.actual??null;
