@@ -12386,18 +12386,22 @@ function buildComparacionFlujos() {
     });
 
     const _mkRow = ({rA, rB, _manual}) => {
-      const vA = rA?.actual ?? null;
-      const vB = rB?.actual ?? null;
-      const lbl = rA?.label || rB?.label || '';
       const tipo = rA?.tipo || rB?.tipo || 'egreso';
+      const isIng = tipo === 'ingreso';
+      // Normalizar signo: egresos siempre negativos para consistencia visual
+      const _norm = (v) => v == null ? null : isIng ? v : -Math.abs(v);
+      const vA = _norm(rA?.actual ?? null);
+      const vB = _norm(rB?.actual ?? null);
+      const lbl = rA?.label || rB?.label || '';
       const soloA = !!(rA && !rB);
       const soloB = !!(!rA && rB);
       const sinPar = soloA || soloB;
+      // Variación siempre sobre valores absolutos
       const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
       const vr = (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
       const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
       const st = sinPar ? {bg:'',bt:'',fw:'400',c:'var(--dim)'} : _estComp(lbl,tipo);
-      const isIng = tipo === 'ingreso';
+      // Egresos: aumento (vn>0) = peor = rojo; disminución = verde
       const cv = vn==null?'var(--dim)': isIng?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)');
       const cr = vr==null?'var(--dim)': isIng?(vr>0?'var(--pos)':'var(--neg)'):(vr>0?'var(--neg)':'var(--pos)');
       const bLabelDif = _manual && rB && rB.label !== rA?.label
