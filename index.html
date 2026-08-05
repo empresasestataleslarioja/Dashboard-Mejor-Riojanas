@@ -12137,17 +12137,32 @@ function buildComparacionFlujos() {
     </button>`;
 
     // Vínculos existentes — header con Vincular + Borrar todos, filas con + y ✕
+    const _vinculosOcultos = localStorage.getItem('_vinculosOcultos') === '1';
+    const _toggleVinculos = () => {
+      const oculto = localStorage.getItem('_vinculosOcultos') === '1';
+      localStorage.setItem('_vinculosOcultos', oculto ? '0' : '1');
+      const el = document.getElementById('_vinculosLista');
+      const btn = document.getElementById('_vinculosToggleBtn');
+      if (el) el.style.display = oculto ? '' : 'none';
+      if (btn) btn.textContent = oculto ? '▲' : '▼';
+    };
+    window._toggleVinculos = _toggleVinculos;
     const _gruposSection = `
       <div style="margin-bottom:10px">
         <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;
           margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span>Vínculos definidos (${_mapeos.length})</span>
+          <button id="_vinculosToggleBtn" onclick="_toggleVinculos()" title="${_vinculosOcultos ? 'Mostrar vínculos' : 'Ocultar vínculos'}"
+            style="padding:1px 6px;background:rgba(232,200,74,.08);border:1px solid rgba(232,200,74,.2);
+            border-radius:2px;font-size:8px;color:#e8c84a;cursor:pointer;letter-spacing:0;text-transform:none">
+            ${_vinculosOcultos ? '▼' : '▲'}</button>
           ${_btnVincular}
           ${_mapeos.length ? `<button onclick="_mapeoBorrarTodos()" style="padding:2px 7px;
             background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);border-radius:2px;
             font-size:7px;color:var(--neg);cursor:pointer;letter-spacing:0;text-transform:none">
             Borrar todos</button>` : ''}
         </div>
+        <div id="_vinculosLista" style="display:${_vinculosOcultos ? 'none' : ''}">
         ${_mapeos.map((g, idx) => {
           const lblA = g.keysA.map(k => {
             const r = fA.rubros.find(r => r.key === k);
@@ -12174,6 +12189,7 @@ function buildComparacionFlujos() {
               title="Quitar vínculo">✕</button>
           </div>`;
         }).join('')}
+        </div>
       </div>`;
 
     // Columnas de selección (incluye miembros de grupos pre-seleccionados para expansión)
