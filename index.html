@@ -11732,6 +11732,26 @@ function _mapeoBorrarTodos() {
   buildComparacionFlujos();
 }
 // ─────────────────────────────────────────────────────────────────────────────
+// Reordena _merged: egresos detalle → egresos total → ingresos detalle → ingresos total → resultado
+// Estable: preserva orden relativo dentro de cada grupo
+function _ordenarMerged(merged) {
+  const rank = ({rA, rB}) => {
+    const r = rA || rB;
+    if (!r) return 99;
+    const t = r.tipo || 'egreso';
+    const tot = !!r.esTotal;
+    if (t === 'egreso'   && !tot) return 1;
+    if (t === 'egreso'   &&  tot) return 2;
+    if (t === 'total')            return 2; // total de egresos
+    if (t === 'ingreso'  && !tot) return 3;
+    if (t === 'ingreso'  &&  tot) return 4;
+    if (t === 'resultado')        return 5;
+    return 6;
+  };
+  return merged.map((r, i) => [r, i])
+    .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
+    .map(([r]) => r);
+}
 
 function buildComparacionFlujos() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
@@ -11906,13 +11926,13 @@ function buildComparacionFlujos() {
       return { rA, rB };
     });
 
-  const _merged = [..._groupRows, ..._autoMerged];
-
+  const _mergedRaw = [..._groupRows, ..._autoMerged];
   // Agregar rubros B sin par (excluye los de grupos manuales que ya están en _bMatched)
-  fB.rubros.forEach(rB => { if (!_bMatched.has(rB.key)) _merged.push({ rA: null, rB }); });
-  // Compatibilidad: allKeys para gráficos que aún lo usan
-  const labelsA_compat = labelsA;
-  const labelsB_compat = new Map(_merged.map(({rA,rB}) => rA && rB ? [rA.key, rB] : rB ? [rB.key, rB] : null).filter(Boolean));
+  fB.rubros.forEach(rB => { if (!_bMatched.has(rB.key)) _mergedRaw.push({ rA: null, rB }); });
+  // Reordenar: egresos detalle → totales → ingresos detalle → totales → resultado
+  // Esto corrige flujos donde egresos aparecen después del TOTAL EGRESOS (ej: Cerámica Riojana)
+  const _merged = _ordenarMerged(_mergedRaw);
+
   const allKeys = _merged.map(({rA,rB}) => rA?.key ?? rB?.key);
 
   // KPIs — helpers robustos para cualquier estructura de flujo
@@ -11932,6 +11952,11 @@ function buildComparacionFlujos() {
   const labB = _flujoLaboral(fB);
   const labCovA = (ingA && labA) ? ingA / Math.abs(labA) * 100 : null;
   const labCovB = (ingB && labB) ? ingB / Math.abs(labB) * 100 : null;
+
+  // Guardar estado de comparación para que exportarFlujoExcel use los mismos datos
+  window._compActiva = { fA, fB, ipc, ipcProy, _merged,
+    necA, necB, ingA, ingB, egrA, egrB, labA, labB,
+    covA, covB, varNom, varReal, labCovA, labCovB };
 
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
   const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v<0?')':'');
@@ -12264,17 +12289,17 @@ function buildComparacionFlujos() {
       ? `<span style="font-size:6.5px;color:#e8c84a;margin-left:4px;opacity:.8" title="Vínculo manual">⚙</span>`
       : '';
     const etiquetaSinPar = soloA
-      ? `<span style="font-size:7.5px;color:var(--dim);opacity:.6;margin-left:5px" title="Concepto sin equivalente en el período anterior">solo ${fA.periodo}</span>`
+      ? `<span style="font-size:7px;background:var(--pos);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto incorporado en ${fA.periodo}: no existía en el período anterior">▲ NUEVO</span>`
       : soloB
-      ? `<span style="font-size:7.5px;color:var(--dim);opacity:.6;margin-left:5px" title="Concepto sin equivalente en el período actual">solo ${fB.periodo}</span>`
+      ? `<span style="font-size:7px;background:var(--neg);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto dado de baja: existía en ${fB.periodo} pero no en el actual">▼ BAJA</span>`
       : '';
-    const opacidad = sinPar ? 'opacity:.55' : '';
-    return `<tr style="background:${st.bg};${st.bt};${opacidad}">
+    const rowBg = sinPar ? (soloA ? 'var(--pos)0d' : 'var(--neg)0d') : st.bg;
+    return `<tr style="background:${rowBg};${st.bt}">
       <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${bLabelDif}${etiquetaSinPar}</td>
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};border-bottom:1px solid var(--bd2)">${fmtM(vA)}</td>
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtM(vB)}</td>
-      ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${fmtMEq(vBEq)}</td>`:''}
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${sinPar?'<span style="color:var(--dim);font-size:8px">—</span>':fmtP(vn)}</td>
+      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${soloB?'var(--dim)':st.c};border-bottom:1px solid var(--bd2)">${soloB?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vA)}</td>
+      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${soloA?'var(--dim)':'var(--dim)'};border-bottom:1px solid var(--bd2)">${soloA?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vB)}</td>
+      ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${sinPar?'':fmtMEq(vBEq)}</td>`:''}
+      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${sinPar?`<span style="color:var(--dim);font-size:8px">${soloA?'nuevo':'baja'}</span>`:fmtP(vn)}</td>
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${sinPar?'':fmtP(vr)}</td>
       ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd2)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
     </tr>`;
@@ -12491,64 +12516,30 @@ function _exportarFlujoSmartBtn() {
 }
 
 function exportarFlujoExcel() {
-  const claveA = document.getElementById('sel-flujo-a')?.value;
-  const claveB = document.getElementById('sel-flujo-b')?.value;
-  if (!claveA || !claveB) { alert('Seleccioná ambos períodos primero.'); return; }
-  const fA = DATA.flujos[claveA];
-  const fB = DATA.flujos[claveB];
-  if (!fA || !fB) return;
-  // FIX 12: validar que los flujos tengan rubros detallados
+  // Usar el estado del panel activo (datos normalizados, rubros ya agrupados/ordenados)
+  const _c = window._compActiva;
+  if (!_c) { alert('Ejecutá la comparación primero (botón "Comparar") y luego el reporte.'); return; }
+  const { fA, fB, ipc, ipcProy, _merged: _mergedExp,
+    necA: _necASignado, necB: _necBSignado,
+    ingA, ingB, egrA, egrB, labA, labB, covA, covB,
+    varNom, varReal, labCovA, labCovB } = _c;
+
+  const necA = _necASignado != null ? Math.abs(_necASignado) : null;
+  const necB = _necBSignado != null ? Math.abs(_necBSignado) : null;
+
   if (!fA?.rubros?.length) {
-    showStorageStatus('⚠ El flujo seleccionado (A) no tiene rubros detallados para exportar.', '#ff8c47');
+    showStorageStatus('⚠ El flujo actual no tiene rubros detallados para exportar.', '#ff8c47');
     return;
   }
   if (!fB?.rubros?.length) {
-    showStorageStatus('⚠ El flujo seleccionado (B) no tiene rubros detallados para exportar.', '#ff8c47');
+    showStorageStatus('⚠ El flujo anterior no tiene rubros detallados para exportar.', '#ff8c47');
     return;
   }
-  // IPC: manual > meses+año de fA > string-parsing > guardado en flujo A
-  const ipcManual = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
-  const _añoExA = fA.año || parseInt((fA.periodo||'').match(/20\d\d/)?.[0]);
-  const ipcAutoMeses = (fA.meses?.length && _añoExA) ? calcularIPCFlujo(fA.meses, _añoExA) : null;
-  const ipcAutoStr   = _ipcAcumEntrePeriodos(fA.periodo, fB.periodo);
-  const ipc = ipcManual > 0 ? ipcManual : (ipcAutoMeses ?? ipcAutoStr ?? fA.ipc ?? 0);
 
-  const necA  = _flujoNecesidad(fA),  necB  = _flujoNecesidad(fB);
-  const ingA  = _flujoIngTotal(fA),   ingB  = _flujoIngTotal(fB);
-  const egrA  = _flujoEgrTotal(fA),   egrB  = _flujoEgrTotal(fB);
-  const labA  = _flujoLaboral(fA),    labB  = _flujoLaboral(fB);
-  const covA  = (ingA&&egrA) ? ingA/Math.abs(egrA)*100 : null;
-  const covB  = (ingB&&egrB) ? ingB/Math.abs(egrB)*100 : null;
-  const varNom  = (necA!=null&&necB&&necB!==0) ? (Math.abs(necA)-Math.abs(necB))/Math.abs(necB)*100 : null;
-  const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
   const labVarNom  = (labA!=null&&labB&&labB!==0) ? (Math.abs(labA)-Math.abs(labB))/Math.abs(labB)*100 : null;
   const labVarReal = (labVarNom!=null&&ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
-  const labCovA = (ingA && labA) ? ingA / Math.abs(labA) * 100 : null;
-  const labCovB = (ingB && labB) ? ingB / Math.abs(labB) * 100 : null;
-
-  const labelsA = new Map(fA.rubros.map(r=>[r.key,r]));
-  const labelsB = new Map(fB.rubros.map(r=>[r.key,r]));
-  const _normLblExp  = s => (s||'').toLowerCase()
-    .replace(/[áàäâã]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
-    .replace(/[óòöôõ]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
-    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-  const _normShortExp = s => _normLblExp(s).substring(0, 28);
-  const _STOP_E = new Set(['de','del','la','las','el','los','y','a','en','por','con','sin','al','o','un','una']);
-  const _normWordsExp = s => _normLblExp(s).split(' ').filter(w=>w.length>2&&!_STOP_E.has(w)).sort().join(' ');
-  const labelsBByNormExp  = new Map(fB.rubros.map(r=>[_normLblExp(r.label).substring(0,60),r]));
-  const labelsBByShortExp = new Map(fB.rubros.map(r=>[_normShortExp(r.label),r]));
-  const labelsBByWordsExp = new Map(fB.rubros.map(r=>[_normWordsExp(r.label),r]));
-  const _bMatchedExp = new Set();
-  const _mergedExp = fA.rubros.map(rA => {
-    let rB = labelsB.get(rA.key);
-    if (!rB) rB = labelsBByNormExp.get(_normLblExp(rA.label).substring(0,60)) || null;
-    if (!rB) rB = labelsBByShortExp.get(_normShortExp(rA.label)) || null;
-    if (!rB) { const w=_normWordsExp(rA.label); if(w.length>4) rB=labelsBByWordsExp.get(w)||null; }
-    if (rB) _bMatchedExp.add(rB.key);
-    return { rA, rB };
-  });
-  fB.rubros.forEach(rB => { if (!_bMatchedExp.has(rB.key)) _mergedExp.push({ rA:null, rB }); });
-  const allKeys = _mergedExp.map(({rA,rB})=>rA?.key??rB?.key);
+  const ipcManual = parseFloat(document.getElementById('comp-flujo-ipc')?.value || '0') || 0;
+  const ipcAutoMeses = null; // ya resuelto en _compActiva
 
   const rubEgr = fA.rubros.filter(r=>r.tipo==='egreso'&&r.actual)
     .sort((a,b)=>Math.abs(b.actual)-Math.abs(a.actual));
@@ -12652,21 +12643,25 @@ function exportarFlujoExcel() {
     const vA=rA?.actual??null, vB=rB?.actual??null;
     const lbl=rA?.label||rB?.label||'';
     const tipo=rA?.tipo||rB?.tipo||'egreso';
+    const soloA=rA&&!rB, soloB=!rA&&rB, sinPar=soloA||soloB;
     const vn=(vA!=null&&vB!=null&&vB!==0)?(Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100:null;
     const vr=(vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
     const isIng=tipo==='ingreso'; const isRes=tipo==='resultado'||tipo==='total';
-    const bg=isRes?T.acc+'18':isIng?T.pos+'12':T.s1;
+    const bgBase=isRes?T.acc+'18':isIng?T.pos+'12':T.s1;
+    const bg=sinPar?(soloA?T.pos+'14':T.neg+'14'):bgBase;
     const fw=isRes?'700':isIng?'500':'400';
     const lblColor=isRes?T.acc:isIng?T.pos:T.text;
     const stripe=isRes?`border-left:3px solid ${T.acc}`:'';
     const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
+    const badgeNuevo=soloA?`<span style="font-size:7px;background:${T.pos};color:#fff;padding:1px 4px;border-radius:2px;margin-left:5px;font-weight:700">▲ NUEVO</span>`:'';
+    const badgeBaja =soloB?`<span style="font-size:7px;background:${T.neg};color:#fff;padding:1px 4px;border-radius:2px;margin-left:5px;font-weight:700">▼ BAJA</span>`:'';
     return `<tr style="background:${bg};${stripe}">
-      <td style="padding:6px 12px;border-bottom:1px solid ${T.bd};font-weight:${fw};font-family:monospace;font-size:10px;color:${lblColor}">${lbl}</td>
-      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;font-weight:${fw};color:${vA!=null&&vA<0?T.neg:T.text}">${C(vA)}</td>
-      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;color:${T.dim}">${C(vB)}</td>
-      ${ipc?`<td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:9px;color:${T.dim}88">${vBEq!=null?'≈'+C(vBEq):'—'}</td>`:''}
-      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;font-weight:600;color:${pColor(vn,isIng)};background:${pBg(vn,isIng)};border-radius:3px">${P(vn)}</td>
-      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;font-weight:600;color:${pColor(vr,isIng)};background:${pBg(vr,isIng)};border-radius:3px">${P(vr)}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid ${T.bd};font-weight:${fw};font-family:monospace;font-size:10px;color:${lblColor}">${lbl}${badgeNuevo}${badgeBaja}</td>
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;font-weight:${fw};color:${soloB?T.dim:(vA!=null&&vA<0?T.neg:T.text)}">${soloB?'—':C(vA)}</td>
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;color:${T.dim}">${soloA?'—':C(vB)}</td>
+      ${ipc?`<td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:9px;color:${T.dim}88">${sinPar||!vBEq?'—':'≈'+C(vBEq)}</td>`:''}
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;font-weight:600;color:${sinPar?T.dim:pColor(vn,isIng)};background:${sinPar?'transparent':pBg(vn,isIng)};border-radius:3px">${sinPar?(soloA?'nuevo':'baja'):P(vn)}</td>
+      <td style="padding:6px 10px;text-align:right;border-bottom:1px solid ${T.bd};font-family:monospace;font-size:10px;font-weight:600;color:${sinPar?T.dim:pColor(vr,isIng)};background:${sinPar?'transparent':pBg(vr,isIng)};border-radius:3px">${sinPar?'—':P(vr)}</td>
     </tr>`;
   }).join('');
 
@@ -12774,7 +12769,7 @@ function exportarFlujoExcel() {
   <div class="header">
     <div class="badge">EMPRESAS ESTATALES · PROVINCIA DE LA RIOJA</div>
     <h1>${fA.empresa}</h1>
-    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC acumulado '+ipc+'%'+(ipcManual>0?' (manual)':(ipcAutoMeses!=null||ipcAutoStr!=null?' (INDEC+REM)':' (guardado)')):''}  </div>
+    <div class="sub">INFORME DE FLUJO DE FONDOS${ipc?' · IPC acumulado '+ipc+'%'+(ipcManual>0?' (manual)':' (INDEC+REM)'):''}  </div>
     <div class="periods">
       <span class="period-tag">▶ ${fA.periodo}</span>
       <span style="color:rgba(255,255,255,.4);font-size:10px;align-self:center">vs</span>
