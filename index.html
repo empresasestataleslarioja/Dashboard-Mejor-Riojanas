@@ -12357,63 +12357,79 @@ function buildComparacionFlujos() {
     ${ipcProy?`<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)" title="Proyección del período siguiente aplicando IPC ${ipcProy}% sobre el período actual">Proyec. +${ipcProy}%</th>`:''}
   </tr></thead><tbody>` +
 
-  _merged.filter(({rA, rB}) => {
-    const r = rA || rB;
-    if (!r) return true;
-    if (r.tipo === 'resultado') return false;
-    if (_esImpCredDeb(r.label)) return false;
-    if (r.tipo === 'egreso' && r.esTotal) return false;
-    // De los tipo='total', mostrar solo el último (grand total), filtrar intermedios
-    if (r.tipo === 'total') {
-      const key = rA?.key ?? rB?.key;
-      return _keepTotalKeys.has(key);
-    }
-    return true;
-  }).map(({rA, rB, _manual}) => {
-    const vA = rA?.actual ?? null;
-    const vB = rB?.actual ?? null;
-    const lbl = rA?.label || rB?.label || '';
-    const tipo = rA?.tipo || rB?.tipo || 'egreso';
-    const esEstructural = !!(rA?.esTotal || rB?.esTotal);  // totales estructurales no son conceptos
-    const soloA = rA && !rB && !esEstructural;  // concepto solo en período actual
-    const soloB = !rA && rB && !esEstructural;  // concepto solo en período anterior
-    const sinPar = soloA || soloB;
-    const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
-    const vr = (vn!=null&&ipc) ? ((1 + vn/100) / (1 + ipc/100) - 1) * 100 : null;
-    const vBEq = (vB!=null&&ipc) ? vB * (1 + ipc/100) : null;
-    // Estilo atenuado para rubros sin par (formato diferente)
-    const st = sinPar
-      ? {bg:'', bt:'', fw:'400', c:'var(--dim)'}
-      : _estComp(lbl, tipo);
-    const isIng = tipo === 'ingreso';
-    const cv = vn==null?'var(--dim)': isIng ? (vn>0?'var(--pos)':'var(--neg)') : (vn>0?'var(--neg)':'var(--pos)');
-    const cr = vr==null?'var(--dim)': isIng ? (vr>0?'var(--pos)':'var(--neg)') : (vr>0?'var(--neg)':'var(--pos)');
-    // Show B label separately when manually linked (different terminology)
-    const bLabelDif = _manual && rB && rB.label !== rA.label
-      ? `<span style="font-size:7px;color:var(--dim);margin-left:5px;opacity:.7" title="Vinculado manualmente a: ${(rB.label||'').replace(/"/g,'&quot;')}">↔ ${(rB.label||'').substring(0,30)}${(rB.label||'').length>30?'…':''}</span>`
-      : '';
-    const manualTag = _manual
-      ? `<span style="font-size:6.5px;color:#e8c84a;margin-left:4px;opacity:.8" title="Vínculo manual">⚙</span>`
-      : '';
-    const etiquetaSinPar = soloA
-      ? `<span style="font-size:7px;background:var(--pos);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto incorporado en ${fA.periodo}: no existía en el período anterior">▲ NUEVO</span>`
-      : soloB
-      ? `<span style="font-size:7px;background:var(--neg);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto dado de baja: existía en ${fB.periodo} pero no en el actual">▼ BAJA</span>`
-      : '';
-    const rowBg = sinPar ? (soloA ? 'var(--pos)0d' : 'var(--neg)0d') : st.bg;
-    return `<tr style="background:${rowBg};${st.bt}">
-      <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${bLabelDif}${etiquetaSinPar}</td>
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${soloB?'var(--dim)':st.c};border-bottom:1px solid var(--bd2)">${soloB?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vA)}</td>
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${soloA?'var(--dim)':'var(--dim)'};border-bottom:1px solid var(--bd2)">${soloA?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vB)}</td>
-      ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${sinPar?'':fmtMEq(vBEq)}</td>`:''}
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${sinPar?`<span style="color:var(--dim);font-size:8px">${soloA?'nuevo':'baja'}</span>`:fmtP(vn)}</td>
-      <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${sinPar?'':fmtP(vr)}</td>
-      ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd2)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
-    </tr>`;
-  }).join('') + (() => {
-    // Filas computadas: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
-    // ingA/egrA ya están calculados por _flujoIngTotal/_flujoEgrTotal al inicio de la función,
-    // con prioridad correcta (tipo='total' esTotal primero, sin sumar subtotales intermedios).
+  (() => {
+    // Filtrar solo rubros detalle (sin totalizadores de ningún tipo)
+    const _detalle = _merged.filter(({rA, rB}) => {
+      const r = rA || rB;
+      if (!r) return true;
+      if (r.tipo === 'resultado' || r.tipo === 'total') return false;
+      if (r.esTotal) return false;  // cualquier subtotal intermedio
+      if (_esImpCredDeb(r.label)) return false;
+      return true;
+    });
+
+    const _mkRow = ({rA, rB, _manual}) => {
+      const vA = rA?.actual ?? null;
+      const vB = rB?.actual ?? null;
+      const lbl = rA?.label || rB?.label || '';
+      const tipo = rA?.tipo || rB?.tipo || 'egreso';
+      const soloA = !!(rA && !rB);
+      const soloB = !!(!rA && rB);
+      const sinPar = soloA || soloB;
+      const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
+      const vr = (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
+      const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
+      const st = sinPar ? {bg:'',bt:'',fw:'400',c:'var(--dim)'} : _estComp(lbl,tipo);
+      const isIng = tipo === 'ingreso';
+      const cv = vn==null?'var(--dim)': isIng?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)');
+      const cr = vr==null?'var(--dim)': isIng?(vr>0?'var(--pos)':'var(--neg)'):(vr>0?'var(--neg)':'var(--pos)');
+      const bLabelDif = _manual && rB && rB.label !== rA?.label
+        ? `<span style="font-size:7px;color:var(--dim);margin-left:5px;opacity:.7" title="Vinculado manualmente a: ${(rB.label||'').replace(/"/g,'&quot;')}">↔ ${(rB.label||'').substring(0,30)}${(rB.label||'').length>30?'…':''}</span>` : '';
+      const manualTag = _manual ? `<span style="font-size:6.5px;color:#e8c84a;margin-left:4px;opacity:.8" title="Vínculo manual">⚙</span>` : '';
+      const etiquetaSinPar = soloA
+        ? `<span style="font-size:7px;background:var(--pos);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto incorporado en ${fA.periodo}: no existía en el período anterior">▲ NUEVO</span>`
+        : soloB
+        ? `<span style="font-size:7px;background:var(--neg);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto dado de baja: existía en ${fB.periodo} pero no en el actual">▼ BAJA</span>` : '';
+      const rowBg = sinPar ? (soloA ? 'rgba(26,158,104,.05)' : 'rgba(217,48,37,.05)') : st.bg;
+      return `<tr style="background:${rowBg};${st.bt}">
+        <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${bLabelDif}${etiquetaSinPar}</td>
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${soloB?'var(--dim)':st.c};border-bottom:1px solid var(--bd2)">${soloB?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vA)}</td>
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${soloA?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vB)}</td>
+        ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${sinPar?'':fmtMEq(vBEq)}</td>`:''}
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cv};border-bottom:1px solid var(--bd2)">${sinPar?`<span style="color:var(--dim);font-size:8px">${soloA?'nuevo':'baja'}</span>`:fmtP(vn)}</td>
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${sinPar?'':fmtP(vr)}</td>
+        ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd2)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
+      </tr>`;
+    };
+
+    // Fila calculada de total (TOTAL INGRESOS / TOTAL EGRESOS)
+    const _mkTotalRow = (lbl, vA, vB, color, borderColor) => {
+      const vn = (vA!=null&&vB!=null&&vB!==0) ? (Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100 : null;
+      const vr = (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
+      const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
+      const isIng = lbl.includes('ING');
+      const cv = vn==null?'var(--dim)': isIng?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)');
+      const cr = vr==null?'var(--dim)': isIng?(vr>0?'var(--pos)':'var(--neg)'):(vr>0?'var(--neg)':'var(--pos)');
+      return `<tr style="background:${color}18;border-top:2px solid ${color}">
+        <td style="padding:7px 12px;font-size:9.5px;font-weight:700;color:${color};font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}</td>
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${color};border-bottom:1px solid var(--bd)">${fmtM(vA)}</td>
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd)">${fmtM(vB)}</td>
+        ${ipc?`<td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd)">${fmtMEq(vBEq)}</td>`:''}
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${cv};border-bottom:1px solid var(--bd)">${fmtP(vn)}</td>
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${cr};border-bottom:1px solid var(--bd)">${fmtP(vr)}</td>
+        ${ipcProy?`<td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
+      </tr>`;
+    };
+
+    const _ingRows = _detalle.filter(({rA,rB}) => (rA?.tipo||rB?.tipo) === 'ingreso');
+    const _egrRows = _detalle.filter(({rA,rB}) => (rA?.tipo||rB?.tipo) !== 'ingreso');
+
+    return _ingRows.map(_mkRow).join('')
+      + _mkTotalRow('TOTAL INGRESOS', ingA ?? 0, ingB ?? 0, '#1a9e68', '#1a9e68')
+      + _egrRows.map(_mkRow).join('')
+      + _mkTotalRow('TOTAL EGRESOS', egrA, egrB, 'var(--neg)', 'var(--neg)');
+  })() + (() => {
+    // Filas computadas tfoot: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
     const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
     const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
     const _vn = (a, b) => (a!=null&&b!=null&&b!==0) ? (a-b)/Math.abs(b)*100 : null;
