@@ -12453,7 +12453,7 @@ function buildComparacionFlujos() {
     // Filas computadas tfoot: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
     const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
     const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
-    const _vn = (a, b) => (a!=null&&b!=null&&b!==0) ? (a-b)/Math.abs(b)*100 : null;
+    const _vn = (a, b) => (a!=null&&b!=null&&b!==0) ? (Math.abs(a)-Math.abs(b))/Math.abs(b)*100 : null;
     const _vr = (vn) => (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
     const _cv = (vn, pos) => vn==null?'var(--dim)': (pos?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)'));
     const nCols = 2 + (ipc?1:0) + 2 + (ipcProy?1:0);
@@ -13076,7 +13076,7 @@ function exportarFlujoExcel() {
       <tfoot>${(()=>{
         const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
         const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
-        const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(a-b)/Math.abs(b)*100:null;
+        const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(Math.abs(a)-Math.abs(b))/Math.abs(b)*100:null;
         const _vr2 = (vn) => (vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
         const pC = (v,posGood,vA) => { const eff = posGood==='auto'?(vA==null||vA>=0):posGood; return v==null?T.dim:(eff?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos)); };
         const tfR = (lbl, vA, vB, posGood) => {
