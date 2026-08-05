@@ -11250,9 +11250,14 @@ function _flujoEgrTotal(f) {
   const r = f.rubros.find(r2 => r2.tipo === 'total' && r2.esTotal)
          ?? f.rubros.find(r2 => r2.tipo === 'total')
          ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL EGR'));
-  // Fallback: sumar todos los conceptos de egreso
+  // Fallback: sumar conceptos de egreso excluyendo totalizadores intermedios
   if (!r) {
-    const egrRows = (f.rubros||[]).filter(r2 => r2.tipo === 'egreso' && !r2.esTotal && r2.actual != null);
+    const egrRows = (f.rubros||[]).filter(r2 => {
+      if (r2.tipo !== 'egreso' || r2.esTotal || r2.actual == null) return false;
+      const lbl = (r2.label||'').toUpperCase();
+      if (/\bTOTAL\b|\bSUBTOTAL\b/.test(lbl)) return false; // ya es un totalizador
+      return true;
+    });
     if (egrRows.length) return egrRows.reduce((s, r2) => s + r2.actual, 0);
   }
   return r?.actual ?? null;
@@ -11794,8 +11799,8 @@ function _ordenarMerged(merged) {
     const t = r.tipo || 'egreso';
     const tot = !!r.esTotal;
     if (t === 'ingreso'  && !tot) return 1; // ingresos detalle primero
-    if (t === 'egreso'   && !tot) return 2; // egresos detalle
-    if (t === 'ingreso'  &&  tot) return 3; // total ingresos
+    if (t === 'ingreso'  &&  tot) return 2; // total ingresos (antes de egresos)
+    if (t === 'egreso'   && !tot) return 3; // egresos detalle
     if (t === 'egreso'   &&  tot) return 4; // subtotal egresos
     if (t === 'total')            return 4; // total de egresos
     if (t === 'resultado')        return 5; // resultado (se reemplaza por computed)
