@@ -11478,14 +11478,15 @@ function buildVistaIndividualFlujo(claveOverride) {
     };
     return [...f.rubros].sort((a,b) => rk(a) - rk(b));
   })();
-  // De los tipo='total', conservar solo el último (grand total); filtrar los intermedios
-  const _lastTotalKey = (f.rubros||[]).filter(r => r.tipo==='total').slice(-1)[0]?.key;
-  const rubrosMain = rubrosOrdenados.filter(r => {
-    if (r.tipo === 'resultado' || _esImpCredDeb(r.label)) return false;
-    if (r.tipo === 'egreso' && r.esTotal) return false; // subtotales intermedios de egresos
-    if (r.tipo === 'total') return r.key === _lastTotalKey; // solo el grand total
+  // Filtrar: solo rubros detalle (sin ningún totalizador); los totales se inyectan como filas computadas
+  const rubrosDetalle = rubrosOrdenados.filter(r => {
+    if (r.tipo === 'resultado' || r.tipo === 'total') return false;
+    if (r.esTotal) return false;
+    if (_esImpCredDeb(r.label)) return false;
     return true;
   });
+  const rubrosIngDet = rubrosDetalle.filter(r => r.tipo === 'ingreso');
+  const rubrosEgrDet = rubrosDetalle.filter(r => r.tipo !== 'ingreso');
 
   // Calcular pie computado
   const { subtotal, impCredDeb, resultado } = _calcResultadoNeto(ingA, egrA);
@@ -11533,15 +11534,31 @@ function buildVistaIndividualFlujo(claveOverride) {
   (sinDesglose ? `<tr><td colspan="${nCols}" style="padding:5px 12px;font-size:8px;color:#ff8c47;font-family:var(--mono);font-style:italic">
     ⚠ Sin desglose mensual disponible — recargá el archivo Excel original para ver datos por mes
   </td></tr>` : '') +
-  rubrosMain.map(r => {
-    const st = _est(r);
-    const ind = st.indent ? `padding-left:${12+st.indent}px` : 'padding:6px 12px';
-    return `<tr style="background:${st.bg};${st.bt}">
-      <td style="${ind};padding-top:5px;padding-bottom:5px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}</td>
-      ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${fmt2(r,m)}</td>`).join('')}
-      ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, r.actual) ?? '—'}</td>` : ''}
-    </tr>`;
-  }).join('') + `</tbody><tfoot>${pieHtml}</tfoot>`;
+  (() => {
+    const _mkDetRow = r => {
+      const st = _est(r);
+      const ind = st.indent ? `padding-left:${12+st.indent}px` : 'padding:6px 12px';
+      return `<tr style="background:${st.bg};${st.bt}">
+        <td style="${ind};padding-top:5px;padding-bottom:5px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}</td>
+        ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${fmt2(r,m)}</td>`).join('')}
+        ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, r.actual) ?? '—'}</td>` : ''}
+      </tr>`;
+    };
+    const _mkTotRow = (lbl, val, mesFn, color) =>
+      `<tr style="background:${color}18;border-top:2px solid ${color}">
+        <td style="padding:6px 12px;font-size:9.5px;font-weight:700;color:${color};font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}</td>
+        ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${color};border-bottom:1px solid var(--bd)">${_fmtC(mesFn(m))}</td>`).join('')}
+        ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${color};background:rgba(100,100,80,.06);border-bottom:1px solid var(--bd)">${_fmtC(val)}</td>` : ''}
+      </tr>`;
+    return rubrosIngDet.map(_mkDetRow).join('')
+      + _mkTotRow('TOTAL INGRESOS', ingA ?? 0,
+          m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0),
+          '#1a9e68')
+      + rubrosEgrDet.map(_mkDetRow).join('')
+      + _mkTotRow('TOTAL EGRESOS', egrA,
+          m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0),
+          'var(--neg)');
+  })() + `</tbody><tfoot>${pieHtml}</tfoot>`;
 }
 
 // ── Edición manual de flujo cargado ──────────────────────────────
