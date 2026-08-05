@@ -12262,11 +12262,16 @@ function buildComparacionFlujos() {
     if (kpisEl && kpisEl.parentNode) kpisEl.parentNode.insertBefore(resumenEl, kpisEl.nextSibling);
   }
   // posEsBueno: para egresos/déficit, subir es malo; para ingresos, subir es bueno
+  const { resultado: _resA } = _calcResultadoNeto(ingA, egrA);
+  const { resultado: _resB } = _calcResultadoNeto(ingB, egrB);
+  // Aplicar signo: resultado hereda el signo de nec (negativo = déficit)
+  const _resASigned = necA != null && _resA != null ? (necA < 0 ? -Math.abs(_resA) : Math.abs(_resA)) : null;
+  const _resBSigned = necB != null && _resB != null ? (necB < 0 ? -Math.abs(_resB) : Math.abs(_resB)) : null;
   const _resRows = [
     { lbl:'Total egresos',  vA: egrA, vB: egrB,  acento:'var(--neg)', posEsBueno: false },
     ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
     { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
-    ...(ipc&&necB ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: necA, vB: necB*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
+    ...(ipc&&_resBSigned ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
   ];
   resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
     padding:10px 16px;font-family:var(--mono)">
@@ -12318,7 +12323,7 @@ function buildComparacionFlujos() {
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
     ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(1)+'%', c:'#e8c84a', title:'Ingresos totales sobre costo laboral del período actual' }] : []),
-    ...(ipc&&necB ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(necB*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del período anterior en pesos actuales' }] : []),
+    ...(ipc&&_resBSigned ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(_resBSigned*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del resultado neto del período anterior en pesos actuales' }] : []),
     ...(ipcProy&&necA ? [{ l:`Proyección siguiente período`, v:fmtM(necA*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el período actual` }] : []),
   ].map(k => `<div style="padding:${k.big||k.big2?'10px 18px':'8px 14px'};background:var(--s2);
     border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':k.big2?'200px':'110px'};
