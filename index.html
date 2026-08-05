@@ -12137,32 +12137,26 @@ function buildComparacionFlujos() {
     </button>`;
 
     // Vínculos existentes — header con Vincular + Borrar todos, filas con + y ✕
-    const _vinculosOcultos = localStorage.getItem('_vinculosOcultos') === '1';
-    const _toggleVinculos = () => {
-      const oculto = localStorage.getItem('_vinculosOcultos') === '1';
-      localStorage.setItem('_vinculosOcultos', oculto ? '0' : '1');
-      const el = document.getElementById('_vinculosLista');
-      const btn = document.getElementById('_vinculosToggleBtn');
-      if (el) el.style.display = oculto ? '' : 'none';
-      if (btn) btn.textContent = oculto ? '▲' : '▼';
+    const _panelOculto = localStorage.getItem('_vinculosPanelOculto') === '1';
+    window._toggleVinculosPanel = () => {
+      const oculto = localStorage.getItem('_vinculosPanelOculto') === '1';
+      localStorage.setItem('_vinculosPanelOculto', oculto ? '0' : '1');
+      const panel = document.getElementById('_vinculosPanelBody');
+      const btn   = document.getElementById('_vinculosPanelToggle');
+      if (panel) panel.style.display = oculto ? '' : 'none';
+      if (btn)   btn.textContent = oculto ? '▲ Ocultar panel' : '▼ Mostrar panel';
     };
-    window._toggleVinculos = _toggleVinculos;
     const _gruposSection = `
       <div style="margin-bottom:10px">
         <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;
           margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span>Vínculos definidos (${_mapeos.length})</span>
-          <button id="_vinculosToggleBtn" onclick="_toggleVinculos()" title="${_vinculosOcultos ? 'Mostrar vínculos' : 'Ocultar vínculos'}"
-            style="padding:1px 6px;background:rgba(232,200,74,.08);border:1px solid rgba(232,200,74,.2);
-            border-radius:2px;font-size:8px;color:#e8c84a;cursor:pointer;letter-spacing:0;text-transform:none">
-            ${_vinculosOcultos ? '▼' : '▲'}</button>
           ${_btnVincular}
           ${_mapeos.length ? `<button onclick="_mapeoBorrarTodos()" style="padding:2px 7px;
             background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);border-radius:2px;
             font-size:7px;color:var(--neg);cursor:pointer;letter-spacing:0;text-transform:none">
             Borrar todos</button>` : ''}
         </div>
-        <div id="_vinculosLista" style="display:${_vinculosOcultos ? 'none' : ''}">
         ${_mapeos.map((g, idx) => {
           const lblA = g.keysA.map(k => {
             const r = fA.rubros.find(r => r.key === k);
@@ -12189,7 +12183,6 @@ function buildComparacionFlujos() {
               title="Quitar vínculo">✕</button>
           </div>`;
         }).join('')}
-        </div>
       </div>`;
 
     // Columnas de selección (incluye miembros de grupos pre-seleccionados para expansión)
@@ -12239,11 +12232,20 @@ function buildComparacionFlujos() {
           : '');
 
     warnB.innerHTML = showPanel ? `
-      <div style="background:var(--s2);border:1px solid ${formatoDif?'#e8c84a55':'var(--bd)'};
-        border-radius:4px;padding:12px 16px;font-family:var(--mono);margin-bottom:6px">
-        ${warnMsg}
-        ${_gruposSection}
-        ${_columnsSection}
+      <div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+          <button id="_vinculosPanelToggle" onclick="_toggleVinculosPanel()"
+            style="padding:2px 9px;background:var(--s2);border:1px solid var(--bd);border-radius:3px;
+            font-size:7.5px;color:var(--dim);cursor:pointer;font-family:var(--mono);letter-spacing:.04em">
+            ${_panelOculto ? '▼ Mostrar panel' : '▲ Ocultar panel'}</button>
+        </div>
+        <div id="_vinculosPanelBody" style="display:${_panelOculto ? 'none' : ''};
+          background:var(--s2);border:1px solid ${formatoDif?'#e8c84a55':'var(--bd)'};
+          border-radius:4px;padding:12px 16px;font-family:var(--mono)">
+          ${warnMsg}
+          ${_gruposSection}
+          ${_columnsSection}
+        </div>
       </div>` : warnMsg;
   }
 
