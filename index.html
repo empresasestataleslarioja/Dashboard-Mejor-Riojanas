@@ -11233,13 +11233,18 @@ function _flujoNecesidad(f) {
 
 function _flujoIngTotal(f) {
   if (!f) return null;
-  // Prioridad: totalizador de ingresos explícito
+  // Prioridad 1: rubro marcado explícitamente como total de ingresos
   const r = f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.esTotal)
-         ?? f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.label?.toUpperCase().includes('TOTAL'))
-         ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL ING'));
+         // Prioridad 2: label específico de TOTAL INGRESOS (no "TOTAL DE APORTES" ni similares)
+         ?? f.rubros.find(r2 => r2.tipo === 'ingreso' && /TOTAL\s*(DE\s*)?ING/i.test(r2.label||''))
+         ?? f.rubros.find(r2 => /TOTAL\s*(DE\s*)?ING/i.test(r2.label||''));
   if (r) return r.actual ?? null;
-  // Fallback: sumar todos los rubros de ingreso no-totalizadores (igual que _flujoEgrTotal)
-  const ingRows = (f.rubros||[]).filter(r2 => r2.tipo === 'ingreso' && !r2.esTotal && r2.actual != null);
+  // Fallback: sumar solo rubros de ingreso detalle, excluyendo totalizadores intermedios
+  const ingRows = (f.rubros||[]).filter(r2 => {
+    if (r2.tipo !== 'ingreso' || r2.esTotal || r2.actual == null) return false;
+    if (/SUBTOTAL|TOTAL/i.test(r2.label||'')) return false; // excluir totalizadores intermedios
+    return true;
+  });
   if (ingRows.length) return ingRows.reduce((s, r2) => s + r2.actual, 0);
   return null;
 }
@@ -11249,7 +11254,8 @@ function _flujoEgrTotal(f) {
   // Prioridad: totalizador de egresos explícito
   const r = f.rubros.find(r2 => r2.tipo === 'total' && r2.esTotal)
          ?? f.rubros.find(r2 => r2.tipo === 'total')
-         ?? f.rubros.find(r2 => r2.label?.toUpperCase().includes('TOTAL EGR'));
+         ?? f.rubros.find(r2 => /TOTAL\s*(DE\s*)?EGR/i.test(r2.label||''))
+         ?? f.rubros.find(r2 => r2.tipo === 'egreso' && r2.esTotal);
   // Fallback: sumar conceptos de egreso excluyendo totalizadores intermedios
   if (!r) {
     const egrRows = (f.rubros||[]).filter(r2 => {
