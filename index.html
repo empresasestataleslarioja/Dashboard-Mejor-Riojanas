@@ -12460,8 +12460,12 @@ function buildComparacionFlujos() {
     const tfRow = (lbl, vA, vB, posIsGood, extra='') => {
       const vn = _vn(vA, vB);
       const vr = _vr(vn);
-      const cv = _cv(vn, posIsGood);
-      const cr = _cv(vr, posIsGood);
+      // Para SUBTOTAL/RESULTADO: si el valor actual es negativo (déficit),
+      // aumento en absoluto (vn>0) = peor = rojo; disminución = mejor = verde.
+      // Si el valor actual es positivo (superávit), vn>0 = mejor = verde.
+      const _posEff = posIsGood === 'auto' ? (vA == null || vA >= 0) : posIsGood;
+      const cv = _cv(vn, _posEff);
+      const cr = _cv(vr, _posEff);
       const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
       return `<tr style="background:rgba(232,255,71,.05);border-top:2px solid var(--y21)">
         <td style="padding:7px 12px;font-size:9.5px;font-weight:700;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}${extra}</td>
@@ -12487,9 +12491,9 @@ function buildComparacionFlujos() {
       </tr>`;
     };
     return `<tfoot>
-      ${tfRow('SUBTOTAL INGRESOS − EGRESOS', subA, subB, true)}
+      ${tfRow('SUBTOTAL INGRESOS − EGRESOS', subA, subB, 'auto')}
       ${impRow('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)}
-      ${tfRow('RESULTADO NETO', resA, resB, true)}
+      ${tfRow('RESULTADO NETO', resA, resB, 'auto')}
     </tfoot>`;
   })();
 
@@ -13074,7 +13078,7 @@ function exportarFlujoExcel() {
         const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
         const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(a-b)/Math.abs(b)*100:null;
         const _vr2 = (vn) => (vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
-        const pC = (v,posGood) => v==null?T.dim:(posGood?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos));
+        const pC = (v,posGood,vA) => { const eff = posGood==='auto'?(vA==null||vA>=0):posGood; return v==null?T.dim:(eff?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos)); };
         const tfR = (lbl, vA, vB, posGood) => {
           const vn=_vn2(vA,vB); const vr=_vr2(vn);
           const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
@@ -13083,8 +13087,8 @@ function exportarFlujoExcel() {
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${C(vA)}</td>
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;color:${T.dim}">${C(vB)}</td>
             ${ipc?`<td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:9px;color:${T.dim}88">${vBEq?'≈'+C(vBEq):'—'}</td>`:''}
-            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,posGood)}">${P(vn)}</td>
-            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,posGood)}">${P(vr)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,posGood,vA)}">${P(vn)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,posGood,vA)}">${P(vr)}</td>
           </tr>`;
         };
         const impR = (lbl, vA, vB) => {
@@ -13098,9 +13102,9 @@ function exportarFlujoExcel() {
             <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${pC(_vr2(vn),false)}">${P(_vr2(vn))}</td>
           </tr>`;
         };
-        return tfR('SUBTOTAL INGRESOS − EGRESOS', subA, subB, true)
+        return tfR('SUBTOTAL INGRESOS − EGRESOS', subA, subB, 'auto')
              + impR('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)
-             + tfR('RESULTADO NETO', resA, resB, true);
+             + tfR('RESULTADO NETO', resA, resB, 'auto');
       })()}</tfoot>
     </table>
   </div>
