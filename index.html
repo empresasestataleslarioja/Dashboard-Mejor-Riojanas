@@ -11453,15 +11453,68 @@ function buildVistaIndividualFlujo(claveOverride) {
   };
 
   const tbl = document.getElementById('tbl-flujos');
+
+  // Separar rubros: los tipo="resultado" y los ImpCredDeb se muestran en el pie computado
+  const rubrosOrdenados = (() => {
+    const rk = r => {
+      if (r.tipo==='ingreso'  && !r.esTotal) return 1;
+      if (r.tipo==='egreso'   && !r.esTotal && !_esImpCredDeb(r.label)) return 2;
+      if (r.tipo==='ingreso'  &&  r.esTotal) return 3;
+      if (r.tipo==='total'    ||  (r.tipo==='egreso' && r.esTotal)) return 4;
+      if (r.tipo==='resultado' || _esImpCredDeb(r.label)) return 9; // al pie
+      return 2;
+    };
+    return [...f.rubros].sort((a,b) => rk(a) - rk(b));
+  })();
+  const rubrosMain = rubrosOrdenados.filter(r => r.tipo !== 'resultado' && !_esImpCredDeb(r.label));
+
+  // Calcular pie computado
+  const { subtotal, impCredDeb, resultado } = _calcResultadoNeto(ingA, egrA);
+  const _fmtC = v => v == null ? '—' : (v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
+  const _fmtPorMes = (rubros, mes, tipo) => {
+    const suma = rubros.filter(r=>r.tipo===tipo&&!r.esTotal&&!_esImpCredDeb(r.label))
+      .reduce((s,r)=>s+(r.porMes?.[mes]??0),0);
+    return suma;
+  };
+  const nCols = meses.length + (meses.length !== 1 ? 1 : 0) + 1; // +1 concepto
+
+  const _pieFila = (lbl, bg, bt, color, fw, valPorMes, valTotal) =>
+    `<tr style="background:${bg};${bt}">
+      <td style="padding:6px 12px;font-size:9.5px;font-weight:${fw};color:${color};font-family:var(--mono);border-top:2px solid ${color}44">${lbl}</td>
+      ${valPorMes.map(v=>`<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${fw};color:${color};border-top:2px solid ${color}44">${_fmtC(v)}</td>`).join('')}
+      ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${fw};color:${color};background:rgba(100,100,80,.06);border-top:2px solid ${color}44">${_fmtC(valTotal)}</td>` : ''}
+    </tr>`;
+
+  // Valores por mes para el pie
+  const _mesIng = m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
+  const _mesEgr = m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
+  const _mesSub = m => { const i=_mesIng(m),e=Math.abs(_mesEgr(m)); return i-e; };
+  const _mesImp = m => Math.abs(_mesSub(m))*0.012;
+  const _mesRes = m => _mesSub(m)-_mesImp(m);
+
+  const pieHtml = [
+    _pieFila('SUBTOTAL  INGRESOS − EGRESOS',
+      'rgba(100,100,80,.06)', 'border-top:2px solid var(--bd)', 'var(--text)', '600',
+      meses.map(_mesSub), subtotal),
+    _pieFila('IMP. SOBRE CRÉDITO/DÉBITO  (1,2%)',
+      'rgba(232,255,71,.04)', '', '#e8c84a', '500',
+      meses.map(m=>-_mesImp(m)), -impCredDeb),
+    _pieFila('RESULTADO NETO — I. ACTIVIDADES OPERATIVAS',
+      resultado < 0 ? 'rgba(255,71,102,.07)' : 'rgba(71,255,180,.07)',
+      `border-top:2px solid ${resultado<0?'var(--neg)':'var(--pos)'}`,
+      resultado < 0 ? 'var(--neg)' : 'var(--pos)', '700',
+      meses.map(_mesRes), resultado),
+  ].join('');
+
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
     <th style="padding:8px 12px;text-align:left;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd)">Concepto</th>
     ${meses.map(m => `<th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--acc);font-family:var(--mono);border-bottom:1px solid var(--bd)">${m}</th>`).join('')}
     ${meses.length !== 1 ? `<th style="padding:8px 12px;text-align:right;font-size:9px;color:var(--dim);font-family:var(--mono);border-bottom:1px solid var(--bd);background:rgba(100,100,80,.04)">TOTAL</th>` : ''}
   </tr></thead><tbody>` +
-  (sinDesglose ? `<tr><td colspan="${meses.length+2}" style="padding:5px 12px;font-size:8px;color:#ff8c47;font-family:var(--mono);font-style:italic">
+  (sinDesglose ? `<tr><td colspan="${nCols}" style="padding:5px 12px;font-size:8px;color:#ff8c47;font-family:var(--mono);font-style:italic">
     ⚠ Sin desglose mensual disponible — recargá el archivo Excel original para ver datos por mes
   </td></tr>` : '') +
-  f.rubros.map(r => {
+  rubrosMain.map(r => {
     const st = _est(r);
     const ind = st.indent ? `padding-left:${12+st.indent}px` : 'padding:6px 12px';
     return `<tr style="background:${st.bg};${st.bt}">
@@ -11469,7 +11522,7 @@ function buildVistaIndividualFlujo(claveOverride) {
       ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${fmt2(r,m)}</td>`).join('')}
       ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, r.actual) ?? '—'}</td>` : ''}
     </tr>`;
-  }).join('') + '</tbody>';
+  }).join('') + `</tbody><tfoot>${pieHtml}</tfoot>`;
 }
 
 // ── Edición manual de flujo cargado ──────────────────────────────
@@ -11732,7 +11785,7 @@ function _mapeoBorrarTodos() {
   buildComparacionFlujos();
 }
 // ─────────────────────────────────────────────────────────────────────────────
-// Reordena _merged: egresos detalle → egresos total → ingresos detalle → ingresos total → resultado
+// Estructura estándar: INGRESOS detalle → EGRESOS detalle → TOTAL ING → TOTAL EGR → RESULTADO
 // Estable: preserva orden relativo dentro de cada grupo
 function _ordenarMerged(merged) {
   const rank = ({rA, rB}) => {
@@ -11740,17 +11793,33 @@ function _ordenarMerged(merged) {
     if (!r) return 99;
     const t = r.tipo || 'egreso';
     const tot = !!r.esTotal;
-    if (t === 'egreso'   && !tot) return 1;
-    if (t === 'egreso'   &&  tot) return 2;
-    if (t === 'total')            return 2; // total de egresos
-    if (t === 'ingreso'  && !tot) return 3;
-    if (t === 'ingreso'  &&  tot) return 4;
-    if (t === 'resultado')        return 5;
+    if (t === 'ingreso'  && !tot) return 1; // ingresos detalle primero
+    if (t === 'egreso'   && !tot) return 2; // egresos detalle
+    if (t === 'ingreso'  &&  tot) return 3; // total ingresos
+    if (t === 'egreso'   &&  tot) return 4; // subtotal egresos
+    if (t === 'total')            return 4; // total de egresos
+    if (t === 'resultado')        return 5; // resultado (se reemplaza por computed)
     return 6;
   };
   return merged.map((r, i) => [r, i])
     .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
     .map(([r]) => r);
+}
+
+// Detecta rubros de Imp. Crédito/Débito bancario por label
+function _esImpCredDeb(lbl) {
+  const n = (lbl||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  return (n.includes('imp') || n.includes('impuesto')) && (n.includes('cred') || n.includes('deb'));
+}
+
+// Calcula el bloque final: subtotal, imp cred/deb, resultado neto
+function _calcResultadoNeto(ingTotal, egrTotal) {
+  const ing = ingTotal || 0;
+  const egr = Math.abs(egrTotal || 0);
+  const subtotal    = ing - egr;                   // negativo = déficit
+  const impCredDeb  = Math.abs(subtotal) * 0.012;  // 1,2% del subtotal, siempre costo
+  const resultado   = subtotal - impCredDeb;        // más negativo
+  return { subtotal, impCredDeb, resultado };
 }
 
 function buildComparacionFlujos() {
@@ -12303,7 +12372,49 @@ function buildComparacionFlujos() {
       <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${cr};border-bottom:1px solid var(--bd2)">${sinPar?'':fmtP(vr)}</td>
       ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd2)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
     </tr>`;
-  }).join('') + '</tbody>';
+  }).join('') + (() => {
+    // Filas computadas: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
+    const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
+    const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
+    const _vn = (a, b) => (a!=null&&b!=null&&b!==0) ? (a-b)/Math.abs(b)*100 : null;
+    const _vr = (vn) => (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
+    const _cv = (vn, pos) => vn==null?'var(--dim)': (pos?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)'));
+    const nCols = 2 + (ipc?1:0) + 2 + (ipcProy?1:0);
+    const tfRow = (lbl, vA, vB, posIsGood, extra='') => {
+      const vn = _vn(vA, vB);
+      const vr = _vr(vn);
+      const cv = _cv(vn, posIsGood);
+      const cr = _cv(vr, posIsGood);
+      const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
+      return `<tr style="background:rgba(232,255,71,.05);border-top:2px solid var(--y21)">
+        <td style="padding:7px 12px;font-size:9.5px;font-weight:700;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}${extra}</td>
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--y21);border-bottom:1px solid var(--bd)">${fmtM(vA)}</td>
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd)">${fmtM(vB)}</td>
+        ${ipc?`<td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd)">${fmtMEq(vBEq)}</td>`:''}
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${cv};border-bottom:1px solid var(--bd)">${fmtP(vn)}</td>
+        <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${cr};border-bottom:1px solid var(--bd)">${fmtP(vr)}</td>
+        ${ipcProy?`<td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--y21);border-bottom:1px solid var(--bd)">${vA!=null?fmtM(vA*(1+ipcProy/100)):'—'}</td>`:''}
+      </tr>`;
+    };
+    const impRow = (lbl, vA, vB) => {
+      const vn = _vn(vA, vB);
+      const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
+      return `<tr style="background:rgba(255,71,102,.04);border-top:1px solid rgba(255,71,102,.3)">
+        <td style="padding:6px 12px;font-size:9px;font-weight:600;color:var(--neg);font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}</td>
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;font-weight:600;color:var(--neg);border-bottom:1px solid var(--bd)">${fmtM(-vA)}</td>
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd)">${fmtM(-vB)}</td>
+        ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd)">${fmtMEq(-vBEq)}</td>`:''}
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:${_cv(vn,false)};border-bottom:1px solid var(--bd)">${fmtP(vn)}</td>
+        <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:${_cv(_vr(vn),false)};border-bottom:1px solid var(--bd)">${fmtP(_vr(vn))}</td>
+        ${ipcProy?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--neg);border-bottom:1px solid var(--bd)">${fmtM(-vA*(1+ipcProy/100))}</td>`:''}
+      </tr>`;
+    };
+    return `<tfoot>
+      ${tfRow('SUBTOTAL INGRESOS − EGRESOS', subA, subB, true)}
+      ${impRow('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)}
+      ${tfRow('RESULTADO NETO', resA, resB, true)}
+    </tfoot>`;
+  })();
 
   // Gráfico variación — usa _merged para respetar la alineación por label
   const _mergedPares = _merged.filter(({rA,rB}) => rA?.actual && rB?.actual && rB.actual !== 0);
@@ -12871,6 +12982,39 @@ function exportarFlujoExcel() {
         <th>Var. real${ipc?' (Fisher)':''}</th>
       </tr></thead>
       <tbody>${compTableRows}</tbody>
+      <tfoot>${(()=>{
+        const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
+        const { subtotal: subB, impCredDeb: impB, resultado: resB } = _calcResultadoNeto(ingB, egrB);
+        const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(a-b)/Math.abs(b)*100:null;
+        const _vr2 = (vn) => (vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
+        const pC = (v,posGood) => v==null?T.dim:(posGood?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos));
+        const tfR = (lbl, vA, vB, posGood) => {
+          const vn=_vn2(vA,vB); const vr=_vr2(vn);
+          const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
+          return `<tr style="background:${T.acc}18;border-top:2px solid ${T.acc}">
+            <td style="padding:8px 14px;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${lbl}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${C(vA)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;color:${T.dim}">${C(vB)}</td>
+            ${ipc?`<td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:9px;color:${T.dim}88">${vBEq?'≈'+C(vBEq):'—'}</td>`:''}
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,posGood)}">${P(vn)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,posGood)}">${P(vr)}</td>
+          </tr>`;
+        };
+        const impR = (lbl, vA, vB) => {
+          const vn=_vn2(vA,vB); const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
+          return `<tr style="background:${T.neg}10;border-top:1px solid ${T.neg}44">
+            <td style="padding:6px 14px;font-family:monospace;font-size:9.5px;font-weight:600;color:${T.neg}">${lbl}</td>
+            <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${T.neg}">${C(-vA)}</td>
+            <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(-vB)}</td>
+            ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9px;color:${T.dim}88">${vBEq?'≈'+C(-vBEq):'—'}</td>`:''}
+            <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${pC(vn,false)}">${P(vn)}</td>
+            <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${pC(_vr2(vn),false)}">${P(_vr2(vn))}</td>
+          </tr>`;
+        };
+        return tfR('SUBTOTAL INGRESOS − EGRESOS', subA, subB, true)
+             + impR('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)
+             + tfR('RESULTADO NETO', resA, resB, true);
+      })()}</tfoot>
     </table>
   </div>
 
