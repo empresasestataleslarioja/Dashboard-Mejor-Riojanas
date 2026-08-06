@@ -12298,7 +12298,7 @@ function buildComparacionFlujos() {
           } else {
             const vp = _varPct(row.vA, row.vB);
             const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
-            varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(1)}%</span>` : '—';
+            varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(2)}%</span>` : '—';
           }
         } else {
           const vp = _varPct(row.vA, row.vB);
