@@ -12745,6 +12745,14 @@ function exportarFlujoExcel() {
   const necA = _necASignado != null ? Math.abs(_necASignado) : null;
   const necB = _necBSignado != null ? Math.abs(_necBSignado) : null;
 
+  // Variación sobre RESULTADO NETO (post imp. 1,2%) — igual al tfoot del panel activo
+  const { resultado: _rNetA } = _calcResultadoNeto(ingA, egrA);
+  const { resultado: _rNetB } = _calcResultadoNeto(ingB, egrB);
+  const _rNetASign = (_necASignado != null && _rNetA != null) ? (_necASignado < 0 ? -Math.abs(_rNetA) : Math.abs(_rNetA)) : null;
+  const _rNetBSign = (_necBSignado != null && _rNetB != null) ? (_necBSignado < 0 ? -Math.abs(_rNetB) : Math.abs(_rNetB)) : null;
+  const _varNomRes = (_rNetASign != null && _rNetBSign) ? (Math.abs(_rNetASign) - Math.abs(_rNetBSign)) / Math.abs(_rNetBSign) * 100 : null;
+  const _varRealRes = (_varNomRes != null && ipc) ? ((1 + _varNomRes / 100) / (1 + ipc / 100) - 1) * 100 : null;
+
   if (!fA?.rubros?.length) {
     showStorageStatus('⚠ El flujo actual no tiene rubros detallados para exportar.', '#ff8c47');
     return;
@@ -12787,7 +12795,7 @@ function exportarFlujoExcel() {
     const a = Math.abs(Math.round(v));
     return (v<0?'($ ':' $ ') + a.toLocaleString('es-AR') + (v<0?')':'');
   };
-  const P = (v, d=1) => v==null ? '—' : (v>0?'+':'')+v.toFixed(d)+'%';
+  const P = (v, d=2) => v==null ? '—' : (v>0?'+':'')+v.toFixed(d)+'%';
   const pColor = (v, isIng=false) => v==null ? T.dim : isIng ? (v>=0 ? T.pos : T.neg) : (v>=0 ? T.neg : T.pos);
   const pBg    = (v, isIng=false) => {
     if (v==null) return 'transparent';
@@ -12941,12 +12949,12 @@ function exportarFlujoExcel() {
     padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
 
   /* KPI GRID */
-  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; margin-bottom:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; margin-bottom:16px; }
   .kpi-card { background:${T.s1}; border-radius:${T.rad}; border:1px solid ${T.bd}; border-top:3px solid ${T.bd};
-    padding:12px 14px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
-  .kpi-card .lbl { font-size:7.5px; color:${T.dim}; font-family:inherit; letter-spacing:.1em; margin-bottom:6px; }
-  .kpi-card .val { font-size:15px; font-weight:700; font-family:inherit; }
-  .kpi-card .note { font-size:8px; color:${T.dim}; margin-top:4px; font-family:inherit; }
+    padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; justify-content:space-between; }
+  .kpi-card .lbl { font-size:7.5px; color:${T.dim}; font-family:inherit; letter-spacing:.1em; margin-bottom:8px; text-transform:uppercase; }
+  .kpi-card .val { font-size:16px; font-weight:700; font-family:inherit; }
+  .kpi-card .note { font-size:8px; color:${T.dim}; margin-top:5px; font-family:inherit; }
 
   /* SEMÁFORO */
   .semaforo { display:flex; align-items:center; gap:16px; padding:14px 20px; border-radius:${T.rad};
@@ -13022,21 +13030,21 @@ function exportarFlujoExcel() {
   <!-- KPIs -->
   <div class="section-title">Indicadores clave</div>
   <div class="kpis">
-    <div class="kpi-card" style="border-top-color:${T.neg};grid-column:span 2">
-      <div class="lbl">NECESIDAD DE FONDOS · ${fA.periodo}</div>
-      <div class="val" style="color:${T.neg};font-size:20px">${C(necA)}</div>
+    <div class="kpi-card" style="border-top-color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos}">
+      <div class="lbl">RESULTADO NETO · ${fA.periodo}</div>
+      <div class="val" style="color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos};font-size:18px">${C(_rNetASign)}</div>
     </div>
     <div class="kpi-card" style="border-top-color:${T.dim}">
-      <div class="lbl">NECESIDAD ANT. · ${fB.periodo}</div>
-      <div class="val" style="color:${T.dim}">${C(necB)}</div>
+      <div class="lbl">RESULTADO NETO ANT. · ${fB.periodo}</div>
+      <div class="val" style="color:${T.dim};font-size:18px">${C(_rNetBSign)}</div>
     </div>
-    <div class="kpi-card" style="border-top-color:${pColor(-varNom)}">
-      <div class="lbl">VAR. NOMINAL DÉFICIT</div>
-      <div class="val" style="color:${pColor(-varNom)}">${P(varNom)}</div>
+    <div class="kpi-card" style="border-top-color:${pColor(-_varNomRes)}">
+      <div class="lbl">VAR. NOMINAL RESULTADO</div>
+      <div class="val" style="color:${pColor(-_varNomRes)}">${P(_varNomRes)}</div>
     </div>
-    ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(-varReal)}">
+    ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(-_varRealRes)}">
       <div class="lbl">VAR. REAL (FISHER)</div>
-      <div class="val" style="color:${pColor(-varReal)}">${P(varReal)}</div>
+      <div class="val" style="color:${pColor(-_varRealRes)}">${P(_varRealRes)}</div>
       <div class="note">descontando IPC ${ipc}%</div>
     </div>`:''}
     <div class="kpi-card" style="border-top-color:${covColor(covA)}">
