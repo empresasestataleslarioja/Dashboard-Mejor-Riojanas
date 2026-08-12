@@ -33722,11 +33722,12 @@ function _dispararAutoSync() {
       _dispararAutoSync(); // reagendar
       return;
     }
-    // No auto-sincronizar si el conteo de transferencias bajó respecto a la última publicación
+    // No auto-sincronizar si el conteo de transferencias bajó respecto a la última publicación.
+    // Excepción: si el conteo es 0 los datos aún no cargaron desde Sheets (no es una pérdida real).
     const _transVaciaAS = t => !t.beneficiario && !t.saf && !t.organismo && !t.importe;
     const _autoTransCount = (DATA.transferencias || []).filter(t => !_transVaciaAS(t)).length;
     const _autoLastCount  = parseInt(localStorage.getItem(_LS_TRANS_LAST_CNT) || '0', 10);
-    if (_autoLastCount > 0 && _autoTransCount < _autoLastCount) {
+    if (_autoLastCount > 0 && _autoTransCount > 0 && _autoTransCount < _autoLastCount) {
       const ind2 = document.getElementById('save-indicator');
       if (ind2) { ind2.textContent = `⚠ Auto-sync detenido: ${_autoTransCount} trans < ${_autoLastCount} previas. Publicá manualmente.`; ind2.style.color = '#ff8c47'; }
       console.warn(`[AutoSync] Detenido — conteo bajó de ${_autoLastCount} a ${_autoTransCount}`);
