@@ -32566,6 +32566,18 @@ async function syncToCloud(nota) {
     const restoData = Object.assign({}, fullData);
     delete restoData.transferencias;
 
+    // Guardia de balances: si vamos a publicar 0 balances y el último conteo publicado
+    // era > 0, no incluir balances en el payload para evitar borrado accidental.
+    const _LS_BAL_LAST_CNT = 'lr_balances_last_count';
+    const _balNuevo  = (restoData.balances || []).length;
+    const _balPrevio = parseInt(localStorage.getItem(_LS_BAL_LAST_CNT) || '0', 10);
+    if (_balPrevio > 0 && _balNuevo === 0) {
+      console.warn(`[Sync] Guardia balances: 0 locales vs ${_balPrevio} previos — omitiendo balances del payload`);
+      delete restoData.balances;
+      delete restoData.balances_rubros;
+      showStorageStatus(`⚠ Balances omitidos del sync (0 locales vs ${_balPrevio} en Sheets). Descargá desde Sheets para restaurarlos.`, '#ff8c47');
+    }
+
     const payload = {
       token:     _cloudToken,
       tab:       'all',
@@ -32644,6 +32656,11 @@ async function syncToCloud(nota) {
       result = await postViaForm(_cloudUrl, payload);
     }
     if (!result.ok) throw new Error(result.error || 'Error al guardar');
+
+    // Actualizar contador de balances publicados exitosamente
+    if (_balNuevo > 0) {
+      localStorage.setItem(_LS_BAL_LAST_CNT, String(_balNuevo));
+    }
 
     const pubDate = (result.savedAt||'').slice(0,16).replace('T',' ');
     updateCloudStatusBar('ok', 'Publicado ' + pubDate);
@@ -33731,6 +33748,16 @@ function _dispararAutoSync() {
       const ind2 = document.getElementById('save-indicator');
       if (ind2) { ind2.textContent = `⚠ Auto-sync detenido: ${_autoTransCount} trans < ${_autoLastCount} previas. Publicá manualmente.`; ind2.style.color = '#ff8c47'; }
       console.warn(`[AutoSync] Detenido — conteo bajó de ${_autoLastCount} a ${_autoTransCount}`);
+      return;
+    }
+    // No auto-sincronizar si los balances locales son 0 y el último conteo publicado era > 0.
+    const _LS_BAL_LAST_CNT_AS = 'lr_balances_last_count';
+    const _autoBalCount  = Object.keys(_balances || {}).length;
+    const _autoBalPrevio = parseInt(localStorage.getItem(_LS_BAL_LAST_CNT_AS) || '0', 10);
+    if (_autoBalPrevio > 0 && _autoBalCount === 0) {
+      const ind3 = document.getElementById('save-indicator');
+      if (ind3) { ind3.textContent = `⚠ Auto-sync detenido: 0 balances vs ${_autoBalPrevio} previos. Descargá desde Sheets.`; ind3.style.color = '#ff8c47'; }
+      console.warn(`[AutoSync] Detenido — balances bajaron de ${_autoBalPrevio} a 0`);
       return;
     }
     const ind = document.getElementById('save-indicator');
