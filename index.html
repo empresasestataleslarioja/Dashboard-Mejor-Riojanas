@@ -32303,16 +32303,18 @@ async function syncFromCloud(silent, opts) {
     } catch(fetchErr) {
       // Cuando la app se abre como archivo local (file://), fetch falla por CORS.
       // En ese caso informar claramente en lugar de ejecutar JSONP dinámico.
-      const esCORS = fetchErr.name === 'TypeError' || fetchErr.message.includes('CORS') ||
-                     fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError');
       const esLocal = location.protocol === 'file:';
-      if (esCORS || esLocal) {
+      if (esLocal) {
         if (!silent) showStorageStatus(
           '⚠ Sin acceso al servidor: abrí el dashboard desde un servidor web (no desde archivo local) para sincronizar con Sheets.',
           '#ff8c47'
         );
       } else {
-        if (!silent) showStorageStatus('✗ No se pudo conectar con el servidor: ' + fetchErr.message, 'var(--neg)');
+        if (!silent) showStorageStatus(
+          '✗ Error de conexión con Sheets: ' + fetchErr.message +
+          ' — Verificá que el Apps Script esté desplegado como Aplicación web con acceso "Cualquier usuario" y redesployá con nueva versión.',
+          'var(--neg)'
+        );
       }
       if (btn) { btn.disabled = false; btn.textContent = '↓ Sincronizar'; }
       updateCloudStatusBar('error');
