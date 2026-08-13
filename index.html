@@ -33017,8 +33017,8 @@ function applyCloudData(cloud, opts) {
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
       const tsCloud = parseInt(f.timestamp) || 0;
       const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
-      // Conservar versión local si es igual o más reciente (>= evita pisar con misma versión de Sheets)
-      if (tsLocal >= tsCloud) return;
+      // Conservar versión local si es más reciente. Si ambos son 0 (nuevo dispositivo), cargar desde Sheets.
+      if (tsLocal > 0 && tsLocal >= tsCloud) return;
       let rubros_parsed = [];
       try { rubros_parsed = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
       // Si la versión de Sheets no tiene rubros pero la local sí, conservar la local (no degradar)
