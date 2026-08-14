@@ -11073,6 +11073,15 @@ function _editarPeriodoFlujo(clave) {
 function _eliminarFlujo(clave) {
   if (!confirm('¿Eliminar este flujo?')) return;
   delete DATA.flujos[clave];
+  // Purgar del snapshot de Sheets para que buildCloudPayload no lo re-agregue
+  try {
+    const _snap = JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]');
+    const _snapFilt = _snap.filter(f => {
+      const k = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+      return k !== clave;
+    });
+    localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(_snapFilt));
+  } catch(e) {}
   saveDataToLocalCache();
   // Subir inmediatamente a Sheets para que la eliminación persista
   try { syncToCloud('Eliminación de flujo'); } catch(e) { try { _dispararAutoSync(); } catch(e2) {} }
