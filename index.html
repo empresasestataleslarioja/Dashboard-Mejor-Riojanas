@@ -33014,12 +33014,22 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // Restaurar flujos de fondos desde Sheets — MERGE, nunca reemplazar
-  // Sheets es fuente de verdad: los registros publicados jamás se eliminan.
+  // Restaurar flujos de fondos desde Sheets — MERGE con detección de eliminaciones
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
     DATA.flujos = DATA.flujos || {};
-    // Guardar snapshot de lo que vino de Sheets para que buildCloudPayload
-    // pueda incluir flujos de Sheets que no estén cargados localmente
+    // Detectar flujos que estaban en el snap anterior pero ya no están en Sheets → fueron eliminados
+    try {
+      const _oldSnap = JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]');
+      if (_oldSnap.length > 0) {
+        const _newClaves = new Set(cloud.flujos.map(f =>
+          f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado')));
+        _oldSnap.forEach(f => {
+          const k = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+          if (!_newClaves.has(k) && DATA.flujos[k]) delete DATA.flujos[k];
+        });
+      }
+    } catch(e) {}
+    // Guardar snapshot actualizado de lo que vino de Sheets
     try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
