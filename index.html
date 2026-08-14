@@ -11070,10 +11070,24 @@ function _editarPeriodoFlujo(clave) {
   if (msg) { msg.textContent = `✓ Período actualizado a "${nuevo.trim()}"`; msg.style.color = 'var(--pos)'; }
 }
 
+// Claves de flujos eliminados localmente — se excluyen de cualquier sync
+const _LS_FLUJOS_DEL = 'lr_flujos_deleted_v1';
+function _getFlujosDel() {
+  try { return new Set(JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]')); } catch(e) { return new Set(); }
+}
+function _addFlujosDel(clave) {
+  try {
+    const s = _getFlujosDel(); s.add(clave);
+    localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify([...s]));
+  } catch(e) {}
+}
+
 function _eliminarFlujo(clave) {
   if (!confirm('¿Eliminar este flujo?')) return;
   delete DATA.flujos[clave];
-  // Purgar del snapshot de Sheets para que buildCloudPayload no lo re-agregue
+  // Registrar como eliminado — buildCloudPayload lo excluirá siempre
+  _addFlujosDel(clave);
+  // Purgar también del snap de Sheets
   try {
     const _snap = JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]');
     const _snapFilt = _snap.filter(f => {
@@ -33031,9 +33045,12 @@ function applyCloudData(cloud, opts) {
     } catch(e) {}
     // Guardar snapshot actualizado de lo que vino de Sheets
     try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
+    const _delSet = (typeof _getFlujosDel === 'function') ? _getFlujosDel() : new Set();
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+      // No restaurar flujos eliminados localmente
+      if (_delSet.has(clave)) return;
       const tsCloud = parseInt(f.timestamp) || 0;
       const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
       // Conservar versión local si es más reciente. Si ambos son 0 (nuevo dispositivo), cargar desde Sheets.
@@ -33395,12 +33412,17 @@ function buildCloudPayload() {
   const _sheetsSnap = (() => {
     try { return JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]'); } catch(e) { return []; }
   })();
-  // Base: todos los flujos locales actuales
-  const _flujosBase = { ...(DATA.flujos || {}) };
+  // Set de claves eliminadas localmente — nunca se incluyen en el payload
+  const _flujosDel = (typeof _getFlujosDel === 'function') ? _getFlujosDel() : new Set();
+  // Base: flujos locales, excluyendo los marcados como eliminados
+  const _flujosBase = {};
+  Object.entries(DATA.flujos || {}).forEach(([k, v]) => { if (!_flujosDel.has(k)) _flujosBase[k] = v; });
   // Agregar flujos del snapshot de Sheets que no existen localmente (no eliminar publicados)
+  // pero sí respetar eliminaciones locales
   _sheetsSnap.forEach(f => {
     if (!f.empresa || !f.periodo) return;
     const k = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+    if (_flujosDel.has(k)) return; // eliminado localmente — no re-agregar
     if (!_flujosBase[k]) {
       // Flujo en Sheets pero no local — reconstruir estructura mínima para preservarlo
       let rp = []; try { rp = JSON.parse(f.rubros_json || '[]'); } catch(e) {}
