@@ -11087,6 +11087,7 @@ function _eliminarFlujo(clave) {
   delete DATA.flujos[clave];
   // Registrar como eliminado — buildCloudPayload lo excluirá siempre
   _addFlujosDel(clave);
+  console.log('[Flujos] Eliminado:', clave, '| Set actual:', [..._getFlujosDel()]);
   // Purgar también del snap de Sheets
   try {
     const _snap = JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]');
@@ -33414,6 +33415,8 @@ function buildCloudPayload() {
   })();
   // Set de claves eliminadas localmente — nunca se incluyen en el payload
   const _flujosDel = (typeof _getFlujosDel === 'function') ? _getFlujosDel() : new Set();
+  console.log('[Flujos] Claves locales:', Object.keys(DATA.flujos||{}).length,
+    '| Eliminadas:', [..._flujosDel], '| Snap:', _sheetsSnap.length);
   // Base: flujos locales, excluyendo los marcados como eliminados
   const _flujosBase = {};
   Object.entries(DATA.flujos || {}).forEach(([k, v]) => { if (!_flujosDel.has(k)) _flujosBase[k] = v; });
