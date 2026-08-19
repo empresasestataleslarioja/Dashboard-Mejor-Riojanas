@@ -33028,10 +33028,20 @@ function applyCloudData(cloud, opts) {
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
-      // No restaurar flujos eliminados localmente
-      if (_delSet.has(clave)) return;
       const tsCloud = parseInt(f.timestamp) || 0;
       const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
+      // Si está en el set de eliminaciones pero Sheets tiene una versión más reciente
+      // (fue recreado en otro dispositivo), limpiar la eliminación y restaurar
+      if (_delSet.has(clave)) {
+        if (tsCloud > 0 && tsCloud > tsLocal) {
+          _delSet.delete(clave);
+          try {
+            localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify([..._delSet]));
+          } catch(e) {}
+        } else {
+          return; // eliminación local más reciente — no restaurar
+        }
+      }
       // Conservar versión local si es más reciente. Si ambos son 0 (nuevo dispositivo), cargar desde Sheets.
       if (tsLocal > 0 && tsLocal >= tsCloud) return;
       let rubros_parsed = [];
