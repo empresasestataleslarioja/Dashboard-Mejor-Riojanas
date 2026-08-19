@@ -32839,43 +32839,44 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // TRANSFERENCIAS: nunca tocar en sync automático (skipTransferencias=true)
-  // Solo sincronizar cuando el usuario lo pide explícitamente desde el menú
+  // TRANSFERENCIAS: merge — agregar registros de Sheets que no existen localmente.
+  // Nunca eliminar registros locales. La eliminación es acción explícita del usuario.
   if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
-    // PROTECCIÓN: si Sheets trae menos registros que los que hay localmente,
-    // no reemplazar — puede ser un dato desactualizado por latencia del POST no-cors
-    const _localCount = (DATA.transferencias || []).length;
-    const _cloudCount = cloud.transferencias.length;
-    if (_localCount > 0 && _cloudCount < _localCount * 0.8) {
-      console.warn(`[LR] applyCloudData: Sheets tiene ${_cloudCount} transferencias vs ${_localCount} locales — se mantienen los datos locales`);
-      // No reemplazar — conservar datos locales más completos
-    } else {
-    _backupTransferenciasLocal('antes de aplicar datos de Sheets');
-    // SHEETS MANDA: reemplazar completamente las transferencias locales
-    DATA.transferencias = cloud.transferencias.map(r => ({
-      saf:          r.saf          || '',
-      organismo:    r.organismo    || '',
-      beneficiario: r.beneficiario || '',
-      empresa:      r.empresa      || '',
-      ff:           r.ff           || '',
-      cgto:         r.cgto         || '',
-      observacion:  r.observacion  || '',
-      mes:            r.mes   ? (parseInt(r.mes) || 0) : 0,
-      año:            r.año   ? (parseInt(r.año) || 0) : 0,
-      importe:        parseFloat(r.importe) || 0,
-      categoria:      r.categoria       || 'Sin Clasificar',
-      semana:         r.semana ? (parseInt(r.semana) || null) : null,
-      esMesCompleto:  r.esMesCompleto === 1 || r.esMesCompleto === '1' || r.esMesCompleto === true,
-      _archivo:       r._archivo        || '',
-      _hoja:          r._hoja           || '',
-    }));
+    DATA.transferencias = DATA.transferencias || [];
+    // Construir set de claves locales existentes
+    const _transLocalKeys = new Set(DATA.transferencias.map(t =>
+      [t.beneficiario||'', t.año||'', t.mes||'', t.importe||''].join('|')));
+    let _agregadas = 0;
+    cloud.transferencias.forEach(r => {
+      const k = [r.beneficiario||'', r.año||'', r.mes||'', r.importe||''].join('|');
+      if (_transLocalKeys.has(k)) return; // ya existe localmente — no tocar
+      _transLocalKeys.add(k);
+      _agregadas++;
+      DATA.transferencias.push({
+        saf:          r.saf          || '',
+        organismo:    r.organismo    || '',
+        beneficiario: r.beneficiario || '',
+        empresa:      r.empresa      || '',
+        ff:           r.ff           || '',
+        cgto:         r.cgto         || '',
+        observacion:  r.observacion  || '',
+        mes:          r.mes   ? (parseInt(r.mes) || 0) : 0,
+        año:          r.año   ? (parseInt(r.año) || 0) : 0,
+        importe:      parseFloat(r.importe) || 0,
+        categoria:    r.categoria       || 'Sin Clasificar',
+        semana:       r.semana ? (parseInt(r.semana) || null) : null,
+        esMesCompleto: r.esMesCompleto === 1 || r.esMesCompleto === '1' || r.esMesCompleto === true,
+        _archivo:     r._archivo        || '',
+        _hoja:        r._hoja           || '',
+      });
+    });
+    if (_agregadas > 0) console.log(`[Sync] Transferencias: +${_agregadas} nuevas desde Sheets (total: ${DATA.transferencias.length})`);
     // Recalcular años disponibles
     DATA.transferencias.forEach(t => {
       const a = parseInt(t.año);
       if (a && !DATA.years.includes(a)) DATA.years.push(a);
     });
     DATA.years.sort();
-    } // fin else (Sheets tiene datos válidos)
   }
 
   // notas
@@ -32884,19 +32885,16 @@ function applyCloudData(cloud, opts) {
     cloud.notas.forEach(r => { if (r.empresa && r.nota) DATA.notas[r.empresa] = r.nota; });
   }
 
-  // balances PDF: restaurar objetos analizados
-  // IMPORTANTE: si Sheets devuelve la hoja de balances (aunque esté vacía),
-  // reemplazamos _balances completamente — no mergeamos — para que las
-  // eliminaciones realizadas en el dashboard se reflejen correctamente.
+  // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
   if (Array.isArray(cloud.balances)) {
-    // SHEETS MANDA: siempre reemplazar balances locales con los de Sheets
-    _balances = {};
     if (true) {
-      // Sin datos locales → restaurar desde Sheets
+      // Merge: agregar desde Sheets los que no existen localmente; si existe local, conservarlo
       const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
       cloud.balances.forEach(r => {
         if (!r.empresa || !r.periodo) return;
         const key = r.empresa + '_' + r.periodo;
+        // Si ya existe localmente, conservar el local (no sobreescribir con Sheets)
+        if (_balances[key]) return;
         _balances[key] = {
         filename:     key,
         empresa:      r.empresa,
@@ -33034,21 +33032,9 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // Restaurar flujos de fondos desde Sheets — MERGE con detección de eliminaciones
+  // Restaurar flujos de fondos desde Sheets — solo AGREGAR, nunca eliminar locales
   if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
     DATA.flujos = DATA.flujos || {};
-    // Detectar flujos que estaban en el snap anterior pero ya no están en Sheets → fueron eliminados
-    try {
-      const _oldSnap = JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]');
-      if (_oldSnap.length > 0) {
-        const _newClaves = new Set(cloud.flujos.map(f =>
-          f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado')));
-        _oldSnap.forEach(f => {
-          const k = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
-          if (!_newClaves.has(k) && DATA.flujos[k]) delete DATA.flujos[k];
-        });
-      }
-    } catch(e) {}
     // Guardar snapshot actualizado de lo que vino de Sheets
     try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
     const _delSet = (typeof _getFlujosDel === 'function') ? _getFlujosDel() : new Set();
