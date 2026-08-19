@@ -32879,10 +32879,12 @@ function applyCloudData(cloud, opts) {
     DATA.years.sort();
   }
 
-  // notas
+  // notas — merge: agregar desde Sheets las que no existen localmente
   if (cloud.notas && cloud.notas.length) {
-    DATA.notas = {};
-    cloud.notas.forEach(r => { if (r.empresa && r.nota) DATA.notas[r.empresa] = r.nota; });
+    DATA.notas = DATA.notas || {};
+    cloud.notas.forEach(r => {
+      if (r.empresa && r.nota && !DATA.notas[r.empresa]) DATA.notas[r.empresa] = r.nota;
+    });
   }
 
   // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
@@ -32893,8 +32895,10 @@ function applyCloudData(cloud, opts) {
       cloud.balances.forEach(r => {
         if (!r.empresa || !r.periodo) return;
         const key = r.empresa + '_' + r.periodo;
-        // Si ya existe localmente, conservar el local (no sobreescribir con Sheets)
-        if (_balances[key]) return;
+        // Si existe local más reciente, conservarlo; si Sheets es más reciente o no existe, tomar de Sheets
+        const _tsSheets = r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : 0;
+        const _tsLocal  = _balances[key] ? (_balances[key].timestamp || 0) : 0;
+        if (_tsLocal > 0 && _tsLocal >= _tsSheets) return; // local más reciente → conservar
         _balances[key] = {
         filename:     key,
         empresa:      r.empresa,
