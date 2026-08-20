@@ -11511,7 +11511,13 @@ function buildVistaIndividualFlujo(claveOverride) {
   const rubrosEgrDet = rubrosDetalle.filter(r => r.tipo !== 'ingreso');
 
   // Calcular pie computado
-  const { subtotal, impCredDeb, resultado } = _calcResultadoNeto(ingA, egrA);
+  // Si hay un rubro explícito de imp. cred/déb (o gastos bancarios), usar su valor
+  // y descontarlo de egrA para no duplicar
+  const _rubroImpCD = f.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+  const egrAajust   = _rubroImpCD ? (egrA || 0) - Math.abs(_rubroImpCD.actual || 0) : egrA;
+  const { subtotal, impCredDeb: _impCDCalc, resultado: _resCalc } = _calcResultadoNeto(ingA, egrAajust);
+  const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : _impCDCalc;
+  const resultado  = subtotal - impCredDeb;
   const _fmtC = v => v == null ? '—' : (v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
   const _fmtPorMes = (rubros, mes, tipo) => {
     const suma = rubros.filter(r=>r.tipo===tipo&&!r.esTotal&&!_esImpCredDeb(r.label))
@@ -11531,8 +11537,11 @@ function buildVistaIndividualFlujo(claveOverride) {
   const _mesIng = m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesEgr = m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesSub = m => { const i=_mesIng(m),e=Math.abs(_mesEgr(m)); return i-e; };
-  const _mesImp = m => Math.abs(_mesSub(m))*0.012;
-  const _mesRes = m => _mesSub(m)-_mesImp(m);
+  // Si hay rubro explícito de imp. cred/déb, usar su valor por mes; si no, calcular 1,2%
+  const _mesImp = _rubroImpCD
+    ? m => Math.abs(_rubroImpCD.porMes?.[m] ?? 0)
+    : m => Math.abs(_mesSub(m)) * 0.012;
+  const _mesRes = m => _mesSub(m) - _mesImp(m);
 
   const pieHtml = [
     _pieFila('SUBTOTAL  INGRESOS − EGRESOS',
@@ -11867,7 +11876,9 @@ function _ordenarMerged(merged) {
 // Detecta rubros de Imp. Crédito/Débito bancario por label
 function _esImpCredDeb(lbl) {
   const n = (lbl||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  return (n.includes('imp') || n.includes('impuesto')) && (n.includes('cred') || n.includes('deb'));
+  if ((n.includes('imp') || n.includes('impuesto')) && (n.includes('cred') || n.includes('deb'))) return true;
+  if (/gastos?\s+bancarios?/.test(n)) return true;
+  return false;
 }
 
 // Calcula el bloque final: subtotal, imp cred/deb, resultado neto
