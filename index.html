@@ -32838,11 +32838,16 @@ function applyCloudData(cloud, opts) {
   if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
     DATA.transferencias = DATA.transferencias || [];
     // Construir set de claves locales existentes
-    const _transLocalKeys = new Set(DATA.transferencias.map(t =>
-      [t.beneficiario||'', t.año||'', t.mes||'', t.importe||''].join('|')));
+    const _transKey = t => [
+      (t.beneficiario||'').trim(),
+      String(t.año||'').trim(),
+      String(t.mes||'').trim(),
+      String(Math.round(parseFloat(t.importe||0)))
+    ].join('|');
+    const _transLocalKeys = new Set(DATA.transferencias.map(_transKey));
     let _agregadas = 0;
     cloud.transferencias.forEach(r => {
-      const k = [r.beneficiario||'', r.año||'', r.mes||'', r.importe||''].join('|');
+      const k = _transKey(r);
       if (_transLocalKeys.has(k)) return; // ya existe localmente — no tocar
       _transLocalKeys.add(k);
       _agregadas++;
