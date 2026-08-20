@@ -2091,6 +2091,48 @@ self.onmessage = async (e) => {
         font-size:9.5px;border-radius:3px;cursor:pointer;font-family:var(--mono)">
         🧪 Probar POST (diagnóstico de escritura)
       </button>
+
+      <!-- Sync por módulo -->
+      <div style="border-top:1px solid var(--bd);padding-top:10px;margin-bottom:10px">
+        <div style="font-size:9px;color:var(--dim);margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase">Sincronización por módulo</div>
+        <table style="width:100%;border-collapse:collapse;font-size:8.5px;font-family:var(--mono)">
+          <thead>
+            <tr>
+              <td style="color:var(--dim);padding:2px 4px"></td>
+              <td style="color:var(--dim);padding:2px 4px;text-align:center">↑ Publicar</td>
+              <td style="color:var(--dim);padding:2px 4px;text-align:center">↓ Descargar</td>
+              <td style="color:var(--dim);padding:2px 4px;text-align:center">⟳ Restaurar</td>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Transferencias</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloTransferencias()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('transferencias')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="restaurarDesdeSheets('transferencias')" style="padding:2px 8px;font-size:8px;background:rgba(255,100,71,.1);border:1px solid #ff647155;color:var(--neg);border-radius:2px;cursor:pointer;font-family:var(--mono)">⟳</button></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Balances</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloBalances()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('balances')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="restaurarDesdeSheets('balances')" style="padding:2px 8px;font-size:8px;background:rgba(255,100,71,.1);border:1px solid #ff647155;color:var(--neg);border-radius:2px;cursor:pointer;font-family:var(--mono)">⟳</button></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Flujos</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloFlujos()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('flujos')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="restaurarDesdeSheets('flujos')" style="padding:2px 8px;font-size:8px;background:rgba(255,100,71,.1);border:1px solid #ff647155;color:var(--neg);border-radius:2px;cursor:pointer;font-family:var(--mono)">⟳</button></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Personal</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloPersonal()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('personal')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="font-size:8px;color:var(--dim);margin-top:6px;line-height:1.5">⟳ Restaurar: reemplaza datos locales con Sheets (pide confirmación)</div>
+      </div>
       <div id="cloud-last-update" style="display:none;margin-bottom:10px;font-size:8.5px;color:var(--dim);font-family:var(--mono)"></div>
       <!-- Config -->
       <div style="border-top:1px solid var(--bd);padding-top:12px">
@@ -32572,6 +32614,66 @@ async function syncSoloTransferencias() {
 
 
 
+// ── Funciones por módulo ─────────────────────────────────────────────
+
+async function syncSoloBalances() {
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando balances…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _cloudUser||'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros } });
+    if (ind) { ind.textContent = '✓ Balances publicados'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+async function syncSoloFlujos() {
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando flujos…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _cloudUser||'cargador', nota: 'Publicación flujos', data: { flujos: payload.flujos, flujos_config: payload.flujos_config, flujos_a_eliminar: payload.flujos_a_eliminar } });
+    if (ind) { ind.textContent = '✓ Flujos publicados'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+async function syncSoloPersonal() {
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando personal…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _cloudUser||'cargador', nota: 'Publicación personal', data: { personal: payload.personal } });
+    if (ind) { ind.textContent = '✓ Personal publicado'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+async function descargarSoloModulo(modulo) {
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⟳ Descargando ' + modulo + '…'; ind.style.color = '#47e8ff'; }
+  try {
+    await syncFromCloud(false, { soloModulo: modulo });
+    if (ind) { ind.textContent = '✓ ' + modulo + ' actualizado'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+async function restaurarDesdeSheets(modulo) {
+  const nombres = { transferencias: 'Transferencias', balances: 'Balances', flujos: 'Flujos', personal: 'Personal' };
+  if (!confirm(`⚠ Restaurar ${nombres[modulo]||modulo} desde Sheets\n\nEsto reemplazará los registros locales de ${nombres[modulo]||modulo} con los de Sheets.\nLos datos locales no publicados se perderán.\n\n¿Confirmás?`)) return;
+  if (modulo === 'transferencias') { DATA.transferencias = []; }
+  else if (modulo === 'balances') { _balances = {}; }
+  else if (modulo === 'flujos') { DATA.flujos = {}; try { localStorage.removeItem('lr_flujos_sheets_snap'); localStorage.removeItem(_LS_FLUJOS_DEL); } catch(e) {} }
+  else if (modulo === 'personal') { DATA.personal = []; DATA.pers_totals = {}; }
+  saveDataToLocalCache();
+  await descargarSoloModulo(modulo);
+}
+
 async function syncToCloud(nota) {
   if (isReadonlyUser()) {
     showStorageStatus('⚠ Usuario de solo lectura — sin permisos de escritura', '#ff8c47');
@@ -32743,6 +32845,8 @@ async function syncToCloud(nota) {
 // ── Convertir datos flat del Sheet → estructura DATA ─────────────
 function applyCloudData(cloud, opts) {
   opts = opts || {};
+  // Si soloModulo está definido, saltar todo lo demás
+  const _solo = opts.soloModulo || null; // 'transferencias'|'balances'|'flujos'|'personal'|null
   // ── Restaurar usuarios en localStorage (sincronización entre dispositivos) ──
   if (cloud.lr_users_extra && typeof cloud.lr_users_extra === 'object') {
     try {
@@ -32755,7 +32859,7 @@ function applyCloudData(cloud, opts) {
     try { localStorage.setItem('lr_readonly_v1', JSON.stringify(cloud.lr_readonly)); } catch(e) {}
   }
   // fact: rows con columnas: empresa, 2020, 2021, 2022, 2023, 2024, 2025, 2026
-  if (cloud.fact && cloud.fact.length) {
+  if ((!_solo || _solo === 'fact') && cloud.fact && cloud.fact.length) {
     DATA.fact = {};
     DATA.totals_fact = {};
     cloud.fact.forEach(row => {
@@ -32796,7 +32900,7 @@ function applyCloudData(cloud, opts) {
   }
 
   // personal: rows con columnas: empresa, 2020..2026
-  if (cloud.personal && cloud.personal.length) {
+  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length) {
     DATA.personal    = [];
     DATA.pers_totals = {};
     cloud.personal.forEach(row => {
@@ -32835,7 +32939,7 @@ function applyCloudData(cloud, opts) {
 
   // TRANSFERENCIAS: merge — agregar registros de Sheets que no existen localmente.
   // Nunca eliminar registros locales. La eliminación es acción explícita del usuario.
-  if (!opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
+  if ((!_solo || _solo === 'transferencias') && !opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
     DATA.transferencias = DATA.transferencias || [];
     // Construir set de claves locales existentes
     const _transKey = t => [
@@ -32887,7 +32991,7 @@ function applyCloudData(cloud, opts) {
   }
 
   // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
-  if (Array.isArray(cloud.balances)) {
+  if ((!_solo || _solo === 'balances') && Array.isArray(cloud.balances)) {
     if (true) {
       // Merge: agregar desde Sheets los que no existen localmente; si existe local, conservarlo
       const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
@@ -33036,7 +33140,7 @@ function applyCloudData(cloud, opts) {
   }
 
   // Restaurar flujos de fondos desde Sheets — solo AGREGAR, nunca eliminar locales
-  if (Array.isArray(cloud.flujos) && cloud.flujos.length) {
+  if ((!_solo || _solo === 'flujos') && Array.isArray(cloud.flujos) && cloud.flujos.length) {
     DATA.flujos = DATA.flujos || {};
     // Guardar snapshot actualizado de lo que vino de Sheets
     try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
