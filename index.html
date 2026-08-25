@@ -2142,6 +2142,21 @@ self.onmessage = async (e) => {
   </div>
 
   <!-- ══ PANEL FLOTANTE DE VISUALIZACIÓN ════════════════════════ -->
+  <!-- Popover detalle rubros KPI -->
+  <div id="kpi-rubro-popover" style="display:none;position:fixed;z-index:9000;
+    background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);padding:12px 14px;min-width:220px;max-width:320px;
+    font-family:var(--mono);font-size:8.5px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span id="kpi-pop-title" style="font-size:9px;font-weight:600;color:var(--text);letter-spacing:.06em"></span>
+      <button onclick="document.getElementById('kpi-rubro-popover').style.display='none'"
+        style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:13px;padding:0 2px;line-height:1">✕</button>
+    </div>
+    <div id="kpi-pop-body" style="color:var(--dim);line-height:1.9"></div>
+    <div id="kpi-pop-total" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--bd);
+      font-weight:700;color:var(--text)"></div>
+  </div>
+
   <div id="viz-panel" style="display:none;position:fixed;top:52px;left:210px;right:0;
     background:var(--s1);border-bottom:2px solid var(--bd2);z-index:150;
     padding:10px 22px 12px;box-shadow:0 6px 20px rgba(0,0,0,.35)">
@@ -11295,42 +11310,87 @@ function _flujoEgrTotal(f) {
 }
 
 function _flujoLaboral(f) {
-  if (!f) return null;
-  const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const _esLaboral = lbl => {
-    const u = _n(lbl);
-    // Categorías Excel: remuneraciones y cargas sociales
-    if (u.includes('REMUNER') || (u.includes('CARGA') && u.includes('SOCIAL'))) return true;
-    // Honorarios directores/síndicos y profesionales
-    if (u.includes('HONORAR') && (u.includes('DIRECT') || u.includes('SINDIC') || u.includes('PROFES'))) return true;
-    // Equivalentes comunes en flujos no estándar
-    if ((u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') ||
-        u.includes('HABERES') || u.includes('JORNAL') || u.includes('SAC') || u.includes('AGUINALDO')) return true;
-    return false;
-  };
-  const matches = (f.rubros||[]).filter(r2 => !r2.esTotal && r2.actual != null && _esLaboral(r2.label));
-  if (!matches.length) return null;
-  return matches.reduce((s, r2) => s + Math.abs(r2.actual ?? 0), 0);
+  const rows = _flujoLaboralRows(f);
+  if (!rows.length) return null;
+  return rows.reduce((s, r2) => s + Math.abs(r2.actual ?? 0), 0);
 }
 
 // Ingresos operativos: excluye subsidios y transferencias del estado
-function _flujoIngOperativo(f) {
-  if (!f) return null;
-  const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const _esSubsidio = lbl => {
-    const u = _n(lbl);
-    return u.includes('SUBSIDIO') || /TRANSFERENCIA.{0,12}ESTADO/.test(u) ||
-           /APORTE.{0,12}ESTADO/.test(u) || /COBRO.{0,12}SUBSIDIO/.test(u);
-  };
-  const rows = (f.rubros||[]).filter(r2 => {
+// Rubros de ingreso no operativos — excluidos de los indicadores de cobertura
+function _esIngExcluido(lbl) {
+  const u = (lbl||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if (u.includes('SUBSIDIO') || /TRANSFERENCIA.{0,12}ESTADO/.test(u) ||
+      /APORTE.{0,12}ESTADO/.test(u) || /COBRO.{0,12}SUBSIDIO/.test(u)) return true;
+  // Saldos de OP / órdenes de pago / remesas — no son ingresos de explotación
+  if (/SALDO.{0,6}OP/.test(u) || /ORDEN(ES)?.{0,6}(DE.{0,4})?PAGO/.test(u) ||
+      u.includes('OP VIGENTE') || u.includes('SALDO INICIAL') || u.includes('SALDO ANTERIOR')) return true;
+  return false;
+}
+
+function _flujoIngOperativoRows(f) {
+  if (!f) return [];
+  return (f.rubros||[]).filter(r2 => {
     if (r2.tipo !== 'ingreso' || r2.esTotal || r2.actual == null) return false;
     if (/SUBTOTAL|TOTAL/i.test(r2.label||'')) return false;
-    if (_esSubsidio(r2.label)) return false;
+    if (_esIngExcluido(r2.label)) return false;
     return true;
   });
-  if (rows.length) return rows.reduce((s, r2) => s + r2.actual, 0);
-  return _flujoIngTotal(f); // fallback si no hay rubros detalle
 }
+
+function _flujoIngOperativo(f) {
+  if (!f) return null;
+  const rows = _flujoIngOperativoRows(f);
+  if (rows.length) return rows.reduce((s, r2) => s + r2.actual, 0);
+  return _flujoIngTotal(f);
+}
+
+function _flujoLaboralRows(f) {
+  if (!f) return [];
+  const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _esLab = lbl => {
+    const u = _n(lbl);
+    return u.includes('REMUNER') || (u.includes('CARGA') && u.includes('SOCIAL')) ||
+           (u.includes('HONORAR') && (u.includes('DIRECT') || u.includes('SINDIC') || u.includes('PROFES'))) ||
+           (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') ||
+           u.includes('HABERES') || u.includes('JORNAL') || u.includes('SAC') || u.includes('AGUINALDO');
+  };
+  return (f.rubros||[]).filter(r2 => !r2.esTotal && r2.actual != null && _esLab(r2.label));
+}
+
+function mostrarKpiDetalle(evt, popKey) {
+  const pop = document.getElementById('kpi-rubro-popover');
+  if (!pop) return;
+  const data = (window._kpiPopData || {})[popKey];
+  if (!data) return;
+  const { titulo, rows, totalLabel } = data;
+  document.getElementById('kpi-pop-title').textContent = titulo;
+  const fmt = v => (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+  const total = rows.reduce((s, r) => s + Math.abs(r.actual ?? 0), 0);
+  document.getElementById('kpi-pop-body').innerHTML = rows.length
+    ? rows.map(r => `<div style="display:flex;justify-content:space-between;gap:12px">
+        <span style="color:var(--dim);max-width:180px;white-space:normal">${r.label}</span>
+        <span style="color:var(--text);white-space:nowrap;font-weight:600">${fmt(Math.abs(r.actual??0))}</span>
+      </div>`).join('')
+    : '<span style="color:var(--dim)">Sin rubros detectados</span>';
+  document.getElementById('kpi-pop-total').innerHTML =
+    `<div style="display:flex;justify-content:space-between;gap:12px">
+      <span style="color:var(--dim)">${totalLabel}</span>
+      <span style="color:var(--acc);font-weight:700">${fmt(total)}</span>
+    </div>`;
+  pop.style.display = 'block';
+  const rc = evt.currentTarget.getBoundingClientRect();
+  const pw = pop.offsetWidth || 280, ph = pop.offsetHeight || 160;
+  let left = rc.left, top = rc.bottom + 6;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  if (top + ph > window.innerHeight - 10) top = rc.top - ph - 6;
+  pop.style.left = left + 'px';
+  pop.style.top  = top  + 'px';
+  evt.stopPropagation();
+}
+document.addEventListener('click', () => {
+  const p = document.getElementById('kpi-rubro-popover');
+  if (p) p.style.display = 'none';
+});
 
 // Diagnóstico: ejecutar en consola → _diagLaboral('ALFA') para ver qué rubros detecta
 function _diagLaboral(empresaStr) {
@@ -11441,31 +11501,31 @@ function buildVistaIndividualFlujo(claveOverride) {
   const labA_ind = _flujoLaboral(f);
   const covA     = (ingAOp && egrA)   ? (ingAOp / Math.abs(egrA)   * 100).toFixed(1) + '%' : '—';
   const covLabA  = (ingAOp && labA_ind) ? (ingAOp / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
-  // Rubros utilizados en los indicadores (para mostrar detalle)
-  const _n_ = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const _esSub_ = l => { const u=_n_(l); return u.includes('SUBSIDIO')||/TRANSFERENCIA.{0,12}ESTADO/.test(u)||/APORTE.{0,12}ESTADO/.test(u); };
-  const _esLab_ = l => { const u=_n_(l); return u.includes('REMUNER')||(u.includes('CARGA')&&u.includes('SOCIAL'))||(u.includes('HONORAR')&&(u.includes('DIRECT')||u.includes('SINDIC')||u.includes('PROFES')))||u.includes('SUELDO')||u.includes('SALARIO')||u.includes('HABERES')||u.includes('JORNAL')||u.includes('SAC')||u.includes('AGUINALDO'); };
-  const fmt$ = v => '$ ' + Math.abs(Math.round(v||0)).toLocaleString('es-AR');
-  const _ingOpRows_ind = (f.rubros||[]).filter(r2=>r2.tipo==='ingreso'&&!r2.esTotal&&r2.actual!=null&&!/SUBTOTAL|TOTAL/i.test(r2.label||'')&&!_esSub_(r2.label));
-  const _labRows_ind   = (f.rubros||[]).filter(r2=>!r2.esTotal&&r2.actual!=null&&_esLab_(r2.label));
-  const _covDetail = _ingOpRows_ind.length ? _ingOpRows_ind.map(r=>`<span style="opacity:.75">${r.label}:</span> ${fmt$(r.actual)}`).join('<br>') : '';
-  const _labDetail = _labRows_ind.length   ? _labRows_ind.map(r=>`<span style="opacity:.75">${r.label}:</span> ${fmt$(r.actual)}`).join('<br>') : '';
+  const _ingOpRows_ind = _flujoIngOperativoRows(f);
+  const _labRows_ind   = _flujoLaboralRows(f);
+  window._kpiPopData = {
+    cov_ing: { titulo: 'Ingresos operativos incluidos', rows: _ingOpRows_ind, totalLabel: 'Total ingresos operativos' },
+    cov_lab: { titulo: 'Costo laboral incluido',        rows: _labRows_ind,   totalLabel: 'Total costo laboral' },
+  };
   const necCol   = necA == null ? 'var(--dim)' : necA < 0 ? 'var(--neg)' : 'var(--pos)';
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Fondos solicitados',       v:fmt(necA),   c:necCol, big:true },
     { l:'Total ingresos',           v:fmt(ingA),   c:'#1a9e68' },
     { l:'Total egresos',            v:fmt(egrA),   c:'var(--neg)' },
-    { l:'Cobertura ing / egresos',  v:covA,        c:'var(--text)', detail:_covDetail },
-    ...(covLabA ? [{ l:'Cobertura ing / costo laboral', v:covLabA, c:'#e8c84a', detail:_labDetail }] : []),
+    { l:'Cobertura ing / egresos',  v:covA, c:'var(--text)', popKey:'cov_ing' },
+    ...(covLabA ? [{ l:'Cobertura ing / costo laboral', v:covLabA, c:'#e8c84a', popKey:'cov_lab' }] : []),
     { l:'IPC período',              v:f.ipc ? f.ipc + '%' : '—', c:'#47e8ff' },
     { l:'Tipo',                     v:f.tipo || '—', c:'var(--dim)' },
   ].map(k => `<div style="padding:${k.big?'10px 18px':'8px 14px'};
     background:var(--s2);border:1px solid var(--bd);border-radius:6px;min-width:${k.big?'160px':'110px'};
-    ${k.big ? 'border-left:3px solid var(--neg)' : ''}">
-    <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">${k.l}</div>
+    ${k.big ? 'border-left:3px solid var(--neg)' : ''}${k.popKey ? 'cursor:pointer;' : ''}"
+    ${k.popKey ? `onclick="mostrarKpiDetalle(event,'${k.popKey}')"` : ''}>
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+      <div style="font-size:8px;color:var(--dim);font-family:var(--mono);flex:1">${k.l}</div>
+      ${k.popKey ? '<div style="font-size:9px;color:var(--dim);opacity:.45" title="Ver rubros incluidos">ⓘ</div>' : ''}
+    </div>
     <div style="font-size:${k.big?'16px':'13px'};font-weight:700;color:${k.c};font-family:var(--mono)">${k.v}</div>
-    ${k.detail ? `<div style="font-size:7.5px;color:var(--dim);font-family:var(--mono);margin-top:5px;line-height:1.7;border-top:1px solid var(--bd);padding-top:4px">${k.detail}</div>` : ''}
   </div>`).join('');
 
   // Meses del flujo — inferir desde el período si no hay datos mensuales
@@ -12385,32 +12445,31 @@ function buildComparacionFlujos() {
   </div>`;
 
 
-  // Detalle de rubros para indicadores de cobertura (vista comparativa)
-  const _n_c = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const _esSub_c = l => { const u=_n_c(l); return u.includes('SUBSIDIO')||/TRANSFERENCIA.{0,12}ESTADO/.test(u)||/APORTE.{0,12}ESTADO/.test(u); };
-  const _esLab_c = l => { const u=_n_c(l); return u.includes('REMUNER')||(u.includes('CARGA')&&u.includes('SOCIAL'))||(u.includes('HONORAR')&&(u.includes('DIRECT')||u.includes('SINDIC')||u.includes('PROFES')))||u.includes('SUELDO')||u.includes('SALARIO')||u.includes('HABERES')||u.includes('JORNAL'); };
-  const fmt$c = v => '$ ' + Math.abs(Math.round(v||0)).toLocaleString('es-AR');
-  const _ingOpRows_c = (fA.rubros||[]).filter(r=>r.tipo==='ingreso'&&!r.esTotal&&r.actual!=null&&!/SUBTOTAL|TOTAL/i.test(r.label||'')&&!_esSub_c(r.label));
-  const _labRows_c   = (fA.rubros||[]).filter(r=>!r.esTotal&&r.actual!=null&&_esLab_c(r.label));
-  const _covDetail_c = _ingOpRows_c.length ? _ingOpRows_c.map(r=>`<span style="opacity:.75">${r.label}:</span> ${fmt$c(r.actual)}`).join('<br>') : '';
-  const _labDetail_c = _labRows_c.length   ? _labRows_c.map(r=>`<span style="opacity:.75">${r.label}:</span> ${fmt$c(r.actual)}`).join('<br>') : '';
+  // Store rubros para popover interactivo (vista comparativa — período actual fA)
+  window._kpiPopData = {
+    cov_ing: { titulo: 'Ingresos operativos incluidos', rows: _flujoIngOperativoRows(fA), totalLabel: 'Total ingresos operativos' },
+    cov_lab: { titulo: 'Costo laboral incluido',        rows: _flujoLaboralRows(fA),      totalLabel: 'Total costo laboral' },
+  };
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Necesidad actual',     v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
     { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
     { l:'Var. real (Fisher)',   v:fmtP(varReal),                                                 c:colVar(varReal) },
-    { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)', detail:_covDetail_c },
+    { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)', popKey:'cov_ing' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
-    ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(1)+'%', c:'#e8c84a', title:'Ingresos operativos sobre costo laboral del período actual', detail:_labDetail_c }] : []),
+    ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(1)+'%', c:'#e8c84a', title:'Ingresos operativos sobre costo laboral del período actual', popKey:'cov_lab' }] : []),
     ...(ipc&&_resBSigned ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(_resBSigned*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del resultado neto del período anterior en pesos actuales' }] : []),
     ...(ipcProy&&necA ? [{ l:`Proyección siguiente período`, v:fmtM(necA*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el período actual` }] : []),
   ].map(k => `<div style="padding:${k.big||k.big2?'10px 18px':'8px 14px'};background:var(--s2);
     border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':k.big2?'200px':'110px'};
-    ${k.big?'border-left:3px solid var(--neg)':k.big2?'border-left:3px solid var(--y21)':''}"
-    ${k.title?`title="${k.title}"`:''}">
-    <div style="font-size:8px;color:${k.big2?'var(--y21)':'var(--dim)'};font-family:var(--mono);margin-bottom:4px">${k.l}</div>
+    ${k.big?'border-left:3px solid var(--neg)':k.big2?'border-left:3px solid var(--y21)':''}
+    ${k.popKey?'cursor:pointer;':''}"
+    ${k.title?`title="${k.title}"`:''}${k.popKey?`onclick="mostrarKpiDetalle(event,'${k.popKey}')"`:''}>
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+      <div style="font-size:8px;color:${k.big2?'var(--y21)':'var(--dim)'};font-family:var(--mono);flex:1">${k.l}</div>
+      ${k.popKey ? '<div style="font-size:9px;color:var(--dim);opacity:.45" title="Ver rubros incluidos">ⓘ</div>' : ''}
+    </div>
     <div style="font-size:${k.big?'16px':k.big2?'15px':'14px'};font-weight:700;color:${k.c};font-family:var(--mono)">${k.v}</div>
-    ${k.detail ? `<div style="font-size:7.5px;color:var(--dim);font-family:var(--mono);margin-top:5px;line-height:1.7;border-top:1px solid var(--bd);padding-top:4px">${k.detail}</div>` : ''}
   </div>`).join('') +
   (() => {
     // Bloque comparativo costo laboral
