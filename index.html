@@ -11296,16 +11296,40 @@ function _flujoEgrTotal(f) {
 
 function _flujoLaboral(f) {
   if (!f) return null;
-  const matches = (f.rubros || []).filter(r2 => {
-    if (r2.esTotal) return false;
-    const u = (r2.label || '').toUpperCase();
-    return (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') || u.includes('REMUNER') ||
-           u.includes('SAC') || u.includes('AGUINALDO') ||
-           u.includes('CARGA') || u.includes('SOCIAL') || u.includes('CONTRIB') ||
-           u.includes('PERSONAL') || u.includes('HABERES') || u.includes('JORNAL');
-  });
+  const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _esLaboral = lbl => {
+    const u = _n(lbl);
+    // Categorías Excel: remuneraciones y cargas sociales
+    if (u.includes('REMUNER') || (u.includes('CARGA') && u.includes('SOCIAL'))) return true;
+    // Honorarios directores/síndicos y profesionales
+    if (u.includes('HONORAR') && (u.includes('DIRECT') || u.includes('SINDIC') || u.includes('PROFES'))) return true;
+    // Equivalentes comunes en flujos no estándar
+    if ((u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') ||
+        u.includes('HABERES') || u.includes('JORNAL') || u.includes('SAC') || u.includes('AGUINALDO')) return true;
+    return false;
+  };
+  const matches = (f.rubros||[]).filter(r2 => !r2.esTotal && r2.actual != null && _esLaboral(r2.label));
   if (!matches.length) return null;
   return matches.reduce((s, r2) => s + Math.abs(r2.actual ?? 0), 0);
+}
+
+// Ingresos operativos: excluye subsidios y transferencias del estado
+function _flujoIngOperativo(f) {
+  if (!f) return null;
+  const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _esSubsidio = lbl => {
+    const u = _n(lbl);
+    return u.includes('SUBSIDIO') || /TRANSFERENCIA.{0,12}ESTADO/.test(u) ||
+           /APORTE.{0,12}ESTADO/.test(u) || /COBRO.{0,12}SUBSIDIO/.test(u);
+  };
+  const rows = (f.rubros||[]).filter(r2 => {
+    if (r2.tipo !== 'ingreso' || r2.esTotal || r2.actual == null) return false;
+    if (/SUBTOTAL|TOTAL/i.test(r2.label||'')) return false;
+    if (_esSubsidio(r2.label)) return false;
+    return true;
+  });
+  if (rows.length) return rows.reduce((s, r2) => s + r2.actual, 0);
+  return _flujoIngTotal(f); // fallback si no hay rubros detalle
 }
 
 // Diagnóstico: ejecutar en consola → _diagLaboral('ALFA') para ver qué rubros detecta
@@ -11412,10 +11436,11 @@ function buildVistaIndividualFlujo(claveOverride) {
   // KPIs
   const necA = _flujoNecesidadSignada(f);
   const ingA = _flujoIngTotal(f);
+  const ingAOp = _flujoIngOperativo(f);
   const egrA = _flujoEgrTotal(f);
   const labA_ind = _flujoLaboral(f);
-  const covA     = (ingA && egrA)   ? (ingA / Math.abs(egrA)   * 100).toFixed(1) + '%' : '—';
-  const covLabA  = (ingA && labA_ind) ? (ingA / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
+  const covA     = (ingAOp && egrA)   ? (ingAOp / Math.abs(egrA)   * 100).toFixed(1) + '%' : '—';
+  const covLabA  = (ingAOp && labA_ind) ? (ingAOp / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
   const necCol   = necA == null ? 'var(--dim)' : necA < 0 ? 'var(--neg)' : 'var(--pos)';
 
   document.getElementById('flujo-kpis').innerHTML = [
@@ -12084,18 +12109,20 @@ function buildComparacionFlujos() {
 
   const ingA = _flujoIngTotal(fA);
   const ingB = _flujoIngTotal(fB);
+  const ingAOp = _flujoIngOperativo(fA);
+  const ingBOp = _flujoIngOperativo(fB);
   const egrA = _flujoEgrTotal(fA);
   const egrB = _flujoEgrTotal(fB);
-  const covA = (ingA && egrA) ? ingA / Math.abs(egrA) * 100 : null;
-  const covB = (ingB && egrB) ? ingB / Math.abs(egrB) * 100 : null;
+  const covA = (ingAOp && egrA) ? ingAOp / Math.abs(egrA) * 100 : null;
+  const covB = (ingBOp && egrB) ? ingBOp / Math.abs(egrB) * 100 : null;
   const labA = _flujoLaboral(fA);
   const labB = _flujoLaboral(fB);
-  const labCovA = (ingA && labA) ? ingA / Math.abs(labA) * 100 : null;
-  const labCovB = (ingB && labB) ? ingB / Math.abs(labB) * 100 : null;
+  const labCovA = (ingAOp && labA) ? ingAOp / Math.abs(labA) * 100 : null;
+  const labCovB = (ingBOp && labB) ? ingBOp / Math.abs(labB) * 100 : null;
 
   // Guardar estado de comparación para que exportarFlujoExcel use los mismos datos
   window._compActiva = { fA, fB, ipc, ipcProy, _merged,
-    necA, necB, ingA, ingB, egrA, egrB, labA, labB,
+    necA, necB, ingA, ingB, ingAOp, ingBOp, egrA, egrB, labA, labB,
     covA, covB, varNom, varReal, labCovA, labCovB };
 
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
@@ -12675,7 +12702,7 @@ function buildComparacionFlujos() {
     const periodos = allFlujos.map(f => f.periodo);
     const necesidades = allFlujos.map(f => _flujoNecesidad(f));
     const coberturas  = allFlujos.map(f => {
-      const ing = _flujoIngTotal(f);
+      const ing = _flujoIngOperativo(f);
       const egr = _flujoEgrTotal(f);
       return (ing && egr) ? parseFloat((ing / Math.abs(egr) * 100).toFixed(1)) : null;
     });
@@ -13253,10 +13280,11 @@ function _rptFlujoIndividual() {
 
   const necA    = _flujoNecesidad(f);
   const ingA    = _flujoIngTotal(f);
+  const ingAOp  = _flujoIngOperativo(f);
   const egrA    = _flujoEgrTotal(f);
   const labA    = _flujoLaboral(f);
-  const covA    = (ingA && egrA) ? (ingA / Math.abs(egrA) * 100) : null;
-  const covLabA_rpt = (ingA && labA) ? (ingA / Math.abs(labA) * 100) : null;
+  const covA    = (ingAOp && egrA) ? (ingAOp / Math.abs(egrA) * 100) : null;
+  const covLabA_rpt = (ingAOp && labA) ? (ingAOp / Math.abs(labA) * 100) : null;
 
   // colores por tipo de rubro
   const _rowStyle = r => {
@@ -13427,16 +13455,18 @@ async function generarInformeFlujo() {
     const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
     const ingA = _flujoIngTotal(fA);
     const ingB = _flujoIngTotal(fB);
+    const ingAOp = _flujoIngOperativo(fA);
+    const ingBOp = _flujoIngOperativo(fB);
     const varIng = (ingA!=null&&ingB&&ingB!==0) ? (Math.abs(ingA)-Math.abs(ingB))/Math.abs(ingB)*100 : null;
     const egrA = _flujoEgrTotal(fA);
     const egrB = _flujoEgrTotal(fB);
     const varEgr = (egrA!=null&&egrB&&egrB!==0) ? (Math.abs(egrA)-Math.abs(egrB))/Math.abs(egrB)*100 : null;
-    const covA = (ingA&&egrA) ? ingA/Math.abs(egrA)*100 : null;
-    const covB = (ingB&&egrB) ? ingB/Math.abs(egrB)*100 : null;
+    const covA = (ingAOp&&egrA) ? ingAOp/Math.abs(egrA)*100 : null;
+    const covB = (ingBOp&&egrB) ? ingBOp/Math.abs(egrB)*100 : null;
     const labA = _flujoLaboral(fA);
     const labB = _flujoLaboral(fB);
-    const labCovA = (ingA&&labA) ? ingA/Math.abs(labA)*100 : null;
-    const labCovB = (ingB&&labB) ? ingB/Math.abs(labB)*100 : null;
+    const labCovA = (ingAOp&&labA) ? ingAOp/Math.abs(labA)*100 : null;
+    const labCovB = (ingBOp&&labB) ? ingBOp/Math.abs(labB)*100 : null;
 
     const hoy = new Date();
     const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
