@@ -11448,7 +11448,7 @@ function _renderKpiPopover(pop, popKey, ctx) {
   pop.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <span style="font-size:9px;font-weight:600;color:var(--text);letter-spacing:.06em">${titulo} — rubros</span>
-      <button onclick="document.getElementById('kpi-rubro-popover').style.display='none'"
+      <button onclick="event.stopPropagation();document.getElementById('kpi-rubro-popover').style.display='none'"
         style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
     </div>
     <div style="font-size:7.5px;color:var(--dim);margin-bottom:8px;line-height:1.5">
@@ -11467,9 +11467,9 @@ function _renderKpiPopover(pop, popKey, ctx) {
         <div style="flex:1;font-size:8px;color:${incluido?'var(--text)':'var(--dim)'};font-family:var(--mono);line-height:1.4">${r.label}</div>
         <div style="font-size:8px;color:var(--dim);white-space:nowrap;font-family:var(--mono)">${fmt(r.actual)}</div>
         <div style="display:flex;gap:3px;flex-shrink:0">
-          <button style="${bs(ov===true,'#47b87a')}"  onclick="_kpiToggle(${i},true)"  title="Incluir siempre">✓</button>
-          <button style="${bs(ov===null,'#888')}"      onclick="_kpiToggle(${i},null)"  title="Auto (${autoVal?'incluido':'excluido'})">A</button>
-          <button style="${bs(ov===false,'#e05555')}"  onclick="_kpiToggle(${i},false)" title="Excluir siempre">✗</button>
+          <button style="${bs(ov===true,'#47b87a')}"  onclick="event.stopPropagation();_kpiToggle(${i},true)"  title="Incluir siempre">✓</button>
+          <button style="${bs(ov===null,'#888')}"      onclick="event.stopPropagation();_kpiToggle(${i},null)"  title="Auto (${autoVal?'incluido':'excluido'})">A</button>
+          <button style="${bs(ov===false,'#e05555')}"  onclick="event.stopPropagation();_kpiToggle(${i},false)" title="Excluir siempre">✗</button>
         </div>
       </div>`;
     }).join('')}
@@ -11487,17 +11487,17 @@ function _kpiToggle(idx, valor) {
   const r = window._kpiRubrosRef?.[idx];
   if (!ctx?.f || !r) return;
   _setRubroOverride(ctx.f, ctx.categoria, r.label, valor);
-  // Re-renderizar popover
   const pop = document.getElementById('kpi-rubro-popover');
-  _renderKpiPopover(pop, popKey, ctx);
-  // Recalcular KPIs
-  if (window._flujoActualInd) {
-    mostrarFlujoDetalle(window._flujoActualInd);
-    setTimeout(() => { if (pop.style.display!=='none') _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]); }, 60);
-  } else if (window._compActiva) {
-    const ca = window._compActiva;
-    compararFlujos(ca.fA.clave, ca.fB.clave);
-    setTimeout(() => { if (pop.style.display!=='none') _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]); }, 60);
+  // Reconstruir la vista (actualiza KPI cards) y luego redibujar el popover
+  if (window._flujoActualClave) {
+    buildVistaIndividualFlujo(window._flujoActualClave);
+    // buildVistaIndividualFlujo reconstruye _kpiPopData; re-abrimos el popover
+    _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]);
+    pop.style.display = 'block';
+  } else {
+    buildComparacionFlujos();
+    _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]);
+    pop.style.display = 'block';
   }
 }
 
@@ -11617,7 +11617,8 @@ function buildVistaIndividualFlujo(claveOverride) {
   const covLabA  = (ingAOp && labA_ind) ? (ingAOp / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
   const _ingOpRows_ind = _flujoIngOperativoRows(f);
   const _labRows_ind   = _flujoLaboralRows(f);
-  window._flujoActualInd = f;
+  window._flujoActualInd   = f;
+  window._flujoActualClave = claveA;
   window._kpiPopData = {
     cov_ing: { f, categoria: 'ingOp',   titulo: 'Ingresos operativos', rows: _ingOpRows_ind, totalLabel: 'Total ingresos operativos' },
     cov_lab: { f, categoria: 'laboral', titulo: 'Costo laboral',       rows: _labRows_ind,   totalLabel: 'Total costo laboral' },
