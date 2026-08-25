@@ -11412,7 +11412,6 @@ function _renderKpiPopover(pop, popKey, ctx) {
   const cfg = _getRubrosCfg(f);
   const overrides = cfg[_flujoKey(f)]?.[categoria] || {};
 
-  // Todos los rubros relevantes según categoría
   const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const _esIngAuto = r => {
     if (r.tipo !== 'ingreso' || r.esTotal || r.actual == null) return false;
@@ -11421,26 +11420,27 @@ function _renderKpiPopover(pop, popKey, ctx) {
   };
   const _esLabAuto = r => {
     const u = _n(r.label);
-    if (r.esTotal || r.actual == null) return false;
     return u.includes('REMUNER') || (u.includes('CARGA') && u.includes('SOCIAL')) ||
       (u.includes('HONORAR') && (u.includes('DIRECT') || u.includes('SINDIC') || u.includes('PROFES'))) ||
       (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') ||
       u.includes('HABERES') || u.includes('JORNAL') || u.includes('SAC') || u.includes('AGUINALDO');
   };
 
-  const todoIngreso = (f.rubros||[]).filter(r => r.tipo === 'ingreso' && !r.esTotal && r.actual != null && !/SUBTOTAL|TOTAL/i.test(r.label||''));
-  const todoEgreso  = (f.rubros||[]).filter(r => r.tipo === 'egreso'  && !r.esTotal && r.actual != null && !/SUBTOTAL|TOTAL/i.test(r.label||''));
-
-  const rubros = categoria === 'ingOp' ? todoIngreso : todoEgreso;
+  const rubros = (f.rubros||[]).filter(r => {
+    if (r.esTotal || r.actual == null || /SUBTOTAL|TOTAL/i.test(r.label||'')) return false;
+    return categoria === 'ingOp' ? r.tipo === 'ingreso' : r.tipo === 'egreso';
+  });
   const autoFn = categoria === 'ingOp' ? _esIngAuto : _esLabAuto;
 
-  const fmt = v => '$ ' + Math.abs(Math.round(v||0)).toLocaleString('es-AR');
+  // Guardar referencia indexada para evitar encoding de labels en onclick
+  window._kpiRubrosRef = rubros;
+  window._kpiPopKey    = popKey;
 
+  const fmt = v => '$ ' + Math.abs(Math.round(v||0)).toLocaleString('es-AR');
   let total = 0;
   rubros.forEach(r => {
     const ov = r.label in overrides ? overrides[r.label] : null;
-    const incluido = ov !== null ? ov : autoFn(r);
-    if (incluido) total += Math.abs(r.actual ?? 0);
+    if (ov !== null ? ov : autoFn(r)) total += Math.abs(r.actual ?? 0);
   });
 
   const titulo = categoria === 'ingOp' ? 'Ingresos operativos' : 'Costo laboral';
@@ -11452,31 +11452,24 @@ function _renderKpiPopover(pop, popKey, ctx) {
         style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
     </div>
     <div style="font-size:7.5px;color:var(--dim);margin-bottom:8px;line-height:1.5">
-      Activá o desactivá cada rubro. <strong style="color:var(--text)">Auto</strong> = detección automática del dashboard.
+      Marcá cada rubro. <strong style="color:var(--text)">A</strong> = detección automática.
     </div>
     <div style="max-height:320px;overflow-y:auto;margin-bottom:8px">
-    ${rubros.map(r => {
+    ${rubros.map((r, i) => {
       const ov = r.label in overrides ? overrides[r.label] : null;
       const autoVal = autoFn(r);
       const incluido = ov !== null ? ov : autoVal;
-      const etAuto = autoVal ? '<span style="color:#47b87a">auto ✓</span>' : '<span style="color:var(--dim)">auto ✗</span>';
-      const btnStyle = (activo, color) =>
-        `padding:2px 7px;font-size:7.5px;border-radius:2px;cursor:pointer;font-family:var(--mono);border:1px solid;` +
+      const bs = (activo, color) =>
+        `padding:2px 8px;font-size:7.5px;border-radius:2px;cursor:pointer;font-family:var(--mono);border:1px solid;` +
         (activo ? `background:${color}22;border-color:${color};color:${color};font-weight:700`
                 : `background:transparent;border-color:var(--bd);color:var(--dim)`);
-      return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">
-        <div style="flex:1;font-size:8px;color:${incluido?'var(--text)':'var(--dim)'};font-family:var(--mono);line-height:1.3">${r.label}</div>
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd)">
+        <div style="flex:1;font-size:8px;color:${incluido?'var(--text)':'var(--dim)'};font-family:var(--mono);line-height:1.4">${r.label}</div>
         <div style="font-size:8px;color:var(--dim);white-space:nowrap;font-family:var(--mono)">${fmt(r.actual)}</div>
         <div style="display:flex;gap:3px;flex-shrink:0">
-          <button style="${btnStyle(ov===true,'#47b87a')}"
-            onclick="_kpiToggle('${_flujoKey(f)}','${categoria}',${JSON.stringify(r.label)},true)"
-            title="Incluir siempre">✓</button>
-          <button style="${btnStyle(ov===null,'#888')}"
-            onclick="_kpiToggle('${_flujoKey(f)}','${categoria}',${JSON.stringify(r.label)},null)"
-            title="${etAuto.replace(/<[^>]+>/g,'')}">A</button>
-          <button style="${btnStyle(ov===false,'#e05555')}"
-            onclick="_kpiToggle('${_flujoKey(f)}','${categoria}',${JSON.stringify(r.label)},false)"
-            title="Excluir siempre">✗</button>
+          <button style="${bs(ov===true,'#47b87a')}"  onclick="_kpiToggle(${i},true)"  title="Incluir siempre">✓</button>
+          <button style="${bs(ov===null,'#888')}"      onclick="_kpiToggle(${i},null)"  title="Auto (${autoVal?'incluido':'excluido'})">A</button>
+          <button style="${bs(ov===false,'#e05555')}"  onclick="_kpiToggle(${i},false)" title="Excluir siempre">✗</button>
         </div>
       </div>`;
     }).join('')}
@@ -11488,24 +11481,23 @@ function _renderKpiPopover(pop, popKey, ctx) {
   `;
 }
 
-function _kpiToggle(flujoKey, categoria, label, valor) {
-  const popKey = categoria === 'ingOp' ? 'cov_ing' : 'cov_lab';
+function _kpiToggle(idx, valor) {
+  const popKey = window._kpiPopKey;
   const ctx = window._kpiPopData?.[popKey];
-  if (!ctx?.f) return;
-  _setRubroOverride(ctx.f, categoria, label, valor);
-  // Actualizar rows en el contexto y re-renderizar
-  ctx.rows = categoria === 'ingOp' ? _flujoIngOperativoRows(ctx.f) : _flujoLaboralRows(ctx.f);
+  const r = window._kpiRubrosRef?.[idx];
+  if (!ctx?.f || !r) return;
+  _setRubroOverride(ctx.f, ctx.categoria, r.label, valor);
+  // Re-renderizar popover
   const pop = document.getElementById('kpi-rubro-popover');
   _renderKpiPopover(pop, popKey, ctx);
-  // Recalcular KPIs sin cerrar el popover
+  // Recalcular KPIs
   if (window._flujoActualInd) {
     mostrarFlujoDetalle(window._flujoActualInd);
-    // Restaurar popover (mostrarFlujoDetalle reconstruye _kpiPopData)
-    setTimeout(() => { _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]); }, 50);
+    setTimeout(() => { if (pop.style.display!=='none') _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]); }, 60);
   } else if (window._compActiva) {
     const ca = window._compActiva;
     compararFlujos(ca.fA.clave, ca.fB.clave);
-    setTimeout(() => { _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]); }, 50);
+    setTimeout(() => { if (pop.style.display!=='none') _renderKpiPopover(pop, popKey, window._kpiPopData[popKey]); }, 60);
   }
 }
 
