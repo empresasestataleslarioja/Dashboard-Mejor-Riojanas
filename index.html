@@ -11799,9 +11799,20 @@ function buildVistaIndividualFlujo(claveOverride) {
           m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0),
           '#1a9e68')
       + rubrosEgrDet.map(_mkDetRow).join('')
-      + _mkTotRow('TOTAL EGRESOS', egrA != null ? -Math.abs(egrA) : null,
-          m => { const v = f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0); return v > 0 ? -v : v; },
-          'var(--neg)');
+      + (() => {
+          // Sumar solo los rubros de egreso que se muestran en la tabla
+          // (igual que la función mensual: excluye impCredDeb que va al pie)
+          const _egrDetRaw = f.rubros
+            .filter(r => r.tipo==='egreso' && !r.esTotal && !_esImpCredDeb(r.label))
+            .reduce((s,r) => s + (r.actual ?? 0), 0);
+          const _egrDetTotal = _egrDetRaw > 0 ? -_egrDetRaw : _egrDetRaw;
+          const _mesFn = m => {
+            const v = f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label))
+              .reduce((s,r)=>s+(r.porMes?.[m]??0),0);
+            return v > 0 ? -v : v;
+          };
+          return _mkTotRow('TOTAL EGRESOS', _egrDetTotal, _mesFn, 'var(--neg)');
+        })();
   })() + `</tbody><tfoot>${pieHtml}</tfoot>`;
 }
 
