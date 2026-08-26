@@ -12332,7 +12332,7 @@ function buildComparacionFlujos() {
 
   // Guardar estado de comparación para que exportarFlujoExcel use los mismos datos
   window._compActiva = { fA, fB, ipc, ipcProy, _merged,
-    necA, necB, ingA, ingB, ingAOp, ingBOp, egrA, egrB, labA, labB,
+    necA, necB, ingA, ingB, ingAOp, ingBOp, egrA, egrB, egrADet, egrBDet, labA, labB,
     covA, covB, varNom, varReal, labCovA, labCovB };
 
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
@@ -13024,15 +13024,25 @@ function exportarFlujoExcel() {
   if (!_c) { alert('Ejecutá la comparación primero (botón "Comparar") y luego el reporte.'); return; }
   const { fA, fB, ipc, ipcProy, _merged: _mergedExp,
     necA: _necASignado, necB: _necBSignado,
-    ingA, ingB, egrA, egrB, labA, labB, covA, covB,
+    ingA, ingB, egrA, egrB,
+    egrADet: _egrADet, egrBDet: _egrBDet,
+    labA, labB, covA, covB,
     varNom, varReal, labCovA, labCovB } = _c;
+  const egrADet = _egrADet ?? _flujoEgrDetTotal(fA);
+  const egrBDet = _egrBDet ?? _flujoEgrDetTotal(fB);
 
   const necA = _necASignado != null ? Math.abs(_necASignado) : null;
   const necB = _necBSignado != null ? Math.abs(_necBSignado) : null;
 
   // Variación sobre RESULTADO NETO (post imp. 1,2%) — igual al tfoot del panel activo
-  const { resultado: _rNetA } = _calcResultadoNeto(ingA, egrA);
-  const { resultado: _rNetB } = _calcResultadoNeto(ingB, egrB);
+  const _rubroImpA_rpt = (fA.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+  const _rubroImpB_rpt = (fB.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+  const { subtotal: _subA_rpt } = _calcResultadoNeto(ingA, egrADet);
+  const { subtotal: _subB_rpt } = _calcResultadoNeto(ingB, egrBDet);
+  const _impA_rpt = _rubroImpA_rpt ? Math.abs(_rubroImpA_rpt.actual||0) : Math.abs(_subA_rpt||0)*0.012;
+  const _impB_rpt = _rubroImpB_rpt ? Math.abs(_rubroImpB_rpt.actual||0) : Math.abs(_subB_rpt||0)*0.012;
+  const _rNetA = _subA_rpt - _impA_rpt;
+  const _rNetB = _subB_rpt - _impB_rpt;
   const _rNetASign = (_necASignado != null && _rNetA != null) ? (_necASignado < 0 ? -Math.abs(_rNetA) : Math.abs(_rNetA)) : null;
   const _rNetBSign = (_necBSignado != null && _rNetB != null) ? (_necBSignado < 0 ? -Math.abs(_rNetB) : Math.abs(_rNetB)) : null;
   const _varNomRes = (_rNetASign != null && _rNetBSign) ? (Math.abs(_rNetASign) - Math.abs(_rNetBSign)) / Math.abs(_rNetBSign) * 100 : null;
