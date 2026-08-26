@@ -11074,14 +11074,36 @@ function _editarPeriodoFlujo(clave) {
 }
 
 // Claves de flujos eliminados localmente — se excluyen de cualquier sync
-const _LS_FLUJOS_DEL = 'lr_flujos_deleted_v1';
+const _LS_FLUJOS_DEL = 'lr_flujos_deleted_v2'; // v2: almacena {clave, deletedAt}
 function _getFlujosDel() {
-  try { return new Set(JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]')); } catch(e) { return new Set(); }
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]');
+    // Soporte legacy (v1 era array de strings)
+    if (raw.length && typeof raw[0] === 'string') return new Set(raw);
+    return new Set(raw.map(x => x.clave || x));
+  } catch(e) { return new Set(); }
+}
+function _getFlujosDelMap() {
+  // Retorna Map<clave, deletedAt> para comparación de timestamps
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]');
+    const m = new Map();
+    raw.forEach(x => {
+      if (typeof x === 'string') m.set(x, 0);
+      else if (x.clave) m.set(x.clave, parseInt(x.deletedAt) || 0);
+    });
+    return m;
+  } catch(e) { return new Map(); }
 }
 function _addFlujosDel(clave) {
   try {
-    const s = _getFlujosDel(); s.add(clave);
-    localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify([...s]));
+    const raw = JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]');
+    // Normalizar a objetos
+    const list = raw.map(x => typeof x === 'string' ? { clave: x, deletedAt: 0 } : x);
+    if (!list.find(x => x.clave === clave)) {
+      list.push({ clave, deletedAt: Date.now() });
+    }
+    localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify(list));
   } catch(e) {}
 }
 
@@ -33376,22 +33398,27 @@ function applyCloudData(cloud, opts) {
     DATA.flujos = DATA.flujos || {};
     // Guardar snapshot actualizado de lo que vino de Sheets
     try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
-    const _delSet = (typeof _getFlujosDel === 'function') ? _getFlujosDel() : new Set();
+    const _delMap = (typeof _getFlujosDelMap === 'function') ? _getFlujosDelMap() : new Map();
+    const _delSet = new Set(_delMap.keys());
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
       const tsCloud = parseInt(f.timestamp) || 0;
       const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
-      // Si está en el set de eliminaciones pero Sheets tiene una versión más reciente
-      // (fue recreado en otro dispositivo), limpiar la eliminación y restaurar
+      // Si está marcado como eliminado: restaurar solo si la versión de Sheets es
+      // genuinamente más nueva que la DELECIÓN (recreado en otro dispositivo después de borrar)
       if (_delSet.has(clave)) {
-        if (tsCloud > 0 && tsCloud > tsLocal) {
+        const tsDeleted = _delMap.get(clave) || 0;
+        if (tsCloud > 0 && tsCloud > tsDeleted) {
+          // Fue subido DESPUÉS de que lo borramos → otro dispositivo lo recreó → restaurar
           _delSet.delete(clave);
+          _delMap.delete(clave);
           try {
-            localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify([..._delSet]));
+            const remaining = [..._delMap.entries()].map(([k,v]) => ({ clave: k, deletedAt: v }));
+            localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify(remaining));
           } catch(e) {}
         } else {
-          return; // eliminación local más reciente — no restaurar
+          return; // nuestra deleción es más reciente — no restaurar
         }
       }
       // Conservar versión local si es más reciente. Si ambos son 0 (nuevo dispositivo), cargar desde Sheets.
@@ -34327,11 +34354,39 @@ function loadDataFromLocalCache() {
       // Restaurar balances analizados desde _embeddedSnap
       // PERO: si localStorage tiene una versión más reciente (el usuario
       // eliminó balances después de exportar el HTML), usar esa.
-      // Restaurar flujos del snapshot — siempre, snap._flujos tiene prioridad
+      // Restaurar flujos del snapshot como base
       if (snap._flujos && Object.keys(snap._flujos).length > 0) {
         DATA.flujos = snap._flujos;
       }
       if (snap._flujos_config) DATA.flujos_config = snap._flujos_config;
+      // Luego, mergear flujos de localStorage (pueden ser más nuevos que el snapshot)
+      try {
+        const _lsRawFl = localStorage.getItem(LS_KEY);
+        if (_lsRawFl) {
+          const _lsCachedFl = JSON.parse(_lsRawFl);
+          const _snapTs = snap.savedAt ? new Date(snap.savedAt).getTime() : 0;
+          const _lsTs   = _lsCachedFl.savedAt ? new Date(_lsCachedFl.savedAt).getTime() : 0;
+          if (_lsCachedFl._flujos && typeof _lsCachedFl._flujos === 'object') {
+            const _delMap2 = (typeof _getFlujosDelMap === 'function') ? _getFlujosDelMap() : new Map();
+            Object.entries(_lsCachedFl._flujos).forEach(([k, f]) => {
+              // Si fue eliminado localmente, no restaurar
+              if (_delMap2.has(k)) return;
+              const tsSnap = parseInt(DATA.flujos[k]?.timestamp) || 0;
+              const tsLs   = parseInt(f?.timestamp) || 0;
+              // Cargar el más reciente entre snap y localStorage
+              if (tsLs > tsSnap || !DATA.flujos[k]) DATA.flujos[k] = f;
+            });
+          }
+          // Flujos eliminados en localStorage (más reciente que snap) → purgar del DATA
+          if (_lsTs > _snapTs && _lsCachedFl._flujos) {
+            const _delMap3 = (typeof _getFlujosDelMap === 'function') ? _getFlujosDelMap() : new Map();
+            _delMap3.forEach((deletedAt, clave) => {
+              const tsSnap2 = parseInt(DATA.flujos[clave]?.timestamp) || 0;
+              if (deletedAt > tsSnap2) delete DATA.flujos[clave];
+            });
+          }
+        }
+      } catch(_eLsFl) {}
 
       // Restaurar rubros del snapshot si están disponibles
       if (snap._rubros && Object.keys(snap._rubros).length > 0) {
