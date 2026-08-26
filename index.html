@@ -11074,13 +11074,11 @@ function _editarPeriodoFlujo(clave) {
 }
 
 // Claves de flujos eliminados localmente — se excluyen de cualquier sync
-const _LS_FLUJOS_DEL = 'lr_flujos_deleted_v2'; // v2: almacena {clave, deletedAt}
+const _LS_FLUJOS_DEL = 'lr_flujos_deleted_v1'; // mismo key; ahora soporta {clave,deletedAt} y strings legacy
 function _getFlujosDel() {
   try {
     const raw = JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]');
-    // Soporte legacy (v1 era array de strings)
-    if (raw.length && typeof raw[0] === 'string') return new Set(raw);
-    return new Set(raw.map(x => x.clave || x));
+    return new Set(raw.map(x => (typeof x === 'string' ? x : x.clave)));
   } catch(e) { return new Set(); }
 }
 function _getFlujosDelMap() {
@@ -11098,11 +11096,11 @@ function _getFlujosDelMap() {
 function _addFlujosDel(clave) {
   try {
     const raw = JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]');
-    // Normalizar a objetos
+    // Normalizar todo a objetos {clave, deletedAt}
     const list = raw.map(x => typeof x === 'string' ? { clave: x, deletedAt: 0 } : x);
-    if (!list.find(x => x.clave === clave)) {
-      list.push({ clave, deletedAt: Date.now() });
-    }
+    const idx = list.findIndex(x => x.clave === clave);
+    const entry = { clave, deletedAt: Date.now() };
+    if (idx >= 0) list[idx] = entry; else list.push(entry);
     localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify(list));
   } catch(e) {}
 }
