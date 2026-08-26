@@ -32551,6 +32551,7 @@ async function postViaForm(url, data) {
     // Si fetch falla por CORS/red, intentar fallback con iframe-form (file:// o Safari)
     if (err.name === 'AbortError') throw new Error('Timeout POST (65s)');
     if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch') || err.message.includes('CORS'))) {
+      console.warn('[Sync] fetch directo falló (' + err.message + '), usando fallback iframe-form. Este método no puede confirmar que el servidor recibió los datos.');
       return _postViaFormLegacy(url, data);
     }
     throw err;
@@ -32974,10 +32975,61 @@ async function syncToCloud(nota) {
       data:      restoData
     };
 
-    // POST a Google Apps Script
-    // Desde GitHub Pages (https) el fetch con cors+json falla por preflight.
-    // Usamos no-cors + text/plain que no genera preflight y el script acepta.
-    // Con no-cors no podemos leer la respuesta, así que verificamos con un GET posterior.
+    // POST a Google Apps Script, seguido de un GET de confirmación.
+    // La confirmación exige que "savedAt" haya avanzado más allá del inicio
+    // de esta publicación: un GET que solo devuelve JSON válido (sin chequear
+    // la fecha) puede corresponder a datos viejos si el POST no llegó a
+    // escribir (p.ej. cuando cae al fallback de iframe, que nunca puede leer
+    // la respuesta real del servidor) — eso producía "éxito" falso.
+    const _publishStartedAt = Date.now();
+    async function _confirmarGuardado() {
+      let check;
+      try {
+        check = await fetch(_cloudUrl + '?tab=meta&t=' + Date.now());
+      } catch(netErr) {
+        if (location.protocol === 'file:') {
+          // Abierto como archivo local: el GET de confirmación también
+          // choca con CORS, igual que el POST. No hay forma de verificar.
+          return { ok: true, savedAt: nowAR(), note: 'Publicado (sin confirmación, file://)' };
+        }
+        throw netErr;
+      }
+      if (!check.ok) {
+        let bodyTxt = '';
+        try { bodyTxt = await check.text(); } catch(e) {}
+        const httpErr = new Error(
+          `HTTP ${check.status} — ` +
+          (check.status === 404 ? 'URL incorrecta o implementación eliminada' :
+           check.status === 403 ? 'Sin permisos — verificá que "Quién tiene acceso" sea "Cualquier usuario"' :
+           check.status === 500 ? 'Error interno del Apps Script — revisá el editor de script por errores' :
+           check.statusText || 'Error del servidor')
+        );
+        httpErr._serverBody = bodyTxt.slice(0, 300);
+        throw httpErr;
+      }
+      let meta;
+      try { meta = await check.json(); } catch(je) {
+        const parseErr = new Error('El servidor no devolvió JSON válido');
+        parseErr._serverBody = 'Verificá que la URL sea la del Apps Script desplegado (exec), no la del editor de script.';
+        throw parseErr;
+      }
+      if (meta.ok === false) {
+        const srvErr = new Error(meta.error || 'El servidor rechazó la solicitud');
+        srvErr._serverBody = JSON.stringify(meta).slice(0, 300);
+        throw srvErr;
+      }
+      const savedAt = meta.meta?.savedAt;
+      const savedTs = savedAt ? new Date(savedAt).getTime() : 0;
+      // Tolerancia de 5s por posible desfasaje de reloj entre cliente y servidor.
+      if (!savedTs || savedTs < _publishStartedAt - 5000) {
+        const staleErr = new Error('El servidor no confirmó el guardado — la fecha de última actualización no cambió. Los datos pueden no haberse publicado.');
+        staleErr._noConfirmado = true;
+        staleErr._serverBody = JSON.stringify(meta).slice(0, 300);
+        throw staleErr;
+      }
+      return { ok: true, savedAt };
+    }
+
     let result;
     try {
       await postViaForm(_cloudUrl, payload);
@@ -33003,44 +33055,18 @@ async function syncToCloud(nota) {
         localStorage.setItem(_LS_TRANS_LAST_CNT, String(transferencias.length));
       }
 
-      try {
-        const check = await fetch(_cloudUrl + '?tab=meta&t=' + Date.now());
-        if (!check.ok) {
-          // HTTP error real (404, 500, etc.) — mostrar status
-          let bodyTxt = '';
-          try { bodyTxt = await check.text(); } catch(e) {}
-          const httpErr = new Error(
-            `HTTP ${check.status} — ` +
-            (check.status === 404 ? 'URL incorrecta o implementación eliminada' :
-             check.status === 403 ? 'Sin permisos — verificá que "Quién tiene acceso" sea "Cualquier usuario"' :
-             check.status === 500 ? 'Error interno del Apps Script — revisá el editor de script por errores' :
-             check.statusText || 'Error del servidor')
-          );
-          httpErr._serverBody = bodyTxt.slice(0, 300);
-          throw httpErr;
-        }
-        let meta;
-        try { meta = await check.json(); } catch(je) {
-          const parseErr = new Error('El servidor no devolvió JSON válido');
-          parseErr._serverBody = 'Verificá que la URL sea la del Apps Script desplegado (exec), no la del editor de script.';
-          throw parseErr;
-        }
-        // El formato normal del GET es {meta:{savedAt:...}} — sin campo "ok"
-        // Solo lanzar error si explícitamente viene ok:false
-        if (meta.ok === false) {
-          const srvErr = new Error(meta.error || 'El servidor rechazó la solicitud');
-          srvErr._serverBody = JSON.stringify(meta).slice(0, 300);
-          throw srvErr;
-        }
-        result = { ok: true, savedAt: meta.meta?.savedAt || nowAR() };
-      } catch(e) {
-        if (e._serverBody !== undefined) throw e; // error ya diagnosticado
-        // CORS/red — asumimos éxito del no-cors POST (normal desde file://)
-        result = { ok: true, savedAt: nowAR() };
-      }
+      result = await _confirmarGuardado();
     } catch(fetchErr) {
-      // Fallback final: form POST en iframe
-      result = await postViaForm(_cloudUrl, payload);
+      // Reintento único: reenviar el payload completo y volver a confirmar.
+      // (Si el primer intento fue por _postViaFormLegacy, este reintento usa
+      // el mismo mecanismo con fallback — pero ahora SIEMPRE se re-verifica.)
+      try {
+        await postViaForm(_cloudUrl, payload);
+        await new Promise(r => setTimeout(r, 2500));
+        result = await _confirmarGuardado();
+      } catch(retryErr) {
+        throw retryErr._serverBody !== undefined ? retryErr : fetchErr;
+      }
     }
     if (!result.ok) throw new Error(result.error || 'Error al guardar');
 
