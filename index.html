@@ -12753,7 +12753,7 @@ function buildComparacionFlujos() {
     return _ingRows.map(_mkRow).join('')
       + _mkTotalRow('TOTAL INGRESOS', ingA ?? 0, ingB ?? 0, '#1a9e68', '#1a9e68')
       + _egrRows.map(_mkRow).join('')
-      + _mkTotalRow('TOTAL EGRESOS', egrA != null ? -Math.abs(egrA) : null, egrB != null ? -Math.abs(egrB) : null, 'var(--neg)', 'var(--neg)');
+      + _mkTotalRow('TOTAL EGRESOS', egrADet != null ? -Math.abs(egrADet) : null, egrBDet != null ? -Math.abs(egrBDet) : null, 'var(--neg)', 'var(--neg)');
   })() + (() => {
     // Filas computadas tfoot: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
     const { subtotal: subA, impCredDeb: impA, resultado: resA } = _calcResultadoNeto(ingA, egrA);
