@@ -11306,6 +11306,17 @@ function _flujoLaboral(f) {
   return rows.reduce((s, r2) => s + Math.abs(r2.actual ?? 0), 0);
 }
 
+// Egreso total consistente con la tabla: excluye impCredDeb/gastos bancarios (va al pie)
+function _flujoEgrDetTotal(f) {
+  if (!f) return null;
+  const rows = (f.rubros||[]).filter(r =>
+    r.tipo === 'egreso' && !r.esTotal && !_esImpCredDeb(r.label) && r.actual != null
+  );
+  if (!rows.length) return _flujoEgrTotal(f);
+  const suma = rows.reduce((s, r) => s + Math.abs(r.actual ?? 0), 0);
+  return -suma; // siempre negativo (egresos)
+}
+
 // Ingresos operativos: excluye subsidios y transferencias del estado
 // Rubros de ingreso no operativos — excluidos de los indicadores de cobertura
 function _esIngExcluido(lbl) {
@@ -12308,10 +12319,12 @@ function buildComparacionFlujos() {
   const ingB = _flujoIngTotal(fB);
   const ingAOp = _flujoIngOperativo(fA);
   const ingBOp = _flujoIngOperativo(fB);
-  const egrA = _flujoEgrTotal(fA);
+  const egrA = _flujoEgrTotal(fA);     // total bruto (para _calcResultadoNeto)
   const egrB = _flujoEgrTotal(fB);
-  const covA = (ingAOp && egrA) ? ingAOp / Math.abs(egrA) * 100 : null;
-  const covB = (ingBOp && egrB) ? ingBOp / Math.abs(egrB) * 100 : null;
+  const egrADet = _flujoEgrDetTotal(fA); // sin impCredDeb (para display y ratios)
+  const egrBDet = _flujoEgrDetTotal(fB);
+  const covA = (ingAOp && egrADet) ? ingAOp / Math.abs(egrADet) * 100 : null;
+  const covB = (ingBOp && egrBDet) ? ingBOp / Math.abs(egrBDet) * 100 : null;
   const labA = _flujoLaboral(fA);
   const labB = _flujoLaboral(fB);
   const labCovA = (ingAOp && labA) ? ingAOp / Math.abs(labA) * 100 : null;
@@ -12524,7 +12537,7 @@ function buildComparacionFlujos() {
   const _resASigned = necA != null && _resA != null ? (necA < 0 ? -Math.abs(_resA) : Math.abs(_resA)) : null;
   const _resBSigned = necB != null && _resB != null ? (necB < 0 ? -Math.abs(_resB) : Math.abs(_resB)) : null;
   const _resRows = [
-    { lbl:'Total egresos',  vA: egrA, vB: egrB,  acento:'var(--neg)', posEsBueno: false },
+    { lbl:'Total egresos',  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
     ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
     { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
     ...(ipc&&_resBSigned ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
@@ -12910,7 +12923,7 @@ function buildComparacionFlujos() {
     const necesidades = allFlujos.map(f => _flujoNecesidad(f));
     const coberturas  = allFlujos.map(f => {
       const ing = _flujoIngOperativo(f);
-      const egr = _flujoEgrTotal(f);
+      const egr = _flujoEgrDetTotal(f);
       return (ing && egr) ? parseFloat((ing / Math.abs(egr) * 100).toFixed(1)) : null;
     });
     mkChart('ch-flujo-tend','line',{
@@ -13488,7 +13501,7 @@ function _rptFlujoIndividual() {
   const necA    = _flujoNecesidad(f);
   const ingA    = _flujoIngTotal(f);
   const ingAOp  = _flujoIngOperativo(f);
-  const egrA    = _flujoEgrTotal(f);
+  const egrA    = _flujoEgrDetTotal(f);
   const labA    = _flujoLaboral(f);
   const covA    = (ingAOp && egrA) ? (ingAOp / Math.abs(egrA) * 100) : null;
   const covLabA_rpt = (ingAOp && labA) ? (ingAOp / Math.abs(labA) * 100) : null;
@@ -13665,8 +13678,8 @@ async function generarInformeFlujo() {
     const ingAOp = _flujoIngOperativo(fA);
     const ingBOp = _flujoIngOperativo(fB);
     const varIng = (ingA!=null&&ingB&&ingB!==0) ? (Math.abs(ingA)-Math.abs(ingB))/Math.abs(ingB)*100 : null;
-    const egrA = _flujoEgrTotal(fA);
-    const egrB = _flujoEgrTotal(fB);
+    const egrA = _flujoEgrDetTotal(fA);
+    const egrB = _flujoEgrDetTotal(fB);
     const varEgr = (egrA!=null&&egrB&&egrB!==0) ? (Math.abs(egrA)-Math.abs(egrB))/Math.abs(egrB)*100 : null;
     const covA = (ingAOp&&egrA) ? ingAOp/Math.abs(egrA)*100 : null;
     const covB = (ingBOp&&egrB) ? ingBOp/Math.abs(egrB)*100 : null;
