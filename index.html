@@ -5589,7 +5589,7 @@ function buildSingleChart(id, effectiveType, data, opts, baseType) {
         const isHeadcount = lbl === 'Empleados' || lbl === 'Total empleados';
         const isPct = lbl.includes('%') || lbl.includes('Variación') || lbl.includes('Inflación');
         if (isHeadcount) return '  ' + lbl + ': ' + fn(raw);
-        if (isPct)       return '  ' + lbl + ': ' + (raw != null ? raw.toFixed(1)+'%' : '—');
+        if (isPct)       return '  ' + lbl + ': ' + (raw != null ? raw.toFixed(2)+'%' : '—');
         return '  ' + lbl + ': ' + fvFull(raw);
       }}}
     },
@@ -6193,7 +6193,7 @@ function _rptResumen() {
     if (t.año) transXanio[String(t.año)] = (transXanio[String(t.año)]||0) + (t.importe||0);
   });
   const totTrans = transXanio[lastY] || 0;
-  const transPct = totFact ? (totTrans/totFact*100).toFixed(1)+'% de facturación' : '';
+  const transPct = totFact ? (totTrans/totFact*100).toFixed(2)+'% de facturación' : '';
 
   const kpis = `<div class="kg">
     ${_rptKpi('Facturación '+lastY, fmt(totFact), years.length+' ejercicios', '#185fa5')}
@@ -6268,13 +6268,13 @@ function _rptFacturacion() {
     const sit  = DATA.sit[selEmp]  || {};
     const kpis = '<div class="kg">' + years.map(y => {
       const f=fact[y]||0, s=sit[y];
-      const margen = f>0&&s!=null ? (s/f*100).toFixed(1)+'%' : '—';
+      const margen = f>0&&s!=null ? (s/f*100).toFixed(2)+'%' : '—';
       return _rptKpi(selEmp+' · '+y, fmt(f), 'Resultado: '+fmt(s)+(margen!=='—'?' · '+margen:''), s>0?'#0f6e56':s<0?'#c0392b':'#888');
     }).join('') + '</div>';
     const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
     const filaFact   = years.map(y=>`<td style="text-align:right">${fmt(fact[y]||0)}</td>`).join('');
     const filaRes    = years.map(y=>`<td style="text-align:right;font-weight:700;color:${(sit[y]||0)<0?'#c0392b':'#0f6e56'}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
-    const filaMargen = years.map(y=>{ const f=fact[y]||0,s=sit[y]; const m=f>0&&s!=null?(s/f*100).toFixed(1)+'%':'—'; return `<td style="text-align:right;color:${(s||0)<0?'#c0392b':'#0f6e56'}">${m}</td>`; }).join('');
+    const filaMargen = years.map(y=>{ const f=fact[y]||0,s=sit[y]; const m=f>0&&s!=null?(s/f*100).toFixed(2)+'%':'—'; return `<td style="text-align:right;color:${(s||0)<0?'#c0392b':'#0f6e56'}">${m}</td>`; }).join('');
     const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9.5pt">
       <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Concepto</th>${ths}</tr></thead>
       <tbody>
@@ -6347,7 +6347,7 @@ function _rptResultado() {
     const sit  = DATA.sit[selEmp]  || {};
     const kpis = '<div class="kg">' + years.map(y => {
       const f = fact[y]||0, s = sit[y];
-      const m = f>0 && s!=null ? (s/f*100).toFixed(1) : null;
+      const m = f>0 && s!=null ? (s/f*100).toFixed(2) : null;
       return _rptKpi(selEmp+' · '+y, (s!=null&&s!==0?fmt(s):'N/D'), (m!==null?'Margen: '+m+'%':''), (s>0?'#0f6e56':s<0?'#c0392b':'#888'));
     }).join('') + '</div>';
 
@@ -6390,7 +6390,7 @@ function _rptResultado() {
         const isSep = ER_SEPARATORS.includes(k);
         const bg = isSep ? 'background:#f0f0e8;font-weight:700;border-top:1px solid #ccc' : '';
         const ventas = totals['ventas_netas']?.[lastY] || 0;
-        const pct = ventas && totals[k]?.[lastY] != null ? (totals[k][lastY]/ventas*100).toFixed(1)+'%' : '—';
+        const pct = ventas && totals[k]?.[lastY] != null ? (totals[k][lastY]/ventas*100).toFixed(2)+'%' : '—';
         const celdas = years.map(y=>{
           const v=totals[k]?.[y]; const col=v<0?'color:#c0392b':(isSep&&v>0?'color:#0f6e56':'');
           return `<td style="text-align:right;${bg};${col}">${fmtER(v)}</td>`;
@@ -6562,8 +6562,8 @@ function _rptPersonal(autoPrint) {
     let tablaRows = pYrsEmp.map((y,i) => {
       const v    = vals[i];
       const prev = i>0 ? vals[i-1] : null;
-      const vInt = prev ? ((v-prev)/prev*100).toFixed(1) : null;
-      const vBase2 = vBase && y!==baseYearEmp ? ((v-vBase)/vBase*100).toFixed(1) : null;
+      const vInt = prev ? ((v-prev)/prev*100).toFixed(2) : null;
+      const vBase2 = vBase && y!==baseYearEmp ? ((v-vBase)/vBase*100).toFixed(2) : null;
       const ic = vInt===null?'':(parseFloat(vInt)>=0?'up':'dn');
       const bc = vBase2===null?'':(parseFloat(vBase2)>=0?'up':'dn');
       const isL = y===lastYEmp;
@@ -6581,7 +6581,7 @@ function _rptPersonal(autoPrint) {
     _h.push('<div class="kg3" id="sec_kpis">');
     _h.push(_rptKpi('Nómina '+lastYEmp, vLast||'—', vBase?'▲ +'+varTotal+' vs '+baseYearEmp:'—', '#0f6e56', vBase&&vLast>=vBase?'up':'dn'));
     _h.push(_rptKpi('Nómina '+baseYearEmp+' (base)', vBase||'—', 'Año base de comparación', '#185fa5', ''));
-    _h.push(_rptKpi('Crecimiento '+baseYearEmp+'→'+lastYEmp, vBase&&vLast?(((vLast-vBase)/vBase)*100).toFixed(1)+'%':'—', 'de '+vBase+' a '+vLast+' empleados', '#534ab7', vLast>=vBase?'up':'dn'));
+    _h.push(_rptKpi('Crecimiento '+baseYearEmp+'→'+lastYEmp, vBase&&vLast?(((vLast-vBase)/vBase)*100).toFixed(2)+'%':'—', 'de '+vBase+' a '+vLast+' empleados', '#534ab7', vLast>=vBase?'up':'dn'));
     _h.push('</div>');
     _h.push('<div class="st" id="sec_evol">Evolución de plantilla '+baseYearEmp+'–'+lastYEmp+'</div>');
     _h.push('<div class="cc" style="margin-bottom:12px">'+barras+'</div>');
@@ -6665,7 +6665,7 @@ function _rptPersonal(autoPrint) {
           + '</tr>';
       }).join('') + '</table>';
 
-    const topGrow = byGrowth.slice(0,6).map(function(d){return {l:d.e,v:Math.max(0,d.g),fmt:'+'+d.g.toFixed(1)+'%'};});
+    const topGrow = byGrowth.slice(0,6).map(function(d){return {l:d.e,v:Math.max(0,d.g),fmt:'+'+d.g.toFixed(2)+'%'};});
     const topSize = bySize.slice(0,6).map(function(d){return {l:d.e,v:_persGetTotal(d,lastY)||0,fmt:String(_persGetTotal(d,lastY))};});
 
     // Tabla consolidada — VAR usa año base PROPIO de cada empresa
@@ -6678,13 +6678,13 @@ function _rptPersonal(autoPrint) {
       const vL       = _persGetTotal(d, empLast);
       const v0       = empBase ? _persGetTotal(d, empBase) : 0;
       const vP       = _persGetTotal(d, pYrs[pYrs.length-2]);
-      const vi       = vP && vL ? ((vL-vP)/vP*100).toFixed(1) : null;
-      const vb       = v0 && vL && empBase !== empLast ? ((vL-v0)/v0*100).toFixed(1) : null;
+      const vi       = vP && vL ? ((vL-vP)/vP*100).toFixed(2) : null;
+      const vb       = v0 && vL && empBase !== empLast ? ((vL-v0)/v0*100).toFixed(2) : null;
       const ic       = vi===null?'':(parseFloat(vi)>=0?'up':'dn');
       const bc       = vb===null?'':(parseFloat(vb)>=0?'up':'dn');
       const baseCol  = empBase ? `<span style="font-size:7pt;color:#555">${empBase}</span>` : '—';
       // % del total en último año disponible
-      const pctTot   = totLast && vL ? (vL/totLast*100).toFixed(1)+'%' : '—';
+      const pctTot   = totLast && vL ? (vL/totLast*100).toFixed(2)+'%' : '—';
       return `<tr><td>${d.e}</td>
         ${pYrs.map(y=>`<td>${_persGetTotal(d,y)||'—'}</td>`).join('')}
         <td style="font-size:9pt;color:#555">${pctTot}</td>
@@ -6711,7 +6711,7 @@ function _rptPersonal(autoPrint) {
     _h2.push(_rptKpi('Nómina total '+lastY, totLast.toLocaleString('es-AR'), '▲ +'+pctStr(totLast,totBase)+' vs '+baseYear, '#0f6e56', 'up'));
     _h2.push(_rptKpi('Nómina total '+baseYear, totBase.toLocaleString('es-AR'), 'Año base de comparación', '#185fa5', ''));
     _h2.push(_rptKpi2('Mayor empleador '+lastY, mayorEmp?.e||'—', (_persGetTotal(mayorEmp,lastY)||0)+' empleados', '#ba7517', ''));
-    _h2.push(_rptKpi2('Mayor crecimiento', mayorCr?.e||'—', '▲ +'+((mayorCr?.g)||0).toFixed(1)+'% '+baseYear+'→'+lastY, '#534ab7', 'up'));
+    _h2.push(_rptKpi2('Mayor crecimiento', mayorCr?.e||'—', '▲ +'+((mayorCr?.g)||0).toFixed(2)+'% '+baseYear+'→'+lastY, '#534ab7', 'up'));
     _h2.push('</div>');
     _h2.push('<div class="st" id="sec_evol">Evolución nómina total del portafolio</div>');
     _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
@@ -6944,7 +6944,7 @@ function _rptBalance(autoPrint) {
   Object.assign(ren, ren_); Object.assign(liq, liq_);
 
   const fM = v => { if(v==null)return'—'; return (v<0?'($ ':'$ ')+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':''); };
-  const fP = v => v==null?'—':(v>0?'+':'')+v.toFixed(1)+'%';
+  const fP = v => v==null?'—':(v>0?'+':'')+v.toFixed(2)+'%';
   const fR = v => v==null?'—':v.toFixed(2);
   const pColor = v => v==null?'#888':v>0?'#1a9e68':'#d93025';
   const pBg    = v => v==null?'transparent':v>0?'#e8f5e9':'#fce8e6';
@@ -6955,7 +6955,7 @@ function _rptBalance(autoPrint) {
   const erRows = er.map(r=>{
     const fw=r.calc?'700':'400';
     const bg=r.calc?'#f8f9fa':'#fff';
-    const pct=ren.ventas_ingresos&&r.val!=null?(r.val/ren.ventas_ingresos*100).toFixed(1)+'%':'—';
+    const pct=ren.ventas_ingresos&&r.val!=null?(r.val/ren.ventas_ingresos*100).toFixed(2)+'%':'—';
     return `<tr style="background:${bg}">
       <td style="padding:5px 10px;border-bottom:1px solid #eee;font-weight:${fw};font-family:monospace;font-size:10px">${r.lbl}</td>
       <td style="padding:5px 10px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-size:10px;font-weight:${fw};color:${r.val!=null&&r.val<0?'#d93025':'#333'}">${fM(r.val)}</td>
@@ -7193,7 +7193,7 @@ function _rptBalance(autoPrint) {
           const ar = pct >= 0 ? '▲' : '▼';
           const bw = Math.min(Math.abs(pct), 100);
           varCell = `<td style="padding:5px 10px;text-align:right">
-            <span style="font-family:monospace;font-size:10.5px;font-weight:${fw};color:${c}">${ar} ${Math.abs(pct).toFixed(1)}%</span>
+            <span style="font-family:monospace;font-size:10.5px;font-weight:${fw};color:${c}">${ar} ${Math.abs(pct).toFixed(2)}%</span>
             <div style="margin-top:3px;height:4px;border-radius:2px;background:#eee;overflow:hidden">
               <div style="height:100%;width:${bw}%;background:${c};border-radius:2px;-webkit-print-color-adjust:exact;print-color-adjust:exact"></div>
             </div>
@@ -7328,7 +7328,7 @@ function _rptBalance(autoPrint) {
           if (vPrevR != null && vPrevR !== 0) {
             const vr = (vR/vPrevR - 1)*100;
             const col = vr>0?'#1a9e68':'#d93025';
-            varHtml = `<div style="font-size:7.5px;color:${col};margin-top:1px">${vr>0?'▲':'▼'} ${Math.abs(vr).toFixed(1)}% real</div>`;
+            varHtml = `<div style="font-size:7.5px;color:${col};margin-top:1px">${vr>0?'▲':'▼'} ${Math.abs(vr).toFixed(2)}% real</div>`;
           }
         }
         return `<td style="${tdStyle(bx)}">${vR!=null?fM(vR):'—'}${varHtml}</td>`;
@@ -7445,8 +7445,8 @@ function _rptBalance(autoPrint) {
       const prev = getInd(comparativos[comparativos.length - 2]);
       if (ven != null && prev.rx.ventas_ingresos != null && prev.rx.ventas_ingresos) {
         const vVar = (ven - prev.rx.ventas_ingresos) / Math.abs(prev.rx.ventas_ingresos) * 100;
-        if (vVar > 5)  puntos.push({ok:true,  txt:`Ingresos en alza vs. ${anterior?.periodo}: +${vVar.toFixed(1)}% (${fM(prev.rx.ventas_ingresos)} → ${fM(ven)}).`});
-        else if (vVar < -5) puntos.push({ok:false, txt:`Ingresos a la baja vs. ${anterior?.periodo}: ${vVar.toFixed(1)}% (${fM(prev.rx.ventas_ingresos)} → ${fM(ven)}).`});
+        if (vVar > 5)  puntos.push({ok:true,  txt:`Ingresos en alza vs. ${anterior?.periodo}: +${vVar.toFixed(2)}% (${fM(prev.rx.ventas_ingresos)} → ${fM(ven)}).`});
+        else if (vVar < -5) puntos.push({ok:false, txt:`Ingresos a la baja vs. ${anterior?.periodo}: ${vVar.toFixed(2)}% (${fM(prev.rx.ventas_ingresos)} → ${fM(ven)}).`});
       }
       if (rn != null && prev.rx.resultado_neto != null) {
         const rVar = rn - prev.rx.resultado_neto;
@@ -7853,7 +7853,7 @@ function _rptBalanceIntegral() {
     if (v == null) return '—';
     return (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
   };
-  const fP = v => v == null ? '—' : (v > 0 ? '+' : '') + Number(v).toFixed(1) + '%';
+  const fP = v => v == null ? '—' : (v > 0 ? '+' : '') + Number(v).toFixed(2) + '%';
   const fR = v => v == null ? '—' : Number(v).toFixed(2);
   const colNum = v => v == null ? '#888' : v >= 0 ? '#1a6e3c' : '#b91c1c';
 
@@ -8148,7 +8148,7 @@ function _rptTransferencias(autoPrint) {
   h.push('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px" id="sec_kpis">');
   h.push('<div class="kp"><div class="kl">Total transferido</div><div class="kv">'+fM2(total)+'</div><div class="ks">'+nPagos.toLocaleString('es-AR')+' pagos · '+nBen+' beneficiarias</div></div>');
   cats.forEach(function(kv) {
-    h.push('<div class="kp"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:12pt">'+fM2(kv[1])+'</div><div class="ks">'+(total?(kv[1]/total*100).toFixed(1):'0')+'% del total</div></div>');
+    h.push('<div class="kp"><div class="kl">'+kv[0]+'</div><div class="kv" style="font-size:12pt">'+fM2(kv[1])+'</div><div class="ks">'+(total?(kv[1]/total*100).toFixed(2):'0')+'% del total</div></div>');
   });
   h.push('</div>');
   if (false) { // bloque eliminado — ya no hay sección separada de categorías
@@ -8571,8 +8571,8 @@ function fvFull(v, decimals=0) {
 function fvShort(v) {
   if (v == null) return '—';
   const a = Math.abs(v), s = v < 0 ? '-' : '';
-  if (a >= 1e9) return s+'$'+(a/1e9).toFixed(1)+'B';
-  if (a >= 1e6) return s+'$'+(a/1e6).toFixed(1)+'M';
+  if (a >= 1e9) return s+'$'+(a/1e9).toFixed(2)+'B';
+  if (a >= 1e6) return s+'$'+(a/1e6).toFixed(2)+'M';
   if (a >= 1e3) return s+'$'+(a/1e3).toFixed(0)+'K';
   return s+'$'+a.toFixed(0);
 }
@@ -8631,11 +8631,11 @@ function smfStyle(emp, year) {
 }
 function pctStr(a, b) {
   if (!b) return '—';
-  return ((a-b)/Math.abs(b)*100).toFixed(1)+'%';
+  return ((a-b)/Math.abs(b)*100).toFixed(2)+'%';
 }
 function pctNum(a, b) {
   if (!b) return 0;
-  return parseFloat(((a-b)/Math.abs(b)*100).toFixed(1));
+  return parseFloat(((a-b)/Math.abs(b)*100).toFixed(2));
 }
 
 function mkChart(id, type, data, opts={}) {
@@ -10389,7 +10389,7 @@ function _confirmarImportFlujo(res) {
       '</tr></thead><tbody>' +
       res.rubros.map(r => {
         const col = r.tipo==='ingreso'?'color:#1a9e68':r.tipo==='resultado'?'font-weight:600':'';
-        const vp  = r.var_pct != null ? ((r.var_pct*100)>=0?'+':'')+(r.var_pct*100).toFixed(1)+'%' : '—';
+        const vp  = r.var_pct != null ? ((r.var_pct*100)>=0?'+':'')+(r.var_pct*100).toFixed(2)+'%' : '—';
         const vc  = r.var_pct == null ? 'color:var(--dim)' : r.var_pct > 0 ? 'color:var(--neg)' : 'color:#1a9e68';
         return '<tr style="border-bottom:1px solid var(--bd2)">' +
           '<td style="padding:3px 8px;' + col + '">' + r.label + '</td>' +
@@ -10997,7 +10997,7 @@ function _renderListaFlujos() {
           ${fmtDim(necAnt)}
         </td>
         <td style="${tdBase};font-family:var(--mono);text-align:right">
-          <strong style="color:${varCol}">${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(1)+'%' : '—'}</strong>${barraVar}
+          <strong style="color:${varCol}">${varPct != null ? (varPct>0?'+':'')+varPct.toFixed(2)+'%' : '—'}</strong>${barraVar}
         </td>
         <td style="${tdBase};font-family:var(--mono)">${f.ipc ? f.ipc+'%' : '—'}</td>
         <td style="${tdBase}">${fechaCarga}</td>
@@ -11624,8 +11624,8 @@ function buildVistaIndividualFlujo(claveOverride) {
   const ingAOp = _flujoIngOperativo(f);
   const egrA = _flujoEgrTotal(f);
   const labA_ind = _flujoLaboral(f);
-  const covA     = (ingAOp && egrA)   ? (ingAOp / Math.abs(egrA)   * 100).toFixed(1) + '%' : '—';
-  const covLabA  = (ingAOp && labA_ind) ? (ingAOp / Math.abs(labA_ind) * 100).toFixed(1) + '%' : null;
+  const covA     = (ingAOp && egrA)   ? (ingAOp / Math.abs(egrA)   * 100).toFixed(2) + '%' : '—';
+  const covLabA  = (ingAOp && labA_ind) ? (ingAOp / Math.abs(labA_ind) * 100).toFixed(2) + '%' : null;
   const _ingOpRows_ind = _flujoIngOperativoRows(f);
   const _labRows_ind   = _flujoLaboralRows(f);
   window._flujoActualInd   = f;
@@ -12521,7 +12521,7 @@ function buildComparacionFlujos() {
   // ── Resumen agregado — siempre comparable independientemente del formato ──
   const _fmtMabs = v => v==null ? '—' : '$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
   const _varPct  = (a,b) => (a!=null&&b!=null&&b!==0) ? (Math.abs(a)-Math.abs(b))/Math.abs(b)*100 : null;
-  const _varStr  = v => v==null ? '' : ` <span style="color:${v>0?'var(--neg)':'var(--pos)'};font-size:8px">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  const _varStr  = v => v==null ? '' : ` <span style="color:${v>0?'var(--neg)':'var(--pos)'};font-size:8px">${v>0?'+':''}${v.toFixed(2)}%</span>`;
   let resumenEl = document.getElementById('flujo-resumen-agregado');
   if (!resumenEl) {
     resumenEl = document.createElement('div');
@@ -12572,7 +12572,7 @@ function buildComparacionFlujos() {
         } else {
           const vp = _varPct(row.vA, row.vB);
           const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
-          varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(1)}%</span>` : '—';
+          varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(2)}%</span>` : '—';
         }
         return `<tr${nota}>
           <td style="padding:4px 8px 4px 0;font-size:9px;color:var(--dim)">${row.lbl}</td>
@@ -12595,9 +12595,9 @@ function buildComparacionFlujos() {
     { l:'Necesidad actual',     v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
     { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
     { l:'Var. real (Fisher)',   v:fmtP(varReal),                                                 c:colVar(varReal) },
-    { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(1)+'%' : '—',                              c:'var(--text)', popKey:'cov_ing' },
-    { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(1)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
-    ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(1)+'%', c:'#e8c84a', title:'Ingresos operativos sobre costo laboral del período actual', popKey:'cov_lab' }] : []),
+    { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(2)+'%' : '—',                              c:'var(--text)', popKey:'cov_ing' },
+    { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(2)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
+    ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(2)+'%', c:'#e8c84a', title:'Ingresos operativos sobre costo laboral del período actual', popKey:'cov_lab' }] : []),
     ...(ipc&&_resBSigned ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(_resBSigned*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del resultado neto del período anterior en pesos actuales' }] : []),
     ...(ipcProy&&necA ? [{ l:`Proyección siguiente período`, v:fmtM(necA*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el período actual` }] : []),
   ].map(k => `<div style="padding:${k.big||k.big2?'10px 18px':'8px 14px'};background:var(--s2);
@@ -12618,8 +12618,8 @@ function buildComparacionFlujos() {
     const labVarReal = (labVarNom!=null&&ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
     const labPctEgrA = (egrA&&labA) ? Math.abs(labA)/Math.abs(egrA)*100 : null;
     const labPctEgrB = (egrB&&labB) ? Math.abs(labB)/Math.abs(egrB)*100 : null;
-    const cpA = labCovA ? labCovA.toFixed(1)+'%' : '—';
-    const cpB = labCovB ? labCovB.toFixed(1)+'%' : '—';
+    const cpA = labCovA ? labCovA.toFixed(2)+'%' : '—';
+    const cpB = labCovB ? labCovB.toFixed(2)+'%' : '—';
     const colLab = labVarNom==null?'var(--dim)':labVarNom>0?'var(--neg)':'var(--pos)';
     return `<div style="padding:10px 16px;background:var(--s2);border:1px solid var(--bd);
       border-left:3px solid #e8c84a;border-radius:4px;min-width:260px">
@@ -12628,13 +12628,13 @@ function buildComparacionFlujos() {
         <div>
           <div style="font-size:7px;color:var(--dim);margin-bottom:2px">${fA.periodo}</div>
           <div style="font-size:13px;font-weight:700;color:var(--neg)">${fmtM(labA)}</div>
-          ${labPctEgrA!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrA.toFixed(1)}% de egresos</div>`:''}
+          ${labPctEgrA!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrA.toFixed(2)}% de egresos</div>`:''}
           <div style="font-size:8px;color:#e8c84a;margin-top:1px;font-weight:600">Cob. ing/lab: ${cpA}</div>
         </div>
         <div>
           <div style="font-size:7px;color:var(--dim);margin-bottom:2px">${fB.periodo}</div>
           <div style="font-size:13px;font-weight:700;color:var(--dim)">${fmtM(labB)}</div>
-          ${labPctEgrB!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrB.toFixed(1)}% de egresos</div>`:''}
+          ${labPctEgrB!=null?`<div style="font-size:8px;color:var(--dim);margin-top:2px">${labPctEgrB.toFixed(2)}% de egresos</div>`:''}
           <div style="font-size:8px;color:var(--dim);margin-top:1px">Cob. ing/lab: ${cpB}</div>
         </div>
         <div style="padding-top:4px;border-top:1px solid var(--bd)">
@@ -12853,15 +12853,15 @@ function buildComparacionFlujos() {
     else if (covA >= 70) { icon='🟡'; label='Cobertura con alerta (70–89%)'; color='#e8c84a'; }
     else                 { icon='🔴'; label='Cobertura crítica (<70%)';       color='var(--neg)'; }
     const deltaCov = (covA!=null&&covB!=null) ? (covA-covB) : null;
-    const deltaStr = deltaCov!=null ? `<span style="font-size:11px;font-family:var(--mono);color:${deltaCov>=0?'var(--pos)':'var(--neg)'};margin-left:10px">${deltaCov>=0?'+':''}${deltaCov.toFixed(1)} pp vs período anterior</span>` : '';
+    const deltaStr = deltaCov!=null ? `<span style="font-size:11px;font-family:var(--mono);color:${deltaCov>=0?'var(--pos)':'var(--neg)'};margin-left:10px">${deltaCov>=0?'+':''}${deltaCov.toFixed(2)} pp vs período anterior</span>` : '';
     semEl.innerHTML = `<div style="padding:12px 18px;background:var(--s2);border:1px solid var(--bd);
       border-left:3px solid ${color};border-radius:4px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
       <span style="font-size:20px">${icon}</span>
       <div>
         <div style="font-size:12px;font-weight:700;color:${color};font-family:var(--mono)">${label}</div>
         <div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-top:3px">
-          Cobertura actual: <span style="color:${color};font-weight:700">${covA.toFixed(1)}%</span>
-          ${covB!=null?`&nbsp;·&nbsp; Período anterior: <span style="color:var(--dim)">${covB.toFixed(1)}%</span>`:''}
+          Cobertura actual: <span style="color:${color};font-weight:700">${covA.toFixed(2)}%</span>
+          ${covB!=null?`&nbsp;·&nbsp; Período anterior: <span style="color:var(--dim)">${covB.toFixed(2)}%</span>`:''}
           ${deltaStr}
         </div>
       </div>
@@ -12881,10 +12881,10 @@ function buildComparacionFlujos() {
       return `<div style="margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
           <span style="font-size:8px;color:var(--dim);font-family:var(--mono)">${r.label}</span>
-          <span style="font-size:8px;color:var(--neg);font-family:var(--mono)">${fmtM(r.actual)} &nbsp; ${pct.toFixed(1)}%</span>
+          <span style="font-size:8px;color:var(--neg);font-family:var(--mono)">${fmtM(r.actual)} &nbsp; ${pct.toFixed(2)}%</span>
         </div>
         <div style="height:6px;background:var(--s3);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${Math.min(pct,100).toFixed(1)}%;background:var(--neg);border-radius:3px;opacity:.75"></div>
+          <div style="height:100%;width:${Math.min(pct,100).toFixed(2)}%;background:var(--neg);border-radius:3px;opacity:.75"></div>
         </div>
       </div>`;
     }).join('');
@@ -12930,7 +12930,7 @@ function buildComparacionFlujos() {
     const coberturas  = allFlujos.map(f => {
       const ing = _flujoIngOperativo(f);
       const egr = _flujoEgrDetTotal(f);
-      return (ing && egr) ? parseFloat((ing / Math.abs(egr) * 100).toFixed(1)) : null;
+      return (ing && egr) ? parseFloat((ing / Math.abs(egr) * 100).toFixed(2)) : null;
     });
     mkChart('ch-flujo-tend','line',{
       labels: periodos,
@@ -12944,7 +12944,7 @@ function buildComparacionFlujos() {
       ]
     },{ plugins:{ legend:{ labels:{ font:{size:8} } } },
         scales:{
-          y:{ ticks:{ callback: v=>'$'+(v/1e6).toFixed(1)+'M', font:{size:7} }, position:'left' },
+          y:{ ticks:{ callback: v=>'$'+(v/1e6).toFixed(2)+'M', font:{size:7} }, position:'left' },
           y2:{ ticks:{ callback: v=>v+'%', font:{size:7} }, position:'right', grid:{ drawOnChartArea:false } }
         }
     });
@@ -12988,7 +12988,7 @@ function _ipcAcumEntrePeriodos(pA, pB) {
     mes++;
     if (mes > 12) { anio++; mes = 1; }
   }
-  return acum > 1 ? parseFloat(((acum - 1) * 100).toFixed(1)) : null;
+  return acum > 1 ? parseFloat(((acum - 1) * 100).toFixed(2)) : null;
 }
 
 // ── EXPORTAR FLUJO A EXCEL ────────────────────────────────────────
@@ -13109,7 +13109,7 @@ function exportarFlujoExcel() {
         <text x="${pad+6}" y="${y+18}" font-size="10" fill="${T.text}" font-family="monospace">${lbl}</text>
         <rect x="${pad+labelW}" y="${y+8}" width="${w}" height="${rowH-16}" rx="2" fill="${T.neg}cc"/>
         <text x="${pad+labelW+barW+4}" y="${y+18}" font-size="10" fill="${T.text}" font-family="monospace" text-anchor="start">${C(r.actual)}</text>
-        <text x="${pad+labelW+barW+valW+pctW-4}" y="${y+18}" font-size="11" font-weight="600" fill="${pct>20?T.neg:T.dim}" font-family="monospace" text-anchor="end">${pct.toFixed(1)}%</text>
+        <text x="${pad+labelW+barW+valW+pctW-4}" y="${y+18}" font-size="11" font-weight="600" fill="${pct>20?T.neg:T.dim}" font-family="monospace" text-anchor="end">${pct.toFixed(2)}%</text>
       </g>`;
     }).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="display:block">
@@ -13304,7 +13304,7 @@ function exportarFlujoExcel() {
     <div class="icon">${semEmoji}</div>
     <div style="flex:1">
       <div class="status">${semText}</div>
-      <div class="detail">Cobertura ingresos/egresos: <strong>${covA!=null?covA.toFixed(1)+'%':'—'}</strong>${covB!=null?' · período anterior: '+covB.toFixed(1)+'%  (Δ '+(covA-covB>0?'+':'')+(covA-covB).toFixed(1)+' pp)':''}</div>
+      <div class="detail">Cobertura ingresos/egresos: <strong>${covA!=null?covA.toFixed(2)+'%':'—'}</strong>${covB!=null?' · período anterior: '+covB.toFixed(2)+'%  (Δ '+(covA-covB>0?'+':'')+(covA-covB).toFixed(2)+' pp)':''}</div>
     </div>
     ${ipc&&necA?`<div style="text-align:right;border-left:1px solid ${T.bd};padding-left:16px">
       <div style="font-size:7.5px;color:${T.dim};letter-spacing:.08em;margin-bottom:4px">PROYECCIÓN PRÓX. PERÍODO · IPC ${ipc}%</div>
@@ -13334,13 +13334,13 @@ function exportarFlujoExcel() {
     </div>`:''}
     <div class="kpi-card" style="border-top-color:${covColor(covA)}">
       <div class="lbl">COBERTURA ING/EGR</div>
-      <div class="val" style="color:${covColor(covA)}">${covA!=null?covA.toFixed(1)+'%':'—'}</div>
-      ${covB!=null?`<div class="note">ant: ${covB.toFixed(1)}%</div>`:''}
+      <div class="val" style="color:${covColor(covA)}">${covA!=null?covA.toFixed(2)+'%':'—'}</div>
+      ${covB!=null?`<div class="note">ant: ${covB.toFixed(2)}%</div>`:''}
     </div>
     ${(labCovA||labCovB)?`<div class="kpi-card" style="border-top-color:${T.acc}">
       <div class="lbl">COB. ING / COSTO LABORAL</div>
-      <div class="val" style="color:${T.acc}">${labCovA!=null?labCovA.toFixed(1)+'%':'—'}</div>
-      ${labCovB!=null?`<div class="note">ant: ${labCovB.toFixed(1)}%</div>`:''}
+      <div class="val" style="color:${T.acc}">${labCovA!=null?labCovA.toFixed(2)+'%':'—'}</div>
+      ${labCovB!=null?`<div class="note">ant: ${labCovB.toFixed(2)}%</div>`:''}
     </div>`:''}
     <div class="kpi-card" style="border-top-color:${T.pos}">
       <div class="lbl">TOTAL INGRESOS</div>
@@ -13359,14 +13359,14 @@ function exportarFlujoExcel() {
       <div class="lab-cell">
         <div class="lbl">${fA.periodo}</div>
         <div class="val" style="color:${T.neg}">${C(labA)}</div>
-        ${(egrA&&labA)?`<div class="sub">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>`:''}
-        ${labCovA!=null?`<div class="sub" style="color:${T.acc}">Cob. ing/lab: ${labCovA.toFixed(1)}%</div>`:''}
+        ${(egrA&&labA)?`<div class="sub">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(2)}% de egresos</div>`:''}
+        ${labCovA!=null?`<div class="sub" style="color:${T.acc}">Cob. ing/lab: ${labCovA.toFixed(2)}%</div>`:''}
       </div>
       <div class="lab-cell">
         <div class="lbl">${fB.periodo}</div>
         <div class="val" style="color:${T.dim}">${C(labB)}</div>
-        ${(egrB&&labB)?`<div class="sub">${(Math.abs(labB)/Math.abs(egrB)*100).toFixed(1)}% de egresos</div>`:''}
-        ${labCovB!=null?`<div class="sub" style="color:${T.acc}">Cob. ing/lab: ${labCovB.toFixed(1)}%</div>`:''}
+        ${(egrB&&labB)?`<div class="sub">${(Math.abs(labB)/Math.abs(egrB)*100).toFixed(2)}% de egresos</div>`:''}
+        ${labCovB!=null?`<div class="sub" style="color:${T.acc}">Cob. ing/lab: ${labCovB.toFixed(2)}%</div>`:''}
       </div>
       <div class="lab-cell">
         <div class="lbl">VAR. NOMINAL</div>
@@ -13591,17 +13591,17 @@ function _rptFlujoIndividual() {
     </div>
     <div class="kpi" style="border-top-color:${semColor}">
       <div class="lbl">Cobertura ing/egr</div>
-      <div class="val" style="color:${semColor}">${covA != null ? covA.toFixed(1)+'%' : '—'}</div>
+      <div class="val" style="color:${semColor}">${covA != null ? covA.toFixed(2)+'%' : '—'}</div>
       <div style="font-size:7.5px;color:${semColor};margin-top:2px;font-family:monospace">${semText}</div>
     </div>
     ${labA ? `<div class="kpi" style="border-top-color:#e8c84a">
       <div class="lbl">Costo laboral</div>
       <div class="val" style="color:#7a5900">${C(labA)}</div>
-      ${egrA ? `<div style="font-size:7.5px;color:#888;margin-top:2px;font-family:monospace">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(1)}% de egresos</div>` : ''}
+      ${egrA ? `<div style="font-size:7.5px;color:#888;margin-top:2px;font-family:monospace">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(2)}% de egresos</div>` : ''}
     </div>` : ''}
     ${covLabA_rpt ? `<div class="kpi" style="border-top-color:#e8c84a">
       <div class="lbl">Cob. ing / costo laboral</div>
-      <div class="val" style="color:#7a5900">${covLabA_rpt.toFixed(1)}%</div>
+      <div class="val" style="color:#7a5900">${covLabA_rpt.toFixed(2)}%</div>
       <div style="font-size:7.5px;color:#888;margin-top:2px;font-family:monospace">${covLabA_rpt>=100?'Ingresos cubren costo laboral':'Ingresos no cubren costo laboral'}</div>
     </div>` : ''}
   </div>
@@ -13912,12 +13912,12 @@ function buildResumen() {
 
   const rNetoLast = rNeto(last);
   const kpiItems = [
-    { lbl:`Facturación ${last}`,      val:fv(tf[last]),    sub:`×${tf[first]?((tf[last]/tf[first]).toFixed(1)):'—'} vs ${first}`, cls:'up', ac:'#c4d600' },
+    { lbl:`Facturación ${last}`,      val:fv(tf[last]),    sub:`×${tf[first]?((tf[last]/tf[first]).toFixed(2)):'—'} vs ${first}`, cls:'up', ac:'#c4d600' },
     { lbl:'Ejercicios analizados',    val:years.length,    sub:years.join(' · '), cls:'', ac:'#47e8ff' },
     { lbl:`Resultado neto ${last}`,   val:fv(rNetoLast),   sub:`${DATA.sup_count[last]||0} pos · ${DATA.def_count[last]||0} neg`, cls: rNetoLast>=0?'up':'dn', ac: rNetoLast>=0?'#47ffb4':'#ff4766' },
     { lbl:`Nómina ${last}`,           val:fn(persLast),    sub:persSub, cls:'up', ac:'#c447ff' },
-    { lbl:`Concentración top 3 ${last}`, val:top3pct.toFixed(1)+'%', sub:`${concLabel} · Top5: ${top5pct.toFixed(1)}%`, cls: top3pct>=60?'dn':'', ac:'#ff8c47' },
-    { lbl:`Transferencias ${last}`,   val:totalTrans>0?fv(totalTrans):'Sin datos', sub: transPctFact!=null?`${transPctFact.toFixed(1)}% de la facturación`:'', cls:'', ac:'#47b4ff' },
+    { lbl:`Concentración top 3 ${last}`, val:top3pct.toFixed(2)+'%', sub:`${concLabel} · Top5: ${top5pct.toFixed(2)}%`, cls: top3pct>=60?'dn':'', ac:'#ff8c47' },
+    { lbl:`Transferencias ${last}`,   val:totalTrans>0?fv(totalTrans):'Sin datos', sub: transPctFact!=null?`${transPctFact.toFixed(2)}% de la facturación`:'', cls:'', ac:'#47b4ff' },
   ];
   const bandEl = document.getElementById('kpi-res-band');
   if (bandEl) {
@@ -14048,7 +14048,7 @@ function buildFacturacion() {
       const prev = years[i-1];
       const f  = fact[y]||0, fp = fact[prev]||0;
       const res = sit[y];
-      const margen = f > 0 && res != null ? (res/f*100).toFixed(1)+'%' : null;
+      const margen = f > 0 && res != null ? (res/f*100).toFixed(2)+'%' : null;
       const deltaFact = prev
         ? `<div class="kpi-sub ${f>=fp?'up':'dn'}">${f>=fp?'▲':'▼'} ${Math.abs(pctNum(f,fp))}% fact. vs ${prev}</div>`
         : '<div class="kpi-sub">Base</div>';
@@ -14183,7 +14183,7 @@ function buildFacturacion() {
     // Gráfico 4: margen operativo top empresas con resultado
     const empConSit = Object.entries(DATA.sit||{})
       .filter(([,s])=>s[last]!=null && (DATA.fact[last]||DATA.fact[_]||true))
-      .map(([e,s])=>({ e, margen: DATA.fact[e]?.[last] ? parseFloat((s[last]/DATA.fact[e][last]*100).toFixed(1)) : null }))
+      .map(([e,s])=>({ e, margen: DATA.fact[e]?.[last] ? parseFloat((s[last]/DATA.fact[e][last]*100).toFixed(2)) : null }))
       .filter(x=>x.margen!=null)
       .sort((a,b)=>b.margen-a.margen)
       .slice(0,12);
@@ -14518,7 +14518,7 @@ function buildResDesglose() {
               const ventasLastY = totals['ventas_netas']?.[lastY] || 0;
               const valLastY = totals[k]?.[lastY];
               const pct = ventasLastY && valLastY != null && valLastY !== 0
-                ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(1)}%</span>`
+                ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(2)}%</span>`
                 : '<span style="color:var(--dim)">—</span>';
               return `<tr>
                 <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
@@ -14568,7 +14568,7 @@ function buildResDesglose() {
               const ventasLastY = empEr[lastY]?.['ventas_netas'] || 0;
               const valLastY = empEr[lastY]?.[k];
               const pct = ventasLastY && valLastY != null && valLastY !== 0
-                ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(1)}%</span>`
+                ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(2)}%</span>`
                 : '<span style="color:var(--dim)">—</span>';
               return `<tr>
                 <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
@@ -14686,7 +14686,7 @@ function buildResultado() {
     // KPI: resultado neto por año con color semáforo + margen
     document.getElementById('kpi-res2').innerHTML = allYears.map(y => {
       const f = fact[y]||0, s = sit[y];
-      const m = f > 0 && s != null ? parseFloat((s/f*100).toFixed(1)) : null;
+      const m = f > 0 && s != null ? parseFloat((s/f*100).toFixed(2)) : null;
       const col = s > 0 ? 'var(--pos)' : s < 0 ? 'var(--neg)' : 'var(--text)';
       const margenTag = m !== null
         ? `<div class="kpi-sub" style="color:${m>=0?'#1a9e68':'var(--neg)'}">Margen: ${m}%</div>` : '';
@@ -15578,7 +15578,7 @@ function renderTablaPersonal() {
   function fmtVar(v) {
     if (v == null || !isFinite(v)) return '<span style="color:var(--dim)">—</span>';
     var col = v >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return '<span style="color:' + col + '">' + (v>=0?'+':'') + v.toFixed(1) + '%</span>';
+    return '<span style="color:' + col + '">' + (v>=0?'+':'') + v.toFixed(2) + '%</span>';
   }
 
   var html = '<thead><tr style="position:sticky;top:0;background:var(--s1)">' +
@@ -15854,11 +15854,11 @@ function buildPortafolio() {
     const factColor = r.f > 0 ? 'var(--text)' : 'var(--dim)';
     const resColor  = r.r == null ? 'var(--dim)' : r.r > 0 ? 'var(--pos)' : 'var(--neg)';
     const resVal    = r.r == null ? '—' : fvFull(r.r);
-    const mrgVal    = r.margen != null ? r.margen.toFixed(1)+'%' : '—';
+    const mrgVal    = r.margen != null ? r.margen.toFixed(2)+'%' : '—';
     const fxemp     = r.p > 0 ? fvFull(r.f/r.p) : '—';
     const mrgColor  = r.margen == null ? 'var(--dim)' : r.margen > 0 ? 'var(--pos)' : 'var(--neg)';
     // Dependencia estatal: transferencias / facturación
-    const dep       = r.f > 0 && r.t > 0 ? (r.t/r.f*100).toFixed(1)+'%' : r.f===0&&r.t>0 ? '∞' : '—';
+    const dep       = r.f > 0 && r.t > 0 ? (r.t/r.f*100).toFixed(2)+'%' : r.f===0&&r.t>0 ? '∞' : '—';
     const depColor  = r.f > 0 && r.t > 0 ? (r.t/r.f > 0.5 ? '#ff8c47' : 'var(--dim)') : 'var(--dim)';
 
     const tr = document.createElement('tr');
@@ -15884,7 +15884,7 @@ function buildPortafolio() {
         ${r.balResNeto!=null?fvFull(r.balResNeto):'—'}
       </td>
       <td style="${tdR};color:${r.balRoe==null?'var(--dim)':r.balRoe>0.1?'var(--pos)':r.balRoe>0?'#e8ff47':'var(--neg)'}">
-        ${r.balRoe!=null?(r.balRoe*100).toFixed(1)+'%':'—'}
+        ${r.balRoe!=null?(r.balRoe*100).toFixed(2)+'%':'—'}
       </td>
       <td style="${tdR};color:${r.balLiqCorr==null?'var(--dim)':r.balLiqCorr>=1?'var(--pos)':'var(--neg)'}">
         ${r.balLiqCorr!=null?r.balLiqCorr.toFixed(2)+'x':'—'}
@@ -16136,7 +16136,7 @@ function buildEmpresa() {
   mkChart('ch-e-margen','line',{
     labels: margenYs.map(String),
     datasets:[
-      {label:'Margen %', data:margenYs.map(y=>parseFloat(((sit[y]||0)/(fact[y]||1)*100).toFixed(1))),
+      {label:'Margen %', data:margenYs.map(y=>parseFloat(((sit[y]||0)/(fact[y]||1)*100).toFixed(2))),
         borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.4, pointRadius:6, yAxisID:'y'},
       {label:'Var. real', data:margenReal, type:'line', borderColor:'#2ecc8a', backgroundColor:'transparent',
         borderDash:[4,3], borderWidth:1.8, pointRadius:margenReal.map(v=>v!==null?4:0),
@@ -16528,7 +16528,7 @@ function buildAuditERProvisorio(emp) {
     const s = Math.abs(Math.round(v)).toLocaleString('es-AR');
     return `<span style="color:${v<0?'var(--neg)':'inherit'}">${v<0?'−':''}$${s}</span>`;
   };
-  const fmtPct = p => p == null ? '<span style="color:var(--dim)">—</span>' : `${p>=0?'+':''}${p.toFixed(1)}%`;
+  const fmtPct = p => p == null ? '<span style="color:var(--dim)">—</span>' : `${p>=0?'+':''}${p.toFixed(2)}%`;
   const diffColor = d => {
     if (d == null) return 'var(--dim)';
     const a = Math.abs(d);
@@ -16549,7 +16549,7 @@ function buildAuditERProvisorio(emp) {
       { lbl:'Margen neto', p: vpV?provAcc2.resultado_neto/vpV*100:null, b: vbV?balAcc.resultado_neto/vbV*100:null },
     ].filter(k => k.p != null || k.b != null);
     if (!kpis.length) return '';
-    const fP = v => v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%';
+    const fP = v => v==null?'—':(v>=0?'+':'')+v.toFixed(2)+'%';
     const cP = v => v==null?'var(--dim)':v>=0?'var(--pos)':'var(--neg)';
     return `<div style="display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--bd);background:var(--s2)">
       ${kpis.map(k=>`<div style="padding:6px 12px;background:var(--s1);border:1px solid var(--bd);border-radius:4px;min-width:130px">
@@ -16564,7 +16564,7 @@ function buildAuditERProvisorio(emp) {
             <div style="font-size:7px;color:var(--dim)">Balance</div>
             <div style="font-size:14px;font-weight:700;color:${cP(k.b)};font-family:var(--mono)">${fP(k.b)}</div>
           </div>
-          ${k.p!=null&&k.b!=null?`<div style="font-size:8px;color:${diffColor(k.p-k.b)};font-family:var(--mono);margin-left:4px">${k.p-k.b>0?'+':''}${(k.p-k.b).toFixed(1)}pp</div>`:''}
+          ${k.p!=null&&k.b!=null?`<div style="font-size:8px;color:${diffColor(k.p-k.b)};font-family:var(--mono);margin-left:4px">${k.p-k.b>0?'+':''}${(k.p-k.b).toFixed(2)}pp</div>`:''}
         </div>
       </div>`).join('')}
     </div>`;
@@ -16641,8 +16641,8 @@ function buildAuditERProvisorio(emp) {
       : null;
     const semaforo = consistencia == null ? '' :
       consistencia < 2 ? '🟢 Composición consistente (<2 pp)' :
-      consistencia < 8 ? '🟡 Diferencia moderada ('+consistencia.toFixed(1)+' pp en margen operativo)' :
-      '🔴 Diferencia significativa ('+consistencia.toFixed(1)+' pp en margen operativo) — revisar';
+      consistencia < 8 ? '🟡 Diferencia moderada ('+consistencia.toFixed(2)+' pp en margen operativo)' :
+      '🔴 Diferencia significativa ('+consistencia.toFixed(2)+' pp en margen operativo) — revisar';
 
     html += `</tbody></table></div>`;
     if (semaforo) {
@@ -16698,10 +16698,10 @@ function _informeEjecutivoRender(emp) {
 
   // ── Helpers de formato ────────────────────────────────────────────────────────
   const m   = v => v == null ? '—' : fv(v);
-  const p   = v => v == null ? '—' : (v * 100).toFixed(1) + '%';
+  const p   = v => v == null ? '—' : (v * 100).toFixed(2) + '%';
   const r2  = v => v == null ? '—' : v.toFixed(2);
   const dd  = v => v == null ? '—' : Math.round(v) + ' días';
-  const pct = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+  const pct = v => v == null ? '—' : (v > 0 ? '+' : '') + v.toFixed(2) + '%';
   const sem = (v, ok, warn) => {
     if (v == null) return '<span style="color:#888">—</span>';
     if (ok(v))   return '<span style="color:#2ecc71;font-weight:700">✓</span>';
@@ -16821,7 +16821,7 @@ function _informeEjecutivoRender(emp) {
           const y = yearOf(b.periodo); const f = fact[y]; const t = transTotal(y);
           return (f && t > 0) ? t / f * 100 : null;
         },
-        fmt: v => v.toFixed(1) + '%',
+        fmt: v => v.toFixed(2) + '%',
         ok: v => v < 30, warn: v => v < 60, inv: true,
         trendOk: (v0,v1) => v1 < v0,
       },
@@ -17177,7 +17177,7 @@ function _informeEjecutivoRender(emp) {
           <td style="text-align:right">${m(ing)}</td>
           <td style="text-align:right;color:#c0392b">${egr != null ? m(-Math.abs(egr)) : '—'}</td>
           <td style="text-align:right;color:${nec>0?'#c0392b':'#1a7a4a'}">${m(nec)}</td>
-          <td style="text-align:right">${f.ipc ? f.ipc.toFixed(1)+'%' : '—'}</td>
+          <td style="text-align:right">${f.ipc ? f.ipc.toFixed(2)+'%' : '—'}</td>
         </tr>`;
       }).join('')}
       </tbody>
@@ -17255,7 +17255,7 @@ function _informeEjecutivoRender(emp) {
             <td style="text-align:right">${c.dot ?? '—'}</td>
             <td style="text-align:right">${c.cost != null ? m(c.cost) + c.fuenteCosto : '—'}</td>
             <td style="text-align:right">${c.cxe != null ? m(c.cxe) : '—'}</td>
-            <td style="text-align:right;color:${c.pctFact!=null&&c.pctFact>60?'#c0392b':c.pctFact!=null&&c.pctFact>40?'#e67e22':'#1a7a4a'}">${c.pctFact!=null?c.pctFact.toFixed(1)+'%':'—'}</td>
+            <td style="text-align:right;color:${c.pctFact!=null&&c.pctFact>60?'#c0392b':c.pctFact!=null&&c.pctFact>40?'#e67e22':'#1a7a4a'}">${c.pctFact!=null?c.pctFact.toFixed(2)+'%':'—'}</td>
           </tr>`).join('')}
         </tbody>
       </table>`;
@@ -17485,7 +17485,7 @@ function informeEstadoERProvisorio(empFiltro) {
           <td style="text-align:center">${r.meses}</td>
           <td style="text-align:right">${fv2(r.ventas)}</td>
           <td style="text-align:right;color:${colRes};font-weight:600">${fv2(r.resultado)}</td>
-          <td style="text-align:right;color:${colMrg}">${r.margen != null ? r.margen.toFixed(1)+'%' : '—'}</td>
+          <td style="text-align:right;color:${colMrg}">${r.margen != null ? r.margen.toFixed(2)+'%' : '—'}</td>
         </tr>`;
       });
     });
@@ -17894,7 +17894,7 @@ function buildEvolucionMensual(emp) {
         const vt = mesesMostrar.reduce((s,m)=>(s)+(valConcMes.ventas?.[m]||0),0);
         const ro = mesesMostrar.reduce((s,m)=>(s)+(valConcMes.resOperativo?.[m]||0),0);
         const re = mesesMostrar.reduce((s,m)=>(s)+(valConcMes.resEjercicio?.[m]||0),0);
-        const fmtK = v => { const abs=Math.abs(v); return (v<0?'−':'')+(abs>=1e6?(abs/1e6).toFixed(1)+'M':abs>=1e3?(abs/1e3).toFixed(0)+'k':abs.toFixed(0)); };
+        const fmtK = v => { const abs=Math.abs(v); return (v<0?'−':'')+(abs>=1e6?(abs/1e6).toFixed(2)+'M':abs>=1e3?(abs/1e3).toFixed(0)+'k':abs.toFixed(0)); };
         const kpiHtml = vt || ro ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
           ${vt?`<div style="padding:6px 12px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #47e8ff;border-radius:4px">
             <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">VENTAS ${yr}</div>
@@ -17902,18 +17902,18 @@ function buildEvolucionMensual(emp) {
           ${ro?`<div style="padding:6px 12px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #e8c84a;border-radius:4px">
             <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">RES. OPERATIVO</div>
             <div style="font-size:15px;font-weight:700;color:${ro<0?'var(--neg)':'#e8c84a'};font-family:var(--mono)">$${fmtK(ro)}</div>
-            ${vt?`<div style="font-size:8px;color:var(--dim)">${(ro/vt*100).toFixed(1)}% margen</div>`:''}
+            ${vt?`<div style="font-size:8px;color:var(--dim)">${(ro/vt*100).toFixed(2)}% margen</div>`:''}
           </div>`:''}
           ${re?`<div style="padding:6px 12px;background:var(--s2);border:1px solid var(--bd);border-left:3px solid #ff8c47;border-radius:4px">
             <div style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">RES. EJERCICIO</div>
             <div style="font-size:15px;font-weight:700;color:${re<0?'var(--neg)':'#ff8c47'};font-family:var(--mono)">$${fmtK(re)}</div>
-            ${vt?`<div style="font-size:8px;color:var(--dim)">${(re/vt*100).toFixed(1)}% margen</div>`:''}
+            ${vt?`<div style="font-size:8px;color:var(--dim)">${(re/vt*100).toFixed(2)}% margen</div>`:''}
           </div>`:''}
         </div>` : '';
 
         _tendCfgs.push({ id: chId, type:'line',
           data:{ labels: chLabels, datasets: chDs },
-          opts:{ scales:{ y:{ ticks:{ callback: v => { const a=Math.abs(v); return (v<0?'-':'')+(a>=1e6?(a/1e6).toFixed(1)+'M':a>=1e3?(a/1e3).toFixed(0)+'k':a); } } } },
+          opts:{ scales:{ y:{ ticks:{ callback: v => { const a=Math.abs(v); return (v<0?'-':'')+(a>=1e6?(a/1e6).toFixed(2)+'M':a>=1e3?(a/1e3).toFixed(0)+'k':a); } } } },
             plugins:{ legend:{ display:true, labels:{ font:{size:10}, boxWidth:14 } } } }
         });
         return `<div style="margin-bottom:20px">
@@ -17936,7 +17936,7 @@ function buildEvolucionMensual(emp) {
         const ventasTot = mesesMostrar.reduce((s,m)=> s + (valConcMes.ventas?.[m] || 0), 0);
         const pct = (hayDato && ventasTot && e.concepto !== 'ventas') ? (totFila / ventasTot * 100) : null;
         const totCell = `<td style="padding:4px 8px;text-align:right;font-size:9px;font-weight:600;border-left:1px solid var(--bd);${totFila<0?'color:var(--neg)':'color:var(--text)'}">${hayDato?fmt(totFila):'—'}</td>`;
-        const pctCell = `<td style="padding:4px 8px;text-align:right;font-size:8.5px;color:${pct==null?'var(--dim)':pct<0?'var(--neg)':'var(--dim)'};border-left:1px dashed var(--bd)">${pct!=null?(pct>=0?'+':'')+pct.toFixed(1)+'%':'—'}</td>`;
+        const pctCell = `<td style="padding:4px 8px;text-align:right;font-size:8.5px;color:${pct==null?'var(--dim)':pct<0?'var(--neg)':'var(--dim)'};border-left:1px dashed var(--bd)">${pct!=null?(pct>=0?'+':'')+pct.toFixed(2)+'%':'—'}</td>`;
         const style = e.bold ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
         return `<tr style="${style}"><td style="padding:4px 8px;font-size:9px;white-space:nowrap">${e.lbl}${calc?' <span style="font-size:7px;color:var(--dim)">auto</span>':''}</td>${celdas}${totCell}${pctCell}${edit?'<td></td>':''}</tr>`;
       }).join('');
@@ -17991,9 +17991,9 @@ function renderERGraficosEmpresa(emp) {
   const liq   = ind.liquidez    || {};
   const sol   = ind.solvencia   || {};
   const fmt   = v => v == null ? '—' : (Math.abs(v) >= 1e9
-    ? (v/1e9).toFixed(1) + 'B'
+    ? (v/1e9).toFixed(2) + 'B'
     : Math.abs(v) >= 1e6
-      ? (v/1e6).toFixed(1) + 'M'
+      ? (v/1e6).toFixed(2) + 'M'
       : Math.abs(v) >= 1e3
         ? (v/1e3).toFixed(0) + 'K'
         : Math.round(v).toLocaleString('es-AR'));
@@ -18036,15 +18036,15 @@ function renderERGraficosEmpresa(emp) {
         colorSemaforo(liqVal, 1.5, 1.0),
         'Activo corriente / Pasivo corriente. >1.5 saludable, <1 riesgo') +
       kpi('Endeudamiento',
-        endVal != null ? (endVal*100).toFixed(1) : '—', '%',
+        endVal != null ? (endVal*100).toFixed(2) : '—', '%',
         colorSemaforo(endVal == null ? null : 1 - endVal, 0.4, 0),
         'Pasivo total / Activo total. <60% saludable') +
       kpi('ROE',
-        roeVal != null ? roeVal.toFixed(1) : '—', '%',
+        roeVal != null ? roeVal.toFixed(2) : '—', '%',
         colorSemaforo(roeVal, 5, 0),
         'Rentabilidad sobre patrimonio neto') +
       kpi('Margen neto',
-        margenVal != null ? margenVal.toFixed(1) : '—', '%',
+        margenVal != null ? margenVal.toFixed(2) : '—', '%',
         colorSemaforo(margenVal, 5, 0),
         'Resultado neto / Ingresos totales') +
       kpi('Patrimonio neto',
@@ -18125,13 +18125,13 @@ function renderERGraficosEmpresa(emp) {
     const margenNeto  = bals.map(b2 => {
       const r2 = b2.indicadores?.rentabilidad || {};
       return (r2.resultado_neto != null && r2.ventas_ingresos)
-        ? parseFloat((r2.resultado_neto / r2.ventas_ingresos * 100).toFixed(1)) : null;
+        ? parseFloat((r2.resultado_neto / r2.ventas_ingresos * 100).toFixed(2)) : null;
     });
     const margenBruto = bals.map(b2 => {
       const r2 = b2.indicadores?.rentabilidad || {};
       const bruto = r2.utilidad_bruta ?? r2.resultado_operativo;
       return (bruto != null && r2.ventas_ingresos)
-        ? parseFloat((bruto / r2.ventas_ingresos * 100).toFixed(1)) : null;
+        ? parseFloat((bruto / r2.ventas_ingresos * 100).toFixed(2)) : null;
     });
     const resultados  = bals.map(b2 =>
       (b2.indicadores?.rentabilidad?.resultado_neto || 0) / 1e6
@@ -18211,8 +18211,8 @@ function renderFlujosEmpresa(emp) {
   wrap.style.display = '';
 
   const fmt  = v => v == null ? '—' :
-    (Math.abs(v) >= 1e9 ? (v/1e9).toFixed(1)+'B' :
-     Math.abs(v) >= 1e6 ? (v/1e6).toFixed(1)+'M' :
+    (Math.abs(v) >= 1e9 ? (v/1e9).toFixed(2)+'B' :
+     Math.abs(v) >= 1e6 ? (v/1e6).toFixed(2)+'M' :
      Math.abs(v) >= 1e3 ? (v/1e3).toFixed(0)+'K' : Math.round(v).toLocaleString('es-AR'));
   const fmtM = v => v == null ? '—' :
     (v < 0 ? '−' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR');
@@ -18301,7 +18301,7 @@ function buildComparar() {
       label:e,
       data: years.map(y=>{
         const f=DATA.fact[e]?.[y]||0, s=DATA.sit[e]?.[y];
-        return (f>0&&s!=null) ? parseFloat((s/f*100).toFixed(1)) : null;
+        return (f>0&&s!=null) ? parseFloat((s/f*100).toFixed(2)) : null;
       }),
       borderColor:colors[i], backgroundColor:colors[i]+'18', fill:false, tension:.4, pointRadius:5, spanGaps:true
     }))
@@ -18411,8 +18411,8 @@ function exportPortafolioCSV() {
     const pd = DATA.personal.find(d=>d.e===e);
     const p  = pd?.y?.[String(lastY)] || 0;
     const t  = _transEmpresa(e).filter(x=>String(x.año)===String(lastY)).reduce((s,x)=>s+(x.importe||0),0);
-    const margen = f && r != null ? (r/f*100).toFixed(1) : '';
-    const dep    = f > 0 && t > 0 ? (t/f*100).toFixed(1) : '';
+    const margen = f && r != null ? (r/f*100).toFixed(2) : '';
+    const dep    = f > 0 && t > 0 ? (t/f*100).toFixed(2) : '';
     return [e, getRuboLabel(e), f||'', r!=null?r:'', margen, p||'', t||'', dep];
   }).filter(r=>r[2]||r[3]||r[5]||r[6]);
   rows.sort((a,b)=>(b[2]||0)-(a[2]||0));
@@ -19600,7 +19600,7 @@ function buildTransferencias() {
     <div class="kpi"><div class="kpi-accent" style="background:${TRANS_COLORS[c]}"></div>
       <div class="kpi-label">${c}</div>
       <div class="kpi-value">${fv(catTotals[c])}</div>
-      <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(1)}% del total</div>
+      <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(2)}% del total</div>
     </div>`).join('')}`;
 
   // ── Alerta de semanas / meses faltantes ─────────────────────
@@ -19652,7 +19652,7 @@ function buildTransferencias() {
       legend: { display: false },
       tooltip:{ callbacks:{
         label: ctx => ` ${ctx.label}: ${fvFull(ctx.raw*1e6)}`,
-        afterLabel: ctx => `  ${(ctx.raw / donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}%`
+        afterLabel: ctx => `  ${(ctx.raw / donutCats.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(2)}%`
       }}
     },
     _plugins: [ _donutCenterPlugin ],
@@ -19673,9 +19673,9 @@ function buildTransferencias() {
             <div style="font-size:7.5pt;color:var(--dim);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c}</div>
             <div style="font-size:8.5pt;font-weight:600;color:var(--text);font-family:var(--mono);white-space:nowrap">${fvFull(catTotals[c])}</div>
             <div style="height:3px;background:var(--bd);border-radius:2px;margin-top:3px">
-              <div style="height:3px;width:${pct.toFixed(1)}%;background:${TRANS_COLORS[c]};border-radius:2px"></div>
+              <div style="height:3px;width:${pct.toFixed(2)}%;background:${TRANS_COLORS[c]};border-radius:2px"></div>
             </div>
-            <div style="font-size:7pt;color:var(--dim);font-family:var(--mono)">${pct.toFixed(1)}%</div>
+            <div style="font-size:7pt;color:var(--dim);font-family:var(--mono)">${pct.toFixed(2)}%</div>
           </div>
         </div>`;
     }).join('');
@@ -19750,7 +19750,7 @@ function buildTransferencias() {
         return `<tr style="border-bottom:1px solid var(--bd2)22">
           <td style="padding:3px 6px;color:var(--text)">${sf.length>30?sf.slice(0,28)+'…':sf}</td>
           <td style="padding:3px 6px;text-align:right;color:#47e8ff">${fv(tot)}</td>
-          <td style="padding:3px 6px;text-align:right;color:var(--dim)">${totalGeneral>0?(tot/totalGeneral*100).toFixed(1)+'%':'—'}</td>
+          <td style="padding:3px 6px;text-align:right;color:var(--dim)">${totalGeneral>0?(tot/totalGeneral*100).toFixed(2)+'%':'—'}</td>
         </tr>`;
       }).join('')}
       <tr style="border-top:1px solid var(--bd2);font-weight:700">
@@ -19847,7 +19847,7 @@ const INFL = {
     if (validos.length === 0) return;
     // Acumulado del año = producto de (1 + m/100) - 1
     const acum = validos.reduce((acc, m) => acc * (1 + m/100), 1) - 1;
-    INFL.anual[yr] = parseFloat((acum * 100).toFixed(1));
+    INFL.anual[yr] = parseFloat((acum * 100).toFixed(2));
     // IPC estimado: IPC diciembre anterior × (1 + acum)
     const ipcBase = INFL.ipc[yr - 1];
     if (ipcBase) INFL.ipc[yr] = parseFloat((ipcBase * (1 + acum)).toFixed(0));
@@ -19867,7 +19867,7 @@ function deflact(val, year) {
 }
 function realGrowthPct(v2, y2, v1, y1) {
   if (!v1 || !INFL.ipc[y2] || !INFL.ipc[y1]) return null;
-  return parseFloat((((v2/v1) / (INFL.ipc[y2]/INFL.ipc[y1]) - 1)*100).toFixed(1));
+  return parseFloat((((v2/v1) / (INFL.ipc[y2]/INFL.ipc[y1]) - 1)*100).toFixed(2));
 }
 function inflBanner(years) {
   if (!showInflation) return '';
@@ -19879,7 +19879,7 @@ function inflBanner(years) {
     // Marcar visualmente si el año está activo en el filtro actual
     const isActive = years.includes(y);
     const dimStyle = isActive ? '' : 'opacity:.45;';
-    let label = v != null ? v.toFixed(1) + '%' : '—';
+    let label = v != null ? v.toFixed(2) + '%' : '—';
     let note  = '';
     if (y === 2025 && v != null) note = '<div style="font-size:7px;color:var(--dim);margin-top:2px">acum. 12m</div>';
     if (y === 2026 && v != null) note = `<div style="font-size:7px;color:var(--dim);margin-top:2px">${meses26}m pub.</div>`;
@@ -19890,7 +19890,7 @@ function inflBanner(years) {
   const acum = INFL.ipc[2024] && INFL.ipc[2021] ? ((INFL.ipc[2024]/INFL.ipc[2021])-1)*100 : null;
   return `<div class="infl-banner">
     <div><div class="infl-banner-title">IPC INDEC — Inflación anual</div><div class="infl-rates">${rates}</div></div>
-    <div class="infl-note">Valores deflactados en <strong>pesos constantes de 2021</strong>. 2025: acumulado 12 meses completo. 2026: se actualiza mes a mes.${acum ? ` Acumulado 2021→2024: <strong>${acum.toFixed(0)}%</strong>.` : ''}</div>
+    <div class="infl-note">Valores deflactados en <strong>pesos constantes de 2021</strong>. 2025: acumulado 12 meses completo. 2026: se actualiza mes a mes.${acum ? ` Acumulado 2021→2024: <strong>${acum.toFixed(2)}%</strong>.` : ''}</div>
   </div>`;
 }
 
@@ -19899,7 +19899,7 @@ function inflBanner(years) {
 // ═══════════════════════════════════════════════════════════
 function buildInflacion() {
   const ia = INFL.anual;
-  const fmtInfl = (y) => ia[y] != null ? ia[y].toFixed(1)+'%' : '—';
+  const fmtInfl = (y) => ia[y] != null ? ia[y].toFixed(2)+'%' : '—';
   // KPIs — todos los años con datos
   document.getElementById('kpi-infl').innerHTML = [
     {l:'Inflación 2020', v:fmtInfl(2020), s:'IPC INDEC anual', ac:YC[2020]},
@@ -19932,7 +19932,7 @@ function buildInflacion() {
       const m = (INFL.mensual[y]||[])[i];
       if (m == null) return null;
       acc = (1+acc/100)*(1+m/100)*100-100;
-      return parseFloat(acc.toFixed(1));
+      return parseFloat(acc.toFixed(2));
     });
     const isDashed = y >= 2025;
     return { label:String(y), data:vals, borderColor:YC[y]||'#888', backgroundColor:'transparent',
@@ -19973,7 +19973,7 @@ function buildInflacion() {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${e}</td><td class="r">${fvFull(v1)}</td><td class="r">${fvFull(v2)}</td>
       <td class="r" style="color:${nom>=0?'var(--pos)':'var(--neg)'}">${nom}%</td>
-      <td class="r" style="color:#b8a000">${inflAcum!=null?inflAcum.toFixed(0)+'%':'—'}</td>
+      <td class="r" style="color:#b8a000">${inflAcum!=null?inflAcum.toFixed(2)+'%':'—'}</td>
       <td class="r" style="color:${real!=null?(real>=0?'var(--pos)':'var(--neg)'):'var(--dim)'}">${real!=null?real+'%':'—'}</td>
       <td>${real!=null?`<span class="real-pill ${real>=0?'real-pos':'real-neg'}">${real>=0?'▲ Creció real':'▼ Cayó real'}</span>`:'—'}</td>`;
     tb.appendChild(tr);
@@ -20031,7 +20031,7 @@ function actualizarInflacionMensual() {
   const meses = INFL.mensual[2026].filter(v => v != null);
   if (meses.length > 0) {
     const acum = meses.reduce((acc, m) => acc * (1 + m / 100), 1);
-    INFL.anual[2026] = parseFloat(((acum - 1) * 100).toFixed(1));
+    INFL.anual[2026] = parseFloat(((acum - 1) * 100).toFixed(2));
   }
 
   // Persistir en localStorage
@@ -20428,14 +20428,14 @@ function exportXLSX() {
     } else if (currentPanel === 'inflacion') {
       const d1 = [['Año','IPC anual %','IPC base Dic2016=100','Deflactor base 2021']];
       DATA.years.forEach(y => d1.push([y, INFL.anual[y], INFL.ipc[y], parseFloat((INFL.ipc[2021]/INFL.ipc[y]).toFixed(4))]));
-      d1.push([`Acum ${_inflFirstY}→${_inflLastY}`, parseFloat(ACUM_2021_2024.toFixed(1))+'%','','']);
+      d1.push([`Acum ${_inflFirstY}→${_inflLastY}`, parseFloat(ACUM_2021_2024.toFixed(2))+'%','','']);
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d1), 'Inflación INDEC');
       const d2 = [['Empresa','2021','Último año','Var. nominal','Acum. inflación','Var. real','Evaluación']];
       const lastY = years[years.length-1];
       const _firstY = years[0] || 2021;
       Object.entries(DATA.fact).filter(([,f])=>f[_firstY]>0&&f[lastY]>0).forEach(([e,f]) => {
         const nom=pctNum(f[lastY],f[_firstY]), real=realGrowthPct(f[lastY],lastY,f[_firstY],_firstY);
-        d2.push([e,f[_firstY],f[lastY],nom+'%',ACUM_2021_2024.toFixed(0)+'%',real+'%',real>=0?'Creció real':'Cayó real']);
+        d2.push([e,f[_firstY],f[lastY],nom+'%',ACUM_2021_2024.toFixed(2)+'%',real+'%',real>=0?'Creció real':'Cayó real']);
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d2), 'Variaciones reales');
 
@@ -20447,7 +20447,7 @@ function exportXLSX() {
         const f=fact[y]||0, s=sit[y]||null, prev=years[i-1];
         const rf = deflact(f,y);
         const nom = (prev&&fact[prev]) ? pctNum(f,fact[prev])+'%' : '—';
-        const margen = (f&&s!=null) ? parseFloat((s/f*100).toFixed(1))+'%' : '—';
+        const margen = (f&&s!=null) ? parseFloat((s/f*100).toFixed(2))+'%' : '—';
         d1.push([y,f,parseFloat(rf.toFixed(0)),s,margen,nom]);
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d1), (emp.substring(0,28)+' Financiero'));
@@ -20463,7 +20463,7 @@ function exportXLSX() {
       sels.forEach(emp => {
         const fact=DATA.fact[emp]||{}, sit=DATA.sit[emp]||{};
         const d=[['Año','Facturación','Resultado','Margen %']];
-        years.forEach(y=>{const f=fact[y]||0,s=sit[y]||null;d.push([y,f,s,f&&s!=null?parseFloat((s/f*100).toFixed(1))+'%':'—']);});
+        years.forEach(y=>{const f=fact[y]||0,s=sit[y]||null;d.push([y,f,s,f&&s!=null?parseFloat((s/f*100).toFixed(2))+'%':'—']);});
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d), emp.substring(0,28));
       });
 
@@ -20587,7 +20587,7 @@ async function exportPDF() {
       fill(C.acc); doc.rect(M,y,2,13,'F');
       sz(6); ink(C.acc); doc.text('IPC INDEC — Inflación anual',M+5,y+5);
       years.forEach((yr,i)=>{ sz(8); ink(C.text); doc.text(`${yr}: ${INFL.anual[yr]}%`,M+5+i*52,y+10); });
-      sz(7); ink(C.acc); doc.text(`Acumulado 2021→2024: ${ACUM_2021_2024.toFixed(0)}%`,W-M-5,y+10,{align:'right'});
+      sz(7); ink(C.acc); doc.text(`Acumulado 2021→2024: ${ACUM_2021_2024.toFixed(2)}%`,W-M-5,y+10,{align:'right'});
       y+=16;
       // tabla facturación
       sectionTitle('Facturación por empresa ($ millones)',M,y); y+=4;
@@ -20715,7 +20715,7 @@ async function exportPDF() {
       fill(C.acc); doc.rect(M,y,2,13,'F');
       sz(6); ink(C.acc); doc.text('IPC INDEC — Inflación anual',M+5,y+5);
       years.forEach((yr,i)=>{ sz(8.5); ink(C.text); doc.text(`${yr}: ${INFL.anual[yr]}%`,M+5+i*52,y+10); });
-      sz(7); ink(C.acc); doc.text(`Acumulado 2021→2024: ${ACUM_2021_2024.toFixed(0)}%`,W-M-5,y+10,{align:'right'});
+      sz(7); ink(C.acc); doc.text(`Acumulado 2021→2024: ${ACUM_2021_2024.toFixed(2)}%`,W-M-5,y+10,{align:'right'});
       y+=17;
       // períodos
       sectionTitle('Variación nominal vs real — Facturación total consolidada',M,y); y+=4;
@@ -20726,7 +20726,7 @@ async function exportPDF() {
         if(ri%2===0){fill(C.s2);doc.rect(M,y-1,W-M*2,5.5,'F');}
         const v1=tf[y1],v2=tf[y2];
         const nom=pctNum(v2,v1);
-        const inflPer=parseFloat(((INFL.ipc[y2]/INFL.ipc[y1]-1)*100).toFixed(1));
+        const inflPer=parseFloat(((INFL.ipc[y2]/INFL.ipc[y1]-1)*100).toFixed(2));
         const real=realGrowthPct(v2,y2,v1,y1);
         row([`${y1}→${y2}`,fvShort(v1),fvShort(v2),nom+'%',inflPer+'%',real+'%',real>=0?'▲ Creció en términos reales':'▼ Cayó en términos reales'],M+2,y+3.5,pCols,{size:7,colors:[C.dim,C.text,C.text,nom>=0?C.pos:C.neg,C.dim,real>=0?C.pos:C.neg,real>=0?C.pos:C.neg]});
         y+=5.5;
@@ -20743,7 +20743,7 @@ async function exportPDF() {
         const v0=f[years[0]],vL=f[lastY];
         const nom=pctNum(vL,v0);
         const real=realGrowthPct(vL,lastY,v0,years[0]);
-        row([e.slice(0,22),fvShort(v0),fvShort(vL),nom+'%',ACUM_2021_2024.toFixed(0)+'%',real+'%',real>=0?'▲ Real':'▼ Real'],M+2,y+3.5,eCols,{size:6.8,colors:[C.text,C.text,C.text,nom>=0?C.pos:C.neg,C.dim,real>=0?C.pos:C.neg,real>=0?C.pos:C.neg]});
+        row([e.slice(0,22),fvShort(v0),fvShort(vL),nom+'%',ACUM_2021_2024.toFixed(2)+'%',real+'%',real>=0?'▲ Real':'▼ Real'],M+2,y+3.5,eCols,{size:6.8,colors:[C.text,C.text,C.text,nom>=0?C.pos:C.neg,C.dim,real>=0?C.pos:C.neg,real>=0?C.pos:C.neg]});
         y+=5.5;
       });
     }
@@ -20767,7 +20767,7 @@ async function exportPDF() {
       years.forEach((yr,ri)=>{
         if(ri%2===0){fill(C.s2);doc.rect(M,y-1,W-M*2,5.5,'F');}
         const f=fact[yr]||0,s=sit[yr],p=pers?.y[String(yr)]||0;
-        const m=f&&s!=null?parseFloat((s/f*100).toFixed(1)):null;
+        const m=f&&s!=null?parseFloat((s/f*100).toFixed(2)):null;
         row([String(yr),fvShort(f),s!=null&&s!==0?fvShort(s):'—',m!=null?m+'%':'—',String(p),s>0?'Superávit':s<0?'Déficit':'—'],M+2,y+3.5,dCols,{size:7.2,colors:[C.dim,C.text,s>0?C.pos:s<0?C.neg:C.dim,m>=0?C.pos:C.neg,C.text,s>0?C.pos:s<0?C.neg:C.dim]});
         y+=5.5;
       });
@@ -21047,7 +21047,7 @@ function getDrillConfig(id) {
     return { title:`Composición Facturación ${lastY}`, sub:'Participación porcentual por empresa',
       tabs:[
         { label:'📋 Tabla', html: dTbl(['Empresa',`Fact. ${lastY}`,'Part. %'],
-            sorted.map(([n,f])=>({ cells:[dc(n,'dd'),dc(fvd(f[lastY]||0)),dc(total?(f[lastY]/total*100).toFixed(1)+'%':'—','dd')] }))
+            sorted.map(([n,f])=>({ cells:[dc(n,'dd'),dc(fvd(f[lastY]||0)),dc(total?(f[lastY]/total*100).toFixed(2)+'%':'—','dd')] }))
           )
         },
         { label:'📈 Gráfico', chart:{ type:'doughnut', data:{ labels:sorted.slice(0,7).map(([n])=>n.split(' ')[0]), datasets:[{ data:sorted.slice(0,7).map(([,f])=>f[lastY]/1e6), backgroundColor:['#c4d600cc','#47e8ffcc','#ff8c47cc','#c447ffcc','#47ffb4cc','#ff4766cc','#303640'], borderWidth:0 }] }} },
@@ -21068,7 +21068,7 @@ function getDrillConfig(id) {
       const rows = years.map(yr => {
         const fact = f[yr] || 0;
         const res  = s[yr] ?? null;
-        const margen = fact > 0 && res != null ? parseFloat((res/fact*100).toFixed(1)) : null;
+        const margen = fact > 0 && res != null ? parseFloat((res/fact*100).toFixed(2)) : null;
         const gastos = fact > 0 && res != null ? fact - res : null;
         return { yr, fact, res, margen, gastos };
       });
@@ -21258,7 +21258,7 @@ function getDrillConfig(id) {
       tabs:[
         { label:'📊 KPI', stats: DATA.years.map(y=>({ l:`IPC ${y}`, v:ia[y]+'%', cls:'dr', s:`IPC base: ${INFL.ipc[y]}` })) },
         { label:'📋 Tabla IPC', html: dTbl(['Año','IPC anual %','IPC base Dic2016=100','Deflactor base 2021','Acum. desde 2021'],
-            DATA.years.map((y,i)=>({ cells:[dc(y),dc(ia[y]+'%','dr'),dc(INFL.ipc[y]),dc((INFL.ipc[2021]/INFL.ipc[y]).toFixed(4),'dd'),dc(i===0?'—':((INFL.ipc[y]/INFL.ipc[2021]-1)*100).toFixed(1)+'%','dr')] }))
+            DATA.years.map((y,i)=>({ cells:[dc(y),dc(ia[y]+'%','dr'),dc(INFL.ipc[y]),dc((INFL.ipc[2021]/INFL.ipc[y]).toFixed(4),'dd'),dc(i===0?'—':((INFL.ipc[y]/INFL.ipc[2021]-1)*100).toFixed(2)+'%','dr')] }))
           )
         },
         { label:'📈 Gráfico', chart:{ type:'bar', data:{ labels:DATA.years.map(String), datasets:[{ label:'Inflación %', data:DATA.years.map(y=>ia[y]), backgroundColor:Object.values(YC).map(c=>c+'cc'), borderRadius:5 }] }, opts:{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'}}}} } },
@@ -21271,7 +21271,7 @@ function getDrillConfig(id) {
     return { title:'IPC Acumulado Mensual', sub:'Acumulado mes a mes dentro de cada año',
       tabs: DATA.years.map(y => {
         let acc = 0;
-        const vals = INFL.mensual[y].map(m => { acc = (1+acc/100)*(1+m/100)*100-100; return parseFloat(acc.toFixed(1)); });
+        const vals = INFL.mensual[y].map(m => { acc = (1+acc/100)*(1+m/100)*100-100; return parseFloat(acc.toFixed(2)); });
         return {
           label:`📋 ${y}`,
           html: dTbl(['Mes','Mensual %','Acumulado %'],
@@ -21380,7 +21380,7 @@ function getDrillConfig(id) {
         const f = fact[y]||0;
         const s = sit[y] ?? null;
         const g = (f>0 && s!=null) ? f - s : null;   // gastos estimados
-        const m = (f>0 && s!=null) ? parseFloat((s/f*100).toFixed(1)) : null;
+        const m = (f>0 && s!=null) ? parseFloat((s/f*100).toFixed(2)) : null;
         return { y, f, s, g, m };
       });
       return { title:`${emp} — Resultado Operativo`, sub:'Facturación · Gastos estimados · Resultado · Margen',
@@ -21399,7 +21399,7 @@ function getDrillConfig(id) {
           },
           { label:'📋 Tabla resultado', html: dTbl(
               ['Año','Resultado','Facturación','Margen %'],
-              years.map(y=>{ const s=sit[y],f=fact[y]||0; const m=f&&s!=null?parseFloat((s/f*100).toFixed(1)):null; return { cells:[dc(y),dc(s!=null&&s!==0?fvd(s):'-',s>0?'dc':s<0?'dr':''),dc(f?fvd(f):'-'),dc(m!==null?m+'%':'-',m>=0?'dc':'dr')] }; })
+              years.map(y=>{ const s=sit[y],f=fact[y]||0; const m=f&&s!=null?parseFloat((s/f*100).toFixed(2)):null; return { cells:[dc(y),dc(s!=null&&s!==0?fvd(s):'-',s>0?'dc':s<0?'dr':''),dc(f?fvd(f):'-'),dc(m!==null?m+'%':'-',m>=0?'dc':'dr')] }; })
             )
           },
           { label:'📈 Composición', chart:{ type:'bar', data:{
@@ -21424,10 +21424,10 @@ function getDrillConfig(id) {
       const margenYs = years.filter(y=>(fact[y]||0)>0&&sit[y]!=null&&sit[y]!==0);
       const mRows = margenYs.map((y,i) => {
         const f = fact[y], s = sit[y];
-        const m = parseFloat((s/f*100).toFixed(1));
+        const m = parseFloat((s/f*100).toFixed(2));
         const prev = margenYs[i-1];
-        const mPrev = prev ? parseFloat((sit[prev]/fact[prev]*100).toFixed(1)) : null;
-        return { y, f, s, m, delta: mPrev!=null ? parseFloat((m-mPrev).toFixed(1)) : null };
+        const mPrev = prev ? parseFloat((sit[prev]/fact[prev]*100).toFixed(2)) : null;
+        return { y, f, s, m, delta: mPrev!=null ? parseFloat((m-mPrev).toFixed(2)) : null };
       });
       return { title:`${emp} — Margen Operativo`, sub:'Resultado / Facturación · Composición y evolución',
         tabs:[
@@ -21445,7 +21445,7 @@ function getDrillConfig(id) {
           },
           { label:'📋 Composición', html: dTbl(
               ['Año','Facturación 100%','Gastos est.','% gastos','Resultado','Margen %'],
-              mRows.map(r=>{ const gp=parseFloat(((r.f-r.s)/r.f*100).toFixed(1)); return { cells:[
+              mRows.map(r=>{ const gp=parseFloat(((r.f-r.s)/r.f*100).toFixed(2)); return { cells:[
                 dc(r.y),
                 dc(fvd(r.f), 'dd'),
                 dc(fvd(r.f-r.s), 'dd'),
@@ -21524,7 +21524,7 @@ function getDrillConfig(id) {
                 data: pYrs.slice(1).map((y,i) => {
                   const v  = pers?.y[y]||0;
                   const p  = pers?.y[pYrs[i]]||0;
-                  return p>0 ? parseFloat(((v-p)/p*100).toFixed(1)) : null;
+                  return p>0 ? parseFloat(((v-p)/p*100).toFixed(2)) : null;
                 }),
                 backgroundColor: pYrs.slice(1).map((y,i) => {
                   const v=pers?.y[y]||0, p=pers?.y[pYrs[i]]||0;
@@ -21587,10 +21587,10 @@ function getDrillConfig(id) {
       return { title:'Margen Operativo Comparado', sub:sels.join(' · '),
         tabs:[
           { label:'📋 Tabla', html: dTbl(['Empresa',...years.map(String)],
-              sels.map((e,i)=>({ cells:[dc(e),...years.map(y=>{ const f=DATA.fact[e]?.[y]||0,s=DATA.sit[e]?.[y]; const m=f&&s!=null?parseFloat((s/f*100).toFixed(1)):null; return dc(m!==null?m+'%':'-',m>=0?'dc':'dr'); })] }))
+              sels.map((e,i)=>({ cells:[dc(e),...years.map(y=>{ const f=DATA.fact[e]?.[y]||0,s=DATA.sit[e]?.[y]; const m=f&&s!=null?parseFloat((s/f*100).toFixed(2)):null; return dc(m!==null?m+'%':'-',m>=0?'dc':'dr'); })] }))
             )
           },
-          { label:'📈 Gráfico', chart:{ type:'line', data:{ labels:years.map(String), datasets:sels.map((e,i)=>({ label:e, data:years.map(y=>{ const f=DATA.fact[e]?.[y]||0,s=DATA.sit[e]?.[y]; return (f>0&&s!=null)?parseFloat((s/f*100).toFixed(1)):null; }), borderColor:colors[i], fill:false, tension:.4, pointRadius:5, spanGaps:true })) }, opts:{scales:{y:{ticks:{callback:v=>v+'%'}}}} } },
+          { label:'📈 Gráfico', chart:{ type:'line', data:{ labels:years.map(String), datasets:sels.map((e,i)=>({ label:e, data:years.map(y=>{ const f=DATA.fact[e]?.[y]||0,s=DATA.sit[e]?.[y]; return (f>0&&s!=null)?parseFloat((s/f*100).toFixed(2)):null; }), borderColor:colors[i], fill:false, tension:.4, pointRadius:5, spanGaps:true })) }, opts:{scales:{y:{ticks:{callback:v=>v+'%'}}}} } },
         ]
       };
     }
@@ -21603,7 +21603,7 @@ function getDrillConfig(id) {
 
     const total = rows.reduce((s,t) => s + t.importe, 0);
     const fmtM  = v => fvFull(v);
-    const pct   = v => (v / total * 100).toFixed(1) + '%';
+    const pct   = v => (v / total * 100).toFixed(2) + '%';
 
     // ── Agrupaciones ──────────────────────────────────────────
     // Por empresa
@@ -23935,7 +23935,7 @@ function handleImportWorkbook(wb, fname) {
     const { year:erY, imported:erImp, skipped:erSkip, syncLog:erSync, discrepancias:erDisc } = erResult;
     const fmtDisc = v => {
       const m = Math.abs(v)/1e6;
-      return `${v<0?'−':''}${m>=1?m.toFixed(1)+'M':Math.round(Math.abs(v)).toLocaleString('es-AR')}`;
+      return `${v<0?'−':''}${m>=1?m.toFixed(2)+'M':Math.round(Math.abs(v)).toLocaleString('es-AR')}`;
     };
     let discHtml = '';
     if (erDisc && erDisc.length) {
@@ -24467,7 +24467,7 @@ function buildSostenibilidad() {
   mkChart('ch-sost-quad','scatter',{datasets},{
     plugins:{
       legend:{position:'bottom'},
-      tooltip:{callbacks:{label:ctx=>`${ctx.raw.emp}: dep ${ctx.raw.x.toFixed(1)}% · res ${fvShort(ctx.raw.y*1e6)}`}}
+      tooltip:{callbacks:{label:ctx=>`${ctx.raw.emp}: dep ${ctx.raw.x.toFixed(2)}% · res ${fvShort(ctx.raw.y*1e6)}`}}
     },
     scales:{
       x:{title:{display:true,text:'Dependencia estatal (transferencias / facturación %)',color:'var(--dim)'},
@@ -24508,7 +24508,7 @@ function buildSostenibilidad() {
     <td class="r" style="color:${r.r==null?'var(--dim)':r.r>=0?'var(--pos)':'var(--neg)'}">${r.r!=null?fvFull(r.r):'—'}</td>
     <td class="r" style="color:#c447ff">${r.t>0?fvFull(r.t):'—'}</td>
     <td class="r" style="color:${r.neto==null?'var(--dim)':r.neto>=0?'var(--pos)':'var(--neg)'};font-weight:500">${r.neto!=null?fvFull(r.neto):'—'}</td>
-    <td class="r">${r.dep>0?r.dep.toFixed(1)+'%':'—'}</td>
+    <td class="r">${r.dep>0?r.dep.toFixed(2)+'%':'—'}</td>
     <td><span style="background:${cuadColors[r.cuad]||'var(--s3)'}22;color:${cuadColors[r.cuad]||'var(--dim)'};padding:1px 8px;border-radius:2px;font-size:9px">${r.cuad}</span></td>
   </tr>`).join('')}</tbody>`;
   document.getElementById('sost-tbl-lbl').textContent = `${rows.length} empresas · año ${yr}`;
@@ -24585,7 +24585,7 @@ function buildHeatmap() {
   // Formatear valor en celda
   const fmtCell = (v) => {
     if (v==null) return '—';
-    if (metric==='margen') return v.toFixed(1)+'%';
+    if (metric==='margen') return v.toFixed(2)+'%';
     if (metric==='personal') return fn(v);
     return fvFull(v);
   };
@@ -24716,7 +24716,7 @@ function buildPresupuesto() {
   let kpiCuarto;
   if (esAñoActual && exec.length > 0 && avgExec < 100 && mesActual >= 1 && mesActual <= 11) {
     // Proyección lineal simple: si al mes M se ejecutó X%, al mes 12 se ejecutará X%*12/M
-    const proyPct   = Math.min(avgExec * (12 / mesActual), 200).toFixed(1);
+    const proyPct   = Math.min(avgExec * (12 / mesActual), 200).toFixed(2);
     const totalPres = rows.reduce((s,r)=>s+r.pres,0);
     const proyMonto = totalPres * Math.min(avgExec/100 * (12/mesActual), 2);
     const proyColor = proyPct >= 100 ? '#47ffb4' : proyPct >= 80 ? '#ff8c47' : '#ff4766';
@@ -24729,7 +24729,7 @@ function buildPresupuesto() {
   }
 
   document.getElementById('kpi-pres').innerHTML = `
-    <div class="kpi"><div class="kpi-accent" style="background:#47e8ff"></div><div class="kpi-label">Ejecución promedio</div><div class="kpi-value">${avgExec.toFixed(1)}%</div><div class="kpi-sub">${exec.length} empresas</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:#47e8ff"></div><div class="kpi-label">Ejecución promedio</div><div class="kpi-value">${avgExec.toFixed(2)}%</div><div class="kpi-sub">${exec.length} empresas</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#47ffb4"></div><div class="kpi-label">Sobre presupuesto</div><div class="kpi-value">${over}</div><div class="kpi-sub">ejecución &gt;100%</div></div>
     <div class="kpi"><div class="kpi-accent" style="background:#ff4766"></div><div class="kpi-label">Baja ejecución</div><div class="kpi-value">${under}</div><div class="kpi-sub">ejecución &lt;80%</div></div>
     ${kpiCuarto}`;
@@ -24739,7 +24739,7 @@ function buildPresupuesto() {
   const colors = rows.map(r=>r.pct==null?'#94a3b8':r.pct>=100?'#47ffb4':r.pct>=80?'#ff8c47':'#ff4766');
   mkChart('ch-pres-ejecucion','bar',{
     labels: rows.map(r=>r.e.length>14?r.e.slice(0,13)+'…':r.e),
-    datasets:[{label:'Ejecución %',data:rows.map(r=>r.pct!=null?r.pct.toFixed(1):0),backgroundColor:colors,borderRadius:3}]
+    datasets:[{label:'Ejecución %',data:rows.map(r=>r.pct!=null?r.pct.toFixed(2):0),backgroundColor:colors,borderRadius:3}]
   },{
     plugins:{legend:{display:false},annotation:{annotations:{line100:{type:'line',yMin:100,yMax:100,borderColor:'#94a3b8',borderDash:[4,4],borderWidth:1}}}},
     scales:{x:{ticks:{font:{size:8},maxRotation:45}},y:{ticks:{callback:v=>v+'%'}}}
@@ -24763,7 +24763,7 @@ function buildPresupuesto() {
     return `<tr>
       <td>${r.e}</td><td class="r">${fvFull(r.pres)}</td><td class="r">${fvFull(r.real)}</td>
       <td class="r" style="color:${r.dev>=0?'var(--pos)':'var(--neg)'}">${fvFull(r.dev)}</td>
-      <td class="r" style="font-weight:500;color:${semColor}">${r.pct!=null?r.pct.toFixed(1)+'%':'—'}</td>
+      <td class="r" style="font-weight:500;color:${semColor}">${r.pct!=null?r.pct.toFixed(2)+'%':'—'}</td>
       <td><span style="background:${semColor}22;color:${semColor};padding:1px 8px;border-radius:2px;font-size:9px">${semLabel}</span></td>
     </tr>`;
   }).join('')}</tbody>`;
@@ -24809,7 +24809,7 @@ function updateCmpLabel() {
   const years = DATA.years;
   const totA  = DATA.totals_fact[String(_cmpYearA)] || 0;
   const totB  = DATA.totals_fact[String(_cmpYearB)] || 0;
-  const pct   = totA && totB ? ((totB-totA)/Math.abs(totA)*100).toFixed(1) : null;
+  const pct   = totA && totB ? ((totB-totA)/Math.abs(totA)*100).toFixed(2) : null;
   lbl.style.color = 'var(--dim)';
   lbl.textContent = pct
     ? `${_cmpYearA}→${_cmpYearB}: ${pct>0?'+':''}${pct}% facturación`
@@ -26877,7 +26877,7 @@ function analizarBalanceLocal(filename, texto) {
   const alertas = [];
   if (patrimon != null && patrimon < 0)      alertas.push('Patrimonio neto negativo');
   if (liqCorr  != null && liqCorr < 1)       alertas.push('Liquidez corriente menor a 1');
-  if (endeudam != null && endeudam > 0.7)    alertas.push(`Endeudamiento elevado (${(endeudam*100).toFixed(0)}% del activo)`);
+  if (endeudam != null && endeudam > 0.7)    alertas.push(`Endeudamiento elevado (${(endeudam*100).toFixed(2)}% del activo)`);
   if (roe      != null && roe < 0)           alertas.push('ROE negativo — pérdidas sobre el patrimonio');
   if (resNeto  != null && resNeto < 0)       alertas.push('Resultado del ejercicio negativo');
   if (dPat     != null && dPat > 2)          alertas.push('Deuda mayor al doble del patrimonio');
@@ -26886,7 +26886,7 @@ function analizarBalanceLocal(filename, texto) {
   if (activoT != null && pasivoT != null && patrimon != null) {
     const diff = Math.abs(activoT - (pasivoT + patrimon));
     if (diff > Math.abs(activoT) * 0.01)
-      alertas.push(`Balance descuadrado: Activo (${(activoT/1e6).toFixed(1)}M) ≠ Pasivo + PN (${((pasivoT+patrimon)/1e6).toFixed(1)}M)`);
+      alertas.push(`Balance descuadrado: Activo (${(activoT/1e6).toFixed(2)}M) ≠ Pasivo + PN (${((pasivoT+patrimon)/1e6).toFixed(2)}M)`);
   }
   // Cobertura de intereses: advertir si hay deuda significativa pero no se encontraron intereses
   if (intereses == null && endeudam != null && endeudam > 0.4)
@@ -26907,12 +26907,12 @@ function analizarBalanceLocal(filename, texto) {
       : liqCorr >= 1 ? `Liquidez ajustada (ratio ${liqCorr.toFixed(2)}).`
       : `Liquidez comprometida (ratio ${liqCorr.toFixed(2)}).`);
     if (endeudam != null) diag.push(endeudam < 0.3
-      ? `Muy bajo endeudamiento (${(endeudam*100).toFixed(0)}%).`
-      : endeudam < 0.6 ? `Endeudamiento moderado (${(endeudam*100).toFixed(0)}%).`
-      : `Endeudamiento elevado (${(endeudam*100).toFixed(0)}%).`);
+      ? `Muy bajo endeudamiento (${(endeudam*100).toFixed(2)}%).`
+      : endeudam < 0.6 ? `Endeudamiento moderado (${(endeudam*100).toFixed(2)}%).`
+      : `Endeudamiento elevado (${(endeudam*100).toFixed(2)}%).`);
     if (roe != null) diag.push(roe > 0
-      ? `Rentabilidad positiva (ROE ${(roe*100).toFixed(1)}%).`
-      : `Pérdidas sobre el patrimonio (ROE ${(roe*100).toFixed(1)}%).`);
+      ? `Rentabilidad positiva (ROE ${(roe*100).toFixed(2)}%).`
+      : `Pérdidas sobre el patrimonio (ROE ${(roe*100).toFixed(2)}%).`);
     if (!alertas.length) diag.push('Sin alertas críticas.');
     else diag.push(`${alertas.length} alerta${alertas.length>1?'s':''} a revisar.`);
   }
@@ -27080,11 +27080,11 @@ function buildComparacionBalances() {
   const fmtV = (v, fmt) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
     if (fmt==='ratio') return v.toFixed(2) + 'x';
-    if (fmt==='pct')   return (v*100).toFixed(1)+'%';
+    if (fmt==='pct')   return (v*100).toFixed(2)+'%';
     if (fmt==='monto') {
       const s=v<0?'-':'', a=Math.abs(v);
       if (a>=1e9) return s+'$'+(a/1e9).toFixed(2)+'B';
-      if (a>=1e6) return s+'$'+(a/1e6).toFixed(1)+'M';
+      if (a>=1e6) return s+'$'+(a/1e6).toFixed(2)+'M';
       if (a>=1e3) return s+'$'+(a/1e3).toFixed(0)+'K';
       return s+'$'+a.toFixed(0);
     }
@@ -27131,7 +27131,7 @@ function buildComparacionBalances() {
         const arrow= pct > 0 ? '▲' : '▼';
         varCell = `<td style="padding:6px 12px;text-align:right;font-family:var(--mono);font-size:10px;
           border-bottom:1px solid var(--bd2);color:${buena?'#2ecc8a':'#ff4766'}">
-          ${arrow} ${pct>0?'+':''}${pct.toFixed(1)}%</td>`;
+          ${arrow} ${pct>0?'+':''}${pct.toFixed(2)}%</td>`;
       } else {
         varCell = `<td style="padding:6px 12px;border-bottom:1px solid var(--bd2);color:var(--dim)">—</td>`;
       }
@@ -27630,7 +27630,7 @@ function buildAnalisisHorizontal(b, bAnt) {
         const pos = pct >= 0;
         const c   = pos ? 'var(--pos)' : 'var(--neg)';
         const arrow = pos ? '▲' : '▼';
-        pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:11px">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+        pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:11px">${arrow} ${Math.abs(pct).toFixed(2)}%</span>`;
         const barW = Math.min(Math.abs(pct), 100);
         barHtml = `<div style="margin-top:3px;height:4px;border-radius:2px;background:var(--bd2);overflow:hidden">
           <div style="height:100%;width:${barW}%;background:${c};border-radius:2px;transition:width .3s"></div>
@@ -27663,14 +27663,14 @@ function buildESPConParticipacion(b, bAnt) {
     const pct = Math.abs(v / aT * 100);
     const isTotal = Math.abs(pct - 100) < 0.5;
     if (isTotal) return `<td style="padding:4px 8px;text-align:right;font-size:9px;color:var(--dim2)">100%</td>`;
-    const barW = Math.min(pct, 100).toFixed(1);
+    const barW = Math.min(pct, 100).toFixed(2);
     const c = color || 'var(--acc)';
     return `<td style="padding:4px 8px;text-align:right;white-space:nowrap">
       <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
         <div style="width:36px;height:3px;background:var(--bd2);border-radius:2px;overflow:hidden;flex-shrink:0">
           <div style="height:100%;width:${barW}%;background:${c};border-radius:2px"></div>
         </div>
-        <span style="font-family:var(--mono);font-size:9.5px;color:${c};font-weight:600;min-width:34px;text-align:right">${pct.toFixed(1)}%</span>
+        <span style="font-family:var(--mono);font-size:9.5px;color:${c};font-weight:600;min-width:34px;text-align:right">${pct.toFixed(2)}%</span>
       </div>
     </td>`;
   };
@@ -27740,7 +27740,7 @@ function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
     if (curV == null || antV == null || antV === 0) return '';
     const p = (curV - antV) / Math.abs(antV) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-size:9px;font-family:var(--mono);font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-size:9px;font-family:var(--mono);font-weight:600">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const curD = _extractPatrimonialData(b);
   const antD = bAnt ? _extractPatrimonialData(bAnt) : null;
@@ -27764,7 +27764,7 @@ function buildIndicadoresPatrimoniales(b, bAnt, liq, sol, scores) {
     ${mkRow('Liquidez seca','(AC − BC) / PC',lS!=null?lS.toFixed(2):'—',lS!=null&&lS>=1,'OK',null,'≥ 1,0')}
     ${mkRow('Capital de trabajo','AC − PC',kT!=null?fmtM(kT):'—',kT!=null&&kT>0,'> 0',null,'> 0')}
     ${secR('Solvencia')}
-    ${mkRow('Razón endeudamiento','PT / AT',sEnd!=null?(sEnd*100).toFixed(1)+'%':'—',sEnd!=null&&sEnd<0.6,'bajo',solScore,'< 60%')}
+    ${mkRow('Razón endeudamiento','PT / AT',sEnd!=null?(sEnd*100).toFixed(2)+'%':'—',sEnd!=null&&sEnd<0.6,'bajo',solScore,'< 60%')}
     ${mkRow('Deuda / Patrimonio','PT / PN',sDP!=null?sDP.toFixed(2):'—',sDP!=null&&sDP<1,'OK',null,'< 1,0')}
     ${mkRow('Cobertura intereses','EBIT / Gtos. fin.',sCob!=null?sCob.toFixed(2)+'×':'—',sCob!=null&&sCob>1.5,'OK',null,'> 1,5')}
     ${secR('Montos estructurales')}
@@ -27810,7 +27810,7 @@ function buildIndicadoresResultados(b, ren, efi, scores) {
   </tr>`;
   const renScore = scores?.rentabilidad != null ? Math.min(scores.rentabilidad,100) : null;
   const efiScore = scores?.eficiencia   != null ? Math.min(scores.eficiencia,100)   : null;
-  const fp = v => v != null ? (v*100).toFixed(1)+'%' : '—';
+  const fp = v => v != null ? (v*100).toFixed(2)+'%' : '—';
   const fr = v => v != null ? v.toFixed(2) : '—';
   const fd = v => v != null ? Math.round(v)+' d' : '—';
   return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10.5px">
@@ -27848,7 +27848,7 @@ function buildPluriER(b, priores) {
     if (cur == null || ini == null || ini === 0) return '';
     const p = (cur - ini) / Math.abs(ini) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-weight:600;font-family:var(--mono);font-size:9px">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-weight:600;font-family:var(--mono);font-size:9px">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const curYear = _periodoYear(b.periodo);
   const rows_data = hist.map(bx => {
@@ -27934,13 +27934,13 @@ function buildDiagnosticoV3(b, scores, scoreGlobal, scoreLabel, scoreColor, liq,
     : `Liquidez insuficiente: ratio corriente <strong>${liqVal}</strong> por debajo de 1,0. Riesgo de incumplimiento de obligaciones de corto plazo.`;
   const solEnd = sol.razon_endeudamiento;
   const solOk  = solEnd!=null ? solEnd<0.6 : null;
-  const solEndFmt = solEnd!=null ? (solEnd*100).toFixed(1)+'%' : null;
+  const solEndFmt = solEnd!=null ? (solEnd*100).toFixed(2)+'%' : null;
   const solText = solEnd==null ? 'Sin datos de solvencia disponibles.'
     : solEnd<0.3 ? `Endeudamiento bajo (<strong>${solEndFmt}</strong>) — patrimonio predomina. Estructura financiera conservadora y robusta.`
     : solEnd<0.6 ? `Endeudamiento moderado (<strong>${solEndFmt}</strong>) dentro de parámetros aceptables.`
     : `Endeudamiento elevado (<strong>${solEndFmt}</strong>) — la deuda supera el umbral recomendado. Monitorear capacidad de refinanciamiento.`;
-  const roe = ren.roe, roeFmt = roe!=null ? (roe*100).toFixed(1)+'%' : null;
-  const margenFmt = ren.margen_neto!=null ? (ren.margen_neto*100).toFixed(1)+'%' : null;
+  const roe = ren.roe, roeFmt = roe!=null ? (roe*100).toFixed(2)+'%' : null;
+  const margenFmt = ren.margen_neto!=null ? (ren.margen_neto*100).toFixed(2)+'%' : null;
   const renOk = roe!=null ? roe>0 : null;
   const renText = roe==null ? 'Sin datos de rentabilidad disponibles.'
     : roe>=0.15 ? `Rentabilidad alta — ROE <strong>${roeFmt}</strong>${margenFmt?' y margen neto <strong>'+margenFmt+'</strong>':''}.`
@@ -27986,7 +27986,7 @@ function buildComparativoReexpESP(b, bAnt) {
     if (act == null || comp == null || comp === 0) return '<span style="color:var(--dim2)">—</span>';
     const p = (act - comp) / Math.abs(comp) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const curY = _periodoYear(b.periodo);
   const antD = bAnt ? _extractPatrimonialData(bAnt) : null;
@@ -28053,7 +28053,7 @@ function buildComparativoReexpER(b, bAnt) {
     if (act == null || comp == null || comp === 0) return '<span style="color:var(--dim2)">—</span>';
     const p = (act - comp) / Math.abs(comp) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const er = b.estructura_er || [];
   const hasValComp = er.some(r => r.valComp != null && r.valComp !== 0);
@@ -28132,7 +28132,7 @@ function buildComparativoPlurianual(b, priores) {
     if (cur == null || ini == null || ini === 0) return '';
     const p = (cur - ini) / Math.abs(ini) * 100;
     const c = p >= 0 ? 'var(--pos)' : 'var(--neg)';
-    return `<span style="color:${c};font-weight:600;font-family:var(--mono)">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(1)}%</span>`;
+    return `<span style="color:${c};font-weight:600;font-family:var(--mono)">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const curYear = _periodoYear(b.periodo);
   const rows_data = hist.map(bx => {
@@ -28195,7 +28195,7 @@ function buildComparativoIndicadores(b, priores) {
   const fmtN = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
   const fmtInd = (v, tipo) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
-    if (tipo==='pct')   return (v*100).toFixed(1)+'%';
+    if (tipo==='pct')   return (v*100).toFixed(2)+'%';
     if (tipo==='ratio') return v.toFixed(2);
     if (tipo==='dias')  return Math.round(v)+' d';
     const a=Math.abs(v), s=v<0?'−':'';
@@ -28209,7 +28209,7 @@ function buildComparativoIndicadores(b, priores) {
     if (Math.abs(delta)<0.0001) return '<span style="color:var(--dim)">—</span>';
     let good = delta>0; if (betterLow) good=!good;
     const c = good?'var(--pos)':'var(--neg)';
-    return `<span style="color:${c};font-size:9px;font-family:var(--mono);font-weight:600">${delta>0?'▲':'▼'} ${pct.toFixed(0)}%</span>`;
+    return `<span style="color:${c};font-size:9px;font-family:var(--mono);font-weight:600">${delta>0?'▲':'▼'} ${pct.toFixed(2)}%</span>`;
   };
   const inds = hist.map(bx => {
     const ind=bx.indicadores||{};
@@ -28331,7 +28331,7 @@ function buildEstadoResultados(b) {
 
   const pct = (v, base) => {
     if (v == null || base == null || base === 0) return '';
-    return `<span style="font-size:8.5px;color:var(--dim);margin-left:6px">${(v/base*100).toFixed(1)}%</span>`;
+    return `<span style="font-size:8.5px;color:var(--dim);margin-left:6px">${(v/base*100).toFixed(2)}%</span>`;
   };
 
   // ── Si hay estructura_er del Excel, usar esa estructura directamente ──
@@ -28918,11 +28918,11 @@ function showBalanceResult() {
       sub: liq.liquidez_corriente!=null ? (liq.liquidez_corriente>=1?'✓ Cubre pasivo corriente':'⚠ Menor a 1') : 'Sin dato',
       ac:  liq.liquidez_corriente==null?'#94a3b8':liq.liquidez_corriente>=1?'#47ffb4':'#ff4766' },
     { lbl:'Endeudamiento',
-      val: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento*100).toFixed(1)+'%' : '—',
+      val: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento*100).toFixed(2)+'%' : '—',
       sub: sol.razon_endeudamiento!=null ? (sol.razon_endeudamiento<0.6?'Nivel moderado':'⚠ Alta deuda') : 'Sin dato',
       ac:  sol.razon_endeudamiento==null?'#94a3b8':sol.razon_endeudamiento<0.6?'#47e8ff':'#ff4766' },
     { lbl:'ROE',
-      val: ren.roe!=null ? (ren.roe*100).toFixed(1)+'%' : '—',
+      val: ren.roe!=null ? (ren.roe*100).toFixed(2)+'%' : '—',
       sub: ren.roe!=null ? (ren.roe>0?'Rentable sobre patrimonio':'⚠ Pérdida sobre patrimonio') : 'Sin dato',
       ac:  ren.roe==null?'#94a3b8':ren.roe>0?'#47ffb4':'#ff4766' },
   ];
@@ -29044,7 +29044,7 @@ function showBalanceResult() {
     if (v == null) return null;
     const s = v < 0 ? '−' : '', a = Math.abs(v);
     if (a >= 1e9) return s + '$' + (a/1e9).toFixed(2) + 'B';
-    if (a >= 1e6) return s + '$' + (a/1e6).toFixed(1) + 'M';
+    if (a >= 1e6) return s + '$' + (a/1e6).toFixed(2) + 'M';
     if (a >= 1e3) return s + '$' + (a/1e3).toFixed(0) + 'K';
     return s + '$' + a.toFixed(0);
   };
@@ -29128,7 +29128,7 @@ function showBalanceResult() {
             <span style="color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
               title="${d.linea}">${d.linea.slice(0,60)}</span>
             <span style="color:#1a9e68;flex-shrink:0;font-weight:600">
-              $${Math.abs(d.valor)>=1e6?(Math.abs(d.valor)/1e6).toFixed(1)+'M':Math.abs(d.valor)>=1e3?(Math.abs(d.valor)/1e3).toFixed(0)+'K':d.valor}
+              $${Math.abs(d.valor)>=1e6?(Math.abs(d.valor)/1e6).toFixed(2)+'M':Math.abs(d.valor)>=1e3?(Math.abs(d.valor)/1e3).toFixed(0)+'K':d.valor}
             </span>
           </div>`).join('')}` : ''}
           ${fallos.length ? `
@@ -29175,12 +29175,12 @@ function generarDiagnosticoFinanciero(liq, sol, ren, efi, b) {
   const fmt = v => {
     if (v == null) return null;
     const s = v < 0 ? '−' : '', a = Math.abs(v);
-    if (a >= 1e9) return s + '$' + (a/1e6).toFixed(1) + 'M';
-    if (a >= 1e6) return s + '$' + (a/1e6).toFixed(1) + 'M';
+    if (a >= 1e9) return s + '$' + (a/1e6).toFixed(2) + 'M';
+    if (a >= 1e6) return s + '$' + (a/1e6).toFixed(2) + 'M';
     if (a >= 1e3) return s + '$' + (a/1e3).toFixed(0) + 'K';
     return s + '$' + a.toFixed(0);
   };
-  const pct = v => v != null ? (v * 100).toFixed(1) + '%' : null;
+  const pct = v => v != null ? (v * 100).toFixed(2) + '%' : null;
   const rat = v => v != null ? v.toFixed(2) + 'x' : null;
 
   const secciones = [];
@@ -29337,12 +29337,12 @@ function buildIndicTableVis(rows, moneda) {
   const fmt = (v, tipo) => {
     if (v == null) return '—';
     if (tipo === 'ratio') return v.toFixed(2) + 'x';
-    if (tipo === 'pct')   return (v * 100).toFixed(1) + '%';
+    if (tipo === 'pct')   return (v * 100).toFixed(2) + '%';
     if (tipo === 'dias')  return Math.round(v) + ' días';
     if (tipo === 'monto') {
       const s = v < 0 ? '-' : '', a = Math.abs(v);
       if (a >= 1e9) return s + '$' + (a/1e9).toFixed(2) + 'B';
-      if (a >= 1e6) return s + '$' + (a/1e6).toFixed(1) + 'M';
+      if (a >= 1e6) return s + '$' + (a/1e6).toFixed(2) + 'M';
       if (a >= 1e3) return s + '$' + (a/1e3).toFixed(0) + 'K';
       return s + '$' + a.toFixed(0);
     }
@@ -31428,7 +31428,7 @@ function _rebuildTransSoloGraficos() {
     <div class="kpi"><div class="kpi-accent" style="background:${TRANS_COLORS[c]}"></div>
       <div class="kpi-label">${c}</div>
       <div class="kpi-value">${fv(catTotals[c])}</div>
-      <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(1)}% del total</div>
+      <div class="kpi-sub">${(catTotals[c]/total*100).toFixed(2)}% del total</div>
     </div>`).join('')}`;
 
   // Donut por categoría
@@ -31437,7 +31437,7 @@ function _rebuildTransSoloGraficos() {
     datasets:[{ data: topCat.map(c=>catTotals[c]/1e6),
       backgroundColor: topCat.map(c=>TRANS_COLORS[c]), borderWidth:2, borderColor:'var(--bg)' }]
   },{ plugins:{ legend:{ position:'right', labels:{ color:'var(--text)', font:{size:10} } },
-    tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvShort(ctx.raw*1e6)} (${(ctx.raw/topCat.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(1)}%)` } } },
+    tooltip:{ callbacks:{ label: ctx => ` ${ctx.label}: ${fvShort(ctx.raw*1e6)} (${(ctx.raw/topCat.reduce((s,c)=>s+catTotals[c]/1e6,0)*100).toFixed(2)}%)` } } },
     cutout:'58%' });
 
   // Barras por SAF emisor
@@ -31694,7 +31694,7 @@ function _transMensualDrillMes(mes, catFiltro, yr, rows) {
         stats: [
           { l: `Total ${catFiltro}`, v: fvd(totalCat), cls: 'dc' },
           { l: 'Transferencias',     v: rowsCat.length, cls: '' },
-          { l: '% del mes',          v: total > 0 ? (totalCat/total*100).toFixed(1)+'%' : '—', cls: '' },
+          { l: '% del mes',          v: total > 0 ? (totalCat/total*100).toFixed(2)+'%' : '—', cls: '' },
         ],
         html: tblCat
       }] : []),
@@ -31768,7 +31768,7 @@ function _transMensualDrillAnio(yr, rows, cats, byMes) {
           dc(NM[m]),
           dc(rowsM.length, 'dd'),
           dc(totM > 0 ? fvd(totM) : '—', totM > 0 ? 'dc' : ''),
-          dc(totalAnio > 0 && totM > 0 ? (totM/totalAnio*100).toFixed(1)+'%' : '—', 'dd'),
+          dc(totalAnio > 0 && totM > 0 ? (totM/totalAnio*100).toFixed(2)+'%' : '—', 'dd'),
         ],
         _cls: totM === 0 ? 'dd' : ''
       };
@@ -31917,7 +31917,7 @@ function buildTransTendencia() {
         callbacks: {
           label: ctx => {
             if (ctx.dataset.yAxisID === 'y2')
-              return ` Var. real: ${ctx.raw.y >= 0 ? '▲' : '▼'} ${ctx.raw.y.toFixed(1)}%`;
+              return ` Var. real: ${ctx.raw.y >= 0 ? '▲' : '▼'} ${ctx.raw.y.toFixed(2)}%`;
             return ` ${fv(ctx.raw * 1e6)}`;
           },
           afterLabel: ctx => {
@@ -31926,15 +31926,15 @@ function buildTransTendencia() {
             const y = años[i], prev = años[i-1];
             if (!prev) return '';
             const prevY = años[i-1];
-            const nomPct = varNom[i]?.toFixed(1);
-            const realPct = varReal[i]?.toFixed(1);
+            const nomPct = varNom[i]?.toFixed(2);
+            const realPct = varReal[i]?.toFixed(2);
             // Inflación del período usando IPC para consistencia con realGrowthPct
             const inflPeriodo = INFL.ipc[y] && INFL.ipc[prev]
               ? ((INFL.ipc[y]/INFL.ipc[prevY])-1)*100
               : INFL.anual[y] ?? null;
             const lines = [];
             if (nomPct != null) lines.push(` Var. nominal: ${nomPct > 0 ? '▲' : '▼'} ${nomPct}%`);
-            if (inflPeriodo != null) lines.push(` Inflación período ${prevY}→${y}: ${inflPeriodo.toFixed(1)}%`);
+            if (inflPeriodo != null) lines.push(` Inflación período ${prevY}→${y}: ${inflPeriodo.toFixed(2)}%`);
             if (realPct != null) lines.push(` Var. real: ${realPct > 0 ? '▲' : '▼'} ${realPct}%`);
             return lines.join(' | ');
           }
@@ -31948,7 +31948,7 @@ function buildTransTendencia() {
         y2: {
           position: 'right',
           grid: { drawOnChartArea: false },
-          ticks: { callback: v => v.toFixed(0)+'%', color:'#ff8c47', font:{size:9} },
+          ticks: { callback: v => v.toFixed(2)+'%', color:'#ff8c47', font:{size:9} },
           title: { display:true, text:'Var. real %', color:'#ff8c47', font:{size:9} }
         }
       } : {})
@@ -31972,8 +31972,8 @@ function buildVarRealChart(emp, years, fact, inflData) {
   mkChart('ch-e-varreal','bar',{
     labels: pairs.map(p=>p.lbl),
     datasets:[
-      {label:'Nominal %',data:pairs.map(p=>p.nom.toFixed(1)),backgroundColor:'#47e8ff88',borderRadius:3},
-      {label:'Real %',   data:pairs.map(p=>p.real.toFixed(1)),backgroundColor:pairs.map(p=>p.real>=0?'#2ecc8a88':'#ff476688'),borderRadius:3},
+      {label:'Nominal %',data:pairs.map(p=>p.nom.toFixed(2)),backgroundColor:'#47e8ff88',borderRadius:3},
+      {label:'Real %',   data:pairs.map(p=>p.real.toFixed(2)),backgroundColor:pairs.map(p=>p.real>=0?'#2ecc8a88':'#ff476688'),borderRadius:3},
     ]
   },{
     scales:{y:{ticks:{callback:v=>v+'%'}}},
