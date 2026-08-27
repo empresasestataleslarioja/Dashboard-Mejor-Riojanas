@@ -4676,7 +4676,7 @@ function checkAuth() {
   return false;
 }
 
-function doLogin() {
+async function doLogin() {
   const user = (document.getElementById('login-user')?.value || '').trim().toLowerCase();
   const pass = (document.getElementById('login-pass')?.value || '').trim();
   const msg  = document.getElementById('login-msg');
@@ -4687,9 +4687,9 @@ function doLogin() {
   }
 
   // Verificar credenciales — combina usuarios hardcodeados + creados dinámicamente
-  const allUsers = loadUsuarios();  // LOGIN_USERS + lr_users_v1 de localStorage
+  const allUsers = getUsuarios();  // LOGIN_USERS + lr_users_v1 de localStorage
   const passEsperada = allUsers[user];
-  if (!passEsperada || passEsperada !== pass) {
+  if (!passEsperada || !(await verificarPass(pass, passEsperada))) {
     if (msg) { msg.textContent = 'Usuario o contraseña incorrectos'; msg.style.color = 'var(--neg)'; }
     // Limpiar contraseña
     const p = document.getElementById('login-pass');
