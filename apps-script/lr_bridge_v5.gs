@@ -1,6 +1,11 @@
 // ══════════════════════════════════════════════════════════════════
 //  lr_bridge_v5.gs — Google Apps Script
 //  Dashboard BI La Rioja v6
+//  Cambios vs v5 + lock (diagnóstico flujos):
+//    · upsertFlujos ahora devuelve {dedupCount, existentesPrevios,
+//      filasEscritas, motivoNoEscritura} en vez de nada. doPost vuelca eso
+//      en resultados.flujos_* — antes el log en 'OK' solo mostraba el
+//      tamaño del array recibido, no si la hoja realmente se escribió.
 //  Cambios vs v5 original (fix conflictos):
 //    · doPost: LockService.getScriptLock() serializa las escrituras.
 //      Sin esto, dos publicaciones cercanas en el tiempo (p.ej. guardar dos
@@ -223,9 +228,16 @@ function doPost(e) {
 
     // ── FLUJOS ────────────────────────────────────────────────────
     if (Array.isArray(payload.flujos) || Array.isArray(payload.flujos_a_eliminar)) {
-      upsertFlujos(ss, payload.flujos || [], payload.flujos_a_eliminar || []);
-      resultados.flujos = (payload.flujos || []).length;
+      const flDiag = upsertFlujos(ss, payload.flujos || [], payload.flujos_a_eliminar || []);
+      // flujos_recibidos: tamaño del array que llegó en el payload (antes del dedup).
+      // flujos_escritos: filas realmente grabadas en la hoja tras el merge — esta es
+      // la que hay que mirar para saber si el guardado surtió efecto de verdad.
+      resultados.flujos_recibidos  = (payload.flujos || []).length;
+      resultados.flujos_dedup      = flDiag.dedupCount;
+      resultados.flujos_existentes_previos = flDiag.existentesPrevios;
+      resultados.flujos_escritos   = flDiag.filasEscritas;
       resultados.flujos_eliminados = (payload.flujos_a_eliminar || []).length;
+      if (flDiag.motivoNoEscritura) resultados.flujos_motivo_no_escritura = flDiag.motivoNoEscritura;
     }
 
     // ── FLUJOS_CONFIG ────────────────────────────────────────────
@@ -405,6 +417,10 @@ function upsertTransferencias(ss, nuevas) {
 }
 
 function upsertFlujos(ss, nuevos, aEliminar) {
+  // Devuelve siempre un diagnóstico real de lo que hizo — antes la función no
+  // devolvía nada y doPost sólo logueaba el tamaño del payload de entrada,
+  // así que un log en 'OK' no probaba que se hubiera escrito una sola fila.
+  const diag = { dedupCount: 0, existentesPrevios: 0, filasEscritas: 0, motivoNoEscritura: '' };
   const elimSet = new Set(aEliminar || []);
   let hoja = ss.getSheetByName(TAB.flujos);
   if (!hoja) hoja = ss.insertSheet(TAB.flujos);
@@ -423,16 +439,24 @@ function upsertFlujos(ss, nuevos, aEliminar) {
       }
     });
   }
+  diag.existentesPrevios = Object.keys(existentes).length;
   const seen = new Set();
   const dedupNuevos = (nuevos || []).filter(r => {
     const k = (r.empresa||'') + '_' + (r.periodo||'') + '_' + (r.tipo||'');
     if (seen.has(k)) return false; seen.add(k); return true;
   });
-  if (dedupNuevos.length === 0 && elimSet.size === 0) return;
+  diag.dedupCount = dedupNuevos.length;
+  if (dedupNuevos.length === 0 && elimSet.size === 0) {
+    diag.motivoNoEscritura = 'sin_datos_ni_eliminaciones';
+    return diag;
+  }
   if (headers.length === 0 && dedupNuevos.length > 0) {
     headers = Object.keys(dedupNuevos[0]);
   }
-  if (headers.length === 0) return;
+  if (headers.length === 0) {
+    diag.motivoNoEscritura = 'sin_headers';
+    return diag;
+  }
   const finalMap = {};
   Object.entries(existentes).forEach(([clave, entry]) => {
     if (!elimSet.has(clave)) {
@@ -447,10 +471,15 @@ function upsertFlujos(ss, nuevos, aEliminar) {
   });
   hoja.clearContents();
   const rows = Object.values(finalMap);
-  if (rows.length === 0) return;
+  if (rows.length === 0) {
+    diag.motivoNoEscritura = 'finalMap_vacio';
+    return diag;
+  }
   const allHeaders = headers.length > 0 ? headers : Object.keys(rows[0]);
   const matrix = [allHeaders, ...rows.map(r => allHeaders.map(h => { const v = r[h]; return (v === null || v === undefined) ? '' : v; }))];
   hoja.getRange(1, 1, matrix.length, allHeaders.length).setValues(matrix);
+  diag.filasEscritas = rows.length;
+  return diag;
 }
 
 function jsonResp(data) {
