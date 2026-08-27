@@ -32712,18 +32712,31 @@ async function syncFromCloud(silent, opts) {
 // ── ESCRIBIR al Sheet (POST) ─────────────────────────────────────
 
 // ── Backup / Recuperación de transferencias ───────────────────────
-const _LS_TRANS_BACKUP_SLOTS = ['lr_trans_bkp_0','lr_trans_bkp_1','lr_trans_bkp_2'];
+// Un solo slot (antes eran 3 copias completas rotativas): con datasets grandes
+// (miles de transferencias) triplicar el respaldo agotaba el localStorage del
+// navegador — el dataset ya vive en el snapshot principal (saveDataToLocalCache)
+// y en Sheets (fuente de verdad), así que un backup adicional es suficiente.
+const _LS_TRANS_BACKUP_SLOTS = ['lr_trans_bkp_0'];
 const _LS_TRANS_BKP_PTR      = 'lr_trans_bkp_ptr';
 const _LS_TRANS_LAST_CNT     = 'lr_trans_last_count';
+
+// Liberar espacio de slots viejos (de cuando había 3) que puedan seguir
+// ocupando lugar en navegadores que ya los escribieron.
+(function _purgeSlotsViejosTrans() {
+  try {
+    ['lr_trans_bkp_1', 'lr_trans_bkp_2'].forEach(k => localStorage.removeItem(k));
+  } catch(e) {}
+})();
 
 function _backupTransferenciasLocal(motivo) {
   try {
     const rows = (DATA.transferencias || []).filter(t => t.beneficiario || t.saf || t.organismo || t.importe);
     if (!rows.length) return;
-    const ptr  = (parseInt(localStorage.getItem(_LS_TRANS_BKP_PTR) || '0', 10)) % 3;
+    const n    = _LS_TRANS_BACKUP_SLOTS.length;
+    const ptr  = (parseInt(localStorage.getItem(_LS_TRANS_BKP_PTR) || '0', 10)) % n;
     const slot = _LS_TRANS_BACKUP_SLOTS[ptr];
     localStorage.setItem(slot, JSON.stringify({ ts: new Date().toISOString(), motivo: motivo || '', rows }));
-    localStorage.setItem(_LS_TRANS_BKP_PTR, String((ptr + 1) % 3));
+    localStorage.setItem(_LS_TRANS_BKP_PTR, String((ptr + 1) % n));
   } catch(e) { console.warn('[LR] backup trans fallo:', e); }
 }
 
@@ -32746,7 +32759,7 @@ function _recuperarBackupTransferencias() {
   }).join('\n');
 
   const resp = prompt(
-    `Backups locales disponibles (últimos 3):\n\n${opciones}\n\n` +
+    `Backups locales disponibles:\n\n${opciones}\n\n` +
     `Ingresá el número del backup a restaurar (o Cancelar para salir):`,
     '1'
   );
