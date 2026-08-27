@@ -1,6 +1,13 @@
 // ══════════════════════════════════════════════════════════════════
 //  lr_bridge_v5.gs — Google Apps Script
 //  Dashboard BI La Rioja v6
+//  Cambios vs v5 original (fix conflictos):
+//    · doPost: LockService.getScriptLock() serializa las escrituras.
+//      Sin esto, dos publicaciones cercanas en el tiempo (p.ej. guardar dos
+//      flujos seguidos) podían solaparse: la segunda leía la hoja antes de
+//      que la primera terminara de escribir, y al guardar pisaba por
+//      completo los cambios de la primera — altas y bajas se perdían en
+//      silencio aunque ambos requests devolvieran ok:true.
 //  Cambios vs v4:
 //    · getFile: leer archivo de Drive por ID (para importar Excel desde Drive)
 //  Cambios vs v3:
@@ -86,6 +93,21 @@ function doGet(e) {
 function doPost(e) {
   const ss      = SpreadsheetApp.openById(SHEET_ID);
   const savedAt = new Date().toISOString();
+
+  // Serializar escrituras: cada request hace leer-modificar-escribir sobre las
+  // mismas hojas (clearContents + setValues). Sin lock, dos publicaciones
+  // cercanas en el tiempo (p.ej. guardar dos flujos seguidos, cada uno dispara
+  // su propio syncToCloud) pueden solaparse: la segunda lee la hoja antes de
+  // que la primera termine de escribir, y al guardar pisa por completo los
+  // cambios de la primera — altas y bajas se pierden en silencio aunque
+  // ambos requests devuelvan ok:true.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    escribirLog(ss, savedAt, 'ERROR_LOCK', 'No se pudo obtener el lock en 30s: ' + lockErr.message, '');
+    return jsonResp({ ok: false, error: 'Servidor ocupado procesando otra publicación — reintentá en unos segundos' });
+  }
 
   try {
     let body;
@@ -221,6 +243,8 @@ function doPost(e) {
   } catch(err) {
     escribirLog(ss, savedAt, 'ERROR', err.message, err.stack ? err.stack.slice(0,300) : '');
     return jsonResp({ ok: false, error: err.message });
+  } finally {
+    lock.releaseLock();
   }
 }
 
