@@ -10710,6 +10710,7 @@ function _guardarFlujoData(data) {
     cargadoEl: nowAR(),
     fuente: data.fuente || 'manual',
   };
+  try { _removeFlujosDel(clave); } catch(e) {}
 
   saveDataToLocalCache();
   // Subir inmediatamente a Sheets para que el nuevo flujo no sea pisado por un sync posterior
@@ -11102,6 +11103,16 @@ function _addFlujosDel(clave) {
     const entry = { clave, deletedAt: Date.now() };
     if (idx >= 0) list[idx] = entry; else list.push(entry);
     localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify(list));
+  } catch(e) {}
+}
+// Volver a crear/guardar un flujo debe anular cualquier eliminación local previa
+// de esa misma clave — si no, buildCloudPayload() lo sigue excluyendo del sync
+// para siempre aunque el usuario lo haya vuelto a cargar.
+function _removeFlujosDel(clave) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_FLUJOS_DEL) || '[]');
+    const list = raw.filter(x => (typeof x === 'string' ? x : x.clave) !== clave);
+    if (list.length !== raw.length) localStorage.setItem(_LS_FLUJOS_DEL, JSON.stringify(list));
   } catch(e) {}
 }
 
