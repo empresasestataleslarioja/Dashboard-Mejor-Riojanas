@@ -4237,6 +4237,9 @@ self.onmessage = async (e) => {
             color:var(--dim);line-height:1.4;max-width:200px"></div>
         </div>
       </div>
+      <div id="fc-aviso-impcd" style="display:none;margin-bottom:10px;padding:8px 12px;
+        background:rgba(255,71,102,.1);border:1px solid var(--neg);border-radius:4px;
+        color:var(--neg);font-size:9.5px;font-family:var(--mono);font-weight:600"></div>
       <div id="fc-rubros-preview" style="overflow-x:auto;margin-bottom:12px;
         border:1px solid var(--bd);border-radius:4px;max-height:220px;overflow-y:auto"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -4475,6 +4478,11 @@ Se calcula automáticamente desde tabla INDEC+REM cuando el flujo tiene meses y 
           </button>
         </div>
       </div>
+
+      <!-- Aviso: IMP.CRED/DEB (u otro rubro "gastos bancarios") sospechosamente alto -->
+      <div id="flujo-aviso-impcd" style="display:none;margin-bottom:12px;padding:8px 12px;
+        background:rgba(255,71,102,.1);border:1px solid var(--neg);border-radius:4px;
+        color:var(--neg);font-size:9.5px;font-family:var(--mono);font-weight:600"></div>
 
       <!-- KPIs -->
       <div id="flujo-kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px"></div>
@@ -10375,6 +10383,31 @@ function _confirmarImportFlujo(res) {
     }
   }
 
+  // Validación: IMP.CRED/DEB (u otro rubro tipo "gastos bancarios") no debería
+  // acercarse al total de egresos — el impuesto es ~1,2%, así que si su valor
+  // importado es una fracción grande del total, lo más probable es que el
+  // dashboard haya leído mal la celda de esa fila (columna/fila corrida en el
+  // Excel), no que el impuesto real sea así de alto. Avisar ANTES de guardar,
+  // en vez de dejar que duplique en silencio el resultado neto del reporte.
+  const _totalEgrDetalle = res.rubros
+    .filter(r2 => r2.tipo === 'egreso' && !r2.esTotal && !_esImpCredDeb(r2.label))
+    .reduce((s, r2) => s + Math.abs(r2.actual || 0), 0);
+  const _impCDPreview = res.rubros.find(r2 => !r2.esTotal && _esImpCredDeb(r2.label) && r2.actual != null);
+  let _avisoImpCD = '';
+  if (_impCDPreview && _totalEgrDetalle > 0) {
+    const ratio = Math.abs(_impCDPreview.actual) / _totalEgrDetalle;
+    if (ratio > 0.05) { // se espera ~1,2% — más de 5% es sospechoso
+      _avisoImpCD = `⚠ "${_impCDPreview.label}" importó ${(ratio*100).toFixed(0)}% del total de egresos ` +
+        `(se esperaba ~1,2%) — revisá si el dashboard leyó la celda correcta de esa fila en el Excel ` +
+        `antes de guardar, porque así como está va a duplicar el resultado neto.`;
+    }
+  }
+  const avisoEl = document.getElementById('fc-aviso-impcd');
+  if (avisoEl) {
+    avisoEl.textContent = _avisoImpCD;
+    avisoEl.style.display = _avisoImpCD ? '' : 'none';
+  }
+
   // Mostrar preview de rubros
   const prev = document.getElementById('fc-rubros-preview');
   if (prev) {
@@ -10388,12 +10421,14 @@ function _confirmarImportFlujo(res) {
         '<th style="text-align:right;padding:3px 8px;background:var(--s3);border-bottom:1px solid var(--bd)">Var %</th>' +
       '</tr></thead><tbody>' +
       res.rubros.map(r => {
-        const col = r.tipo==='ingreso'?'color:#1a9e68':r.tipo==='resultado'?'font-weight:600':'';
+        const sospechoso = _avisoImpCD && r === _impCDPreview;
+        const col = sospechoso ? 'color:var(--neg);font-weight:700'
+          : r.tipo==='ingreso'?'color:#1a9e68':r.tipo==='resultado'?'font-weight:600':'';
         const vp  = r.var_pct != null ? ((r.var_pct*100)>=0?'+':'')+(r.var_pct*100).toFixed(2)+'%' : '—';
         const vc  = r.var_pct == null ? 'color:var(--dim)' : r.var_pct > 0 ? 'color:var(--neg)' : 'color:#1a9e68';
-        return '<tr style="border-bottom:1px solid var(--bd2)">' +
-          '<td style="padding:3px 8px;' + col + '">' + r.label + '</td>' +
-          '<td style="padding:3px 8px;text-align:right">' + fmtV(r.actual) + '</td>' +
+        return '<tr style="border-bottom:1px solid var(--bd2);' + (sospechoso ? 'background:rgba(255,71,102,.08)' : '') + '">' +
+          '<td style="padding:3px 8px;' + col + '">' + (sospechoso ? '⚠ ' : '') + r.label + '</td>' +
+          '<td style="padding:3px 8px;text-align:right;' + col + '">' + fmtV(r.actual) + '</td>' +
           '<td style="padding:3px 8px;text-align:right;color:var(--dim)">' + fmtV(r.anterior) + '</td>' +
           '<td style="padding:3px 8px;text-align:right;' + vc + '">' + vp + '</td>' +
         '</tr>';
@@ -11773,6 +11808,25 @@ function buildVistaIndividualFlujo(claveOverride) {
   const { subtotal, impCredDeb: _impCDCalc, resultado: _resCalc } = _calcResultadoNeto(ingA, egrAajust);
   const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : _impCDCalc;
   const resultado  = subtotal - impCredDeb;
+  // Aviso: el impuesto sobre créditos/débitos es ~1,2% — si el valor cargado es
+  // una fracción grande de los egresos ajustados, lo más probable es que el
+  // dashboard (o el Excel de origen) haya tomado el número de la fila/columna
+  // equivocada en vez del monto real del impuesto.
+  {
+    const avisoEl = document.getElementById('flujo-aviso-impcd');
+    if (avisoEl) {
+      const baseEgr = Math.abs(egrAajust || 0);
+      const ratio = _rubroImpCD && baseEgr > 0 ? Math.abs(_rubroImpCD.actual || 0) / baseEgr : 0;
+      if (_rubroImpCD && ratio > 0.05) {
+        avisoEl.textContent = `⚠ "${_rubroImpCD.label}" es ${(ratio*100).toFixed(0)}% del total de egresos ` +
+          `(se esperaba ~1,2%) — el resultado neto de abajo probablemente esté duplicando este monto. ` +
+          `Revisá la fila correspondiente en el Excel de origen y volvé a importar.`;
+        avisoEl.style.display = '';
+      } else {
+        avisoEl.style.display = 'none';
+      }
+    }
+  }
   const _fmtC = v => v == null ? '—' : (v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
   const _fmtPorMes = (rubros, mes, tipo) => {
     const suma = rubros.filter(r=>r.tipo===tipo&&!r.esTotal&&!_esImpCredDeb(r.label))
