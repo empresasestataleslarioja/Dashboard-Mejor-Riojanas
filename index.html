@@ -12384,6 +12384,39 @@ function buildComparacionFlujos() {
       return { rA, rB };
     });
 
+  // 5. Auto-matching por similitud (fuzzy) — para rubros de denominación
+  // parecida pero no idéntica, que los 4 niveles anteriores no pudieron vincular.
+  // Umbral conservador (70% de las palabras significativas en común) para evitar
+  // falsos positivos en datos financieros; el par queda marcado como sugerencia
+  // (_fuzzy) para que el usuario pueda revisarlo o corregirlo desde el panel manual.
+  const _wordSet = s => new Set(_normLbl(s).split(' ').filter(w => w.length > 2 && !_STOP.has(w)));
+  const _similaridad = (a, b) => {
+    if (!a.size || !b.size) return 0;
+    let inter = 0;
+    a.forEach(w => { if (b.has(w)) inter++; });
+    return inter / Math.min(a.size, b.size);
+  };
+  const _UMBRAL_FUZZY = 0.7;
+  const _candidatosB = fB.rubros.filter(r => !_bMatched.has(r.key));
+  const _fuzzyPares = [];
+  _autoMerged.forEach(par => {
+    if (par.rB) return;
+    const wA = _wordSet(par.rA.label);
+    if (wA.size < 2) return;
+    _candidatosB.forEach(rB => {
+      if (_bMatched.has(rB.key) || rB.tipo !== par.rA.tipo) return;
+      const sim = _similaridad(wA, _wordSet(rB.label));
+      if (sim >= _UMBRAL_FUZZY) _fuzzyPares.push({ par, rB, sim });
+    });
+  });
+  _fuzzyPares.sort((a, b) => b.sim - a.sim);
+  _fuzzyPares.forEach(({ par, rB }) => {
+    if (par.rB || _bMatched.has(rB.key)) return;
+    par.rB = rB;
+    par._fuzzy = true;
+    _bMatched.add(rB.key);
+  });
+
   const _mergedRaw = [..._groupRows, ..._autoMerged];
   // Agregar rubros B sin par (excluye los de grupos manuales que ya están en _bMatched)
   fB.rubros.forEach(rB => { if (!_bMatched.has(rB.key)) _mergedRaw.push({ rA: null, rB }); });
@@ -12785,7 +12818,7 @@ function buildComparacionFlujos() {
       return true;
     });
 
-    const _mkRow = ({rA, rB, _manual}) => {
+    const _mkRow = ({rA, rB, _manual, _fuzzy}) => {
       const tipo = rA?.tipo || rB?.tipo || 'egreso';
       const isIng = tipo === 'ingreso';
       // Normalizar signo: egresos siempre negativos para consistencia visual
@@ -12804,16 +12837,17 @@ function buildComparacionFlujos() {
       // Egresos: aumento (vn>0) = peor = rojo; disminución = verde
       const cv = vn==null?'var(--dim)': isIng?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)');
       const cr = vr==null?'var(--dim)': isIng?(vr>0?'var(--pos)':'var(--neg)'):(vr>0?'var(--neg)':'var(--pos)');
-      const bLabelDif = _manual && rB && rB.label !== rA?.label
-        ? `<span style="font-size:7px;color:var(--dim);margin-left:5px;opacity:.7" title="Vinculado manualmente a: ${(rB.label||'').replace(/"/g,'&quot;')}">↔ ${(rB.label||'').substring(0,30)}${(rB.label||'').length>30?'…':''}</span>` : '';
+      const bLabelDif = (_manual || _fuzzy) && rB && rB.label !== rA?.label
+        ? `<span style="font-size:7px;color:var(--dim);margin-left:5px;opacity:.7" title="Vinculado ${_fuzzy?'automáticamente por similitud':'manualmente'} a: ${(rB.label||'').replace(/"/g,'&quot;')}">↔ ${(rB.label||'').substring(0,30)}${(rB.label||'').length>30?'…':''}</span>` : '';
       const manualTag = _manual ? `<span style="font-size:6.5px;color:#e8c84a;margin-left:4px;opacity:.8" title="Vínculo manual">⚙</span>` : '';
+      const fuzzyTag = _fuzzy ? `<span style="font-size:6.5px;color:#4ab8e8;margin-left:4px;opacity:.8" title="Vínculo automático por similitud de denominación — revisar y corregir manualmente si no corresponde">≈</span>` : '';
       const etiquetaSinPar = soloA
         ? `<span style="font-size:7px;background:var(--pos);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto incorporado en ${fA.periodo}: no existía en el período anterior">▲ NUEVO</span>`
         : soloB
         ? `<span style="font-size:7px;background:var(--neg);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto dado de baja: existía en ${fB.periodo} pero no en el actual">▼ BAJA</span>` : '';
       const rowBg = sinPar ? (soloA ? 'rgba(26,158,104,.05)' : 'rgba(217,48,37,.05)') : st.bg;
       return `<tr style="background:${rowBg};${st.bt}">
-        <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${bLabelDif}${etiquetaSinPar}</td>
+        <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${fuzzyTag}${bLabelDif}${etiquetaSinPar}</td>
         <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${soloB?'var(--dim)':st.c};border-bottom:1px solid var(--bd2)">${soloB?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vA)}</td>
         <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${soloA?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vB)}</td>
         ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${sinPar?'':fmtMEq(vBEq)}</td>`:''}
