@@ -13132,6 +13132,8 @@ function exportarFlujoExcel() {
   const _rNetBSign = (_necBSignado != null && _rNetB != null) ? (_necBSignado < 0 ? -Math.abs(_rNetB) : Math.abs(_rNetB)) : null;
   const _varNomRes = (_rNetASign != null && _rNetBSign) ? (Math.abs(_rNetASign) - Math.abs(_rNetBSign)) / Math.abs(_rNetBSign) * 100 : null;
   const _varRealRes = (_varNomRes != null && ipc) ? ((1 + _varNomRes / 100) / (1 + ipc / 100) - 1) * 100 : null;
+  const _varNomCov  = (covA != null && covB) ? (covA - covB) / covB * 100 : null;
+  const _varRealCov = (_varNomCov != null && ipc) ? ((1 + _varNomCov / 100) / (1 + ipc / 100) - 1) * 100 : null;
 
   if (!fA?.rubros?.length) {
     showStorageStatus('⚠ El flujo actual no tiene rubros detallados para exportar.', '#ff8c47');
@@ -13302,7 +13304,7 @@ function exportarFlujoExcel() {
   /* KPI GRID */
   .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; margin-bottom:16px; }
   .kpi-card { background:${T.s1}; border-radius:${T.rad}; border:1px solid ${T.bd}; border-top:3px solid ${T.bd};
-    padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; justify-content:space-between; }
+    padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; justify-content:flex-start; }
   .kpi-card .lbl { font-size:7.5px; color:${T.dim}; font-family:inherit; letter-spacing:.1em; margin-bottom:8px; text-transform:uppercase; }
   .kpi-card .val { font-size:16px; font-weight:700; font-family:inherit; white-space:nowrap; }
   .kpi-card .note { font-size:8px; color:${T.dim}; margin-top:5px; font-family:inherit; }
@@ -13371,10 +13373,6 @@ function exportarFlujoExcel() {
       <div class="status">${semText}</div>
       <div class="detail">Cobertura ingresos/egresos: <strong>${covA!=null?covA.toFixed(2)+'%':'—'}</strong>${covB!=null?' · período anterior: '+covB.toFixed(2)+'%  (Δ '+(covA-covB>0?'+':'')+(covA-covB).toFixed(2)+' pp)':''}</div>
     </div>
-    ${ipc&&necA?`<div style="text-align:right;border-left:1px solid ${T.bd};padding-left:16px">
-      <div style="font-size:7.5px;color:${T.dim};letter-spacing:.08em;margin-bottom:4px">PROYECCIÓN PRÓX. PERÍODO · IPC ${ipc}%</div>
-      <div style="font-size:16px;font-weight:700;color:${T.acc};font-family:inherit">${C(necA*(1+ipc/100))}</div>
-    </div>`:''}
   </div>
 
   <!-- KPIs -->
@@ -13392,23 +13390,27 @@ function exportarFlujoExcel() {
     </div>
     <div class="kpi-card" style="border-top-color:${pColor(-_varNomRes)}">
       <div class="lbl">VAR. NOMINAL RESULTADO</div>
-      <div class="val" style="color:${pColor(-_varNomRes)}">${P(_varNomRes)}</div>
+      <div class="val" style="color:${pColor(-_varNomRes)};font-size:18px">${P(_varNomRes)}</div>
     </div>
     ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(-_varRealRes)}">
       <div class="lbl">VAR. REAL (FISHER)</div>
-      <div class="val" style="color:${pColor(-_varRealRes)}">${P(_varRealRes)}</div>
+      <div class="val" style="color:${pColor(-_varRealRes)};font-size:18px">${P(_varRealRes)}</div>
       <div class="note">descontando IPC ${ipc}%</div>
     </div>`:''}
-    <div class="kpi-card" style="border-top-color:${covColor(covA)}">
-      <div class="lbl">COBERTURA ING/EGR</div>
-      <div class="val" style="color:${covColor(covA)}">${covA!=null?covA.toFixed(2)+'%':'—'}</div>
-      ${covB!=null?`<div class="note">ant: ${covB.toFixed(2)}%</div>`:''}
+    <div style="grid-column:span 2;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="kpi-card" style="border-top-color:${covColor(covA)}">
+        <div class="lbl">COBERTURA ING/EGR</div>
+        <div class="val" style="color:${covColor(covA)}">${covA!=null?covA.toFixed(2)+'%':'—'}</div>
+        ${covB!=null?`<div class="note">ant: ${covB.toFixed(2)}%</div>`:''}
+        ${_varNomCov!=null?`<div class="note" style="color:${pColor(-_varNomCov)}">Var. nominal: ${P(_varNomCov)}</div>`:''}
+        ${_varRealCov!=null?`<div class="note" style="color:${pColor(-_varRealCov)}">Var. real: ${P(_varRealCov)}</div>`:''}
+      </div>
+      ${(labCovA||labCovB)?`<div class="kpi-card" style="border-top-color:${T.acc}">
+        <div class="lbl">COB. ING / COSTO LABORAL</div>
+        <div class="val" style="color:${T.acc}">${labCovA!=null?labCovA.toFixed(2)+'%':'—'}</div>
+        ${labCovB!=null?`<div class="note">ant: ${labCovB.toFixed(2)}%</div>`:''}
+      </div>`:'<div></div>'}
     </div>
-    ${(labCovA||labCovB)?`<div class="kpi-card" style="border-top-color:${T.acc}">
-      <div class="lbl">COB. ING / COSTO LABORAL</div>
-      <div class="val" style="color:${T.acc}">${labCovA!=null?labCovA.toFixed(2)+'%':'—'}</div>
-      ${labCovB!=null?`<div class="note">ant: ${labCovB.toFixed(2)}%</div>`:''}
-    </div>`:''}
     <div class="kpi-card" style="border-top-color:${T.pos}">
       <div class="lbl">TOTAL INGRESOS</div>
       <div class="val" style="color:${T.pos}">${C(ingA)}</div>
@@ -13417,6 +13419,11 @@ function exportarFlujoExcel() {
       <div class="lbl">TOTAL EGRESOS</div>
       <div class="val" style="color:${T.neg}">${C(egrA)}</div>
     </div>
+    ${ipc&&necA?`<div class="kpi-card" style="border-top-color:${T.acc};border-left:3px solid ${T.acc}">
+      <div class="lbl">PROYECCIÓN PRÓX. PERÍODO</div>
+      <div class="val" style="color:${T.acc};font-size:18px">${C(necA*(1+ipc/100))}</div>
+      <div class="note">si IPC se mantiene en ${ipc}%</div>
+    </div>`:''}
   </div>
 
   <!-- COSTO LABORAL -->
