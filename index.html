@@ -13002,7 +13002,8 @@ function buildComparacionFlujos() {
     const rankEl = document.getElementById('flujo-ranking');
     if (!rankEl) return;
     const rubEgr = fA.rubros.filter(r => r.tipo==='egreso' && r.actual)
-      .sort((a,b) => Math.abs(b.actual) - Math.abs(a.actual));
+      .sort((a,b) => Math.abs(b.actual) - Math.abs(a.actual))
+      .slice(0, 10); // top 10 — coincide con el ranking del reporte imprimible
     if (!rubEgr.length || !egrA) { rankEl.innerHTML = ''; return; }
     const totalEgr = Math.abs(egrA);
     const rows = rubEgr.map(r => {
@@ -13018,7 +13019,7 @@ function buildComparacionFlujos() {
       </div>`;
     }).join('');
     rankEl.innerHTML = `<div class="card" style="padding:14px 16px">
-      <div style="font-size:8px;color:var(--dim);font-family:var(--mono);letter-spacing:.08em;margin-bottom:10px;text-transform:uppercase">Ranking de egresos — ${fA.periodo}</div>
+      <div style="font-size:8px;color:var(--dim);font-family:var(--mono);letter-spacing:.08em;margin-bottom:10px;text-transform:uppercase">Ranking de egresos — Top 10 — ${fA.periodo}</div>
       ${rows}
     </div>`;
   })();
@@ -13605,7 +13606,7 @@ function exportarFlujoExcel() {
   <!-- CHARTS GRID -->
   <div class="charts-grid">
     <div class="card">
-      <div class="chart-title">Ranking de egresos — ${fA.periodo}</div>
+      <div class="chart-title">Ranking de egresos — Top 10 — ${fA.periodo}</div>
       ${svgRanking || `<div style="color:${T.dim};font-size:10px">Sin rubros de egreso clasificados.</div>`}
     </div>
   </div>
