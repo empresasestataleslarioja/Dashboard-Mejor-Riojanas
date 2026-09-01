@@ -13215,35 +13215,6 @@ function exportarFlujoExcel() {
     </svg>`;
   })();
 
-  // ── SVG bar chart: variación por rubro ───────────────────────────
-  const svgVariacion = (() => {
-    const items = _mergedExp
-      .filter(({rA,rB})=>rA?.actual&&rB?.actual&&rB.actual!==0)
-      .map(({rA,rB})=>{ const vn=(Math.abs(rA.actual)-Math.abs(rB.actual))/Math.abs(rB.actual)*100; return {lbl:rA?.label||rB?.label||'',vn}; })
-      .filter(d=>d.vn!=null);
-    if (!items.length) return '';
-    const maxAbs = Math.max(...items.map(d=>Math.abs(d.vn)));
-    const rowH = 28, pad = 10, labelW = 180, halfW = 160, W = pad+labelW+halfW*2+60+pad, H = pad+items.length*rowH+20+pad;
-    const rows = items.map((d,i)=>{
-      const y = pad+20+i*rowH;
-      const w = maxAbs ? Math.abs(d.vn)/maxAbs*halfW : 0;
-      const lbl = d.lbl.length>28?d.lbl.substring(0,26)+'…':d.lbl;
-      const barX = d.vn>=0 ? pad+labelW+halfW : pad+labelW+halfW-w;
-      const col = d.vn>=0 ? T.neg+'88' : T.pos+'88';
-      return `<g>
-        <text x="${pad+labelW-4}" y="${y+16}" font-size="9" fill="${T.dim}" font-family="monospace" text-anchor="end">${lbl}</text>
-        <rect x="${barX}" y="${y+5}" width="${w}" height="${rowH-10}" rx="2" fill="${col}"/>
-        <text x="${pad+labelW+halfW*2+8}" y="${y+16}" font-size="9" font-weight="600" fill="${pColor(d.vn)}" font-family="monospace">${P(d.vn)}</text>
-      </g>`;
-    }).join('');
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="display:block">
-      <rect width="${W}" height="${H}" fill="${T.s1}"/>
-      <line x1="${pad+labelW+halfW}" y1="${pad+16}" x2="${pad+labelW+halfW}" y2="${H-pad}" stroke="${T.bd}" stroke-width="1"/>
-      <text x="${pad+labelW+halfW}" y="${pad+12}" font-size="8" fill="${T.dim}" font-family="monospace" text-anchor="middle">0%</text>
-      ${rows}
-    </svg>`;
-  })();
-
   // ── build comparison table rows ───────────────────────────────────
   const _rLastTotA = fA.rubros.filter(r=>r.tipo==='total').slice(-1)[0]?.key;
   const _rLastTotB = fB.rubros.filter(r=>r.tipo==='total').slice(-1)[0]?.key;
@@ -13329,11 +13300,11 @@ function exportarFlujoExcel() {
     padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
 
   /* KPI GRID */
-  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; margin-bottom:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; margin-bottom:16px; }
   .kpi-card { background:${T.s1}; border-radius:${T.rad}; border:1px solid ${T.bd}; border-top:3px solid ${T.bd};
     padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; justify-content:space-between; }
   .kpi-card .lbl { font-size:7.5px; color:${T.dim}; font-family:inherit; letter-spacing:.1em; margin-bottom:8px; text-transform:uppercase; }
-  .kpi-card .val { font-size:16px; font-weight:700; font-family:inherit; }
+  .kpi-card .val { font-size:16px; font-weight:700; font-family:inherit; white-space:nowrap; }
   .kpi-card .note { font-size:8px; color:${T.dim}; margin-top:5px; font-family:inherit; }
 
   /* SEMÁFORO */
@@ -13362,7 +13333,7 @@ function exportarFlujoExcel() {
   .lab-cell .sub { font-size:8.5px; color:${T.dim}; font-family:inherit; margin-top:3px; }
 
   /* CHARTS GRID */
-  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .charts-grid { display:grid; grid-template-columns:1fr; gap:14px; margin-bottom:14px; }
   .charts-grid .card { margin-bottom:0; }
   .chart-title { font-size:9px; font-weight:700; color:${T.dim}; letter-spacing:.06em; text-transform:uppercase; margin-bottom:10px; font-family:inherit; }
 
@@ -13373,7 +13344,6 @@ function exportarFlujoExcel() {
   @media print {
     body { background:${T.s1}; }
     .page { padding:10px; }
-    .charts-grid { grid-template-columns:1fr 1fr; }
     .header { box-shadow:none; }
   }
 </style>
@@ -13411,12 +13381,14 @@ function exportarFlujoExcel() {
   <div class="section-title">Indicadores clave</div>
   <div class="kpis">
     <div class="kpi-card" style="border-top-color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos}">
-      <div class="lbl">RESULTADO NETO · ${fA.periodo}</div>
+      <div class="lbl">RESULTADO NETO (ACTUAL)</div>
       <div class="val" style="color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos};font-size:18px">${C(_rNetASign)}</div>
+      <div class="note">${fA.periodo}</div>
     </div>
     <div class="kpi-card" style="border-top-color:${T.dim}">
-      <div class="lbl">RESULTADO NETO ANT. · ${fB.periodo}</div>
+      <div class="lbl">RESULTADO NETO (ANTERIOR)</div>
       <div class="val" style="color:${T.dim};font-size:18px">${C(_rNetBSign)}</div>
+      <div class="note">${fB.periodo}</div>
     </div>
     <div class="kpi-card" style="border-top-color:${pColor(-_varNomRes)}">
       <div class="lbl">VAR. NOMINAL RESULTADO</div>
@@ -13448,19 +13420,29 @@ function exportarFlujoExcel() {
   </div>
 
   <!-- COSTO LABORAL -->
-  ${(labA||labB)?`<div class="section-title">Costo laboral</div>
+  ${(()=>{
+    // Barra compacta para mostrar la participación del costo laboral sobre egresos
+    const _pctBar = (pct) => pct==null ? '' : `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+      <div style="flex:0 0 46px;height:5px;background:${T.bd};border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(Math.abs(pct),100).toFixed(1)}%;background:${T.acc};border-radius:3px"></div>
+      </div>
+      <span class="sub" style="margin-top:0">${pct.toFixed(2)}% de egresos</span>
+    </div>`;
+    const pctA = (egrA&&labA) ? Math.abs(labA)/Math.abs(egrA)*100 : null;
+    const pctB = (egrB&&labB) ? Math.abs(labB)/Math.abs(egrB)*100 : null;
+    return (labA||labB)?`<div class="section-title">Costo laboral</div>
   <div class="card" style="padding:0;border-top:3px solid ${T.acc};overflow:hidden">
     <div class="lab-grid">
       <div class="lab-cell">
         <div class="lbl">${fA.periodo}</div>
         <div class="val" style="color:${T.neg}">${C(labA)}</div>
-        ${(egrA&&labA)?`<div class="sub">${(Math.abs(labA)/Math.abs(egrA)*100).toFixed(2)}% de egresos</div>`:''}
+        ${_pctBar(pctA)}
         ${labCovA!=null?`<div class="sub" style="color:${T.acc}">Cob. ing/lab: ${labCovA.toFixed(2)}%</div>`:''}
       </div>
       <div class="lab-cell">
         <div class="lbl">${fB.periodo}</div>
         <div class="val" style="color:${T.dim}">${C(labB)}</div>
-        ${(egrB&&labB)?`<div class="sub">${(Math.abs(labB)/Math.abs(egrB)*100).toFixed(2)}% de egresos</div>`:''}
+        ${_pctBar(pctB)}
         ${labCovB!=null?`<div class="sub" style="color:${T.acc}">Cob. ing/lab: ${labCovB.toFixed(2)}%</div>`:''}
       </div>
       <div class="lab-cell">
@@ -13472,7 +13454,8 @@ function exportarFlujoExcel() {
         <div class="val" style="color:${pColor(-labVarReal)}">${P(labVarReal)}</div>
       </div>`:'<div class="lab-cell"></div>'}
     </div>
-  </div>`:''}
+  </div>`:'';
+  })()}
 
   <!-- TABLA COMPARATIVA -->
   <div class="section-title">Comparativo por rubro</div>
@@ -13534,10 +13517,6 @@ function exportarFlujoExcel() {
     <div class="card">
       <div class="chart-title">Ranking de egresos — ${fA.periodo}</div>
       ${svgRanking || `<div style="color:${T.dim};font-size:10px">Sin rubros de egreso clasificados.</div>`}
-    </div>
-    <div class="card">
-      <div class="chart-title">Variación nominal por rubro</div>
-      ${svgVariacion || `<div style="color:${T.dim};font-size:10px">Sin datos comparativos.</div>`}
     </div>
   </div>
 
