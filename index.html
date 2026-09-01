@@ -11808,9 +11808,15 @@ function buildVistaIndividualFlujo(claveOverride) {
   // pie (SUBTOTAL/RESULTADO NETO) respecto de la suma de las columnas mensuales.
   const _rubroImpCD = f.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
   const egrAajust   = _flujoEgrDetTotal(f) ?? egrA;
-  const { subtotal, impCredDeb: _impCDCalc, resultado: _resCalc } = _calcResultadoNeto(ingA, egrAajust);
-  const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : _impCDCalc;
-  const resultado  = subtotal - impCredDeb;
+  const { impCredDeb: _impCDEstim, resultado: _resEstim } = _calcResultadoNeto(ingA, egrAajust);
+  // Preferir el resultado final explícito del archivo (necA / "Fondos solicitados"):
+  // ese valor puede ya incluir el imp. cred/déb aunque el archivo no traiga un
+  // rubro separado para él, así que estimar y restarle otro 1,2% duplicaría el
+  // impuesto (visible como RESULTADO NETO ≠ "Fondos solicitados"). El estimado
+  // solo se usa si el archivo no trae ningún resultado final explícito.
+  const resultado  = necA != null ? necA : _resEstim;
+  const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : (necA != null ? 0 : _impCDEstim);
+  const subtotal   = resultado + impCredDeb;
   // Aviso: el impuesto sobre créditos/débitos es ~1,2% — si el valor cargado es
   // una fracción grande de los egresos ajustados, lo más probable es que el
   // dashboard (o el Excel de origen) haya tomado el número de la fila/columna
@@ -11849,9 +11855,13 @@ function buildVistaIndividualFlujo(claveOverride) {
   const _mesIng = m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesEgr = m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesSub = m => { const i=_mesIng(m),e=Math.abs(_mesEgr(m)); return i-e; };
-  // Si hay rubro explícito de imp. cred/déb, usar su valor por mes; si no, calcular 1,2%
+  // Si hay rubro explícito de imp. cred/déb, usar su valor por mes; si no hay rubro
+  // pero el archivo trae un resultado final explícito (necA), no estimar nada por
+  // mes (ya viene incluido en ese total); solo se estima 1,2% cuando no hay ni
+  // rubro ni resultado final de referencia.
   const _mesImp = _rubroImpCD
     ? m => Math.abs(_rubroImpCD.porMes?.[m] ?? 0)
+    : necA != null ? () => 0
     : m => Math.abs(_mesSub(m)) * 0.012;
   const _mesRes = m => _mesSub(m) - _mesImp(m);
 
@@ -12201,6 +12211,10 @@ function _esImpCredDeb(lbl) {
   const n = (lbl||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if ((n.includes('imp') || n.includes('impuesto')) && (n.includes('cred') || n.includes('deb'))) return true;
   if (/gastos?\s+bancarios?/.test(n)) return true;
+  // Algunos Excel traen la fila como "Débitos y créditos" / "Créditos y débitos"
+  // sin la palabra "impuesto" — dentro de un flujo de egresos, ese rubro es
+  // igualmente el 1,2% sobre movimientos bancarios (ej. Cerámica Riojana).
+  if (n.includes('cred') && n.includes('deb')) return true;
   return false;
 }
 
