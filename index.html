@@ -11801,10 +11801,13 @@ function buildVistaIndividualFlujo(claveOverride) {
   const rubrosEgrDet = rubrosDetalle.filter(r => r.tipo !== 'ingreso');
 
   // Calcular pie computado
-  // Si hay un rubro explícito de imp. cred/déb (o gastos bancarios), usar su valor
-  // y descontarlo de egrA para no duplicar
+  // Egresos netos (sin imp. cred/déb) se calculan siempre a partir del detalle de
+  // rubros — nunca restando el impuesto de egrA (TOTAL EGRESOS importado del Excel),
+  // porque ese total puede venir ya neto o ya bruto según el archivo de origen: si
+  // ya excluye el impuesto, restarlo de nuevo duplica el descuento y desalinea el
+  // pie (SUBTOTAL/RESULTADO NETO) respecto de la suma de las columnas mensuales.
   const _rubroImpCD = f.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
-  const egrAajust   = _rubroImpCD ? (egrA || 0) - Math.abs(_rubroImpCD.actual || 0) : egrA;
+  const egrAajust   = _flujoEgrDetTotal(f) ?? egrA;
   const { subtotal, impCredDeb: _impCDCalc, resultado: _resCalc } = _calcResultadoNeto(ingA, egrAajust);
   const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : _impCDCalc;
   const resultado  = subtotal - impCredDeb;
