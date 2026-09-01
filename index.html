@@ -12616,8 +12616,18 @@ function buildComparacionFlujos() {
     if (kpisEl && kpisEl.parentNode) kpisEl.parentNode.insertBefore(resumenEl, kpisEl.nextSibling);
   }
   // posEsBueno: para egresos/déficit, subir es malo; para ingresos, subir es bueno
-  const { resultado: _resA } = _calcResultadoNeto(ingA, egrA);
-  const { resultado: _resB } = _calcResultadoNeto(ingB, egrB);
+  // OJO: usar egrADet/egrBDet (sin impCredDeb), no egrA/egrB (bruto, ya lo incluye) —
+  // pasarle el bruto a _calcResultadoNeto hace que le reste el 1,2% de nuevo por su
+  // cuenta, contando el impuesto dos veces. Igual que en buildVistaIndividualFlujo:
+  // si hay un rubro real de impuesto, usar su valor; si no, estimar 1,2%.
+  const _rubroImpA_res = fA.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+  const _rubroImpB_res = fB.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+  const { subtotal: _subA_res } = _calcResultadoNeto(ingA, egrADet);
+  const { subtotal: _subB_res } = _calcResultadoNeto(ingB, egrBDet);
+  const _impA_res = _rubroImpA_res ? Math.abs(_rubroImpA_res.actual || 0) : Math.abs(_subA_res || 0) * 0.012;
+  const _impB_res = _rubroImpB_res ? Math.abs(_rubroImpB_res.actual || 0) : Math.abs(_subB_res || 0) * 0.012;
+  const _resA = _subA_res - _impA_res;
+  const _resB = _subB_res - _impB_res;
   // Aplicar signo: resultado hereda el signo de nec (negativo = déficit)
   const _resASigned = necA != null && _resA != null ? (necA < 0 ? -Math.abs(_resA) : Math.abs(_resA)) : null;
   const _resBSigned = necB != null && _resB != null ? (necB < 0 ? -Math.abs(_resB) : Math.abs(_resB)) : null;
@@ -12625,7 +12635,7 @@ function buildComparacionFlujos() {
     { lbl:'Total egresos',  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
     ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
     { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
-    ...(ipc&&_resBSigned ? [{ lbl:`Ant. a precios actuales (+IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
+    ...(ipc&&_resBSigned ? [{ lbl:`Resultado — Var. real (Fisher, IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
   ];
   resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
     padding:10px 16px;font-family:var(--mono)">
@@ -13364,6 +13374,38 @@ function exportarFlujoExcel() {
       <span class="period-tag" style="opacity:.7">${fB.periodo}</span>
       <span style="margin-left:auto;color:rgba(255,255,255,.45);font-size:9px;font-family:monospace;align-self:center">${fecha}</span>
     </div>
+  </div>
+
+  <!-- RESUMEN COMPARATIVO — TOTALES -->
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
+    <table class="comp">
+      <thead><tr>
+        <th style="text-align:left;width:34%;padding-left:14px">Concepto</th>
+        <th>${fA.periodo}</th>
+        <th style="opacity:.7">${fB.periodo}</th>
+        <th>Var.</th>
+      </tr></thead>
+      <tbody>${(()=>{
+        const _vnE = (Math.abs(egrADet)&&Math.abs(egrBDet)) ? (Math.abs(egrADet)-Math.abs(egrBDet))/Math.abs(egrBDet)*100 : null;
+        const _vnI = (ingA&&ingB) ? (Math.abs(ingA)-Math.abs(ingB))/Math.abs(ingB)*100 : null;
+        const _vnN = (_necASignado!=null&&_necBSignado) ? (Math.abs(_necASignado)-Math.abs(_necBSignado))/Math.abs(_necBSignado)*100 : null;
+        const _row = (lbl, vA, vB, vn, posGood) => `<tr style="border-top:1px solid ${T.bd}">
+          <td style="padding:6px 14px;font-family:monospace;font-size:9.5px;color:${T.text}">${lbl}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${T.text}">${C(vA)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(vB)}</td>
+          <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${pColor(vn,posGood)}">${P(vn)}</td>
+        </tr>`;
+        return _row('Total egresos', egrADet, egrBDet, _vnE, false)
+             + _row('Total ingresos', ingA, ingB, _vnI, true)
+             + _row('Resultado (néc. fondos)', _necASignado, _necBSignado, _vnN, false)
+             + (ipc&&_varRealRes!=null ? `<tr style="border-top:1px solid ${T.bd};background:${T.acc}10">
+                 <td style="padding:6px 14px;font-family:monospace;font-size:9px;font-style:italic;color:${T.dim}">Resultado — Var. real (Fisher, IPC ${ipc}%)</td>
+                 <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(_rNetASign)}</td>
+                 <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">≈${C(_rNetBSign!=null?_rNetBSign*(1+ipc/100):null)}</td>
+                 <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${pColor(-_varRealRes)}">${P(_varRealRes)}</td>
+               </tr>` : '');
+      })()}</tbody>
+    </table>
   </div>
 
   <!-- SEMÁFORO -->
