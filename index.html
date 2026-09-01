@@ -13312,12 +13312,13 @@ function exportarFlujoExcel() {
     padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
 
   /* KPI GRID */
-  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; margin-bottom:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(135px,1fr)); gap:8px; margin-bottom:16px; }
   .kpi-card { background:${T.s1}; border-radius:${T.rad}; border:1px solid ${T.bd}; border-top:3px solid ${T.bd};
-    padding:14px 16px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column; justify-content:flex-start; }
-  .kpi-card .lbl { font-size:7.5px; color:${T.dim}; font-family:inherit; letter-spacing:.1em; margin-bottom:8px; text-transform:uppercase; }
-  .kpi-card .val { font-size:16px; font-weight:700; font-family:inherit; white-space:nowrap; }
-  .kpi-card .note { font-size:8px; color:${T.dim}; margin-top:5px; font-family:inherit; }
+    padding:10px 10px; box-shadow:0 1px 4px rgba(0,0,0,.06); display:flex; flex-direction:column;
+    justify-content:flex-start; align-items:center; text-align:center; }
+  .kpi-card .lbl { font-size:7px; color:${T.dim}; font-family:inherit; letter-spacing:.08em; margin-bottom:6px; text-transform:uppercase; }
+  .kpi-card .val { font-size:14px; font-weight:700; font-family:inherit; white-space:nowrap; }
+  .kpi-card .note { font-size:7.5px; color:${T.dim}; margin-top:4px; font-family:inherit; }
 
   /* SEMÁFORO */
   .semaforo { display:flex; align-items:center; gap:16px; padding:14px 20px; border-radius:${T.rad};
@@ -13422,21 +13423,21 @@ function exportarFlujoExcel() {
   <div class="kpis">
     <div class="kpi-card" style="border-top-color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos}">
       <div class="lbl">RESULTADO NETO (ACTUAL)</div>
-      <div class="val" style="color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos};font-size:18px">${C(_rNetASign)}</div>
+      <div class="val" style="color:${_rNetASign!=null&&_rNetASign<0?T.neg:T.pos};font-size:15px">${C(_rNetASign)}</div>
       <div class="note">${fA.periodo}</div>
     </div>
     <div class="kpi-card" style="border-top-color:${T.dim}">
       <div class="lbl">RESULTADO NETO (ANTERIOR)</div>
-      <div class="val" style="color:${T.dim};font-size:18px">${C(_rNetBSign)}</div>
+      <div class="val" style="color:${T.dim};font-size:15px">${C(_rNetBSign)}</div>
       <div class="note">${fB.periodo}</div>
     </div>
     <div class="kpi-card" style="border-top-color:${pColor(-_varNomRes)}">
       <div class="lbl">VAR. NOMINAL RESULTADO</div>
-      <div class="val" style="color:${pColor(-_varNomRes)};font-size:18px">${P(_varNomRes)}</div>
+      <div class="val" style="color:${pColor(-_varNomRes)};font-size:15px">${P(_varNomRes)}</div>
     </div>
     ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(-_varRealRes)}">
       <div class="lbl">VAR. REAL (FISHER)</div>
-      <div class="val" style="color:${pColor(-_varRealRes)};font-size:18px">${P(_varRealRes)}</div>
+      <div class="val" style="color:${pColor(-_varRealRes)};font-size:15px">${P(_varRealRes)}</div>
       <div class="note">descontando IPC ${ipc}%</div>
     </div>`:''}
     <div style="grid-column:span 2;display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -13463,7 +13464,7 @@ function exportarFlujoExcel() {
     </div>
     ${ipc&&necA?`<div class="kpi-card" style="border-top-color:${T.acc};border-left:3px solid ${T.acc}">
       <div class="lbl">PROYECCIÓN PRÓX. PERÍODO</div>
-      <div class="val" style="color:${T.acc};font-size:18px">${C(necA*(1+ipc/100))}</div>
+      <div class="val" style="color:${T.acc};font-size:15px">${C(necA*(1+ipc/100))}</div>
       <div class="note">si IPC se mantiene en ${ipc}%</div>
     </div>`:''}
   </div>
