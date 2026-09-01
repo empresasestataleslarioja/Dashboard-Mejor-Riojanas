@@ -13239,9 +13239,14 @@ function exportarFlujoExcel() {
     if(r.tipo==='total') { const k=rA?.key??rB?.key; return _rKeepTot.has(k); }
     return true;
   }).map(({rA,rB})=>{
-    const vA=rA?.actual??null, vB=rB?.actual??null;
-    const lbl=rA?.label||rB?.label||'';
     const tipo=rA?.tipo||rB?.tipo||'egreso';
+    // TOTAL EGRESOS: no confiar en el .actual crudo de cada Excel — algunos períodos
+    // lo suman incluyendo IMP.CRED/DEB en su propio total y otros no (depende de cómo
+    // se armó cada archivo), lo que compara peras con manzanas. Usar siempre la base
+    // sin impuesto (misma que el cuadro resumen del encabezado) para los dos períodos.
+    const vA = (tipo==='total') ? (rA ? egrADet : null) : (rA?.actual ?? null);
+    const vB = (tipo==='total') ? (rB ? egrBDet : null) : (rB?.actual ?? null);
+    const lbl=rA?.label||rB?.label||'';
     const soloA=rA&&!rB, soloB=!rA&&rB, sinPar=soloA||soloB;
     const vn=(vA!=null&&vB!=null&&vB!==0)?(Math.abs(vA)-Math.abs(vB))/Math.abs(vB)*100:null;
     const vr=(vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
