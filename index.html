@@ -13160,7 +13160,8 @@ function exportarFlujoExcel() {
   const ipcAutoMeses = null; // ya resuelto en _compActiva
 
   const rubEgr = fA.rubros.filter(r=>r.tipo==='egreso'&&r.actual)
-    .sort((a,b)=>Math.abs(b.actual)-Math.abs(a.actual));
+    .sort((a,b)=>Math.abs(b.actual)-Math.abs(a.actual))
+    .slice(0, 10); // top 10 — mantiene el gráfico de ranking legible/corto
 
   // ── extraer variables CSS del tema activo ─────────────────────────
   const _cs = getComputedStyle(document.documentElement);
