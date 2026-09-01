@@ -23296,13 +23296,34 @@ function _mostrarPreviewVentasGastos(result, fname) {
   const totV = meses.reduce((s,m)=>s+result.meses[m].ventas,0);
   const totR = meses.reduce((s,m)=>s+result.meses[m].resultado,0);
 
+  // Empresa: el nombre del archivo es solo una sugerencia (puede traer "ACUMULADO",
+  // "AL 06" u otro sufijo mal recortado) — nunca se guarda sin que el usuario la
+  // confirme o elija del portafolio, para no crear una empresa fantasma que no
+  // aparezca en ningún selector del dashboard.
+  const _empMatch = _matchEmpresaFlujo(result.empresa);
+  const _todasEmp = [...new Set([
+    ...Object.keys(rubros || {}),
+    ...Object.keys(DATA.fact || {}),
+    ...Object.keys(DATA.sit  || {}),
+  ])].sort();
+  const _selVal = _empMatch || result.empresa || '';
+  const _empOpts = '<option value="">— Seleccionar empresa —</option>' +
+    _todasEmp.map(e => `<option value="${e}"${e === _selVal ? ' selected' : ''}>${e}</option>`).join('') +
+    (_selVal && !_todasEmp.includes(_selVal) ? `<option value="${_selVal}" selected>${_selVal} (nueva, del nombre de archivo)</option>` : '');
+
   const html = `<div style="padding:16px;background:var(--s1);border:1px solid var(--bd2);border-radius:6px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:600;margin-bottom:4px">Ventas/Gastos detectado — ${fname}</div>
-    <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
-      <b>${result.empresa}</b> · Año ${result.anio||'?'} · ${meses.length} meses · Facturación total ${fmt(totV)} · Resultado ${fmt(totR)}<br>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+      Año ${result.anio||'?'} · ${meses.length} meses · Facturación total ${fmt(totV)} · Resultado ${fmt(totR)}<br>
       ${(result.itemsVentas?.length||0)+(result.itemsGastos?.length||0) > 0
         ? `<span style="color:var(--pos)">✓ Detalle detectado: ${result.itemsVentas?.length||0} ítems de ventas, ${result.itemsGastos?.length||0} ítems de gastos clasificados.</span>`
         : 'Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo).'}
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga
+        ${!_empMatch ? '<span style="color:var(--y21)">— no se encontró coincidencia automática, verificá la selección</span>' : ''}
+      </label>
+      <select id="vg-empresa" style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid ${!_empMatch?'var(--y21)':'var(--bd)'};border-radius:5px;color:var(--text);font-size:11px">${_empOpts}</select>
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
       <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${ths}</tr></thead>
@@ -23331,8 +23352,10 @@ function _mostrarPreviewVentasGastos(result, fname) {
 
 function _aplicarVentasGastos() {
   const r = window._vgPendiente;
-  if (!r || !r.empresa || !r.anio) return;
-  const emp = r.empresa, yS = String(r.anio);
+  if (!r || !r.anio) return;
+  const emp = document.getElementById('vg-empresa')?.value?.trim() || '';
+  if (!emp) { alert('Seleccioná la empresa a la que se vincula esta carga antes de aplicar.'); return; }
+  const yS = String(r.anio);
   const meses = Object.keys(r.meses).map(Number).sort((a,b)=>a-b);
 
   // Construir filas de ER mensual
