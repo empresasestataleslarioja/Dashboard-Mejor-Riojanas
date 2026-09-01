@@ -33503,16 +33503,31 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // Restaurar flujos de fondos desde Sheets — solo AGREGAR, nunca eliminar locales
+  // Restaurar flujos de fondos desde Sheets — agrega/actualiza, y propaga eliminaciones
+  // hechas en OTROS dispositivos: si una clave estaba en el snapshot anterior de Sheets
+  // y ya no viene en la descarga actual, es que se borró del lado del servidor. Se
+  // elimina también acá, salvo que la copia local se haya modificado después de ese
+  // snapshot (edición local pendiente de publicar, que no se pisa).
   if ((!_solo || _solo === 'flujos') && Array.isArray(cloud.flujos) && cloud.flujos.length) {
     DATA.flujos = DATA.flujos || {};
+    // Snapshot anterior (antes de sobreescribirlo) para detectar qué desapareció
+    let _snapFlujosAnterior = [];
+    try { _snapFlujosAnterior = JSON.parse(localStorage.getItem('lr_flujos_sheets_snap') || '[]'); } catch(e) {}
+    const _snapFlujosAnteriorMap = new Map();
+    _snapFlujosAnterior.forEach(f => {
+      if (!f.empresa || !f.periodo) return;
+      const k = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+      _snapFlujosAnteriorMap.set(k, parseInt(f.timestamp) || 0);
+    });
     // Guardar snapshot actualizado de lo que vino de Sheets
     try { localStorage.setItem('lr_flujos_sheets_snap', JSON.stringify(cloud.flujos)); } catch(e) {}
     const _delMap = (typeof _getFlujosDelMap === 'function') ? _getFlujosDelMap() : new Map();
     const _delSet = new Set(_delMap.keys());
+    const _clavesCloudActuales = new Set();
     cloud.flujos.forEach(f => {
       if (!f.empresa || !f.periodo) return;
       const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+      _clavesCloudActuales.add(clave);
       const tsCloud = parseInt(f.timestamp) || 0;
       const tsLocal = parseInt(DATA.flujos[clave]?.timestamp) || 0;
       // Si está marcado como eliminado: restaurar solo si la versión de Sheets es
@@ -33553,6 +33568,18 @@ function applyCloudData(cloud, opts) {
         fuente:      f.fuente     || 'sheets',
         rubros:      rubros_parsed.map(r => ({ ...r, porMes: r.porMes || {} })),
       };
+    });
+    // Propagar eliminaciones remotas: claves que estaban en el snapshot anterior de
+    // Sheets pero ya no están en la descarga actual, y que no se editaron localmente
+    // después de ese snapshot (si tsLocal es más nuevo, es una edición pendiente de
+    // publicar — no se borra, para no perder trabajo no sincronizado todavía).
+    _snapFlujosAnteriorMap.forEach((tsSnapAnterior, clave) => {
+      if (_clavesCloudActuales.has(clave)) return; // sigue existiendo en Sheets
+      const local = DATA.flujos[clave];
+      if (!local) return; // no la tenemos localmente, nada que propagar
+      const tsLocal = parseInt(local.timestamp) || 0;
+      if (tsLocal > tsSnapAnterior) return; // edición local más nueva que el snapshot — conservar
+      delete DATA.flujos[clave];
     });
     try { saveDataToLocalCache(); } catch(e) {}
   }
