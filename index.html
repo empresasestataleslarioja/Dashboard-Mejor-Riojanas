@@ -23480,10 +23480,14 @@ function tryParseERColumnasMeses(wb, fname) {
   const _clasif = (lbl) => {
     const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
     if (!t) return null;
-    // Aportes/asistencia financiera/subsidios del Estado no son ventas — se
-    // registran como otros ingresos aunque el rótulo diga "ingresos".
-    if (_esIngExcluido(t)) return 'otrosIngresos';
+    // "Ventas netas"/"Ingresos netos/totales" es la cifra de ventas que la propia
+    // empresa declara como tal — se respeta aunque el rótulo también mencione
+    // aportes del Estado (ej. "Ventas netas - Aportes del Estado"), porque suele
+    // ser la única línea de ingresos del archivo y anularla dejaría el ER en cero.
     if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS?|INGRESOS\s+TOTALES?/.test(t)) return 'ventas';
+    // Aportes/asistencia financiera/subsidios del Estado como línea aparte (sin
+    // "ventas netas" en el rótulo) no son ventas — se registran como otros ingresos.
+    if (_esIngExcluido(t)) return 'otrosIngresos';
     if (/VENTAS\s+BRUTAS?/.test(t)) return 'IGNORAR';
     if (/DEVOLUCION|^DESCUENTO/.test(t)) return 'IGNORAR';
     if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
@@ -23495,13 +23499,13 @@ function tryParseERColumnasMeses(wb, fname) {
     if (/TOTAL\s+IMPUESTO/.test(t)) return 'IGNORAR';
     if (/GASTOS?\s+TOTALES?/.test(t)) return 'resEjercicio'; // subtotal global de gastos → usar como gasto neto
     if (/UTILIDAD\s+OPERATIVA|RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA/.test(t)) return 'resOperativo';
-    if (/UTILIDAD\s+ANTES\s+DE\s+IMP|RESULTADO\s+ANTES/.test(t)) return 'resAntesImp';
-    if (/UTILIDAD\s+NETA|RESULTADO\s+(DEL\s+)?EJERCICIO|RESULTADO\s+NETO|GANANCIA\s+NETA/.test(t)) return 'resEjercicio';
+    if (/UTILIDAD\s+ANTES\s+DE\s+IMP|RESULTADO\s+ANTES|RTDO\.?\s+ANTES/.test(t)) return 'resAntesImp';
+    if (/UTILIDAD\s+NETA|RESULTADO\s+(DEL\s+)?EJERCICIO|RESULTADO\s+NETO|GANANCIA\s+NETA|RTDO\.?\s+NETO/.test(t)) return 'resEjercicio';
     if (/IMPUESTO\s+(A\s+(LAS?\s+)?GANANCIAS?|DIFERIDO|SOBRE\s+RENTA)/.test(t)) return 'impuesto';
     if (/GASTOS?\s+FINANC|PRODUCTOS?\s+FINANC/.test(t)) return 'resFinanciero';
     if (/COMERCIALIZAC|MERCADOTECNIA|PUBLICIDAD/.test(t)) return 'gastoCom';
     if (/GASTOS?\s+(DE\s+)?VENTA|GASTOS?\s+OPERATIV/.test(t)) return 'gastoCom';
-    if (/GASTOS?\s+ADMIN/.test(t)) return 'gastoAdm';
+    if (/GASTOS?\s+(DE\s+)?ADMIN/.test(t)) return 'gastoAdm';
     if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA\s+SOCIAL|APORTE|CONTRIBUC|BENEFICIO.*PERSONAL|CARGAS\s+SOC/.test(t)) return 'gastoAdm';
     if (/HONORARIO/.test(t)) return 'gastoAdm';
     if (/AMORTIZAC|DEPRECIAC/.test(t)) return 'gastoAdm';
@@ -23511,7 +23515,8 @@ function tryParseERColumnasMeses(wb, fname) {
     if (/PAPELERIA|ARTICU.*LIMPIEZA|INSUMO/.test(t)) return 'gastoAdm';
     if (/MANTENIMIENTO|REPARACION/.test(t)) return 'gastoAdm';
     if (/COMBUSTIBLE|LUBRICANTE|VEHICULO|RODADO/.test(t)) return 'gastoAdm';
-    if (/IMPUESTO|TASA|CONTRIBUC/.test(t)) return 'gastoAdm';
+    if (/IMPUESTO|TASA|CONTRIBUC|FISCAL/.test(t)) return 'gastoAdm';
+    if (/BANCARIO|GASTOS?\s+DE\s+BANCO/.test(t)) return 'gastoAdm';
     if (/VIATICO|VIAJE|MOVILIDAD/.test(t)) return 'gastoCom';
     if (/FLETE|ENCOMIENDA|ENTREGA/.test(t)) return 'gastoCom';
     if (/GASTO.*VENTA|OPERATIV|OBRA/.test(t)) return 'gastoCom';
@@ -23525,9 +23530,12 @@ function tryParseERColumnasMeses(wb, fname) {
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
     if (rows.length < 5) continue;
 
-    // Detectar fila de cabecera de meses (buscar fila con ≥8 meses en columnas)
+    // Detectar fila de cabecera de meses (buscar fila con ≥8 meses en columnas).
+    // Se buscan las primeras 20 filas (no solo 5): algunos archivos traen un
+    // encabezado de datos del contribuyente (CUIT, dirección, etc.) antes de la
+    // fila de meses, como el "RESUMEN" de Cerámica Riojana.
     let filaMeses = -1, colMeses = []; // [{col, mes}]
-    for (let i = 0; i < Math.min(5, rows.length); i++) {
+    for (let i = 0; i < Math.min(20, rows.length); i++) {
       const cols = [];
       for (let c = 1; c < rows[i].length; c++) {
         const vu = String(rows[i][c] || '').trim().toUpperCase();
