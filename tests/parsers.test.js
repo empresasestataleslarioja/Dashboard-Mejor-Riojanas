@@ -57,6 +57,24 @@ const {
   'tryParseERMatricial',
 ]);
 
+// _erDesdeMonthly lee/escribe sobre el global DATA y usa las consts
+// ER_LABELS/ER_ORDER — se arma un factory aparte que expone un setter de
+// DATA en vez de pasarlo como parámetro, para no tocar la firma real.
+function extractConstBlock(html, startMarker, endMarker) {
+  const s = html.indexOf(startMarker);
+  if (s < 0) throw new Error(`No se encontró "${startMarker}" en index.html`);
+  const e = html.indexOf(endMarker, s);
+  if (e < 0) throw new Error(`No se encontró "${endMarker}" después de "${startMarker}"`);
+  return html.slice(s, e + endMarker.length);
+}
+const erConsts = extractConstBlock(html, 'const ER_LABELS = {', 'const ER_ORDER = Object.keys(ER_LABELS);');
+const erDesdeMonthlySrc = extractFn(html, '_erDesdeMonthly');
+const { _erDesdeMonthly, setData } = new Function(
+  erConsts + '\n' + erDesdeMonthlySrc + '\n' +
+  'let DATA = {};\nfunction setData(d) { DATA = d; }\n' +
+  'return { _erDesdeMonthly, setData };'
+)();
+
 let pass = 0, fail = 0;
 function assert(cond, msg) {
   if (cond) { pass++; console.log('  ✓ ' + msg); }
@@ -157,6 +175,45 @@ group('_matchEmpresaPortafolio', () => {
     'reconoce la empresa pese al sufijo societario ("SAPEM") ausente del portafolio');
   assert(_matchEmpresaPortafolio('UNA EMPRESA QUE NO EXISTE', candidatas) === '',
     'no inventa una coincidencia para un nombre fuera del portafolio');
+});
+
+// ── _erDesdeMonthly: el panel "ER Provisorio — <empresa>" leía solo
+//    DATA.er_mensual (detalle mes a mes, cargado individualmente desde
+//    2025). Bug real: empresas cargadas antes vía RESUMEN histórico
+//    multi-empresa (tryParseERNativo → DATA.er[emp][año], mismo desglose
+//    de partidas pero sin apertura mensual) mostraban "Sin ER provisorio
+//    cargado" pese a tener el dato — la vista nunca consultaba DATA.er. ──
+group('_erDesdeMonthly — usa DATA.er (anual nativo) cuando no hay detalle mensual', () => {
+  setData({
+    er_mensual: {
+      'CERDO DE LOS LLANOS': {
+        '2025': { filas: [
+          { conceptoStd: 'ventas', valores: { 1: 100, 2: 120 } },
+          { conceptoStd: 'resOperativo', valores: { 1: 10, 2: 12 } },
+        ] },
+      },
+    },
+    er: {
+      'CERDO DE LOS LLANOS': {
+        // 2025 también existe en er_mensual (arriba) — el detalle mensual
+        // tiene que ganar y este valor claramente distinto no debe aparecer
+        '2025': { ventas_netas: -1, resultado_operativo: -1 },
+        '2022': { ventas_netas: 1127073623.87, costo_ventas: -1101850481.26,
+                   utilidad_bruta: 25223142.61, gastos_admin: -83362268.76,
+                   gastos_comercializacion: -111320403.98, resultado_operativo: 119884283.08 },
+      },
+    },
+    fact: {}, sit: {},
+  });
+  const er = _erDesdeMonthly('CERDO DE LOS LLANOS');
+  assert(!!er && er['2022'] && er['2022'].costo_ventas === -1101850481.26,
+    'un año sin detalle mensual pero con RESUMEN histórico (DATA.er) trae el desglose completo de partidas');
+  assert(er['2022'].gastos_admin === -83362268.76 && er['2022'].gastos_comercializacion === -111320403.98,
+    'incluye partidas que el fallback anterior (solo fact/sit) no tenía — mismo formato de reporte que el ER mensual');
+  assert(er['2025'].ventas_netas === 220, 'si el año ya tiene detalle mensual, el ER anual nativo (DATA.er) no lo pisa');
+
+  const empEr = _erDesdeMonthly('CERAMICA RIOJANA'); // no cargada en absoluto
+  assert(empEr === null, 'una empresa sin ningún dato (ni mensual, ni DATA.er, ni fact/sit) sigue devolviendo null');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);

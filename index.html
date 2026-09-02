@@ -14857,7 +14857,25 @@ function _erDesdeMonthly(emp) {
     });
   }
 
-  // Fallback final: si no hay desglose mensual, derivar de fact/sit
+  // Fallback intermedio: ER anual "nativo" (DATA.er, ej. Estados de Resultados
+  // provisorios históricos cargados por RESUMEN multi-empresa) — mismo desglose
+  // de partidas que el ER mensual (ER_LABELS), pero sin apertura mes a mes.
+  // Se usa solo para años que no tengan ya detalle mensual.
+  let erAnual = DATA.er?.[emp];
+  if (!erAnual && DATA.er) {
+    const k = Object.keys(DATA.er).find(x => _normEmp(x) === empN);
+    if (k) erAnual = DATA.er[k];
+  }
+  if (erAnual) {
+    Object.entries(erAnual).forEach(([yr, partidas]) => {
+      if (out[yr] || !partidas || typeof partidas !== 'object') return;
+      const acc = {};
+      ER_ORDER.forEach(k => { if (partidas[k] != null && partidas[k] !== 0) acc[k] = partidas[k]; });
+      if (Object.keys(acc).length) { out[yr] = acc; hayAlgo = true; }
+    });
+  }
+
+  // Fallback final: si no hay desglose mensual ni anual nativo, derivar de fact/sit
   const fact = DATA.fact?.[emp] || {};
   const sit  = DATA.sit?.[emp]  || {};
   [...new Set([...Object.keys(fact), ...Object.keys(sit)])].forEach(yr => {
@@ -14883,9 +14901,10 @@ function buildResDesglose() {
   };
 
   if (!selEmp) {
-    // ── Consolidado: solo ER provisorios (DATA.er_mensual) ──
-    // El ER formal (DATA.er desde balances) vive en Análisis de Balances, no aquí.
-    const erEmps = Object.keys(DATA.er_mensual || {});
+    // ── Consolidado: ER provisorios — mensuales (DATA.er_mensual) y anuales
+    // nativos (DATA.er, ej. RESUMEN histórico) resueltos ambos vía _erDesdeMonthly.
+    // El ER formal de balances aprobados vive en Análisis de Balances, no acá.
+    const erEmps = [...new Set([...Object.keys(DATA.er_mensual || {}), ...Object.keys(DATA.er || {})])];
     const erResuelto = {};
     erEmps.forEach(e => {
       const er = _erDesdeMonthly(e);
