@@ -23298,18 +23298,18 @@ function _mostrarPreviewVentasGastos(result, fname) {
 
   // Empresa: el nombre del archivo es solo una sugerencia (puede traer "ACUMULADO",
   // "AL 06" u otro sufijo mal recortado) — nunca se guarda sin que el usuario la
-  // confirme o elija del portafolio, para no crear una empresa fantasma que no
-  // aparezca en ningún selector del dashboard.
-  const _empMatch = _matchEmpresaFlujo(result.empresa);
-  const _todasEmp = [...new Set([
-    ...Object.keys(rubros || {}),
-    ...Object.keys(DATA.fact || {}),
-    ...Object.keys(DATA.sit  || {}),
-  ])].sort();
-  const _selVal = _empMatch || result.empresa || '';
+  // confirme. Solo se ofrecen empresas dadas de alta en Rubros Comerciales (el
+  // portafolio oficial): no se agregan opciones "nuevas" sacadas del archivo.
+  const _todasEmp = Object.keys(rubros || {}).sort();
+  const _empMatch = (() => {
+    if (!result.empresa) return '';
+    const n = result.empresa.toUpperCase().trim();
+    return _todasEmp.find(e => e.toUpperCase() === n)
+        || _todasEmp.find(e => n.includes(e.toUpperCase()) || e.toUpperCase().includes(n))
+        || '';
+  })();
   const _empOpts = '<option value="">— Seleccionar empresa —</option>' +
-    _todasEmp.map(e => `<option value="${e}"${e === _selVal ? ' selected' : ''}>${e}</option>`).join('') +
-    (_selVal && !_todasEmp.includes(_selVal) ? `<option value="${_selVal}" selected>${_selVal} (nueva, del nombre de archivo)</option>` : '');
+    _todasEmp.map(e => `<option value="${e}"${e === _empMatch ? ' selected' : ''}>${e}</option>`).join('');
 
   const html = `<div style="padding:16px;background:var(--s1);border:1px solid var(--bd2);border-radius:6px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:600;margin-bottom:4px">Ventas/Gastos detectado — ${fname}</div>
@@ -23319,12 +23319,13 @@ function _mostrarPreviewVentasGastos(result, fname) {
         ? `<span style="color:var(--pos)">✓ Detalle detectado: ${result.itemsVentas?.length||0} ítems de ventas, ${result.itemsGastos?.length||0} ítems de gastos clasificados.</span>`
         : 'Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo).'}
     </div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga
-        ${!_empMatch ? '<span style="color:var(--y21)">— no se encontró coincidencia automática, verificá la selección</span>' : ''}
+    <div style="margin-bottom:8px">
+      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga (portafolio de Rubros Comerciales)
+        ${!_empMatch ? '<span style="color:var(--y21)">— no se encontró coincidencia automática, seleccioná manualmente</span>' : ''}
       </label>
-      <select id="vg-empresa" style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid ${!_empMatch?'var(--y21)':'var(--bd)'};border-radius:5px;color:var(--text);font-size:11px">${_empOpts}</select>
+      <select id="vg-empresa" onchange="_vgActualizarAvisoExistente()" style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid ${!_empMatch?'var(--y21)':'var(--bd)'};border-radius:5px;color:var(--text);font-size:11px">${_empOpts}</select>
     </div>
+    <div id="vg-aviso-existente" style="display:none;margin-bottom:12px;padding:7px 10px;background:rgba(255,71,102,.1);border:1px solid var(--neg);border-radius:4px;color:var(--neg);font-size:9.5px;font-weight:600"></div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
       <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${ths}</tr></thead>
       <tbody>
@@ -23348,6 +23349,22 @@ function _mostrarPreviewVentasGastos(result, fname) {
   }
   target.innerHTML = html;
   target.scrollIntoView({ behavior:'smooth', block:'start' });
+  _vgActualizarAvisoExistente();
+}
+
+// Avisa si ya hay un ER mensual cargado para la empresa/año seleccionados —
+// evita reimportar el mismo archivo (o uno de otro período) sin darse cuenta.
+function _vgActualizarAvisoExistente() {
+  const r = window._vgPendiente;
+  const el = document.getElementById('vg-aviso-existente');
+  if (!el || !r) return;
+  const emp = document.getElementById('vg-empresa')?.value || '';
+  const yS = String(r.anio || '');
+  const yaExiste = emp && (DATA.er_mensual?.[emp]?.[yS]?.filas?.length > 0);
+  el.style.display = yaExiste ? '' : 'none';
+  el.textContent = yaExiste
+    ? `⚠ Ya existe un Estado de Resultados cargado para ${emp} · ${yS}. Si este archivo ya fue importado antes, aplicar ahora va a reemplazar los datos existentes.`
+    : '';
 }
 
 function _aplicarVentasGastos() {
@@ -23356,6 +23373,11 @@ function _aplicarVentasGastos() {
   const emp = document.getElementById('vg-empresa')?.value?.trim() || '';
   if (!emp) { alert('Seleccioná la empresa a la que se vincula esta carga antes de aplicar.'); return; }
   const yS = String(r.anio);
+  if (DATA.er_mensual?.[emp]?.[yS]?.filas?.length > 0) {
+    const ok = confirm(`Ya existe un Estado de Resultados cargado para ${emp} · ${yS}.\n\n` +
+      `Si este archivo ya fue importado antes, esta acción va a reemplazar los datos existentes.\n\n¿Continuar y sobrescribir?`);
+    if (!ok) return;
+  }
   const meses = Object.keys(r.meses).map(Number).sort((a,b)=>a-b);
 
   // Construir filas de ER mensual
