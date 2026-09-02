@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MejorRiojanas">
-<title>Panel Comparativo 2020–2026 | Estado de Resultados · v4</title>
+<title>Dashboard Gerencial · Mejor Riojanas</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -1658,7 +1658,7 @@ self.onmessage = async (e) => {
   <div style="width:100%;border-bottom:1.5px solid #333;padding-bottom:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
     <div id="print-header-logos" style="display:flex;align-items:center;gap:14px;flex-shrink:0"></div>
     <div style="text-align:right">
-      <div style="font-size:13pt;font-weight:700;color:#111" id="print-titulo">Dashboard BI La Rioja</div>
+      <div style="font-size:13pt;font-weight:700;color:#111" id="print-titulo">Dashboard Gerencial · Mejor Riojanas</div>
       <div style="font-size:8.5pt;color:#555;margin-top:2px" id="print-subtitulo"></div>
     </div>
   </div>
@@ -2127,7 +2127,7 @@ self.onmessage = async (e) => {
             <strong style="color:var(--text)">Bridge Apps Script (lr_bridge_v5.gs)</strong><br>
             Para actualizar el bridge en Google:
             <ol style="margin:4px 0 0 14px;padding:0;font-size:8.5px;line-height:1.8">
-              <li>Abrí tu Spreadsheet de BI La Rioja</li>
+              <li>Abrí tu Spreadsheet de Mejor Riojanas</li>
               <li>Menú <strong>Extensiones → Apps Script</strong></li>
               <li>Seleccioná todo (Ctrl+A) y pegá el código del archivo .gs</li>
               <li>Guardá (Ctrl+S)</li>
@@ -6121,7 +6121,7 @@ function _rptHeader(titulo, subtitulo) {
   return `<div class="hdr">
     ${_membrete({height:46})}
     <div style="text-align:right">
-      <div class="ht">BI La Rioja — ${titulo}</div>
+      <div class="ht">Dashboard Gerencial · Mejor Riojanas — ${titulo}</div>
       <div class="hs">${subtitulo}</div>
       <div style="font-size:7pt;color:#aaa;margin-top:2px;font-family:monospace">${fecha}</div>
     </div>
@@ -7956,7 +7956,7 @@ function _rptBalanceIntegral() {
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8">
-<title>Reporte Integral de Balances — Mejor Riojanas</title>
+<title>Reporte Integral de Balances — Dashboard Gerencial · Mejor Riojanas</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f8;color:#1e1e2d;font-size:11px}
@@ -8224,14 +8224,14 @@ function _imprimirPanelFallback(panelId, panelActivo) {
   const elTit = document.getElementById('print-titulo');
   const elSub = document.getElementById('print-subtitulo');
   const elFooter = document.getElementById('print-footer-txt');
-  if (elTit) elTit.textContent = 'BI La Rioja — ' + tituloPanel;
+  if (elTit) elTit.textContent = 'Dashboard Gerencial · Mejor Riojanas — ' + tituloPanel;
   if (elSub) elSub.textContent = subtitStr;
-  if (elFooter) elFooter.textContent = 'BI La Rioja — '+tituloPanel+(subtitStr?' · '+subtitStr:'')+
+  if (elFooter) elFooter.textContent = 'Dashboard Gerencial · Mejor Riojanas — '+tituloPanel+(subtitStr?' · '+subtitStr:'')+
     '  |  SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete  |  '+fechaStr;
   if (!panelActivo.classList.contains('on')) panelActivo.classList.add('on');
   _prepararPanelParaPrint(panelId, panelActivo);
   const tituloOrig = document.title;
-  document.title = 'BI La Rioja — ' + tituloPanel;
+  document.title = 'Dashboard Gerencial · Mejor Riojanas — ' + tituloPanel;
   requestAnimationFrame(() => requestAnimationFrame(() => {
     window.print();
     document.title = tituloOrig;
@@ -17538,7 +17538,7 @@ function _informeEjecutivoRender(emp) {
     ${sec('Flujos de Fondos', htmlFlujos)}
     ${sec('Transferencias del Estado', htmlTrans)}
     ${sec('Personal', htmlPersonal)}
-    <div class="ie-footer">Dashboard Mejor Riojanas · Generado el ${hoy} · Todos los importes en moneda corriente de cada ejercicio &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
+    <div class="ie-footer">Dashboard Gerencial · Mejor Riojanas · Generado el ${hoy} · Todos los importes en moneda corriente de cada ejercicio &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
   </div>
   </body></html>`;
 
@@ -17773,7 +17773,7 @@ function informeEstadoERProvisorio(empFiltro) {
     </div>
     ${tablaAnualHtml}
     ${tablaHtml}
-    <div class="ft">Dashboard Mejor Riojanas · ${hoy} · ER Provisorio: datos de facturación y resultado mensual acumulado cargados por empresa &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
+    <div class="ft">Dashboard Gerencial · Mejor Riojanas · ${hoy} · ER Provisorio: datos de facturación y resultado mensual acumulado cargados por empresa &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
   </div>
   </body></html>`;
 

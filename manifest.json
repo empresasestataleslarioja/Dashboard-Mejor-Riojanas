@@ -1,7 +1,7 @@
 {
-  "name": "Dashboard Mejor Riojanas",
+  "name": "Dashboard Gerencial · Mejor Riojanas",
   "short_name": "MejorRiojanas",
-  "description": "Panel BI de empresas estatales — La Rioja",
+  "description": "Dashboard gerencial de empresas estatales — La Rioja",
   "start_url": "/Dashboard-Mejor-Riojanas/",
   "display": "standalone",
   "background_color": "#0b1220",
