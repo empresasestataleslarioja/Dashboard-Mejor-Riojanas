@@ -23598,18 +23598,32 @@ function _mostrarPreviewERColumnas(result, fname) {
     </tr>`;
   }).join('');
 
+  // Empresa: el nombre del archivo es solo una sugerencia — nunca se guarda sin
+  // que el usuario la confirme. Solo se ofrecen empresas dadas de alta en Rubros
+  // Comerciales (el portafolio oficial), igual que en el importador de Ventas/Gastos.
+  const _todasEmp = Object.keys(rubros || {}).sort();
+  const _empMatch = (() => {
+    if (!result.empresa) return '';
+    const n = result.empresa.toUpperCase().trim();
+    return _todasEmp.find(e => e.toUpperCase() === n)
+        || _todasEmp.find(e => n.includes(e.toUpperCase()) || e.toUpperCase().includes(n))
+        || '';
+  })();
+  const _empOpts = '<option value="">— Seleccionar empresa —</option>' +
+    _todasEmp.map(e => `<option value="${e}"${e === _empMatch ? ' selected' : ''}>${e}</option>`).join('');
+
   const html = `<div style="padding:16px;background:var(--s1);border:1px solid var(--bd2);border-radius:6px;margin-bottom:12px">
     <div style="font-size:12px;font-weight:600;margin-bottom:4px">ER Mensual detectado — ${fname}</div>
-    <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
-      <b id="er-col-emp-lbl">${result.empresa}</b> · Año ${result.anio} · ${result.filas.length} conceptos · ${meses.length} meses<br>
-      <span style="color:var(--pos)">Verificá el nombre de empresa antes de aplicar.</span>
+    <div style="font-size:10px;color:var(--dim);margin-bottom:8px">
+      Año ${result.anio} · ${result.filas.length} conceptos · ${meses.length} meses
     </div>
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
-      <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Empresa:</label>
-      <input id="er-col-emp-inp" value="${result.empresa}"
-        style="flex:1;max-width:300px;padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);
-        color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none">
+    <div style="margin-bottom:8px">
+      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga (portafolio de Rubros Comerciales)
+        ${!_empMatch ? '<span style="color:var(--y21)">— no se encontró coincidencia automática, seleccioná manualmente</span>' : ''}
+      </label>
+      <select id="er-col-emp-inp" onchange="_erColActualizarAvisoExistente()" style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid ${!_empMatch?'var(--y21)':'var(--bd)'};border-radius:5px;color:var(--text);font-size:11px">${_empOpts}</select>
     </div>
+    <div id="er-col-aviso-existente" style="display:none;margin-bottom:12px;padding:7px 10px;background:rgba(255,71,102,.1);border:1px solid var(--neg);border-radius:4px;color:var(--neg);font-size:9.5px;font-weight:600"></div>
     <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
@@ -23635,14 +23649,34 @@ function _mostrarPreviewERColumnas(result, fname) {
   }
   target.innerHTML = html;
   target.scrollIntoView({ behavior:'smooth', block:'start' });
+  _erColActualizarAvisoExistente();
+}
+
+// Avisa si ya hay un ER mensual cargado para la empresa/año seleccionados.
+function _erColActualizarAvisoExistente() {
+  const r = window._erColPendiente;
+  const el = document.getElementById('er-col-aviso-existente');
+  if (!el || !r) return;
+  const emp = document.getElementById('er-col-emp-inp')?.value || '';
+  const yS = String(r.anio || '');
+  const yaExiste = emp && (DATA.er_mensual?.[emp]?.[yS]?.filas?.length > 0);
+  el.style.display = yaExiste ? '' : 'none';
+  el.textContent = yaExiste
+    ? `⚠ Ya existe un Estado de Resultados cargado para ${emp} · ${yS}. Si este archivo ya fue importado antes, aplicar ahora va a reemplazar los datos existentes.`
+    : '';
 }
 
 function _aplicarERColumnas() {
   const r = window._erColPendiente;
   if (!r) return;
-  const empInp = document.getElementById('er-col-emp-inp');
-  const emp = (empInp ? empInp.value.trim().toUpperCase() : r.empresa) || r.empresa;
+  const emp = document.getElementById('er-col-emp-inp')?.value?.trim() || '';
+  if (!emp) { alert('Seleccioná la empresa a la que se vincula esta carga antes de aplicar.'); return; }
   const yS = String(r.anio);
+  if (DATA.er_mensual?.[emp]?.[yS]?.filas?.length > 0) {
+    const ok = confirm(`Ya existe un Estado de Resultados cargado para ${emp} · ${yS}.\n\n` +
+      `Si este archivo ya fue importado antes, esta acción va a reemplazar los datos existentes.\n\n¿Continuar y sobrescribir?`);
+    if (!ok) return;
+  }
 
   if (!DATA.er_mensual) DATA.er_mensual = {};
   if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
