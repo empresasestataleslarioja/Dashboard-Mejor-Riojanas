@@ -2343,7 +2343,7 @@ self.onmessage = async (e) => {
           </div>
         </div>
         <div style="overflow-x:auto">
-          <table id="port-table" style="width:100%;min-width:900px;border-collapse:collapse;font-size:10px;font-family:var(--mono)"></table>
+          <table id="port-table" style="width:100%;border-collapse:collapse;font-size:10px;font-family:var(--mono);table-layout:auto"></table>
         </div>
       </div>
       <div class="row2">
@@ -3474,10 +3474,6 @@ self.onmessage = async (e) => {
       <!-- contenido dinámico -->
       <div id="trans-content" style="display:none">
 
-        <!-- Conciliación: lo girado por el Estado (SIDIF) vs lo declarado como
-             aporte/asistencia financiera del Estado en ER o Flujos de la empresa -->
-        <div id="trans-reconc-wrap"></div>
-
         <!-- fila superior: dona composición + barras por SAF -->
         <div class="row2" style="align-items:start">
           <div class="card" id="trans-donut-card" style="display:flex;flex-direction:column">
@@ -3547,6 +3543,11 @@ self.onmessage = async (e) => {
           </div>
           </div>
         </div>
+
+        <!-- Conciliación: lo girado por el Estado (SIDIF) vs lo declarado como
+             aporte/asistencia financiera del Estado en ER o Flujos de la empresa —
+             debajo del Detalle y minimizada por defecto -->
+        <div id="trans-reconc-wrap"></div>
 
       </div>
     </div>
@@ -16031,10 +16032,12 @@ function buildPortafolio() {
     <div class="kpi-label">${k.lbl}</div><div class="kpi-value">${k.val}</div>
     <div class="kpi-sub">${k.sub}</div></div>`).join('');
 
-  // Tabla cruzada
+  // Tabla cruzada — columnas monetarias en formato abreviado ($ millones, ya
+  // declarado en el encabezado de la card) para que la tabla completa entre
+  // sin necesidad de desplazamiento horizontal en un ancho de escritorio normal.
   const tbl = document.getElementById('port-table');
-  const thStyle = `style="padding:6px 10px;text-align:left;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
-  const thR     = `style="padding:6px 10px;text-align:right;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
+  const thStyle = `style="padding:6px 7px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
+  const thR     = `style="padding:6px 7px;text-align:right;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
   const hasCmp  = _cmpYearA && _cmpYearB && _cmpYearA !== _cmpYearB;
   const cmpHdrs = hasCmp
     ? `<th ${thR}>Var. Fact ${_cmpYearA}→${_cmpYearB}</th><th ${thR}>Var. Res ${_cmpYearA}→${_cmpYearB}</th>`
@@ -16057,15 +16060,18 @@ function buildPortafolio() {
     ${cmpHdrs}
   </tr></thead>`;
   const tb = document.createElement('tbody');
-  const tdL = `padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;white-space:nowrap`;
-  const tdR = `padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);white-space:nowrap`;
+  const tdL = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;white-space:nowrap`;
+  const tdR = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);white-space:nowrap`;
+  // La empresa es la única columna con texto potencialmente largo — se deja
+  // envolver en 2 líneas en vez de forzar el ancho de toda la tabla por ella.
+  const tdEmp = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;white-space:normal;max-width:150px;font-weight:500`;
 
   rows.forEach((r, i) => {
     const factColor = r.f > 0 ? 'var(--text)' : 'var(--dim)';
     const resColor  = r.r == null ? 'var(--dim)' : r.r > 0 ? 'var(--pos)' : 'var(--neg)';
-    const resVal    = r.r == null ? '—' : fvFull(r.r);
+    const resVal    = r.r == null ? '—' : fvShort(r.r);
     const mrgVal    = r.margen != null ? r.margen.toFixed(2)+'%' : '—';
-    const fxemp     = r.p > 0 ? fvFull(r.f/r.p) : '—';
+    const fxemp     = r.p > 0 ? fvShort(r.f/r.p) : '—';
     const mrgColor  = r.margen == null ? 'var(--dim)' : r.margen > 0 ? 'var(--pos)' : 'var(--neg)';
     // Dependencia estatal: transferencias / facturación
     const dep       = r.f > 0 && r.t > 0 ? (r.t/r.f*100).toFixed(2)+'%' : r.f===0&&r.t>0 ? '∞' : '—';
@@ -16081,17 +16087,17 @@ function buildPortafolio() {
     tr.onclick = ()=>{ document.getElementById('sel-emp').value=r.e; showPanel('empresa', document.querySelector('[onclick*=empresa]')); };
     tr.innerHTML = `
       <td style="${tdL};color:var(--dim)">${i+1}</td>
-      <td style="${tdL};font-weight:500">${r.e}${getNotaBadge(r.e)}</td>
+      <td style="${tdEmp}">${r.e}${getNotaBadge(r.e)}</td>
       <td style="${tdL};color:var(--dim);font-size:9px">${getRuboLabel(r.e)}</td>
-      <td style="${tdR};color:${factColor}">${r.f>0?fvFull(r.f):'—'}</td>
+      <td style="${tdR};color:${factColor}">${r.f>0?fvShort(r.f):'—'}</td>
       <td style="${tdR};color:${resColor}">${resVal}</td>
       <td style="${tdR};color:${mrgColor}">${mrgVal}</td>
       <td style="${tdR}">${r.p>0?fn(r.p):'—'}</td>
       <td style="${tdR};color:var(--acc)">${fxemp}</td>
-      <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fvFull(r.t):'—'}</td>
+      <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fvShort(r.t):'—'}</td>
       <td style="${tdR};color:${depColor}">${dep}</td>
       <td style="${tdR};color:${r.balResNeto==null?'var(--dim)':r.balResNeto>0?'var(--pos)':'var(--neg)'}">
-        ${r.balResNeto!=null?fvFull(r.balResNeto):'—'}
+        ${r.balResNeto!=null?fvShort(r.balResNeto):'—'}
       </td>
       <td style="${tdR};color:${r.balRoe==null?'var(--dim)':r.balRoe>0.1?'var(--pos)':r.balRoe>0?'#e8ff47':'var(--neg)'}">
         ${r.balRoe!=null?(r.balRoe*100).toFixed(2)+'%':'—'}
@@ -19824,6 +19830,18 @@ function _reconciliarTransferenciasAportes() {
   return out.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 }
 
+// Colapsada por defecto (igual que Detalle de transferencias) — el estado se
+// guarda acá porque la card se regenera entera en cada build de Transferencias
+// y perdería el toggle si no se recordara afuera.
+let _transReconcOpen = false;
+function _toggleTransReconc() {
+  _transReconcOpen = !_transReconcOpen;
+  const w = document.getElementById('trans-reconc-body');
+  const t = document.getElementById('trans-reconc-toggle');
+  if (w) w.style.display = _transReconcOpen ? '' : 'none';
+  if (t) t.textContent = _transReconcOpen ? '▲ ocultar' : '▼ mostrar';
+}
+
 function _construirConciliacionTransferencias() {
   const wrap = document.getElementById('trans-reconc-wrap');
   if (!wrap) return;
@@ -19844,26 +19862,28 @@ function _construirConciliacionTransferencias() {
     </tr>`;
   }).join('');
 
-  wrap.innerHTML = `<div class="rowfull card" style="margin-bottom:12px;border-left:3px solid var(--acc)">
-    <div class="card-hd">
+  wrap.innerHTML = `<div class="rowfull card" style="margin-top:12px">
+    <div class="card-hd" style="cursor:pointer" onclick="_toggleTransReconc()">
       <span class="card-hd-title">🔎 Conciliación — SIDIF vs. aportes declarados en ER/Flujos</span>
-      <span class="card-hd-unit">por empresa y año</span>
+      <span class="card-hd-unit" id="trans-reconc-toggle">${_transReconcOpen ? '▲ ocultar' : '▼ mostrar'}</span>
     </div>
-    <div style="padding:4px 16px 6px;font-size:9px;color:var(--dim);font-family:var(--mono);line-height:1.6">
-      Compara lo que el Estado registra haber girado (esta pestaña) contra lo que la propia empresa declaró como aporte/asistencia
-      financiera del Estado en su ER mensual o Flujo de fondos. Solo se listan empresas/años donde al menos una de las dos fuentes
-      registra un monto — una diferencia grande no siempre es un error (puede ser un giro aún no declarado, o viceversa), pero amerita revisión.
+    <div id="trans-reconc-body" style="display:${_transReconcOpen ? '' : 'none'}">
+      <div style="padding:8px 16px 6px;font-size:9px;color:var(--dim);font-family:var(--mono);line-height:1.6">
+        Compara lo que el Estado registra haber girado (esta pestaña) contra lo que la propia empresa declaró como aporte/asistencia
+        financiera del Estado en su ER mensual o Flujo de fondos. Solo se listan empresas/años donde al menos una de las dos fuentes
+        registra un monto — una diferencia grande no siempre es un error (puede ser un giro aún no declarado, o viceversa), pero amerita revisión.
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="padding:5px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Empresa</th>
+          <th style="padding:5px 10px;text-align:center;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Año</th>
+          <th style="padding:5px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Declarado (ER/Flujos)</th>
+          <th style="padding:5px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Girado (SIDIF)</th>
+          <th style="padding:5px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Diferencia</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
     </div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-      <thead><tr>
-        <th style="padding:5px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Empresa</th>
-        <th style="padding:5px 10px;text-align:center;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Año</th>
-        <th style="padding:5px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Declarado (ER/Flujos)</th>
-        <th style="padding:5px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Girado (SIDIF)</th>
-        <th style="padding:5px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;border-bottom:1px solid var(--bd)">Diferencia</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
   </div>`;
 }
 
@@ -25283,8 +25303,8 @@ function getCmpCols(emp) {
   const varR  = resA ? ((resB-resA)/Math.abs(resA)*100) : null;
   const fColor = varF==null?'var(--dim)':varF>=0?'var(--pos)':'var(--neg)';
   const rColor = varR==null?'var(--dim)':varR>=0?'var(--pos)':'var(--neg)';
-  return `<td style="padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);color:${fColor}">${varF!=null?fpct(varF):'—'}</td>`
-       + `<td style="padding:5px 10px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);color:${rColor}">${varR!=null?fpct(varR):'—'}</td>`;
+  return `<td style="padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);color:${fColor}">${varF!=null?fpct(varF):'—'}</td>`
+       + `<td style="padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);color:${rColor}">${varR!=null?fpct(varR):'—'}</td>`;
 }
 
 
