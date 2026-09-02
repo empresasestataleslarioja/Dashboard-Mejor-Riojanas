@@ -11388,7 +11388,8 @@ function _flujoEgrDetTotal(f) {
 function _esIngExcluido(lbl) {
   const u = (lbl||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if (u.includes('SUBSIDIO') || /TRANSFERENCIA.{0,12}ESTADO/.test(u) ||
-      /APORTE.{0,12}ESTADO/.test(u) || /COBRO.{0,12}SUBSIDIO/.test(u)) return true;
+      /APORTE.{0,12}ESTADO/.test(u) || /COBRO.{0,12}SUBSIDIO/.test(u) ||
+      /ASISTENCIA.{0,15}(FINANCIER|ESTADO)/.test(u)) return true;
   // Saldos de OP / órdenes de pago / remesas — no son ingresos de explotación
   if (/SALDO.{0,6}OP/.test(u) || /ORDEN(ES)?.{0,6}(DE.{0,4})?PAGO/.test(u) ||
       u.includes('OP VIGENTE') || u.includes('SALDO INICIAL') || u.includes('SALDO ANTERIOR')) return true;
@@ -23215,18 +23216,6 @@ function tryParseVentasGastos(wb, fname) {
     }
     if (!anio) { const mf = fname.match(/(20\d{2})/); if (mf) anio = mf[1]; }
 
-    // Extraer ventas, gastos y resultado por mes (totales)
-    const meses = {};
-    colMeses.forEach(({col, mes}) => {
-      const ventas = _num(rows[filaVentasTotales][col]);
-      const gastos = _num(rows[filaGastosTotales][col]);
-      if ((ventas != null && ventas !== 0) || (gastos != null && gastos !== 0)) {
-        const v = ventas || 0, g = gastos || 0;
-        meses[mes] = { ventas: v, gastos: g, resultado: v - g };
-      }
-    });
-    if (Object.keys(meses).length === 0) continue;
-
     // ── Extraer ítems de detalle entre las secciones ──────────────
     // Clasificador: mismo criterio que el viewer estándar
     const _clasif = (lbl) => {
@@ -23237,6 +23226,10 @@ function tryParseVentasGastos(wb, fname) {
       if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO/.test(t)) return 'utilBruta';
       if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA/.test(t)) return 'resOperativo';
       if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO/.test(t)) return 'resEjercicio';
+      // Aportes/asistencia financiera/subsidios del Estado no son ventas: aunque
+      // el archivo los liste como "ingreso", incluirlos en Facturación sobreestima
+      // las ventas reales de la empresa — se registran aparte como otros ingresos.
+      if (_esIngExcluido(t)) return 'otrosIngresos';
       if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) return 'ventas';
       if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
       if (/FINANCIER|INTERES.*PAGAD/.test(t)) return 'resFinanciero';
@@ -23272,6 +23265,28 @@ function tryParseVentasGastos(wb, fname) {
 
     const itemsVentas = filaIniVentas >= 0 ? _extractRange(filaIniVentas, filaVentasTotales) : [];
     const itemsGastos = filaIniGastos >= 0 ? _extractRange(filaIniGastos, filaGastosTotales) : [];
+
+    // Ítems de "ventas" que en realidad son aportes/asistencia financiera del
+    // Estado: se descuentan del total de ventas del mes (que sale de la fila
+    // TOTALES del Excel, sin distinguir su composición) para que Facturación
+    // refleje solo ventas comerciales reales, no subsidios.
+    const itemsNoVenta = itemsVentas.filter(it => it.conceptoStd === 'otrosIngresos');
+    const _noVentaPorMes = m => itemsNoVenta.reduce((s, it) => s + (it.valores[m] || 0), 0);
+
+    // Extraer ventas, gastos y resultado por mes (totales)
+    const meses = {};
+    colMeses.forEach(({col, mes}) => {
+      const ventasBruto = _num(rows[filaVentasTotales][col]);
+      const gastos = _num(rows[filaGastosTotales][col]);
+      if ((ventasBruto != null && ventasBruto !== 0) || (gastos != null && gastos !== 0)) {
+        // "ventas" (Facturación) descuenta aportes/asistencia del Estado; el
+        // "resultado" (bottom line real) sí los conserva, porque son ingresos
+        // efectivamente recibidos aunque no sean ventas comerciales.
+        const v = (ventasBruto || 0) - _noVentaPorMes(mes), g = gastos || 0;
+        meses[mes] = { ventas: v, gastos: g, resultado: (ventasBruto || 0) - g };
+      }
+    });
+    if (Object.keys(meses).length === 0) continue;
 
     // Nombre de empresa: del nombre de archivo (antes del primer _ con fecha) o del título
     let empresa = fname.replace(/\.xlsx?$/i,'').replace(/_/g,' ').toUpperCase();
@@ -23465,6 +23480,9 @@ function tryParseERColumnasMeses(wb, fname) {
   const _clasif = (lbl) => {
     const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
     if (!t) return null;
+    // Aportes/asistencia financiera/subsidios del Estado no son ventas — se
+    // registran como otros ingresos aunque el rótulo diga "ingresos".
+    if (_esIngExcluido(t)) return 'otrosIngresos';
     if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS?|INGRESOS\s+TOTALES?/.test(t)) return 'ventas';
     if (/VENTAS\s+BRUTAS?/.test(t)) return 'IGNORAR';
     if (/DEVOLUCION|^DESCUENTO/.test(t)) return 'IGNORAR';
