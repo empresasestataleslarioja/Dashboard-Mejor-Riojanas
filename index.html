@@ -554,6 +554,216 @@ function closeModeloInfo() { document.getElementById('modelo-overlay').style.dis
 [data-theme="institucional"] .chip.on-sin { background: #1a5ab4; color: #fff; border-color: #2568cc; }
 [data-theme="institucional"] .nav-section { color: #2a4878; }
 
+/* ══════════════════════════════════════════════════════════
+   FIX DE CONTRASTE EN TEMAS CLAROS
+   Muchos valores/textos usan colores hex fijos calibrados para
+   fondo oscuro (cyan/verde/amarillo/violeta/gris claros) escritos
+   en el style inline de cada celda/valor. En los temas de fondo
+   claro (powerbi, gobierno, ft, atlas, mineral) esos mismos hex
+   quedan casi ilegibles. En vez de tocar cada llamada en el JS,
+   se remapean acá a los tokens de tema (ya definidos con buen
+   contraste para cada tema claro) — [style^="color:#HEX"] agarra
+   el color cuando es la primera propiedad del inline style, y
+   [style*=";color:#HEX"] cuando viene después de otra propiedad.
+   Los reportes imprimibles (ventana/documento aparte, fondo papel
+   fijo) no están dentro de [data-theme], así que esta regla no
+   los afecta — su paleta ya está pensada para fondo claro.
+══════════════════════════════════════════════════════════ */
+[data-theme="powerbi"] [style^="color:#47e8ff"],
+[data-theme="powerbi"] [style*=";color:#47e8ff"],
+[data-theme="powerbi"] [style^="color:#8ac8e8"],
+[data-theme="powerbi"] [style*=";color:#8ac8e8"],
+[data-theme="gobierno"] [style^="color:#47e8ff"],
+[data-theme="gobierno"] [style*=";color:#47e8ff"],
+[data-theme="gobierno"] [style^="color:#8ac8e8"],
+[data-theme="gobierno"] [style*=";color:#8ac8e8"],
+[data-theme="ft"] [style^="color:#47e8ff"],
+[data-theme="ft"] [style*=";color:#47e8ff"],
+[data-theme="ft"] [style^="color:#8ac8e8"],
+[data-theme="ft"] [style*=";color:#8ac8e8"],
+[data-theme="atlas"] [style^="color:#47e8ff"],
+[data-theme="atlas"] [style*=";color:#47e8ff"],
+[data-theme="atlas"] [style^="color:#8ac8e8"],
+[data-theme="atlas"] [style*=";color:#8ac8e8"],
+[data-theme="mineral"] [style^="color:#47e8ff"],
+[data-theme="mineral"] [style*=";color:#47e8ff"],
+[data-theme="mineral"] [style^="color:#8ac8e8"],
+[data-theme="mineral"] [style*=";color:#8ac8e8"] {
+  color: var(--acc) !important;
+}
+[data-theme="powerbi"] [style^="color:#47ffb4"],
+[data-theme="powerbi"] [style*=";color:#47ffb4"],
+[data-theme="powerbi"] [style^="color:#1a9e68"],
+[data-theme="powerbi"] [style*=";color:#1a9e68"],
+[data-theme="powerbi"] [style^="color:#56d1b2"],
+[data-theme="powerbi"] [style*=";color:#56d1b2"],
+[data-theme="gobierno"] [style^="color:#47ffb4"],
+[data-theme="gobierno"] [style*=";color:#47ffb4"],
+[data-theme="gobierno"] [style^="color:#1a9e68"],
+[data-theme="gobierno"] [style*=";color:#1a9e68"],
+[data-theme="gobierno"] [style^="color:#56d1b2"],
+[data-theme="gobierno"] [style*=";color:#56d1b2"],
+[data-theme="ft"] [style^="color:#47ffb4"],
+[data-theme="ft"] [style*=";color:#47ffb4"],
+[data-theme="ft"] [style^="color:#1a9e68"],
+[data-theme="ft"] [style*=";color:#1a9e68"],
+[data-theme="ft"] [style^="color:#56d1b2"],
+[data-theme="ft"] [style*=";color:#56d1b2"],
+[data-theme="atlas"] [style^="color:#47ffb4"],
+[data-theme="atlas"] [style*=";color:#47ffb4"],
+[data-theme="atlas"] [style^="color:#1a9e68"],
+[data-theme="atlas"] [style*=";color:#1a9e68"],
+[data-theme="atlas"] [style^="color:#56d1b2"],
+[data-theme="atlas"] [style*=";color:#56d1b2"],
+[data-theme="mineral"] [style^="color:#47ffb4"],
+[data-theme="mineral"] [style*=";color:#47ffb4"],
+[data-theme="mineral"] [style^="color:#1a9e68"],
+[data-theme="mineral"] [style*=";color:#1a9e68"],
+[data-theme="mineral"] [style^="color:#56d1b2"],
+[data-theme="mineral"] [style*=";color:#56d1b2"] {
+  color: var(--pos) !important;
+}
+[data-theme="powerbi"] [style^="color:#c447ff"],
+[data-theme="powerbi"] [style*=";color:#c447ff"],
+[data-theme="gobierno"] [style^="color:#c447ff"],
+[data-theme="gobierno"] [style*=";color:#c447ff"],
+[data-theme="ft"] [style^="color:#c447ff"],
+[data-theme="ft"] [style*=";color:#c447ff"],
+[data-theme="atlas"] [style^="color:#c447ff"],
+[data-theme="atlas"] [style*=";color:#c447ff"],
+[data-theme="mineral"] [style^="color:#c447ff"],
+[data-theme="mineral"] [style*=";color:#c447ff"] {
+  color: var(--y24) !important;
+}
+[data-theme="powerbi"] [style^="color:#ff8c47"],
+[data-theme="powerbi"] [style*=";color:#ff8c47"],
+[data-theme="gobierno"] [style^="color:#ff8c47"],
+[data-theme="gobierno"] [style*=";color:#ff8c47"],
+[data-theme="ft"] [style^="color:#ff8c47"],
+[data-theme="ft"] [style*=";color:#ff8c47"],
+[data-theme="atlas"] [style^="color:#ff8c47"],
+[data-theme="atlas"] [style*=";color:#ff8c47"],
+[data-theme="mineral"] [style^="color:#ff8c47"],
+[data-theme="mineral"] [style*=";color:#ff8c47"] {
+  color: var(--y23) !important;
+}
+[data-theme="powerbi"] [style^="color:#e8c84a"],
+[data-theme="powerbi"] [style*=";color:#e8c84a"],
+[data-theme="powerbi"] [style^="color:#c4d600"],
+[data-theme="powerbi"] [style*=";color:#c4d600"],
+[data-theme="powerbi"] [style^="color:#b8a000"],
+[data-theme="powerbi"] [style*=";color:#b8a000"],
+[data-theme="gobierno"] [style^="color:#e8c84a"],
+[data-theme="gobierno"] [style*=";color:#e8c84a"],
+[data-theme="gobierno"] [style^="color:#c4d600"],
+[data-theme="gobierno"] [style*=";color:#c4d600"],
+[data-theme="gobierno"] [style^="color:#b8a000"],
+[data-theme="gobierno"] [style*=";color:#b8a000"],
+[data-theme="ft"] [style^="color:#e8c84a"],
+[data-theme="ft"] [style*=";color:#e8c84a"],
+[data-theme="ft"] [style^="color:#c4d600"],
+[data-theme="ft"] [style*=";color:#c4d600"],
+[data-theme="ft"] [style^="color:#b8a000"],
+[data-theme="ft"] [style*=";color:#b8a000"],
+[data-theme="atlas"] [style^="color:#e8c84a"],
+[data-theme="atlas"] [style*=";color:#e8c84a"],
+[data-theme="atlas"] [style^="color:#c4d600"],
+[data-theme="atlas"] [style*=";color:#c4d600"],
+[data-theme="atlas"] [style^="color:#b8a000"],
+[data-theme="atlas"] [style*=";color:#b8a000"],
+[data-theme="mineral"] [style^="color:#e8c84a"],
+[data-theme="mineral"] [style*=";color:#e8c84a"],
+[data-theme="mineral"] [style^="color:#c4d600"],
+[data-theme="mineral"] [style*=";color:#c4d600"],
+[data-theme="mineral"] [style^="color:#b8a000"],
+[data-theme="mineral"] [style*=";color:#b8a000"] {
+  color: var(--y21) !important;
+}
+[data-theme="powerbi"] [style^="color:#38c5e0"],
+[data-theme="powerbi"] [style*=";color:#38c5e0"],
+[data-theme="gobierno"] [style^="color:#38c5e0"],
+[data-theme="gobierno"] [style*=";color:#38c5e0"],
+[data-theme="ft"] [style^="color:#38c5e0"],
+[data-theme="ft"] [style*=";color:#38c5e0"],
+[data-theme="atlas"] [style^="color:#38c5e0"],
+[data-theme="atlas"] [style*=";color:#38c5e0"],
+[data-theme="mineral"] [style^="color:#38c5e0"],
+[data-theme="mineral"] [style*=";color:#38c5e0"] {
+  color: var(--y22) !important;
+}
+[data-theme="powerbi"] [style^="color:#aaa"],
+[data-theme="powerbi"] [style*=";color:#aaa"],
+[data-theme="powerbi"] [style^="color:#999"],
+[data-theme="powerbi"] [style*=";color:#999"],
+[data-theme="powerbi"] [style^="color:#888"],
+[data-theme="powerbi"] [style*=";color:#888"],
+[data-theme="powerbi"] [style^="color:#777"],
+[data-theme="powerbi"] [style*=";color:#777"],
+[data-theme="powerbi"] [style^="color:#666"],
+[data-theme="powerbi"] [style*=";color:#666"],
+[data-theme="powerbi"] [style^="color:#ccc"],
+[data-theme="powerbi"] [style*=";color:#ccc"],
+[data-theme="powerbi"] [style^="color:#bbb"],
+[data-theme="powerbi"] [style*=";color:#bbb"],
+[data-theme="gobierno"] [style^="color:#aaa"],
+[data-theme="gobierno"] [style*=";color:#aaa"],
+[data-theme="gobierno"] [style^="color:#999"],
+[data-theme="gobierno"] [style*=";color:#999"],
+[data-theme="gobierno"] [style^="color:#888"],
+[data-theme="gobierno"] [style*=";color:#888"],
+[data-theme="gobierno"] [style^="color:#777"],
+[data-theme="gobierno"] [style*=";color:#777"],
+[data-theme="gobierno"] [style^="color:#666"],
+[data-theme="gobierno"] [style*=";color:#666"],
+[data-theme="gobierno"] [style^="color:#ccc"],
+[data-theme="gobierno"] [style*=";color:#ccc"],
+[data-theme="gobierno"] [style^="color:#bbb"],
+[data-theme="gobierno"] [style*=";color:#bbb"],
+[data-theme="ft"] [style^="color:#aaa"],
+[data-theme="ft"] [style*=";color:#aaa"],
+[data-theme="ft"] [style^="color:#999"],
+[data-theme="ft"] [style*=";color:#999"],
+[data-theme="ft"] [style^="color:#888"],
+[data-theme="ft"] [style*=";color:#888"],
+[data-theme="ft"] [style^="color:#777"],
+[data-theme="ft"] [style*=";color:#777"],
+[data-theme="ft"] [style^="color:#666"],
+[data-theme="ft"] [style*=";color:#666"],
+[data-theme="ft"] [style^="color:#ccc"],
+[data-theme="ft"] [style*=";color:#ccc"],
+[data-theme="ft"] [style^="color:#bbb"],
+[data-theme="ft"] [style*=";color:#bbb"],
+[data-theme="atlas"] [style^="color:#aaa"],
+[data-theme="atlas"] [style*=";color:#aaa"],
+[data-theme="atlas"] [style^="color:#999"],
+[data-theme="atlas"] [style*=";color:#999"],
+[data-theme="atlas"] [style^="color:#888"],
+[data-theme="atlas"] [style*=";color:#888"],
+[data-theme="atlas"] [style^="color:#777"],
+[data-theme="atlas"] [style*=";color:#777"],
+[data-theme="atlas"] [style^="color:#666"],
+[data-theme="atlas"] [style*=";color:#666"],
+[data-theme="atlas"] [style^="color:#ccc"],
+[data-theme="atlas"] [style*=";color:#ccc"],
+[data-theme="atlas"] [style^="color:#bbb"],
+[data-theme="atlas"] [style*=";color:#bbb"],
+[data-theme="mineral"] [style^="color:#aaa"],
+[data-theme="mineral"] [style*=";color:#aaa"],
+[data-theme="mineral"] [style^="color:#999"],
+[data-theme="mineral"] [style*=";color:#999"],
+[data-theme="mineral"] [style^="color:#888"],
+[data-theme="mineral"] [style*=";color:#888"],
+[data-theme="mineral"] [style^="color:#777"],
+[data-theme="mineral"] [style*=";color:#777"],
+[data-theme="mineral"] [style^="color:#666"],
+[data-theme="mineral"] [style*=";color:#666"],
+[data-theme="mineral"] [style^="color:#ccc"],
+[data-theme="mineral"] [style*=";color:#ccc"],
+[data-theme="mineral"] [style^="color:#bbb"],
+[data-theme="mineral"] [style*=";color:#bbb"] {
+  color: var(--dim) !important;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
@@ -1048,6 +1258,7 @@ body.layout-compacto .kpi-value { font-size: 20px; }
   background: var(--accent-col, var(--bd));
 }
 .evo-year { font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; margin-bottom:5px; }
+.evo-fact-lbl { font-size:7.5px; letter-spacing:.1em; color:var(--dim); text-transform:uppercase; margin-bottom:1px; }
 .evo-fact { font-family:var(--serif); font-size:20px; line-height:1; }
 .evo-delta { font-size:10px; margin-top:4px; }
 .evo-res { font-size:10px; margin-top:3px; }
@@ -16272,9 +16483,10 @@ function buildEmpresa() {
     const f = fact[y]||0, s = sit[y], prev = years[i-1];
     const prevF = fact[prev]||0;
     const delta = prev&&prevF ? `<div class="evo-delta" style="color:${f>=prevF?'var(--pos)':'var(--neg)'}">${f>=prevF?'▲':'▼'} ${Math.abs(pctNum(f,prevF))}% vs ${prev}</div>` : '';
-    const resStr = s!=null&&s!==0 ? `<div class="evo-res" style="color:${s>0?'var(--pos)':'var(--neg)'}">Res: ${fv(s)}</div>` : '';
+    const resStr = s!=null&&s!==0 ? `<div class="evo-res" style="color:${s>0?'var(--pos)':'var(--neg)'}">Resultado operativo: ${fv(s)}</div>` : '';
     return `<div class="evo-card" style="--accent-col:${YC[y]}">
       <div class="evo-year">${y}</div>
+      <div class="evo-fact-lbl">Facturación</div>
       <div class="evo-fact" style="color:${YC[y]}">${f>0?fv(f):'N/D'}</div>
       ${delta}${resStr}
     </div>`;
@@ -23582,6 +23794,7 @@ function _aplicarVentasGastos() {
   DATA.fact[emp][yS] = totV;
   DATA.sit[emp][yS] = totR;
   if (!DATA.years.includes(parseInt(yS))) { DATA.years.push(parseInt(yS)); DATA.years.sort(); }
+  try { syncYearChips(); } catch(e) {}
 
   try { computeTotals(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
@@ -23845,6 +24058,7 @@ function _aplicarERColumnas() {
     DATA.sit[emp][yS] = totR;
   }
   if (!DATA.years.includes(parseInt(yS))) { DATA.years.push(parseInt(yS)); DATA.years.sort((a,b)=>a-b); }
+  try { syncYearChips(); } catch(e) {}
 
   try { computeTotals(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
@@ -24225,6 +24439,7 @@ function _aplicarERMatricial() {
 
   // Recalcular totales del año
   computeTotals();
+  try { syncYearChips(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
   marcarPendienteGuardar();
 
