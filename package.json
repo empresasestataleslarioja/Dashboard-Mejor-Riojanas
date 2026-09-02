@@ -1,0 +1,11 @@
+{
+  "name": "dashboard-mejor-riojanas",
+  "private": true,
+  "description": "Sin build step — index.html se sirve directamente vía GitHub Pages. Este package.json existe solo para correr tests/parsers.test.js.",
+  "scripts": {
+    "test": "node tests/parsers.test.js"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
