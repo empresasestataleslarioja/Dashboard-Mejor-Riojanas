@@ -1891,33 +1891,33 @@ self.onmessage = async (e) => {
   <nav class="nav">
     <div class="nav-group"><strong>Análisis</strong></div>
     <button class="nav-item active" onclick="showPanel('resumen',this)">
-      <span class="nav-dot"></span><strong>Resumen consolidado</strong>
+      <span class="nav-dot"></span>📈 <strong>Resumen consolidado</strong>
     </button>
     <button class="nav-item" onclick="showPanel('facturacion',this)">
-      <span class="nav-dot"></span><strong>Facturación</strong>
+      <span class="nav-dot"></span>💵 <strong>Facturación</strong>
     </button>
     <button class="nav-item" onclick="showPanel('resultado',this)">
-      <span class="nav-dot"></span><strong>Resultado operativo</strong>
+      <span class="nav-dot"></span>📉 <strong>Resultado operativo</strong>
     </button>
     <button class="nav-item" onclick="showPanel('personal',this)">
-      <span class="nav-dot"></span><strong>Personal</strong>
+      <span class="nav-dot"></span>👥 <strong>Personal</strong>
     </button>
     <button class="nav-item" onclick="showPanel('ranking',this)">
-      <span class="nav-dot"></span><strong>Rankings</strong>
+      <span class="nav-dot"></span>🏆 <strong>Rankings</strong>
     </button>
     <button class="nav-item" onclick="showPanel('portafolio',this)">
       <span class="nav-dot"></span>🗂 <strong>Portafolio</strong>
     </button>
     <button class="nav-item" onclick="showPanel('inflacion',this)">
-      <span class="nav-dot"></span><strong>Inflación INDEC</strong>
+      <span class="nav-dot"></span>📐 <strong>Inflación INDEC</strong>
     </button>
 
     <div class="nav-group"><strong>Por empresa</strong></div>
     <button class="nav-item" onclick="showPanel('empresa',this)">
-      <span class="nav-dot"></span><strong>Evolución empresa</strong>
+      <span class="nav-dot"></span>🔍 <strong>Evolución empresa</strong>
     </button>
     <button class="nav-item" onclick="showPanel('comparar',this)">
-      <span class="nav-dot"></span><strong>Comparar empresas</strong>
+      <span class="nav-dot"></span>⚖️ <strong>Comparar empresas</strong>
     </button>
 
     <div class="nav-group"><strong>Datos</strong></div>
@@ -2429,19 +2429,6 @@ self.onmessage = async (e) => {
 
       <div class="cs-divider" style="height:auto;align-self:stretch"></div>
 
-      <!-- Comparar períodos -->
-      <div class="cs-group" style="flex-direction:column;align-items:flex-start;gap:5px">
-        <span class="cs-label">Comparar</span>
-        <div style="display:flex;align-items:center;gap:6px">
-          <select id="cmp-yr-a" onchange="setCmpPeriod()" style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:4px 7px;border-radius:2px;cursor:pointer"></select>
-          <span style="font-size:9px;color:var(--dim)">vs</span>
-          <select id="cmp-yr-b" onchange="setCmpPeriod()" style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:4px 7px;border-radius:2px;cursor:pointer"></select>
-        </div>
-        <div style="font-size:8px;color:var(--dim)" id="cmp-period-lbl">variación entre períodos</div>
-      </div>
-
-      <div class="cs-divider" style="height:auto;align-self:stretch"></div>
-
       <!-- Semáforo -->
       <div class="cs-group" style="flex-direction:column;align-items:flex-start;gap:5px">
         <span class="cs-label">🚦 Semáforo</span>
@@ -2538,8 +2525,8 @@ self.onmessage = async (e) => {
       <div id="kpi-port" class="kpi-strip"></div>
       <div class="rowfull card">
         <div class="card-hd">
-          <span class="card-hd-title">Vista cruzada — todas las empresas × indicadores clave</span>
-          <span class="card-hd-unit">$ millones</span>
+          <span class="card-hd-title" style="margin-right:8px">Vista cruzada — todas las empresas × indicadores clave</span>
+          <span class="card-hd-unit" style="margin-right:auto">$ completos</span>
           <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
             <span style="font-size:9px;color:var(--dim)">ORDENAR</span>
             <select id="port-sort" onchange="buildPortafolio()" style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 6px;border-radius:2px;cursor:pointer">
@@ -16262,46 +16249,45 @@ function buildPortafolio() {
     <div class="kpi-label">${k.lbl}</div><div class="kpi-value">${k.val}</div>
     <div class="kpi-sub">${k.sub}</div></div>`).join('');
 
-  // Tabla cruzada — columnas monetarias en formato abreviado ($ millones, ya
-  // declarado en el encabezado de la card) para que la tabla completa entre
-  // sin necesidad de desplazamiento horizontal en un ancho de escritorio normal.
+  // Tabla cruzada — números completos (sin abreviar a K/M/B). Las dos primeras
+  // columnas (# y Empresa) quedan fijas (sticky) al desplazar horizontalmente,
+  // para no perder de referencia la fila mientras se recorren el resto de los
+  // indicadores. Se sacó la columna "Fact/Empleado" (derivable de Facturación
+  // ÷ Personal, ambas ya visibles) para ahorrar ancho.
   const tbl = document.getElementById('port-table');
   const thStyle = `style="padding:6px 7px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
   const thR     = `style="padding:6px 7px;text-align:right;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
-  const hasCmp  = _cmpYearA && _cmpYearB && _cmpYearA !== _cmpYearB;
-  const cmpHdrs = hasCmp
-    ? `<th ${thR}>Var. Fact ${_cmpYearA}→${_cmpYearB}</th><th ${thR}>Var. Res ${_cmpYearA}→${_cmpYearB}</th>`
-    : '';
+  const thSticky1 = `style="position:sticky;left:0;z-index:2;background:var(--s1);padding:6px 7px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap"`;
+  const thSticky2 = `style="position:sticky;left:28px;z-index:2;background:var(--s1);padding:6px 7px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);border-bottom:1px solid var(--bd);white-space:nowrap;box-shadow:2px 0 3px -1px rgba(0,0,0,.15)"`;
   tbl.innerHTML = `<thead><tr>
-    <th ${thStyle}>#</th>
-    <th ${thStyle}>Empresa</th>
+    <th ${thSticky1}>#</th>
+    <th ${thSticky2}>Empresa</th>
     <th ${thStyle}>Rubro</th>
     <th ${thR}>Facturación</th>
     <th ${thR}>Resultado</th>
     <th ${thR}>Margen</th>
     <th ${thR}>Personal</th>
-    <th ${thR}>Fact/Empleado</th>
     <th ${thR}>Transferencias</th>
     <th ${thR}>Depend. estatal</th>
     <th ${thR} title="Resultado del ejercicio según balance cargado">Res. Balance</th>
     <th ${thR} title="Retorno sobre patrimonio neto (balance)">ROE</th>
     <th ${thR} title="Liquidez corriente (activo cte / pasivo cte)">Liquidez</th>
     <th ${thStyle} title="Período del balance cargado">Balance</th>
-    ${cmpHdrs}
   </tr></thead>`;
   const tb = document.createElement('tbody');
   const tdL = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;white-space:nowrap`;
   const tdR = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;text-align:right;font-family:var(--mono);white-space:nowrap`;
   // La empresa es la única columna con texto potencialmente largo — se deja
   // envolver en 2 líneas en vez de forzar el ancho de toda la tabla por ella.
-  const tdEmp = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;white-space:normal;max-width:150px;font-weight:500`;
+  // Además queda como hipervínculo visual hacia Evolución empresa (la fila ya
+  // navega ahí al hacer click, esto lo hace evidente).
+  const tdEmp = `padding:5px 7px;border-bottom:1px solid var(--bd);font-size:10px;white-space:normal;max-width:150px;font-weight:500;color:var(--acc);text-decoration:underline;text-decoration-color:color-mix(in srgb, var(--acc) 40%, transparent)`;
 
   rows.forEach((r, i) => {
     const factColor = r.f > 0 ? 'var(--text)' : 'var(--dim)';
     const resColor  = r.r == null ? 'var(--dim)' : r.r > 0 ? 'var(--pos)' : 'var(--neg)';
-    const resVal    = r.r == null ? '—' : fvShort(r.r);
+    const resVal    = r.r == null ? '—' : fv(r.r);
     const mrgVal    = r.margen != null ? r.margen.toFixed(2)+'%' : '—';
-    const fxemp     = r.p > 0 ? fvShort(r.f/r.p) : '—';
     const mrgColor  = r.margen == null ? 'var(--dim)' : r.margen > 0 ? 'var(--pos)' : 'var(--neg)';
     // Dependencia estatal: transferencias / facturación
     const dep       = r.f > 0 && r.t > 0 ? (r.t/r.f*100).toFixed(2)+'%' : r.f===0&&r.t>0 ? '∞' : '—';
@@ -16315,19 +16301,19 @@ function buildPortafolio() {
     tr.onmouseout  = ()=>tr.style.background=smfBg;
     if (smfBg) tr.style.background = smfBg;
     tr.onclick = ()=>{ document.getElementById('sel-emp').value=r.e; showPanel('empresa', document.querySelector('[onclick*=empresa]')); };
+    tr.title = `Ver ${r.e} en Evolución empresa`;
     tr.innerHTML = `
-      <td style="${tdL};color:var(--dim)">${i+1}</td>
-      <td style="${tdEmp}">${r.e}${getNotaBadge(r.e)}</td>
+      <td style="${tdL};color:var(--dim);position:sticky;left:0;z-index:1;background:var(--s1)">${i+1}</td>
+      <td style="${tdEmp};position:sticky;left:28px;z-index:1;background:var(--s1);box-shadow:2px 0 3px -1px rgba(0,0,0,.15)">${r.e}${getNotaBadge(r.e)}</td>
       <td style="${tdL};color:var(--dim);font-size:9px">${getRuboLabel(r.e)}</td>
-      <td style="${tdR};color:${factColor}">${r.f>0?fvShort(r.f):'—'}</td>
+      <td style="${tdR};color:${factColor}">${r.f>0?fv(r.f):'—'}</td>
       <td style="${tdR};color:${resColor}">${resVal}</td>
       <td style="${tdR};color:${mrgColor}">${mrgVal}</td>
       <td style="${tdR}">${r.p>0?fn(r.p):'—'}</td>
-      <td style="${tdR};color:var(--acc)">${fxemp}</td>
-      <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fvShort(r.t):'—'}</td>
+      <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fv(r.t):'—'}</td>
       <td style="${tdR};color:${depColor}">${dep}</td>
       <td style="${tdR};color:${r.balResNeto==null?'var(--dim)':r.balResNeto>0?'var(--pos)':'var(--neg)'}">
-        ${r.balResNeto!=null?fvShort(r.balResNeto):'—'}
+        ${r.balResNeto!=null?fv(r.balResNeto):'—'}
       </td>
       <td style="${tdR};color:${r.balRoe==null?'var(--dim)':r.balRoe>0.1?'var(--pos)':r.balRoe>0?'#e8ff47':'var(--neg)'}">
         ${r.balRoe!=null?(r.balRoe*100).toFixed(2)+'%':'—'}
@@ -16337,8 +16323,7 @@ function buildPortafolio() {
       </td>
       <td style="${tdR.replace('text-align:right','text-align:center')};color:${r.balPeriodo?'var(--dim)':'var(--bd2)'};">
         ${r.balPeriodo||'—'}
-      </td>
-      ${hasCmp ? getCmpCols(r.e) : ''}`;
+      </td>`;
     tb.appendChild(tr);
   });
   tbl.appendChild(tb);
