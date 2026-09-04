@@ -22929,6 +22929,16 @@ function tryParseERNativo(wb, fname) {
 
   if (!Object.keys(empresa_cols).length) return false;
 
+  // Verificación estructural: las filas 4, 6 y 19 (0-based: 3, 5, 18) tienen
+  // que corresponder a Ventas/Utilidad Bruta/Resultado Operativo — el layout
+  // fijo del RESUMEN multi-empresa (empresas en columnas). Sin esto, cualquier
+  // otra hoja que también se llame "RESUMEN" (ej. el resumen de un ER
+  // provisorio de UNA sola empresa, con período/contribuyente en la fila 0)
+  // podría matchear por tener celdas no vacías en la fila 0, y taparía al
+  // parser correcto para ese archivo.
+  const _lbl = i => String(data[i]?.[0] || '').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase();
+  if (!/VENTA/.test(_lbl(3)) || !/UTILID|BRUT/.test(_lbl(5)) || !/RESULTADO|OPERATIV/.test(_lbl(18))) return false;
+
   // Fila 1: período (ej "A MAYO 2024") → detectar año
   const periodoRow = data[1] || [];
   let detectedYear = null;
@@ -24463,8 +24473,81 @@ function _cancelarERMatricial() {
 }
 
 function handleImportWorkbook(wb, fname) {
-  // ── Intentar parser de Ventas/Gastos mensual (formato acumulado por empresa) ──
   console.log('[LR] handleImportWorkbook:', fname, '— hojas:', wb.SheetNames.join(', '));
+
+  // ── Intentar parser nativo ER_20XX primero: si el libro trae una hoja
+  // RESUMEN con el formato multi-empresa (empresas en columnas, partidas en
+  // filas), es inequívocamente ese formato. Probarlo antes que los parsers
+  // de una sola pestaña evita que uno de ellos matchee por accidente alguna
+  // pestaña individual del propio libro (cada empresa trae su propia hoja de
+  // detalle, con formatos entre sí distintos, y alguna puede coincidir con
+  // el patrón "columnas de meses" de un archivo de una sola empresa).
+  const erResult = tryParseERNativo(wb, fname);
+  if (erResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    const { year:erY, imported:erImp, skipped:erSkip, syncLog:erSync, discrepancias:erDisc } = erResult;
+    const fmtDisc = v => {
+      const m = Math.abs(v)/1e6;
+      return `${v<0?'−':''}${m>=1?m.toFixed(2)+'M':Math.round(Math.abs(v)).toLocaleString('es-AR')}`;
+    };
+    let discHtml = '';
+    if (erDisc && erDisc.length) {
+      discHtml = `
+      <details style="margin-top:10px;cursor:pointer">
+        <summary style="font-size:10px;color:#ffb347;font-weight:600">
+          ⚠ ${erDisc.length} discrepancia${erDisc.length>1?'s':''} detectada${erDisc.length>1?'s':''} — datos del dashboard NO modificados
+        </summary>
+        <div style="margin-top:6px;overflow-x:auto">
+        <table style="font-size:9px;border-collapse:collapse;width:100%">
+          <thead><tr style="border-bottom:1px solid var(--bd)">
+            <th style="text-align:left;padding:2px 6px;color:var(--dim)">Empresa</th>
+            <th style="text-align:left;padding:2px 6px;color:var(--dim)">Campo</th>
+            <th style="text-align:right;padding:2px 6px;color:var(--dim)">En dashboard</th>
+            <th style="text-align:right;padding:2px 6px;color:var(--dim)">En ER ${erY}</th>
+          </tr></thead>
+          <tbody>
+          ${erDisc.map(d=>`<tr style="border-bottom:1px solid var(--bd)2">
+            <td style="padding:2px 6px;color:var(--text)">${d.emp}</td>
+            <td style="padding:2px 6px;color:var(--dim)">${d.campo}</td>
+            <td style="padding:2px 6px;text-align:right;color:#1a9e68">${fmtDisc(d.en_dashboard)}</td>
+            <td style="padding:2px 6px;text-align:right;color:#ffb347">${fmtDisc(d.en_er)}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+        </div>
+        <div style="font-size:9px;color:var(--dim);margin-top:4px;line-height:1.5">
+          Las discrepancias pueden ocurrir cuando el RESUMEN muestra un período parcial (ej. "a mayo 2024")
+          mientras el dashboard tiene el acumulado anual. Los datos originales del dashboard se conservan.
+        </div>
+      </details>`;
+    }
+    let syncHtml = '';
+    if (erSync && erSync.length) {
+      syncHtml = `<div style="font-size:10px;color:#1a9e68;margin-top:4px">
+        ✚ ${erSync.length} dato${erSync.length>1?'s':''} nuevo${erSync.length>1?'s':''} agregado${erSync.length>1?'s':''} a Facturación/Resultado
+      </div>`;
+    }
+    document.getElementById('import-result').innerHTML = `<div class="imp-ok">
+      ✓ Archivo ER detectado — <strong>${fname}</strong><br>
+      Año <strong>${erY}</strong> · <strong>${erImp}</strong> empresas con desglose ER completo · ${erSkip} sin datos.
+      ${syncHtml}
+      <div style="font-size:10px;color:var(--dim);margin-top:4px">
+        El módulo <strong>Resultado Operativo</strong> ahora tiene la vista <strong>📋 Desglose ER</strong>.
+        Los datos originales del dashboard <strong>no fueron modificados</strong>.
+      </div>
+      ${discHtml}
+    </div>`;
+    document.getElementById('import-preview').style.display = 'none';
+    const erTs = Date.now();
+    _importHistory.push({ id: erTs, fname, added: erResult.imported, updated: 0,
+      ts: erTs, reverted: false, diff:[], erImport: true, snapAfter: deepCopyData() });
+    updateImportUI();
+    saveDataToLocalCache();
+    _dispararAutoSync();
+    return;
+  }
+
+  // ── Intentar parser de Ventas/Gastos mensual (formato acumulado por empresa) ──
   const vgResult = tryParseVentasGastos(wb, fname);
   console.log('[LR] tryParseVentasGastos:', vgResult ? vgResult.empresa+' '+Object.keys(vgResult.meses).length+' meses' : 'null');
   if (vgResult) {
@@ -24605,72 +24688,6 @@ function handleImportWorkbook(wb, fname) {
       return;
     }
     _aplicarSIDIF(sidifResult, fname, 'todos');
-    return;
-  }
-
-  // ── Intentar parser nativo ER_20XX ───────────────────────
-  const erResult = tryParseERNativo(wb, fname);
-  if (erResult) {
-    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
-    const { year:erY, imported:erImp, skipped:erSkip, syncLog:erSync, discrepancias:erDisc } = erResult;
-    const fmtDisc = v => {
-      const m = Math.abs(v)/1e6;
-      return `${v<0?'−':''}${m>=1?m.toFixed(2)+'M':Math.round(Math.abs(v)).toLocaleString('es-AR')}`;
-    };
-    let discHtml = '';
-    if (erDisc && erDisc.length) {
-      discHtml = `
-      <details style="margin-top:10px;cursor:pointer">
-        <summary style="font-size:10px;color:#ffb347;font-weight:600">
-          ⚠ ${erDisc.length} discrepancia${erDisc.length>1?'s':''} detectada${erDisc.length>1?'s':''} — datos del dashboard NO modificados
-        </summary>
-        <div style="margin-top:6px;overflow-x:auto">
-        <table style="font-size:9px;border-collapse:collapse;width:100%">
-          <thead><tr style="border-bottom:1px solid var(--bd)">
-            <th style="text-align:left;padding:2px 6px;color:var(--dim)">Empresa</th>
-            <th style="text-align:left;padding:2px 6px;color:var(--dim)">Campo</th>
-            <th style="text-align:right;padding:2px 6px;color:var(--dim)">En dashboard</th>
-            <th style="text-align:right;padding:2px 6px;color:var(--dim)">En ER ${erY}</th>
-          </tr></thead>
-          <tbody>
-          ${erDisc.map(d=>`<tr style="border-bottom:1px solid var(--bd)2">
-            <td style="padding:2px 6px;color:var(--text)">${d.emp}</td>
-            <td style="padding:2px 6px;color:var(--dim)">${d.campo}</td>
-            <td style="padding:2px 6px;text-align:right;color:#1a9e68">${fmtDisc(d.en_dashboard)}</td>
-            <td style="padding:2px 6px;text-align:right;color:#ffb347">${fmtDisc(d.en_er)}</td>
-          </tr>`).join('')}
-          </tbody>
-        </table>
-        </div>
-        <div style="font-size:9px;color:var(--dim);margin-top:4px;line-height:1.5">
-          Las discrepancias pueden ocurrir cuando el RESUMEN muestra un período parcial (ej. "a mayo 2024")
-          mientras el dashboard tiene el acumulado anual. Los datos originales del dashboard se conservan.
-        </div>
-      </details>`;
-    }
-    let syncHtml = '';
-    if (erSync && erSync.length) {
-      syncHtml = `<div style="font-size:10px;color:#1a9e68;margin-top:4px">
-        ✚ ${erSync.length} dato${erSync.length>1?'s':''} nuevo${erSync.length>1?'s':''} agregado${erSync.length>1?'s':''} a Facturación/Resultado
-      </div>`;
-    }
-    document.getElementById('import-result').innerHTML = `<div class="imp-ok">
-      ✓ Archivo ER detectado — <strong>${fname}</strong><br>
-      Año <strong>${erY}</strong> · <strong>${erImp}</strong> empresas con desglose ER completo · ${erSkip} sin datos.
-      ${syncHtml}
-      <div style="font-size:10px;color:var(--dim);margin-top:4px">
-        El módulo <strong>Resultado Operativo</strong> ahora tiene la vista <strong>📋 Desglose ER</strong>.
-        Los datos originales del dashboard <strong>no fueron modificados</strong>.
-      </div>
-      ${discHtml}
-    </div>`;
-    document.getElementById('import-preview').style.display = 'none';
-    const erTs = Date.now();
-    _importHistory.push({ id: erTs, fname, added: erResult.imported, updated: 0,
-      ts: erTs, reverted: false, diff:[], erImport: true, snapAfter: deepCopyData() });
-    updateImportUI();
-    saveDataToLocalCache();
-    _dispararAutoSync();
     return;
   }
 

@@ -75,6 +75,20 @@ const { _erDesdeMonthly, setData } = new Function(
   'return { _erDesdeMonthly, setData };'
 )();
 
+// tryParseERNativo también escribe sobre el global DATA y llama a funciones
+// de refresco de UI (computeTotals/populateSelects/rebuildActive) que no
+// existen fuera del dashboard — se stubean como no-op, solo interesa qué
+// devuelve el parser y qué queda en DATA.er.
+const tryParseERNativoSrc = extractFn(html, 'tryParseERNativo');
+const { tryParseERNativo, getERNativoData, resetERNativoData } = new Function('XLSX',
+  'let DATA = {fact:{},sit:{},er:{}};\n' +
+  'function computeTotals(){}\nfunction populateSelects(){}\nfunction rebuildActive(){}\n' +
+  tryParseERNativoSrc + '\n' +
+  'function getERNativoData(){ return DATA; }\n' +
+  'function resetERNativoData(){ DATA.fact={}; DATA.sit={}; DATA.er={}; }\n' +
+  'return { tryParseERNativo, getERNativoData, resetERNativoData };'
+)(XLSX);
+
 let pass = 0, fail = 0;
 function assert(cond, msg) {
   if (cond) { pass++; console.log('  ✓ ' + msg); }
@@ -214,6 +228,78 @@ group('_erDesdeMonthly — usa DATA.er (anual nativo) cuando no hay detalle mens
 
   const empEr = _erDesdeMonthly('CERAMICA RIOJANA'); // no cargada en absoluto
   assert(empEr === null, 'una empresa sin ningún dato (ni mensual, ni DATA.er, ni fact/sit) sigue devolviendo null');
+});
+
+// ── tryParseERNativo: bug real — al recargar el RESUMEN histórico multi-
+//    empresa de 2022 (ER_2022_ultimo.xlsx), el dashboard lo tomaba como si
+//    fuera un archivo de UNA sola empresa (Agroandina), en vez del desglose
+//    completo de las ~30 empresas del RESUMEN. Causa: el dispatcher probaba
+//    tryParseERColumnasMeses ANTES que tryParseERNativo, y ese parser recorre
+//    TODAS las hojas del libro — la hoja individual de Agroandina (una de las
+//    ~30 hojas por empresa que trae el mismo archivo) coincidía por accidente
+//    con su heurística de "columnas de meses" antes de llegar a la hoja
+//    RESUMEN. Fix: tryParseERNativo se prueba primero en el dispatcher, y se
+//    le agregó una verificación estructural (Ventas/Utilidad Bruta/Resultado
+//    Operativo en las filas fijas del layout) para que solo dispare con el
+//    formato multi-empresa real y no con otra hoja que también se llame
+//    "RESUMEN" pero sea de una sola empresa (ej. Cerámica Riojana). ────────
+group('tryParseERNativo — RESUMEN multi-empresa real vs. RESUMEN de una sola empresa', () => {
+  const rowsMulti = [
+    ['FECHA DE PRESENTACIÓN', 'EMPRESA A', 'EMPRESA B'],
+    ['', 'A DICIEMBRE 2022', 'A DICIEMBRE 2022'],
+    ['INGRESOS', '', ''],
+    ['Ventas Netas', 1000000, 2000000],
+    ['Costo de Ventas', -400000, -900000],
+    ['Utilidad Bruta', 600000, 1100000],
+    [],
+    ['Gastos Financieros', 0, -10000],
+    ['Gastos de Administracion', -100000, -200000],
+    ['Gastos Operativos', 0, 0],
+    ['Gastos Fiscales', 0, 0],
+    ['Gastos Bancarios', 0, 0],
+    ['Gastos de Produccion', 0, 0],
+    ['Gastos de Comercializacion', -50000, -80000],
+    ['Gastos de Obra', 0, 0],
+    ['Otros Gastos', 0, 0],
+    ['Otros Ingresos', 0, 0],
+    ['Otros Egresos', 0, 0],
+    ['Resultado Operativo', 450000, 810000],
+  ];
+  resetERNativoData();
+  const wbMulti = wbFromSheets({ RESUMEN: rowsMulti });
+  const rMulti = tryParseERNativo(wbMulti, 'ER_2022_ultimo.xlsx');
+  assert(!!rMulti, 'detecta el RESUMEN multi-empresa real (empresas en columnas, partidas en filas fijas)');
+  const dataMulti = getERNativoData();
+  assert(Object.keys(dataMulti.er).length === 2 && dataMulti.er['EMPRESA A'] && dataMulti.er['EMPRESA B'],
+    'carga el desglose de TODAS las empresas del RESUMEN, no solo la primera hoja del libro');
+  assert(dataMulti.er['EMPRESA B']['2022'].resultado_operativo === 810000,
+    'toma el valor de la fila "Resultado Operativo" (fija en el layout) para cada empresa');
+
+  // Hoja también llamada "RESUMEN" pero de una sola empresa (contribuyente/
+  // período en vez de empresas en columnas) — no debe matchear como si fuera
+  // el formato multi-empresa, para no taparle el archivo a tryParseERColumnasMeses.
+  // Padeada a ≥19 filas (como un archivo real) para ejercitar la verificación
+  // estructural nueva y no solo el chequeo preexistente de "menos de 19 filas".
+  const rowsUnaEmpresa = [
+    ['CONTRIBUYENTE:', 'CERAMICA RIOJANA SAPEM'],
+    ['CUIT N°:', '30-00000000-0'],
+    ['IIBB N°:', '000-000000-0'],
+    ['DIRECCION:', 'CALLE FALSA 123'],
+    ['ACTIVIDAD:', 'INDUSTRIA'],
+    [],
+    ['RENDICIONES MENSUALES'],
+    ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio'],
+    ['INGRESOS'],
+    ['Ventas netas', 1000, 1100, 1200, 1300, 1400, 1500],
+    ['Gastos de Administracion', -300, -310, -320, -330, -340, -350],
+    ['Rtdo. Antes del impuesto a las Ganancias', 700, 790, 880, 970, 1060, 1150],
+    ['Rtdo. Neto por operaciones continuas', 700, 790, 880, 970, 1060, 1150],
+    [], [], [], [], [], [],
+  ];
+  resetERNativoData();
+  const wbUna = wbFromSheets({ RESUMEN: rowsUnaEmpresa });
+  const rUna = tryParseERNativo(wbUna, 'ER 2026.xlsx');
+  assert(!rUna, 'una hoja "RESUMEN" de una sola empresa (contribuyente/período, no empresas en columnas) no matchea como multi-empresa, aunque tenga ≥19 filas');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
