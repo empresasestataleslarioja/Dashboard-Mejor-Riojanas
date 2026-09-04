@@ -6607,14 +6607,15 @@ function _rptResultado() {
       <thead><tr><th style="text-align:left">Partida</th>${ths2}<th style="text-align:right">% ventas (${lastY})</th></tr></thead>
       <tbody>${ER_ORDER.map(k=>{
         const isSep = ER_SEPARATORS.includes(k);
-        const bg = isSep ? 'background:#f0f0e8;font-weight:700;border-top:1px solid #ccc' : '';
+        const bg = isSep ? 'font-weight:700;border-top:1px solid #ccc' : '';
+        const lblHtml = erRowPrefix(k) + ER_LABELS[k] + (isSep ? ' <span style="font-size:7px;color:#999">auto</span>' : '');
         const ventas = totals['ventas_netas']?.[lastY] || 0;
         const pct = ventas && totals[k]?.[lastY] != null ? (totals[k][lastY]/ventas*100).toFixed(2)+'%' : '—';
         const celdas = years.map(y=>{
           const v=totals[k]?.[y]; const col=v<0?'color:#c0392b':(isSep&&v>0?'color:#0f6e56':'');
           return `<td style="text-align:right;${bg};${col}">${fmtER(v)}</td>`;
         }).join('');
-        return `<tr><td style="${bg}">${ER_LABELS[k]}</td>${celdas}<td style="text-align:right;${bg};color:#555">${pct}</td></tr>`;
+        return `<tr><td style="${bg}">${lblHtml}</td>${celdas}<td style="text-align:right;${bg};color:#555">${pct}</td></tr>`;
       }).join('')}</tbody></table>`;
     const subtit = selEmp ? selEmp+' · '+years[0]+'–'+years[years.length-1] : 'Consolidado · '+erEmpsConDatos.length+' empresas';
     return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
@@ -14782,6 +14783,17 @@ const ER_LABELS = {
 };
 const ER_SEPARATORS = ['utilidad_bruta','resultado_operativo']; // filas resaltadas
 const ER_ORDER = Object.keys(ER_LABELS);
+// Prefijos (−)/(+) para exponer el Estado de Resultados con el mismo
+// criterio visual que usa Evolución Empresa (Ventas Netas, (−) Costo de
+// Ventas, = Utilidad Bruta, ...): subtractivo por defecto salvo los ítems
+// marcados acá como sumables o subtotales (los subtotales llevan "=" y el
+// badge "auto" en vez de signo, porque son calculados).
+const ER_ADD = ['otros_ingresos'];
+function erRowPrefix(k) {
+  if (ER_SEPARATORS.includes(k)) return '= ';
+  if (k === 'ventas_netas') return '';
+  return ER_ADD.includes(k) ? '(+) ' : '(−) ';
+}
 
 // Construye el desglose anual de ER (estructura DATA.er) desde los datos mensuales
 // de una empresa, sumando los meses. Devuelve {año: {clave_er: valor}} o null.
@@ -14941,7 +14953,8 @@ function buildResDesglose() {
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
-              const tdBg = isSep ? 'background:rgba(100,100,80,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              const tdBg = isSep ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
+              const lblHtml = erRowPrefix(k) + ER_LABELS[k] + (isSep ? ' <span style="font-size:7px;color:var(--dim)">auto</span>' : '');
               const lastY = years[years.length-1];
               const ventasLastY = totals['ventas_netas']?.[lastY] || 0;
               const valLastY = totals[k]?.[lastY];
@@ -14949,7 +14962,7 @@ function buildResDesglose() {
                 ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(2)}%</span>`
                 : '<span style="color:var(--dim)">—</span>';
               return `<tr>
-                <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
+                <td style="color:var(--text);${tdBg}">${lblHtml}</td>
                 ${years.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(totals[k][y], k)}</td>`).join('')}
                 <td style="text-align:right;${tdBg}">${pct}</td>
               </tr>`;
@@ -14991,7 +15004,8 @@ function buildResDesglose() {
           <tbody>
             ${ER_ORDER.map(k => {
               const isSep = ER_SEPARATORS.includes(k);
-              const tdBg = isSep ? 'background:rgba(100,100,80,.10);font-weight:700;border-top:1px solid var(--bd)' : '';
+              const tdBg = isSep ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
+              const lblHtml = erRowPrefix(k) + ER_LABELS[k] + (isSep ? ' <span style="font-size:7px;color:var(--dim)">auto</span>' : '');
               const lastY = yearsWithEr[yearsWithEr.length-1];
               const ventasLastY = empEr[lastY]?.['ventas_netas'] || 0;
               const valLastY = empEr[lastY]?.[k];
@@ -14999,7 +15013,7 @@ function buildResDesglose() {
                 ? `<span style="color:var(--dim);font-size:10px">${(valLastY/ventasLastY*100).toFixed(2)}%</span>`
                 : '<span style="color:var(--dim)">—</span>';
               return `<tr>
-                <td style="color:var(--text);${tdBg}">${ER_LABELS[k]}</td>
+                <td style="color:var(--text);${tdBg}">${lblHtml}</td>
                 ${yearsWithEr.map(y=>`<td style="text-align:right;${tdBg}">${fmtCell(empEr[y]?.[k]??null, k)}</td>`).join('')}
                 <td style="text-align:right;${tdBg}">${pct}</td>
               </tr>`;
