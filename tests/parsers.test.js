@@ -275,6 +275,27 @@ group('tryParseERNativo — RESUMEN multi-empresa real vs. RESUMEN de una sola e
   assert(dataMulti.er['EMPRESA B']['2022'].resultado_operativo === 810000,
     'toma el valor de la fila "Resultado Operativo" (fija en el layout) para cada empresa');
 
+  // Bug real: recargar el RESUMEN de 2022 detectaba las 25 empresas
+  // correctamente (ver arriba) pero no impactaba en Facturación/Resultado
+  // de Evolución por Empresa para las que ya tenían un 0 guardado — el
+  // sync solo completaba si el valor existente era undefined/null, y un 0
+  // (el estado real de una empresa dada de alta sin datos cargados) no
+  // calificaba como "ausente", así que quedaba como mera discrepancia sin
+  // aplicarse nunca. ──────────────────────────────────────────────────
+  resetERNativoData();
+  const dataPre = getERNativoData();
+  dataPre.fact['EMPRESA A'] = { '2022': 0 };   // "sin cargar" real
+  dataPre.sit['EMPRESA A']  = { '2022': 0 };
+  dataPre.fact['EMPRESA B'] = { '2022': 1500000 }; // dato real distinto al ER
+  dataPre.sit['EMPRESA B']  = { '2022': 810000 };  // coincide con el ER (sin discrepancia)
+  tryParseERNativo(wbFromSheets({ RESUMEN: rowsMulti }), 'ER_2022_ultimo.xlsx');
+  assert(dataPre.fact['EMPRESA A']['2022'] === 1000000 && dataPre.sit['EMPRESA A']['2022'] === 450000,
+    'un 0 guardado en Facturación/Resultado se trata como ausente y SÍ se completa al recargar el RESUMEN');
+  assert(dataPre.fact['EMPRESA B']['2022'] === 1500000,
+    'un valor existente distinto de 0 nunca se sobreescribe, aunque difiera del RESUMEN (queda como discrepancia)');
+  assert(dataPre.sit['EMPRESA B']['2022'] === 810000,
+    'un valor existente que coincide con el RESUMEN se deja intacto');
+
   // Hoja también llamada "RESUMEN" pero de una sola empresa (contribuyente/
   // período en vez de empresas en columnas) — no debe matchear como si fuera
   // el formato multi-empresa, para no taparle el archivo a tryParseERColumnasMeses.

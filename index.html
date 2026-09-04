@@ -23019,13 +23019,19 @@ function tryParseERNativo(wb, fname) {
       DATA.er[emp][detectedYear] = erRow;
 
       // ── Sync a DATA.fact/sit: SOLO completar datos AUSENTES ────
-      // Regla: solo escribir si el valor actual es estrictamente
-      // undefined o null — NUNCA sobreescribir un 0 ni un número
-      // (un 0 puede ser un resultado operativo legítimo, no "sin dato")
+      // Regla: se completa si el valor actual es undefined, null O 0 —
+      // un 0 guardado en Facturación/Resultado de una empresa estatal en
+      // funcionamiento nunca es un dato real, es casi siempre un valor
+      // "sin cargar" (placeholder de alta en el portafolio, o un import
+      // previo fallido) — así que tratarlo como ausente para esta carga
+      // es lo que permite que recargar un RESUMEN histórico efectivamente
+      // corrija empresas que quedaron en 0. Con cualquier otro valor
+      // (≠0) SÍ se respeta la regla original: nunca se sobreescribe, solo
+      // se registra como discrepancia para revisión manual.
       if (erRow.ventas_netas) {
         if (!DATA.fact[emp]) DATA.fact[emp] = {};
         const existing_f = DATA.fact[emp][detectedYear];
-        if (existing_f === undefined || existing_f === null) {
+        if (existing_f === undefined || existing_f === null || existing_f === 0) {
           DATA.fact[emp][detectedYear] = erRow.ventas_netas;
           syncLog.push({ emp, year: detectedYear, campo: 'Facturación', accion: 'agregado', valor: erRow.ventas_netas });
         } else if (Math.abs(existing_f - erRow.ventas_netas) > 1000) {
@@ -23037,10 +23043,10 @@ function tryParseERNativo(wb, fname) {
       if (erRow.resultado_operativo) {
         if (!DATA.sit[emp]) DATA.sit[emp] = {};
         const existing_s = DATA.sit[emp][detectedYear];
-        if (existing_s === undefined || existing_s === null) {
+        if (existing_s === undefined || existing_s === null || existing_s === 0) {
           DATA.sit[emp][detectedYear] = erRow.resultado_operativo;
           syncLog.push({ emp, year: detectedYear, campo: 'Resultado Op.', accion: 'agregado', valor: erRow.resultado_operativo });
-        } else if (existing_s !== 0 && Math.abs(existing_s - erRow.resultado_operativo) > 1000) {
+        } else if (Math.abs(existing_s - erRow.resultado_operativo) > 1000) {
           discrepancias.push({ emp, year: detectedYear, campo: 'Resultado Op.',
             en_dashboard: existing_s, en_er: erRow.resultado_operativo });
         }
