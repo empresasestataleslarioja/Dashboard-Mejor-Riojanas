@@ -18050,7 +18050,12 @@ function buildEvolucionMensual(emp) {
 
   const erM = (DATA.er_mensual && DATA.er_mensual[emp]) || {};
   const factM = (DATA.fact_mensual && DATA.fact_mensual[emp]) || {};
-  const todosAnios = [...new Set([...Object.keys(erM), ...Object.keys(factM)])].sort();
+  // Años sin detalle mensual pero con ER anual resuelto (RESUMEN histórico
+  // multi-empresa u otro fallback de _erDesdeMonthly) — antes esos años no
+  // entraban a todosAnios y la card quedaba oculta o el año directamente no
+  // aparecía en el selector, aunque el dato ya estuviera cargado.
+  const erResuelto = (typeof _erDesdeMonthly === 'function') ? (_erDesdeMonthly(emp) || {}) : {};
+  const todosAnios = [...new Set([...Object.keys(erM), ...Object.keys(factM), ...Object.keys(erResuelto)])].sort();
 
   if (todosAnios.length === 0) { wrap.style.display = 'none'; return; }
   wrap.style.display = '';
@@ -18115,6 +18120,40 @@ function buildEvolucionMensual(emp) {
   const bloques = anios.map(yr => {
     const erData = erM[yr];
     if (!erData || !Array.isArray(erData.filas) || erData.filas.length === 0) {
+      // Sin detalle mensual: si hay ER anual resuelto (ej. RESUMEN histórico
+      // multi-empresa 2021-2024), mostrarlo con el mismo formato de exposición
+      // que usa Resultado Operativo — una columna de total anual, mismas
+      // partidas y mismo criterio (−)/(+)/= + "auto" en los subtotales.
+      const datosAnio = erResuelto[yr];
+      if (datosAnio) {
+        const ventasAnio = datosAnio.ventas_netas || 0;
+        const filasAnuales = ER_ORDER.map(k => {
+          const isSep = ER_SEPARATORS.includes(k);
+          const v = datosAnio[k];
+          const tdBg = isSep ? 'font-weight:600;border-top:1px solid var(--bd)' : '';
+          const lblHtml = erRowPrefix(k) + ER_LABELS[k] + (isSep ? ' <span style="font-size:7px;color:var(--dim)">auto</span>' : '');
+          const pct = ventasAnio && v != null && v !== 0 && k !== 'ventas_netas'
+            ? `<span style="color:var(--dim);font-size:8.5px">${(v/ventasAnio*100).toFixed(2)}%</span>`
+            : '<span style="color:var(--dim)">—</span>';
+          return `<tr>
+            <td style="padding:4px 8px;font-size:9px;white-space:nowrap;${tdBg}">${lblHtml}</td>
+            <td style="padding:4px 8px;text-align:right;font-size:9px;${tdBg}${v<0?';color:var(--neg)':''}">${v!=null&&v!==0?fmt(v):'—'}</td>
+            <td style="padding:4px 8px;text-align:right;font-size:8.5px;border-left:1px dashed var(--bd);${tdBg}">${pct}</td>
+          </tr>`;
+        }).join('');
+        return `<div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:6px">${yr}
+            <span style="font-size:9px;color:var(--dim);font-weight:400">· ER anual (histórico, sin apertura mensual)</span></div>
+          <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;max-width:420px">
+            <thead><tr>
+              <th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>
+              <th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Total ${yr}</th>
+              <th style="padding:5px 8px;text-align:right;font-size:8.5px;color:var(--dim);border-bottom:2px solid var(--bd)">% v.</th>
+            </tr></thead>
+            <tbody>${filasAnuales}</tbody>
+          </table></div>
+        </div>`;
+      }
       const fMes = factM[yr] || {};
       const meses = Object.keys(fMes).map(Number).sort((a,b)=>a-b);
       if (meses.length === 0) return '';
