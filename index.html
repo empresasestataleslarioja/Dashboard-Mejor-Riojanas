@@ -18082,7 +18082,9 @@ function buildEvolucionMensual(emp) {
   const CONCEPTOS_STD = [
     ['', '— (sin clasificar)'], ['ventas','Ventas'], ['costo','Costo de Ventas'],
     ['utilBruta','Utilidad Bruta'], ['gastoAdm','Gastos Administración'],
-    ['gastoCom','Gastos Comercialización'], ['resOperativo','Resultado Operativo'],
+    ['gastoCom','Gastos Comercialización'], ['gastoOper','Otros Gastos'],
+    ['otrosIngresos','Otros Ingresos'], ['otrosGastos','Otros Egresos'],
+    ['resOperativo','Resultado Operativo'],
     ['resFinanciero','Resultado Financiero'], ['resAntesImp','Resultado antes Imp.'],
     ['resEjercicio','Resultado del Ejercicio'],
   ];
@@ -18335,20 +18337,38 @@ function buildEvolucionMensual(emp) {
         setVCM('gastoAdm', m, gastoAdm);
         setVCM('gastoCom', m, gastoCom);
         setVCM('gastoOper', m, gastoOper);
+        setVCM('otrosIngresos', m, otrosIng);
+        setVCM('otrosGastos', m, otrosGas);
         setVCM('resOperativo', m, resOperativo);
         setVCM('resFinanciero', m, resFin);
         setVCM('resAntesImp', m, resAntesImp);
         setVCM('resEjercicio', m, resEjercicio);
       });
 
+      // Mismas 15 partidas y mismo criterio (−)/(+)/= + "auto" que Resultado
+      // Operativo y que los años solo-anuales de este mismo módulo (ver
+      // ER_LABELS/erRowPrefix) — las categorías que la clasificación mensual
+      // no discrimina (Gastos Financieros/Fiscales/Bancarios/Producción/Obra,
+      // Gastos Operativos como rubro específico) quedan sin dato ("—") en vez
+      // de desaparecer de la lista, para que la fila exista igual en ambas
+      // vistas. Se agregan al final Resultado Financiero/antes de Imp./del
+      // Ejercicio, que sí releva el ER mensual y el RESUMEN anual no tiene.
       const estructura = [
-        { lbl:'Ventas Netas',                  concepto:'ventas',        bold:false },
-        { lbl:'(−) Costo de Ventas',           concepto:'costo',         bold:false },
-        { lbl:'= Utilidad Bruta',              concepto:'utilBruta',     bold:true  },
-        { lbl:'(−) Gastos de Administración',  concepto:'gastoAdm',      bold:false },
-        { lbl:'(−) Gastos de Comercialización',concepto:'gastoCom',      bold:false },
-        { lbl:'(−) Otros Gastos Operativos',   concepto:'gastoOper',     bold:false },
-        { lbl:'= Resultado Operativo',         concepto:'resOperativo',  bold:true  },
+        { lbl: erRowPrefix('ventas_netas') + ER_LABELS['ventas_netas'],                     concepto:'ventas',        bold:false },
+        { lbl: erRowPrefix('costo_ventas') + ER_LABELS['costo_ventas'],                     concepto:'costo',         bold:false },
+        { lbl: erRowPrefix('utilidad_bruta') + ER_LABELS['utilidad_bruta'],                 concepto:'utilBruta',     bold:true  },
+        { lbl: erRowPrefix('gastos_financieros') + ER_LABELS['gastos_financieros'],         concepto:'_na_fin',       bold:false },
+        { lbl: erRowPrefix('gastos_admin') + ER_LABELS['gastos_admin'],                     concepto:'gastoAdm',      bold:false },
+        { lbl: erRowPrefix('gastos_operativos') + ER_LABELS['gastos_operativos'],           concepto:'_na_oper',      bold:false },
+        { lbl: erRowPrefix('gastos_fiscales') + ER_LABELS['gastos_fiscales'],               concepto:'_na_fiscal',    bold:false },
+        { lbl: erRowPrefix('gastos_bancarios') + ER_LABELS['gastos_bancarios'],             concepto:'_na_banc',      bold:false },
+        { lbl: erRowPrefix('gastos_produccion') + ER_LABELS['gastos_produccion'],           concepto:'_na_prod',      bold:false },
+        { lbl: erRowPrefix('gastos_comercializacion') + ER_LABELS['gastos_comercializacion'],concepto:'gastoCom',     bold:false },
+        { lbl: erRowPrefix('gastos_obra') + ER_LABELS['gastos_obra'],                       concepto:'_na_obra',      bold:false },
+        { lbl: erRowPrefix('otros_gastos') + ER_LABELS['otros_gastos'],                     concepto:'gastoOper',     bold:false },
+        { lbl: erRowPrefix('otros_ingresos') + ER_LABELS['otros_ingresos'],                 concepto:'otrosIngresos', bold:false },
+        { lbl: erRowPrefix('otros_egresos') + ER_LABELS['otros_egresos'],                   concepto:'otrosGastos',   bold:false },
+        { lbl: erRowPrefix('resultado_operativo') + ER_LABELS['resultado_operativo'],       concepto:'resOperativo',  bold:true  },
         { lbl:'(+/−) Resultado Financiero',    concepto:'resFinanciero', bold:false },
         { lbl:'= Resultado antes de Imp.',     concepto:'resAntesImp',   bold:true  },
         { lbl:'= Resultado del Ejercicio',     concepto:'resEjercicio',  bold:true  },
