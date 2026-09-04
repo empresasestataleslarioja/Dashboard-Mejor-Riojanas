@@ -22981,6 +22981,115 @@ function descargarModeloTransferencias() {
   setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href); },100);
 }
 
+// ── Extrae detalle MENSUAL de la hoja individual de una empresa dentro
+// de un libro ER_20XX.xlsx (además del anual que ya trae el RESUMEN).
+// Cada empresa trae su propia hoja con su propio plan de cuentas — no hay
+// un formato único — así que en vez de clasificar cada línea (riesgo alto
+// de error en ~30 planes de cuentas distintos), se ubican por texto las
+// filas "ancla" que casi todas las hojas sí tienen ya calculadas
+// (Ventas, Costo, Utilidad Bruta, Resultado Operativo, Resultado del
+// Ejercicio) y se leen esos totales directamente — sin reclasificar ni
+// resumir el detalle de gastos, que queda agrupado como un solo renglón
+// (la diferencia entre dos anclas consecutivas).
+// Devuelve null si no se encuentran anclas suficientes, o si la Ventas
+// mensual sumada no coincide (±5%) con el total anual ya validado del
+// RESUMEN — esa verificación cruzada es la que evita aplicar un detalle
+// mal ubicado: ante la duda, la empresa se queda con el anual nada más.
+function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
+  if (!ws) return null;
+  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
+  if (!rows.length) return null;
+
+  const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim();
+  const RE_VENTAS_STRONG = /^(VENTAS\s*NETAS|INGRESOS\s*POR\s*VENTAS|TOTAL\s*VENTAS|VENTAS\s*TOTALES|TOTAL\s*INGRESOS|INGRESOS\s*POR\s*SERVICIOS)/;
+  const RE_VENTAS_WEAK   = /VENTA|INGRESO/;
+  const RE_COSTO         = /^COSTO\s*(DE\s*)?VENTA|COSTO\s*DE\s*LOS\s*SERVICIOS/;
+  const RE_UTIL_BRUTA    = /(UTILIDAD|RESULTADO|GANANCIA)\s*BRUTA|RDO\.?\s*BRUTO|SUB.?TOTAL.*RDO\s*BRUTO/;
+  const RE_RES_OPERATIVO = /RESULTADO\s*OPERATIVO|GANANCIA\s*\(?PERDIDA\)?\s*OPERATIVA/;
+  const RE_RES_FINAL     = /GANANCIA\s*\(?PERDIDA\)?\s*DEL\s*EJERCICIO|RESULTADO\s*DEL\s*EJERCICIO|UTILIDAD\s*NETA|TOTAL\s*DEL\s*RESULTADO\s*INTEGRAL|RTDO\.?\s*NETO\s*POR\s*OPERACIONES\s*CONTINUAS/;
+
+  // Encabezado: fila con ≥8 celdas tipo fecha en las primeras 20 columnas
+  // (las hojas por empresa traen los meses como fecha, no como texto).
+  let hdrRow = -1, cols = [];
+  for (let r = 0; r < Math.min(10, rows.length); r++) {
+    const found = [];
+    for (let c = 1; c < 20; c++) { if (rows[r][c] instanceof Date) found.push(c); }
+    if (found.length >= 8) { hdrRow = r; cols = found; break; }
+  }
+  if (hdrRow < 0) return null;
+
+  const findAll = (re, from, to) => {
+    const out = [];
+    for (let r = from; r < to; r++) { const l = norm(rows[r]?.[0]); if (l && re.test(l)) out.push(r); }
+    return out;
+  };
+  const rowSum = r => {
+    if (r == null) return null;
+    let s = 0, any = false;
+    cols.forEach(c => { const v = rows[r][c]; if (typeof v === 'number') { s += v; any = true; } });
+    return any ? s : null;
+  };
+  const rowVals = r => {
+    if (r == null) return null;
+    const out = {};
+    cols.forEach((c, i) => { const v = rows[r][c]; if (typeof v === 'number') out[i+1] = v; });
+    return out;
+  };
+  const diffVals = (rA, rB) => { // valores de rA - rB, mes a mes
+    const out = {};
+    cols.forEach((c, i) => {
+      const a = rows[rA]?.[c], b = rows[rB]?.[c];
+      if (typeof a === 'number' || typeof b === 'number') out[i+1] = (typeof a==='number'?a:0) - (typeof b==='number'?b:0);
+    });
+    return out;
+  };
+
+  const from = hdrRow + 1, to = rows.length;
+  const costoR = findAll(RE_COSTO, from, to)[0] ?? null;
+  const utilR  = findAll(RE_UTIL_BRUTA, from, to)[0] ?? null;
+  const boundRow = costoR ?? utilR;
+  const strongV = findAll(RE_VENTAS_STRONG, from, to);
+  const strongCand = boundRow != null ? strongV.filter(r => r < boundRow) : strongV;
+  let ventasR = strongCand.length ? strongCand[strongCand.length-1] : (strongV.length ? strongV[strongV.length-1] : null);
+  if (ventasR == null) {
+    const weakV = findAll(RE_VENTAS_WEAK, from, to);
+    const weakCand = boundRow != null ? weakV.filter(r => r < boundRow) : weakV;
+    ventasR = weakCand.length ? weakCand[0] : (weakV.length ? weakV[0] : null);
+  }
+  const resOpR  = findAll(RE_RES_OPERATIVO, from, to)[0] ?? null;
+  const resFinR = findAll(RE_RES_FINAL, from, to)[0] ?? null;
+  if (ventasR == null || (resOpR == null && resFinR == null)) return null;
+
+  // Verificación cruzada contra el total anual del RESUMEN (ya validado) —
+  // sin esto no se aplica nada para esa empresa.
+  const ventasSum = rowSum(ventasR);
+  if (ventasAnualRef == null) return null;
+  if (ventasAnualRef === 0) { if (!(ventasSum == null || ventasSum === 0)) return null; }
+  else if (ventasSum == null || Math.abs((ventasSum - ventasAnualRef) / ventasAnualRef) > 0.05) return null;
+
+  const filas = [];
+  filas.push({ lbl: String(rows[ventasR][0]).trim(), conceptoStd:'ventas', valores: rowVals(ventasR) });
+  if (costoR != null) filas.push({ lbl: String(rows[costoR][0]).trim(), conceptoStd:'costo', valores: rowVals(costoR) });
+  if (utilR != null) filas.push({ lbl: String(rows[utilR][0]).trim(), conceptoStd:'utilBruta', valores: rowVals(utilR) });
+  if (resOpR != null) {
+    // Bucket único con la diferencia entre Utilidad Bruta (o Ventas, si no
+    // hay Utilidad Bruta) y Resultado Operativo — no se reclasifica el
+    // detalle de gastos individual, se muestra agrupado.
+    const base = utilR ?? ventasR;
+    filas.push({ lbl:'Gastos (detalle no discriminado del original)', conceptoStd:'gastoOper', valores: diffVals(base, resOpR) });
+    filas.push({ lbl: String(rows[resOpR][0]).trim(), conceptoStd:'resOperativo', valores: rowVals(resOpR) });
+  }
+  if (resFinR != null && resFinR !== resOpR) {
+    const base2 = resOpR ?? utilR ?? ventasR;
+    filas.push({ lbl:'Resultado financiero y otros (detalle no discriminado)', conceptoStd:'resFinanciero', valores: diffVals(resFinR, base2) });
+    filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resEjercicio', valores: rowVals(resFinR) });
+  } else if (resOpR == null && resFinR != null) {
+    // Solo hay resultado final (ej. "Utilidad Neta"), sin operativo propio.
+    filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resOperativo', valores: rowVals(resFinR) });
+  }
+  return { filas };
+}
+
 // ── Parser nativo para archivos ER_20XX.xlsx ────────────────────
 // Detecta la hoja RESUMEN y extrae el desglose completo del ER
 function tryParseERNativo(wb, fname) {
@@ -23074,7 +23183,7 @@ function tryParseERNativo(wb, fname) {
     return isNaN(n) ? 0 : n;
   };
 
-  let imported = 0, skipped = 0;
+  let imported = 0, skipped = 0, mensualCount = 0;
   const syncLog      = [];   // datos nuevos agregados
   const discrepancias = [];  // datos que difieren entre ER y dashboard
   Object.entries(empresa_cols).forEach(([ci, rawName]) => {
@@ -23124,6 +23233,31 @@ function tryParseERNativo(wb, fname) {
             en_dashboard: existing_s, en_er: erRow.resultado_operativo });
         }
       }
+
+      // ── Detalle mensual, si la hoja individual de la empresa lo trae y
+      // verifica contra el anual del RESUMEN (ver _extraerERMensualHojaEmpresa)
+      // — nunca pisa un detalle mensual ya cargado para ese año.
+      const yS = String(detectedYear);
+      if (!DATA.er_mensual[emp]?.[yS]) {
+        const ws2 = wb.Sheets[rawName] || wb.Sheets[Object.keys(wb.Sheets).find(s => s.toUpperCase().trim() === String(rawName).toUpperCase().trim())];
+        const mensual = _extraerERMensualHojaEmpresa(ws2, erRow.ventas_netas);
+        if (mensual) {
+          if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
+          DATA.er_mensual[emp][yS] = { filas: mensual.filas, conceptos:{}, esTrimestral:false };
+          const fFila = mensual.filas.find(f => f.conceptoStd === 'ventas');
+          const rFila = mensual.filas.find(f => f.conceptoStd === 'resOperativo');
+          if (fFila) {
+            if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
+            DATA.fact_mensual[emp][yS] = { ...fFila.valores };
+          }
+          if (rFila) {
+            if (!DATA.res_mensual[emp]) DATA.res_mensual[emp] = {};
+            DATA.res_mensual[emp][yS] = { ...rFila.valores };
+          }
+          mensualCount++;
+          syncLog.push({ emp, year: detectedYear, campo: 'ER mensual', accion: 'agregado', valor: null });
+        }
+      }
       imported++;
     } else {
       skipped++;
@@ -23139,7 +23273,7 @@ function tryParseERNativo(wb, fname) {
     try { marcarPendienteGuardar(); } catch(e) {}
   }
 
-  return { year: detectedYear, imported, skipped, sheetName, syncLog, discrepancias };
+  return { year: detectedYear, imported, skipped, mensualCount, sheetName, syncLog, discrepancias };
 }
 
 // ── handleImportWorkbook: pipeline compartido (File o Buffer) ──
@@ -24564,7 +24698,7 @@ function handleImportWorkbook(wb, fname) {
   const erResult = tryParseERNativo(wb, fname);
   if (erResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
-    const { year:erY, imported:erImp, skipped:erSkip, syncLog:erSync, discrepancias:erDisc } = erResult;
+    const { year:erY, imported:erImp, skipped:erSkip, mensualCount:erMensual, syncLog:erSync, discrepancias:erDisc } = erResult;
     const fmtDisc = v => {
       const m = Math.abs(v)/1e6;
       return `${v<0?'−':''}${m>=1?m.toFixed(2)+'M':Math.round(Math.abs(v)).toLocaleString('es-AR')}`;
@@ -24600,16 +24734,23 @@ function handleImportWorkbook(wb, fname) {
         </div>
       </details>`;
     }
+    const erSyncFacRes = (erSync||[]).filter(s => s.campo !== 'ER mensual');
     let syncHtml = '';
-    if (erSync && erSync.length) {
+    if (erSyncFacRes.length) {
       syncHtml = `<div style="font-size:10px;color:#1a9e68;margin-top:4px">
-        ✚ ${erSync.length} dato${erSync.length>1?'s':''} nuevo${erSync.length>1?'s':''} agregado${erSync.length>1?'s':''} a Facturación/Resultado
+        ✚ ${erSyncFacRes.length} dato${erSyncFacRes.length>1?'s':''} nuevo${erSyncFacRes.length>1?'s':''} agregado${erSyncFacRes.length>1?'s':''} a Facturación/Resultado
       </div>`;
     }
+    const mensualHtml = erMensual > 0 ? `<div style="font-size:10px;color:#1a9e68;margin-top:4px">
+        📅 <strong>${erMensual}</strong> empresa${erMensual>1?'s':''} además con detalle <strong>mensual</strong> verificado (hoja individual, contrastado contra el total anual del RESUMEN) — ya visible en Evolución Empresa.
+      </div>` : `<div style="font-size:10px;color:var(--dim);margin-top:4px">
+        No se pudo verificar detalle mensual por empresa en este archivo (queda el desglose anual del RESUMEN).
+      </div>`;
     document.getElementById('import-result').innerHTML = `<div class="imp-ok">
       ✓ Archivo ER detectado — <strong>${fname}</strong><br>
       Año <strong>${erY}</strong> · <strong>${erImp}</strong> empresas con desglose ER completo · ${erSkip} sin datos.
       ${syncHtml}
+      ${mensualHtml}
       <div style="font-size:10px;color:var(--dim);margin-top:4px">
         El módulo <strong>Resultado Operativo</strong> ahora tiene la vista <strong>📋 Desglose ER</strong>.
         Los datos originales del dashboard <strong>no fueron modificados</strong>.

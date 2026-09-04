@@ -80,13 +80,15 @@ const { _erDesdeMonthly, setData } = new Function(
 // existen fuera del dashboard — se stubean como no-op, solo interesa qué
 // devuelve el parser y qué queda en DATA.er.
 const tryParseERNativoSrc = extractFn(html, 'tryParseERNativo');
-const { tryParseERNativo, getERNativoData, resetERNativoData } = new Function('XLSX',
-  'let DATA = {fact:{},sit:{},er:{}};\n' +
+const extraerERMensualSrc = extractFn(html, '_extraerERMensualHojaEmpresa');
+const { tryParseERNativo, _extraerERMensualHojaEmpresa, getERNativoData, resetERNativoData } = new Function('XLSX',
+  'let DATA = {fact:{},sit:{},er:{},er_mensual:{},fact_mensual:{},res_mensual:{}};\n' +
   'function computeTotals(){}\nfunction populateSelects(){}\nfunction rebuildActive(){}\n' +
+  extraerERMensualSrc + '\n' +
   tryParseERNativoSrc + '\n' +
   'function getERNativoData(){ return DATA; }\n' +
-  'function resetERNativoData(){ DATA.fact={}; DATA.sit={}; DATA.er={}; }\n' +
-  'return { tryParseERNativo, getERNativoData, resetERNativoData };'
+  'function resetERNativoData(){ DATA.fact={}; DATA.sit={}; DATA.er={}; DATA.er_mensual={}; DATA.fact_mensual={}; DATA.res_mensual={}; }\n' +
+  'return { tryParseERNativo, _extraerERMensualHojaEmpresa, getERNativoData, resetERNativoData };'
 )(XLSX);
 
 let pass = 0, fail = 0;
@@ -321,6 +323,81 @@ group('tryParseERNativo — RESUMEN multi-empresa real vs. RESUMEN de una sola e
   const wbUna = wbFromSheets({ RESUMEN: rowsUnaEmpresa });
   const rUna = tryParseERNativo(wbUna, 'ER 2026.xlsx');
   assert(!rUna, 'una hoja "RESUMEN" de una sola empresa (contribuyente/período, no empresas en columnas) no matchea como multi-empresa, aunque tenga ≥19 filas');
+});
+
+// ── _extraerERMensualHojaEmpresa: extrae el detalle mensual real de la
+//    hoja individual de cada empresa (dentro del mismo libro del RESUMEN
+//    multi-empresa) usando filas "ancla" ya calculadas en el excel
+//    (Ventas, Costo, Utilidad Bruta, Resultado Operativo, Resultado del
+//    Ejercicio) en vez de reclasificar cada línea de gasto idiosincrática.
+//    Se autoverifica contra el total anual ya confiable del RESUMEN (5% de
+//    tolerancia) — si no valida, no se aplica nada para esa empresa/año. ──
+group('_extraerERMensualHojaEmpresa — anclas + verificación contra el RESUMEN', () => {
+  const meses = [1,2,3,4,5,6,7,8,9,10,11,12].map(m => new Date(2022, m - 1, 1));
+
+  const ventas   = [100000, 110000, 90000, 105000, 98000, 120000, 115000, 108000, 99000, 102000, 130000, 140000];
+  const costo    = [-40000, -44000, -36000, -42000, -39200, -48000, -46000, -43200, -39600, -40800, -52000, -56000];
+  const utilB    = ventas.map((v, i) => v + costo[i]);
+  const resOp    = utilB.map(u => Math.round(u * 0.6));
+  const resEj    = resOp.map(r => Math.round(r * 0.8));
+  const sumVentas = ventas.reduce((a, b) => a + b, 0);
+
+  const rowsOk = [
+    ['EMPRESA MENSUAL SAPEM'],
+    [null, ...meses],
+    ['Ventas Netas', ...ventas],
+    ['Costo de Ventas', ...costo],
+    ['Utilidad Bruta', ...utilB],
+    ['Resultado Operativo', ...resOp],
+    ['Resultado del Ejercicio', ...resEj],
+  ];
+  const wsOk = XLSX.utils.aoa_to_sheet(rowsOk, { cellDates: true });
+  const rOk = _extraerERMensualHojaEmpresa(wsOk, sumVentas);
+  assert(!!rOk, 'valida cuando la suma mensual de Ventas coincide con el total anual de referencia (RESUMEN)');
+  if (rOk) {
+    const fVentas = rOk.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fVentas && fVentas.valores[1] === 100000 && fVentas.valores[12] === 140000,
+      'toma los valores mensuales de la fila "Ventas Netas" en el orden correcto de columnas');
+    assert(!!rOk.filas.find(f => f.conceptoStd === 'costo'), 'incluye la fila de Costo como ancla directa');
+    assert(!!rOk.filas.find(f => f.conceptoStd === 'utilBruta'), 'incluye la fila de Utilidad Bruta como ancla directa');
+    const fResOp = rOk.filas.find(f => f.conceptoStd === 'resOperativo');
+    assert(!!fResOp && fResOp.valores[1] === resOp[0], 'incluye Resultado Operativo (ancla) con su propio valor, no recalculado');
+    assert(!!rOk.filas.find(f => f.conceptoStd === 'gastoOper'),
+      'agrupa la diferencia entre Utilidad Bruta y Resultado Operativo en un único renglón "no discriminado" (no reclasifica gasto por gasto)');
+    assert(!!rOk.filas.find(f => f.conceptoStd === 'resEjercicio'), 'incluye Resultado del Ejercicio (ancla) cuando difiere del Resultado Operativo');
+  }
+
+  // Referencia del RESUMEN muy distinta a la suma real de la hoja → no se
+  // aplica nada (se prefiere quedarse sin detalle mensual antes que mostrar
+  // un número mal verificado).
+  const rBad = _extraerERMensualHojaEmpresa(wsOk, sumVentas * 3);
+  assert(rBad === null, 'rechaza (devuelve null) cuando la suma mensual no coincide con la referencia dentro del 5% de tolerancia');
+
+  // Caso real (Rioja Bus 2021): "Ventas Netas" es una sub-partida y aparece
+  // ANTES que "Total Ingresos" (el total real, incluye subsidios) — ambas
+  // filas matchean como ancla "fuerte" de ventas, pero están antes de la
+  // fila de Costo. Debe preferirse la ÚLTIMA coincidencia fuerte antes del
+  // límite (Costo/Utilidad Bruta), no la primera. ─────────────────────────
+  const ventasNetas   = ventas.map(v => Math.round(v * 0.7));
+  const totalIngresos = ventas; // el total real, coincide con la referencia del RESUMEN
+  const rowsRB = [
+    ['RIOJA BUS SAPEM'],
+    [null, ...meses],
+    ['Ventas Netas', ...ventasNetas],
+    ['Total Ingresos', ...totalIngresos],
+    ['Costo de Ventas', ...costo],
+    ['Utilidad Bruta', ...utilB],
+    ['Resultado Operativo', ...resOp],
+    ['Resultado del Ejercicio', ...resEj],
+  ];
+  const wsRB = XLSX.utils.aoa_to_sheet(rowsRB, { cellDates: true });
+  const rRB = _extraerERMensualHojaEmpresa(wsRB, sumVentas);
+  assert(!!rRB, 'RIOJA BUS: valida usando la fila correcta de ventas (Total Ingresos), no la sub-partida');
+  if (rRB) {
+    const fVentasRB = rRB.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fVentasRB && fVentasRB.lbl === 'Total Ingresos',
+      'prefiere la ÚLTIMA coincidencia fuerte de ventas antes del límite (Costo/Utilidad Bruta) — "Total Ingresos", no "Ventas Netas"');
+  }
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
