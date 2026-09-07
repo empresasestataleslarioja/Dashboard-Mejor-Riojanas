@@ -198,6 +198,35 @@ group('_matchEmpresaPortafolio', () => {
     'no inventa una coincidencia para un nombre fuera del portafolio');
 });
 
+// ── _beneficiarioCanonico: pedido real del usuario — un cambio de forma
+//    societaria (ej. "Alfa SAPEM" → "Alfa SAU") hace que las
+//    transferencias de antes y después del cambio queden reportadas con
+//    cada nombre. Los rankings/totales por beneficiario de Transferencias
+//    agrupaban por el texto crudo, así que aparecían como dos
+//    beneficiarios distintos, partiendo el total. Esta función decide
+//    bajo qué nombre agrupar (la empresa del portafolio, si matchea) SIN
+//    tocar el registro original de la transferencia — eso es a propósito
+//    responsabilidad de quien llama a la función, no de esta. ─────────
+group('_beneficiarioCanonico — agrupa transferencias por empresa del portafolio, no por el texto crudo', () => {
+  const src = extractFn(html, '_beneficiarioCanonico');
+  const srcMatch = extractFn(html, '_matchEmpresaPortafolio');
+  const { _beneficiarioCanonico, setRubros } = new Function(
+    'let rubros = {};\n' + srcMatch + '\n' + src + '\n' +
+    'function setRubros(r){ rubros = r; }\n' +
+    'return { _beneficiarioCanonico, setRubros };'
+  )();
+  setRubros({ 'ALFA': 'Industrias', 'CERAMICA RIOJANA': 'Industrias' });
+
+  assert(_beneficiarioCanonico('Alfa SAPEM') === 'ALFA',
+    'agrupa "Alfa SAPEM" bajo la empresa del portafolio "ALFA" (cambio de forma societaria)');
+  assert(_beneficiarioCanonico('Alfa SAU') === 'ALFA',
+    'agrupa "Alfa SAU" bajo la misma empresa "ALFA" — mismo total que "Alfa SAPEM", no partido en dos');
+  assert(_beneficiarioCanonico('Ceramica Riojana SAPEM') === 'CERAMICA RIOJANA',
+    'funciona igual para cualquier empresa del portafolio, no solo el caso de ejemplo');
+  assert(_beneficiarioCanonico('Municipalidad de Chilecito') === 'Municipalidad de Chilecito',
+    'un beneficiario que no es una empresa del portafolio (un tercero real) se deja tal cual, sin inventar una empresa');
+});
+
 // ── _mismoNombreEmpresa: usada por la alerta "Datos faltantes" (¿esta
 //    empresa tiene un balance cargado?) en vez del matcheo por prefijo
 //    fijo que había antes. Bugs reales reportados por el usuario:

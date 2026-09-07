@@ -8311,7 +8311,7 @@ function _rptTransferencias(autoPrint) {
   // Subtítulos de KPIs
   var rows = transFiltered ? transFiltered() : [];
   var total = rows.reduce(function(s,r){return s+(r.importe||0);},0);
-  var nBen  = new Set(rows.map(function(r){return r.beneficiario||'';})).size;
+  var nBen  = new Set(rows.map(function(r){return _beneficiarioCanonico(r.beneficiario||'');})).size;
   var nPagos= rows.length;
   function fM2(v){
     if(!v) return '—';
@@ -8738,6 +8738,24 @@ function _transEmpresa(e) {
     if (bN && eN.length >= 4 && (bN.includes(eN) || eN.includes(bN))) return true;
     return false;
   });
+}
+
+// ── Beneficiario "canónico" para agrupar rankings/totales de
+// Transferencias — NUNCA reescribe el registro original de la
+// transferencia (eso queda tal como lo reportó la provincia en su
+// momento, con la razón social vigente entonces); solo decide bajo qué
+// nombre se suma/agrupa en las tablas de ranking y desglose. Caso real:
+// una empresa cambia de forma societaria (ej. "Alfa SAPEM" → "Alfa SAU")
+// y las transferencias de antes y después del cambio quedan reportadas
+// con cada nombre — sin esto, el ranking las mostraba como si fueran dos
+// beneficiarios distintos, partiendo el total. Usa la misma coincidencia
+// ya probada de _matchEmpresaPortafolio (exacta, o el nombre de la
+// empresa contenido en el del beneficiario) — si el beneficiario no
+// corresponde a ninguna empresa del portafolio (un tercero real, no una
+// de nuestras empresas), se deja el texto tal cual.
+function _beneficiarioCanonico(raw) {
+  if (!raw) return raw;
+  return _matchEmpresaPortafolio(raw) || raw;
 }
 function getRuboLabel(emp) {
   const r = getRubro(emp);
@@ -20279,7 +20297,7 @@ function buildTransferencias() {
   rows.forEach(t => { catTotals[t.categoria] = (catTotals[t.categoria]||0) + t.importe; });
 
   const topCat = TRANS_CATS.filter(c=>catTotals[c]>0).sort((a,b)=>catTotals[b]-catTotals[a]);
-  const nBen   = new Set(rows.map(t=>t.beneficiario)).size;
+  const nBen   = new Set(rows.map(t=>_beneficiarioCanonico(t.beneficiario))).size;
   const nPagos = rows.length;
 
   document.getElementById('kpi-trans').innerHTML = `
@@ -20374,10 +20392,14 @@ function buildTransferencias() {
   }
 
   // ── Gráfico barras: por beneficiario ─────────────────────────
+  // Se agrupa por la empresa "canónica" del portafolio, no por el texto
+  // crudo del beneficiario — así un cambio de razón social (ej. "Alfa
+  // SAPEM" → "Alfa SAU") no aparece como dos beneficiarios distintos.
   const benMap = {};
   rows.forEach(t => {
-    if (!benMap[t.beneficiario]) benMap[t.beneficiario] = {};
-    benMap[t.beneficiario][t.categoria] = (benMap[t.beneficiario][t.categoria]||0) + t.importe;
+    const ben = _beneficiarioCanonico(t.beneficiario);
+    if (!benMap[ben]) benMap[ben] = {};
+    benMap[ben][t.categoria] = (benMap[ben][t.categoria]||0) + t.importe;
   });
   const bens = Object.keys(benMap).sort((a,b) =>
     Object.values(benMap[b]).reduce((s,v)=>s+v,0) - Object.values(benMap[a]).reduce((s,v)=>s+v,0)
@@ -22312,15 +22334,22 @@ function getDrillConfig(id) {
     const pct   = v => (v / total * 100).toFixed(2) + '%';
 
     // ── Agrupaciones ──────────────────────────────────────────
+    // Todas agrupan por la empresa "canónica" del portafolio (ver
+    // _beneficiarioCanonico), no por el texto crudo del beneficiario —
+    // así un cambio de razón social (ej. "Alfa SAPEM" → "Alfa SAU") no
+    // aparece como dos beneficiarios distintos partiendo el total. El
+    // registro original de cada transferencia (t.beneficiario) no se
+    // toca en ningún lado.
     // Por empresa
     const benMap = {};
     rows.forEach(t => {
-      if (!benMap[t.beneficiario]) benMap[t.beneficiario] = { total:0, cats:{}, años:{}, ops:[] };
-      benMap[t.beneficiario].total += t.importe;
-      benMap[t.beneficiario].cats[t.categoria] = (benMap[t.beneficiario].cats[t.categoria]||0) + t.importe;
+      const ben = _beneficiarioCanonico(t.beneficiario);
+      if (!benMap[ben]) benMap[ben] = { total:0, cats:{}, años:{}, ops:[] };
+      benMap[ben].total += t.importe;
+      benMap[ben].cats[t.categoria] = (benMap[ben].cats[t.categoria]||0) + t.importe;
       const aKey = String(t.año||'S/D');
-      benMap[t.beneficiario].años[aKey] = (benMap[t.beneficiario].años[aKey]||0) + t.importe;
-      benMap[t.beneficiario].ops.push(t);
+      benMap[ben].años[aKey] = (benMap[ben].años[aKey]||0) + t.importe;
+      benMap[ben].ops.push(t);
     });
     const bens = Object.entries(benMap).sort((a,b)=>b[1].total-a[1].total);
 
@@ -22328,8 +22357,9 @@ function getDrillConfig(id) {
     const catMap = {};
     TRANS_CATS.forEach(c => catMap[c] = { total:0, bens:{}, años:{} });
     rows.forEach(t => {
+      const ben = _beneficiarioCanonico(t.beneficiario);
       catMap[t.categoria].total += t.importe;
-      catMap[t.categoria].bens[t.beneficiario] = (catMap[t.categoria].bens[t.beneficiario]||0) + t.importe;
+      catMap[t.categoria].bens[ben] = (catMap[t.categoria].bens[ben]||0) + t.importe;
       const aKey = String(t.año||'S/D');
       catMap[t.categoria].años[aKey] = (catMap[t.categoria].años[aKey]||0) + t.importe;
     });
@@ -22338,11 +22368,12 @@ function getDrillConfig(id) {
     // Por año
     const añoMap = {};
     rows.forEach(t => {
+      const ben = _beneficiarioCanonico(t.beneficiario);
       const aKey = String(t.año||'S/D');
       if (!añoMap[aKey]) añoMap[aKey] = { total:0, cats:{}, bens:{} };
       añoMap[aKey].total += t.importe;
       añoMap[aKey].cats[t.categoria] = (añoMap[aKey].cats[t.categoria]||0) + t.importe;
-      añoMap[aKey].bens[t.beneficiario] = (añoMap[aKey].bens[t.beneficiario]||0) + t.importe;
+      añoMap[aKey].bens[ben] = (añoMap[aKey].bens[ben]||0) + t.importe;
     });
     const añoKeys = Object.keys(añoMap).sort();
 
@@ -32572,7 +32603,7 @@ function _rebuildTransSoloGraficos() {
   const topCat = TRANS_CATS.filter(c=>catTotals[c]>0).sort((a,b)=>catTotals[b]-catTotals[a]);
 
   // KPIs
-  const nBen = new Set(rows.map(t=>t.beneficiario)).size;
+  const nBen = new Set(rows.map(t=>_beneficiarioCanonico(t.beneficiario))).size;
   const nSAF = new Set(rows.map(t=>t.saf).filter(Boolean)).size;
   document.getElementById('kpi-trans').innerHTML = `
     <div class="kpi"><div class="kpi-accent" style="background:#47e8ff"></div>
@@ -32615,11 +32646,13 @@ function _rebuildTransSoloGraficos() {
   },{ scales:{ x:{stacked:true,ticks:{maxRotation:45,color:'var(--text)',font:{size:9}}},
     y:{stacked:true,ticks:{callback:v=>fvShort(v*1e6)}} } });
 
-  // Barras por beneficiario
+  // Barras por beneficiario (agrupado por empresa canónica del portafolio,
+  // no por el texto crudo — ver _beneficiarioCanonico)
   const benMap = {};
   rows.forEach(t => {
-    if (!benMap[t.beneficiario]) benMap[t.beneficiario] = {};
-    benMap[t.beneficiario][t.categoria] = (benMap[t.beneficiario][t.categoria]||0) + t.importe;
+    const ben = _beneficiarioCanonico(t.beneficiario);
+    if (!benMap[ben]) benMap[ben] = {};
+    benMap[ben][t.categoria] = (benMap[ben][t.categoria]||0) + t.importe;
   });
   const bens = Object.keys(benMap).sort((a,b)=>
     Object.values(benMap[b]).reduce((s,v)=>s+v,0) - Object.values(benMap[a]).reduce((s,v)=>s+v,0)
