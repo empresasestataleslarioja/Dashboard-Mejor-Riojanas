@@ -235,6 +235,42 @@ group('_erDesdeMonthly — usa DATA.er (anual nativo) cuando no hay detalle mens
   assert(empEr === null, 'una empresa sin ningún dato (ni mensual, ni DATA.er, ni fact/sit) sigue devolviendo null');
 });
 
+// ── _erDesdeMonthly: bug real — al pedirle a los 4 excel reales el
+//    detalle mensual extraído por anclas, Resultado Operativo salía casi
+//    el DOBLE del valor real para varias empresas (ej. VALLE SOL 2022:
+//    855.6M mostrado vs. 427.8M real). Causa: 'resAntesImp' y
+//    'resEjercicio' mapeaban a la MISMA clave 'resultado_operativo' que
+//    'resOperativo' y el agregador las SUMABA todas juntas — una empresa
+//    con fila 'resOperativo' (el ancla real) Y fila 'resEjercicio' (el
+//    resultado del ejercicio, un concepto distinto que el extractor por
+//    anclas siempre agrega por separado) terminaba con ambos valores
+//    sumados en vez de solo el operativo. ─────────────────────────────
+group('_erDesdeMonthly — no duplica ni aproxima Resultado Operativo con Resultado del Ejercicio', () => {
+  setData({
+    er_mensual: {
+      'EMPRESA CON AMBAS FILAS': { '2022': { filas: [
+        { conceptoStd: 'ventas', valores: { 1: 1000000 } },
+        { conceptoStd: 'resOperativo', valores: { 1: 300000 } },     // el ancla real
+        { conceptoStd: 'resEjercicio', valores: { 1: 280000 } },     // resultado final, concepto distinto
+      ] } },
+      'EMPRESA SOLO CON RESULTADO DEL EJERCICIO': { '2022': { filas: [
+        { conceptoStd: 'ventas', valores: { 1: 1000000 } },
+        { conceptoStd: 'resEjercicio', valores: { 1: 280000 } },     // sin Resultado Operativo propio
+      ] } },
+    },
+    er: {},
+    fact: {},
+    sit: { 'EMPRESA SOLO CON RESULTADO DEL EJERCICIO': { '2022': 305000 } }, // valor anual "oficial"
+  });
+  const conAmbas = _erDesdeMonthly('EMPRESA CON AMBAS FILAS');
+  assert(conAmbas['2022'].resultado_operativo === 300000,
+    'usa el valor de la fila "resOperativo" tal cual, sin sumarle la fila "resEjercicio" (que es un concepto distinto)');
+
+  const soloEjercicio = _erDesdeMonthly('EMPRESA SOLO CON RESULTADO DEL EJERCICIO');
+  assert(soloEjercicio['2022'].resultado_operativo === 305000,
+    'sin una fila "resOperativo" propia, cae al valor anual "oficial" (DATA.sit) en vez de aproximar con "resEjercicio" (puede diferir mucho: son conceptos distintos)');
+});
+
 // ── _crossCheckEREmpresaAnio: pedido real del usuario — "control cruzado
 //    entre los reportes de EVOLUCION EMPRESA y de RESULTADO OPERATIVO para
 //    detectar diferencias entre los importes expuestos". Ambos módulos
@@ -399,6 +435,7 @@ group('_extraerERMensualHojaEmpresa — anclas + verificación contra el RESUMEN
   const resOp    = utilB.map(u => Math.round(u * 0.6));
   const resEj    = resOp.map(r => Math.round(r * 0.8));
   const sumVentas = ventas.reduce((a, b) => a + b, 0);
+  const sumResOp  = resOp.reduce((a, b) => a + b, 0);
 
   const rowsOk = [
     ['EMPRESA MENSUAL SAPEM'],
@@ -410,7 +447,7 @@ group('_extraerERMensualHojaEmpresa — anclas + verificación contra el RESUMEN
     ['Resultado del Ejercicio', ...resEj],
   ];
   const wsOk = XLSX.utils.aoa_to_sheet(rowsOk, { cellDates: true });
-  const rOk = _extraerERMensualHojaEmpresa(wsOk, sumVentas);
+  const rOk = _extraerERMensualHojaEmpresa(wsOk, sumVentas, sumResOp);
   assert(!!rOk, 'valida cuando la suma mensual de Ventas coincide con el total anual de referencia (RESUMEN)');
   if (rOk) {
     const fVentas = rOk.filas.find(f => f.conceptoStd === 'ventas');
@@ -428,7 +465,7 @@ group('_extraerERMensualHojaEmpresa — anclas + verificación contra el RESUMEN
   // Referencia del RESUMEN muy distinta a la suma real de la hoja → no se
   // aplica nada (se prefiere quedarse sin detalle mensual antes que mostrar
   // un número mal verificado).
-  const rBad = _extraerERMensualHojaEmpresa(wsOk, sumVentas * 3);
+  const rBad = _extraerERMensualHojaEmpresa(wsOk, sumVentas * 3, sumResOp);
   assert(rBad === null, 'rechaza (devuelve null) cuando la suma mensual no coincide con la referencia dentro del 5% de tolerancia');
 
   // Caso real (Rioja Bus 2021): "Ventas Netas" es una sub-partida y aparece
@@ -449,12 +486,93 @@ group('_extraerERMensualHojaEmpresa — anclas + verificación contra el RESUMEN
     ['Resultado del Ejercicio', ...resEj],
   ];
   const wsRB = XLSX.utils.aoa_to_sheet(rowsRB, { cellDates: true });
-  const rRB = _extraerERMensualHojaEmpresa(wsRB, sumVentas);
+  const rRB = _extraerERMensualHojaEmpresa(wsRB, sumVentas, sumResOp);
   assert(!!rRB, 'RIOJA BUS: valida usando la fila correcta de ventas (Total Ingresos), no la sub-partida');
   if (rRB) {
     const fVentasRB = rRB.filas.find(f => f.conceptoStd === 'ventas');
     assert(!!fVentasRB && fVentasRB.lbl === 'Total Ingresos',
       'prefiere la ÚLTIMA coincidencia fuerte de ventas antes del límite (Costo/Utilidad Bruta) — "Total Ingresos", no "Ventas Netas"');
+  }
+});
+
+// ── _extraerERMensualHojaEmpresa: conciliación exacta contra el RESUMEN, y
+//    Resultado Operativo validado por separado. Pedido real del usuario:
+//    "los reportes deberían dar los mismos montos por empresa" — antes,
+//    el extractor aceptaba a Ventas dentro de una tolerancia del 5% sin
+//    corregir el residual (el total mostrado quedaba "cerca" del RESUMEN,
+//    no exacto), y Resultado Operativo no se validaba en absoluto: contra
+//    los 4 excel reales, 15 de 65 empresas con Resultado Operativo
+//    mensual estaban a más del 30% del valor real (algunas con el signo
+//    invertido). ──────────────────────────────────────────────────────
+group('_extraerERMensualHojaEmpresa — concilia Ventas exacto y valida Resultado Operativo por separado', () => {
+  const meses2 = [1,2,3,4,5,6,7,8,9,10,11,12].map(m => new Date(2022, m - 1, 1));
+  const ventas2 = [100000, 110000, 90000, 105000, 98000, 120000, 115000, 108000, 99000, 102000, 130000, 140000];
+  const resOp2  = [10000, 11000, 9000, 10500, 9800, 12000, 11500, 10800, 9900, 10200, 13000, 14000];
+  const sumVentas2 = ventas2.reduce((a, b) => a + b, 0);
+  const sumResOp2  = resOp2.reduce((a, b) => a + b, 0);
+
+  const rows2 = [
+    ['EMPRESA CONCILIACION'],
+    [null, ...meses2],
+    ['Ventas Netas', ...ventas2],
+    ['Resultado Operativo', ...resOp2],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2, { cellDates: true });
+
+  // Referencia del RESUMEN levemente distinta a la suma real de la hoja
+  // (redondeo/tolerancia, dentro del 5%) — el resultado debe coincidir
+  // EXACTO con la referencia, no solo "cerca".
+  const refVentasConResidual = sumVentas2 + 850; // ~0.07% de diferencia, dentro del 5%
+  const rConResidual = _extraerERMensualHojaEmpresa(ws2, refVentasConResidual, sumResOp2);
+  assert(!!rConResidual, 'valida cuando el residual está dentro de la tolerancia');
+  if (rConResidual) {
+    const fV = rConResidual.filas.find(f => f.conceptoStd === 'ventas');
+    const sumaFinal = Object.values(fV.valores).reduce((a, b) => a + b, 0);
+    assert(sumaFinal === refVentasConResidual,
+      'concilia el residual como ajuste en el último mes — el total coincide EXACTO con el RESUMEN, no solo dentro del 5%');
+    assert(fV.valores[1] === ventas2[0] && fV.valores[6] === ventas2[5],
+      'no toca los meses que no son el último — el ajuste de conciliación solo se aplica al mes final');
+  }
+
+  // Resultado Operativo con signo invertido respecto del RESUMEN (bug real
+  // encontrado en varias empresas: AGROANDINA 2024, AGROARAUCO 2023, etc.)
+  // — debe rechazarse (la fila no debe aparecer), no conciliarse a la
+  // fuerza con un ajuste gigante.
+  const refResOpInvertido = -sumResOp2;
+  const rResOpMalo = _extraerERMensualHojaEmpresa(ws2, sumVentas2, refResOpInvertido);
+  assert(!!rResOpMalo, 'sigue devolviendo el detalle de Ventas aunque Resultado Operativo no valide');
+  if (rResOpMalo) {
+    assert(!rResOpMalo.filas.find(f => f.conceptoStd === 'resOperativo'),
+      'omite la fila "resOperativo" cuando su ancla no coincide con el RESUMEN (signo invertido) — no la fuerza con un ajuste enorme');
+    assert(!!rResOpMalo.filas.find(f => f.conceptoStd === 'ventas'),
+      'conserva el detalle de Ventas, que sí validó — no rechaza toda la empresa por un problema aislado en Resultado Operativo');
+  }
+
+  // Resultado Operativo dentro de tolerancia → se concilia exacto, igual que Ventas.
+  const rResOpOk = _extraerERMensualHojaEmpresa(ws2, sumVentas2, sumResOp2 - 500);
+  if (rResOpOk) {
+    const fR = rResOpOk.filas.find(f => f.conceptoStd === 'resOperativo');
+    const sumaR = Object.values(fR.valores).reduce((a, b) => a + b, 0);
+    assert(sumaR === sumResOp2 - 500, 'Resultado Operativo también se concilia exacto contra su propia referencia del RESUMEN cuando valida');
+  }
+
+  // Solo hay "Resultado del Ejercicio" (sin fila "Resultado Operativo" en
+  // la hoja) — no debe hacerse pasar por Resultado Operativo, porque son
+  // conceptos distintos que pueden diferir bastante.
+  const rowsSoloEjercicio = [
+    ['EMPRESA SOLO EJERCICIO'],
+    [null, ...meses2],
+    ['Ventas Netas', ...ventas2],
+    ['Resultado del Ejercicio', ...resOp2],
+  ];
+  const wsSoloEjercicio = XLSX.utils.aoa_to_sheet(rowsSoloEjercicio, { cellDates: true });
+  const rSoloEjercicio = _extraerERMensualHojaEmpresa(wsSoloEjercicio, sumVentas2, sumResOp2);
+  assert(!!rSoloEjercicio, 'igual devuelve detalle cuando solo hay Resultado del Ejercicio (sin Resultado Operativo)');
+  if (rSoloEjercicio) {
+    assert(!rSoloEjercicio.filas.find(f => f.conceptoStd === 'resOperativo'),
+      'no etiqueta "Resultado del Ejercicio" como si fuera Resultado Operativo');
+    assert(!!rSoloEjercicio.filas.find(f => f.conceptoStd === 'resEjercicio'),
+      'lo muestra bajo su propio concepto (resEjercicio), informativo pero no conciliado (no hay referencia de RESUMEN para ese concepto)');
   }
 });
 
@@ -474,6 +592,7 @@ group('_extraerERMensualHojaEmpresa — encabezados de mes como texto y variante
   const utilB  = ventas.map((v, i) => v + costo[i]);
   const resOp  = utilB.map(u => Math.round(u * 0.6));
   const sumVentas = ventas.reduce((a, b) => a + b, 0);
+  const sumResOp  = resOp.reduce((a, b) => a + b, 0);
 
   // Caso real AGROANDINA: los meses vienen como texto ("ENERO", "FEBRERO"...).
   const rowsTexto = [
@@ -485,7 +604,7 @@ group('_extraerERMensualHojaEmpresa — encabezados de mes como texto y variante
     ['UTILIDAD OPERATIVA', ...resOp],
   ];
   const wsTexto = XLSX.utils.aoa_to_sheet(rowsTexto);
-  const rTexto = _extraerERMensualHojaEmpresa(wsTexto, sumVentas);
+  const rTexto = _extraerERMensualHojaEmpresa(wsTexto, sumVentas, sumResOp);
   assert(!!rTexto, 'reconoce un encabezado de meses en texto ("ENERO", "FEBRERO"...), no solo fechas de Excel');
   if (rTexto) {
     const fV = rTexto.filas.find(f => f.conceptoStd === 'ventas');
@@ -506,7 +625,7 @@ group('_extraerERMensualHojaEmpresa — encabezados de mes como texto y variante
     ['RESULTADO OPERATIVO', resOp[0], resOp[1], resOp[2], resOp[3], resOp[4], resOp[5], null, resOp[6], resOp[7], resOp[8], resOp[9], resOp[10], resOp[11]],
   ];
   const wsMMYYYY = XLSX.utils.aoa_to_sheet(rowsMMYYYY);
-  const rMMYYYY = _extraerERMensualHojaEmpresa(wsMMYYYY, sumVentas);
+  const rMMYYYY = _extraerERMensualHojaEmpresa(wsMMYYYY, sumVentas, sumResOp);
   assert(!!rMMYYYY, 'reconoce un encabezado de meses en formato "MM/AAAA" (texto), ignorando la columna de subtotal intercalada');
   if (rMMYYYY) {
     const fV = rMMYYYY.filas.find(f => f.conceptoStd === 'ventas');
@@ -527,7 +646,7 @@ group('_extraerERMensualHojaEmpresa — encabezados de mes como texto y variante
     ['UTILIDAD OPERATIVA', ...resOp],
   ];
   const wsHeaderVacio = XLSX.utils.aoa_to_sheet(rowsHeaderVacio);
-  const rHeaderVacio = _extraerERMensualHojaEmpresa(wsHeaderVacio, sumVentas);
+  const rHeaderVacio = _extraerERMensualHojaEmpresa(wsHeaderVacio, sumVentas, sumResOp);
   assert(!!rHeaderVacio, 'no se rinde cuando la primera fila que menciona "ingresos" es un título de sección sin datos');
   if (rHeaderVacio) {
     const fV = rHeaderVacio.filas.find(f => f.conceptoStd === 'ventas');

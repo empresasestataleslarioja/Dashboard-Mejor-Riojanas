@@ -14824,13 +14824,26 @@ function _erDesdeMonthly(emp) {
       gastoCom:      'gastos_comercializacion',
       resOperativo:  'resultado_operativo',
       resFinanciero: 'gastos_financieros',   // resultado financiero como partida
-      resAntesImp:   'resultado_operativo',  // antes de impuestos → aproximar como operativo
-      resEjercicio:  'resultado_operativo',  // resultado del ejercicio → idem
     };
     Object.entries(erM).forEach(([yr, data]) => {
       if (!data || !Array.isArray(data.filas)) return;
       const acc = {};
+      // resAntesImp/resEjercicio (Resultado antes de Impuestos / del
+      // Ejercicio) NO se usan como aproximación de Resultado Operativo —
+      // son conceptos distintos que pueden diferir mucho (incluyen
+      // resultado financiero, impuestos, etc.). Antes mapeaban a la misma
+      // clave 'resultado_operativo' y se SUMABAN con la fila real
+      // 'resOperativo' cuando ambas existían (una empresa con ambas filas
+      // — como el ER extraído por anclas del RESUMEN histórico 2021-2024,
+      // que siempre trae las dos por separado — terminaba mostrando un
+      // Resultado Operativo ~duplicado); y aun corrigiendo eso, usarlas
+      // como aproximación cuando no hay 'resOperativo' propio mostraba un
+      // número que puede diferir 50%+ del Resultado Operativo real (son
+      // conceptos distintos). Si no hay una fila 'resOperativo' genuina,
+      // es mejor caer directo al valor anual "oficial" (DATA.sit, más
+      // abajo) que aproximar con un concepto diferente.
       data.filas.forEach(f => {
+        if (f.conceptoStd === 'resAntesImp' || f.conceptoStd === 'resEjercicio') return;
         const clave = MAP[f.conceptoStd];
         if (!clave) return;
         const suma = Object.values(f.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -14840,7 +14853,15 @@ function _erDesdeMonthly(emp) {
       if (acc.utilidad_bruta == null && acc.ventas_netas != null) {
         acc.utilidad_bruta = (acc.ventas_netas || 0) + (acc.costo_ventas || 0);
       }
-      if (acc.resultado_operativo == null && acc.utilidad_bruta != null) {
+      // Solo derivar Resultado Operativo desde Utilidad Bruta + gastos si
+      // efectivamente hay ALGO de ese detalle de gastos (import individual
+      // clasificado por concepto) — el ER extraído por anclas del RESUMEN
+      // histórico (2021-2024) no trae gastos_admin/gastos_comercializacion
+      // por separado, así que sin este chequeo esto quedaba calculando
+      // Resultado Operativo = Utilidad Bruta (sin restar ningún gasto) en
+      // vez de caer al valor anual "oficial" (DATA.sit) de abajo.
+      if (acc.resultado_operativo == null && acc.utilidad_bruta != null &&
+          (acc.gastos_admin != null || acc.gastos_comercializacion != null)) {
         acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0);
       }
       // Fallback: si todavía no hay resultado_operativo, derivarlo de fact/sit de ese año
@@ -16869,8 +16890,11 @@ function _erStdAnual(emp, yr) {
     if (utilBruta == null && ventas != null && costo != null)
       utilBruta = ventas + costo;
 
+    // Solo derivar de Utilidad Bruta si hay ALGÚN gasto clasificado (ver
+    // el mismo fix en buildEvolucionMensual) — si no, queda en blanco en
+    // vez de mostrar Resultado Operativo = Utilidad Bruta.
     let resOp = gv('resOperativo', m);
-    if (resOp == null && (utilBruta != null || gastoAdm != null || gastoCom != null || gastoOper != null))
+    if (resOp == null && (gastoAdm != null || gastoCom != null || gastoOper != null))
       resOp = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (otrosIng || 0) + (otrosGas || 0);
 
     let resAntesImp = gv('resAntesImp', m);
@@ -18365,8 +18389,13 @@ function buildEvolucionMensual(emp) {
         if (utilBruta == null && (ventas != null || costo != null))
           utilBruta = (ventas || 0) + (costo || 0);
         // Resultado Operativo: total si vino, sino calcular con TODOS los gastos
+        // — pero solo si hay ALGÚN gasto clasificado; si lo único que hay es
+        // Utilidad Bruta (ej. ER extraído por anclas del RESUMEN histórico
+        // cuando el ancla de Resultado Operativo no validó y se omitió),
+        // esto terminaba mostrando Resultado Operativo = Utilidad Bruta
+        // (sin restar ningún gasto) en vez de dejarlo en blanco.
         let resOperativo = gv('resOperativo', m);
-        if (resOperativo == null && (utilBruta != null || gastoAdm != null || gastoCom != null || gastoOper != null))
+        if (resOperativo == null && (gastoAdm != null || gastoCom != null || gastoOper != null))
           resOperativo = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (otrosIng || 0) + (otrosGas || 0);
         // Resultado antes de Imp.
         let resAntesImp = gv('resAntesImp', m);
@@ -23041,7 +23070,17 @@ function descargarModeloTransferencias() {
 // mensual sumada no coincide (±5%) con el total anual ya validado del
 // RESUMEN — esa verificación cruzada es la que evita aplicar un detalle
 // mal ubicado: ante la duda, la empresa se queda con el anual nada más.
-function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
+// Resultado Operativo se valida igual (independiente de Ventas): si su
+// ancla no coincide con el RESUMEN dentro de la misma tolerancia, esa
+// fila se omite del todo en vez de mostrarse — el desglose (Evolución
+// Empresa / Resultado Operativo) cae solo entonces al valor anual
+// "oficial" (DATA.sit), que sigue disponible vía _erDesdeMonthly.
+// Ambas filas, cuando sí validan, se concilian: se les agrega el
+// pequeño residual de redondeo (dentro del 5% tolerado) como un ajuste
+// visible en el último mes con dato, para que el TOTAL mostrado en los
+// reportes coincida EXACTO con Facturación/Resultado Operativo
+// "oficiales" — no solo "cerca". Nunca se reescriben los demás meses.
+function _extraerERMensualHojaEmpresa(ws, ventasAnualRef, resOperativoAnualRef) {
   if (!ws) return null;
   const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
   if (!rows.length) return null;
@@ -23105,13 +23144,39 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
     cols.forEach(({c, mes}) => { const v = rows[r][c]; if (typeof v === 'number') out[mes] = v; });
     return out;
   };
-  const diffVals = (rA, rB) => { // valores de rA - rB, mes a mes
+  // valores de A - B, mes a mes. A/B pueden ser un número de fila (lee la
+  // celda cruda de la hoja) o un objeto {mes:valor} ya armado — esto último
+  // permite restar contra una fila ya conciliada (ver _conciliar) en vez
+  // de la cruda, para que el renglón agrupado seguido quede consistente
+  // con el ajuste de conciliación en el mismo mes.
+  const diffVals = (A, B) => {
+    const valsOf = x => typeof x === 'number' ? rowVals(x) : x;
+    const va = valsOf(A) || {}, vb = valsOf(B) || {};
     const out = {};
-    cols.forEach(({c, mes}) => {
-      const a = rows[rA]?.[c], b = rows[rB]?.[c];
+    cols.forEach(({mes}) => {
+      const a = va[mes], b = vb[mes];
       if (typeof a === 'number' || typeof b === 'number') out[mes] = (typeof a==='number'?a:0) - (typeof b==='number'?b:0);
     });
     return out;
+  };
+  // Agrega el residual (ref - suma) como ajuste visible en el último mes
+  // con dato — nunca cambia qué mes "parece" más chico o más grande de
+  // forma proporcional, solo cierra la diferencia contra el total ya
+  // confiable del RESUMEN. Si no hay residual apreciable (>$1), no toca nada.
+  const _conciliar = (valores, ref) => {
+    if (ref == null || !valores) return valores;
+    const meses = Object.keys(valores).map(Number);
+    if (!meses.length) return valores;
+    const suma = meses.reduce((s, m) => s + valores[m], 0);
+    const diff = ref - suma;
+    if (Math.abs(diff) < 1) return valores;
+    const ultimo = Math.max(...meses);
+    return { ...valores, [ultimo]: (valores[ultimo] || 0) + diff };
+  };
+  const _validaRef = (sum, ref) => {
+    if (ref == null) return false;
+    if (ref === 0) return sum == null || sum === 0;
+    return sum != null && Math.abs((sum - ref) / ref) <= 0.05;
   };
 
   const from = hdrRow + 1, to = rows.length;
@@ -23135,36 +23200,62 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
     const weakCand = boundRow != null ? weakV.filter(r => r < boundRow) : weakV;
     ventasR = pick(weakCand, false) ?? pick(weakV, false);
   }
-  const resOpR  = findAll(RE_RES_OPERATIVO, from, to)[0] ?? null;
+  let resOpR    = findAll(RE_RES_OPERATIVO, from, to)[0] ?? null;
   const resFinR = findAll(RE_RES_FINAL, from, to)[0] ?? null;
-  if (ventasR == null || (resOpR == null && resFinR == null)) return null;
+  if (ventasR == null) return null;
 
   // Verificación cruzada contra el total anual del RESUMEN (ya validado) —
   // sin esto no se aplica nada para esa empresa.
   const ventasSum = rowSum(ventasR);
-  if (ventasAnualRef == null) return null;
-  if (ventasAnualRef === 0) { if (!(ventasSum == null || ventasSum === 0)) return null; }
-  else if (ventasSum == null || Math.abs((ventasSum - ventasAnualRef) / ventasAnualRef) > 0.05) return null;
+  if (!_validaRef(ventasSum, ventasAnualRef)) return null;
+
+  // Resultado Operativo se valida por separado: la fila puede EXISTIR con
+  // un rótulo reconocido pero corresponder a un concepto distinto (o venir
+  // con el signo invertido) — se comprobó contra los 4 excel reales que
+  // esto pasa en ~1 de cada 4 empresas con detalle mensual. Si no valida
+  // (o no se encontró ninguna fila de resultado en la hoja), se omite del
+  // desglose — igual se devuelve el detalle de Ventas/Costo/Utilidad
+  // Bruta, que sí validó, en vez de rechazar toda la empresa por un
+  // problema aislado en el resultado. El desglose de Resultado Operativo
+  // cae al valor anual "oficial" (DATA.sit) en vez de mostrar un número
+  // que no coincide con el RESUMEN.
+  if (resOpR != null && !_validaRef(rowSum(resOpR), resOperativoAnualRef)) resOpR = null;
 
   const filas = [];
-  filas.push({ lbl: String(rows[ventasR][0]).trim(), conceptoStd:'ventas', valores: rowVals(ventasR) });
+  filas.push({ lbl: String(rows[ventasR][0]).trim(), conceptoStd:'ventas', valores: _conciliar(rowVals(ventasR), ventasAnualRef) });
   if (costoR != null) filas.push({ lbl: String(rows[costoR][0]).trim(), conceptoStd:'costo', valores: rowVals(costoR) });
   if (utilR != null) filas.push({ lbl: String(rows[utilR][0]).trim(), conceptoStd:'utilBruta', valores: rowVals(utilR) });
   if (resOpR != null) {
     // Bucket único con la diferencia entre Utilidad Bruta (o Ventas, si no
     // hay Utilidad Bruta) y Resultado Operativo — no se reclasifica el
-    // detalle de gastos individual, se muestra agrupado.
+    // detalle de gastos individual, se muestra agrupado. Se resta contra
+    // el Resultado Operativo YA conciliado, para que el renglón agrupado
+    // absorba el mismo ajuste y la aritmética del mes conciliado siga
+    // cerrando (Utilidad Bruta − Gastos = Resultado Operativo, exacto).
+    const resOpValores = _conciliar(rowVals(resOpR), resOperativoAnualRef);
     const base = utilR ?? ventasR;
-    filas.push({ lbl:'Gastos (detalle no discriminado del original)', conceptoStd:'gastoOper', valores: diffVals(base, resOpR) });
-    filas.push({ lbl: String(rows[resOpR][0]).trim(), conceptoStd:'resOperativo', valores: rowVals(resOpR) });
+    filas.push({ lbl:'Gastos (detalle no discriminado del original)', conceptoStd:'gastoOper', valores: diffVals(base, resOpValores) });
+    filas.push({ lbl: String(rows[resOpR][0]).trim(), conceptoStd:'resOperativo', valores: resOpValores });
   }
   if (resFinR != null && resFinR !== resOpR) {
-    const base2 = resOpR ?? utilR ?? ventasR;
-    filas.push({ lbl:'Resultado financiero y otros (detalle no discriminado)', conceptoStd:'resFinanciero', valores: diffVals(resFinR, base2) });
-    filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resEjercicio', valores: rowVals(resFinR) });
-  } else if (resOpR == null && resFinR != null) {
-    // Solo hay resultado final (ej. "Utilidad Neta"), sin operativo propio.
-    filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resOperativo', valores: rowVals(resFinR) });
+    if (resOpR != null) {
+      // Hay Resultado Operativo propio (ya validado y conciliado arriba):
+      // el resultado financiero y del ejercicio se muestran como conceptos
+      // aparte, agrupando lo que no se explica por el Resultado Operativo.
+      const base2 = _conciliar(rowVals(resOpR), resOperativoAnualRef);
+      filas.push({ lbl:'Resultado financiero y otros (detalle no discriminado)', conceptoStd:'resFinanciero', valores: diffVals(resFinR, base2) });
+      filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resEjercicio', valores: rowVals(resFinR) });
+    } else {
+      // No hay Resultado Operativo propio confiable (no se encontró, o no
+      // validó contra el RESUMEN) — "Resultado del Ejercicio" es un
+      // concepto DISTINTO (incluye resultado financiero, impuestos, etc.)
+      // que puede diferir bastante del operativo real: se muestra bajo su
+      // propio concepto, sin hacerlo pasar por Resultado Operativo (ese
+      // cae directo al valor anual "oficial" del RESUMEN, vía
+      // _erDesdeMonthly, en vez de mostrar una aproximación que podría no
+      // coincidir).
+      filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resEjercicio', valores: rowVals(resFinR) });
+    }
   }
   return { filas };
 }
@@ -23349,7 +23440,7 @@ function tryParseERNativo(wb, fname) {
       const yS = String(detectedYear);
       if (!DATA.er_mensual[emp]?.[yS]) {
         const ws2 = _resolveHojaEmpresa(wb, rawName);
-        const mensual = _extraerERMensualHojaEmpresa(ws2, erRow.ventas_netas);
+        const mensual = _extraerERMensualHojaEmpresa(ws2, erRow.ventas_netas, erRow.resultado_operativo);
         if (mensual) {
           if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
           DATA.er_mensual[emp][yS] = { filas: mensual.filas, conceptos:{}, esTrimestral:false };
