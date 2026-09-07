@@ -81,14 +81,16 @@ const { _erDesdeMonthly, setData } = new Function(
 // devuelve el parser y qué queda en DATA.er.
 const tryParseERNativoSrc = extractFn(html, 'tryParseERNativo');
 const extraerERMensualSrc = extractFn(html, '_extraerERMensualHojaEmpresa');
-const { tryParseERNativo, _extraerERMensualHojaEmpresa, getERNativoData, resetERNativoData } = new Function('XLSX',
+const resolveHojaSrc = extractFn(html, '_resolveHojaEmpresa');
+const { tryParseERNativo, _extraerERMensualHojaEmpresa, _resolveHojaEmpresa, getERNativoData, resetERNativoData } = new Function('XLSX',
   'let DATA = {fact:{},sit:{},er:{},er_mensual:{},fact_mensual:{},res_mensual:{}};\n' +
   'function computeTotals(){}\nfunction populateSelects(){}\nfunction rebuildActive(){}\n' +
   extraerERMensualSrc + '\n' +
+  resolveHojaSrc + '\n' +
   tryParseERNativoSrc + '\n' +
   'function getERNativoData(){ return DATA; }\n' +
   'function resetERNativoData(){ DATA.fact={}; DATA.sit={}; DATA.er={}; DATA.er_mensual={}; DATA.fact_mensual={}; DATA.res_mensual={}; }\n' +
-  'return { tryParseERNativo, _extraerERMensualHojaEmpresa, getERNativoData, resetERNativoData };'
+  'return { tryParseERNativo, _extraerERMensualHojaEmpresa, _resolveHojaEmpresa, getERNativoData, resetERNativoData };'
 )(XLSX);
 
 let pass = 0, fail = 0;
@@ -398,6 +400,108 @@ group('_extraerERMensualHojaEmpresa — anclas + verificación contra el RESUMEN
     assert(!!fVentasRB && fVentasRB.lbl === 'Total Ingresos',
       'prefiere la ÚLTIMA coincidencia fuerte de ventas antes del límite (Costo/Utilidad Bruta) — "Total Ingresos", no "Ventas Netas"');
   }
+});
+
+// ── _extraerERMensualHojaEmpresa: encabezados de mes como TEXTO y otras
+//    variantes reales. Bug real: al recargar los RESUMEN históricos de
+//    2021/2022, la enorme mayoría de las hojas por empresa no traían el
+//    mes como fecha de Excel (único formato que el extractor reconocía al
+//    principio) sino como texto — "ENERO", "01/2021" — o usaban rótulos
+//    de resultado distintos ("UTILIDAD OPERATIVA" en vez de "RESULTADO
+//    OPERATIVO"), o tenían un renglón de sección vacío ("INGRESOS", sin
+//    datos) justo antes de la fila real de ventas. Todo eso hacía que casi
+//    ninguna empresa de 2021/2022 mostrara detalle mensual en Evolución
+//    Empresa, aunque el excel sí lo traía. ──────────────────────────────
+group('_extraerERMensualHojaEmpresa — encabezados de mes como texto y variantes reales de rótulos', () => {
+  const ventas = [100000, 110000, 90000, 105000, 98000, 120000, 115000, 108000, 99000, 102000, 130000, 140000];
+  const costo  = [-40000, -44000, -36000, -42000, -39200, -48000, -46000, -43200, -39600, -40800, -52000, -56000];
+  const utilB  = ventas.map((v, i) => v + costo[i]);
+  const resOp  = utilB.map(u => Math.round(u * 0.6));
+  const sumVentas = ventas.reduce((a, b) => a + b, 0);
+
+  // Caso real AGROANDINA: los meses vienen como texto ("ENERO", "FEBRERO"...).
+  const rowsTexto = [
+    ['AGROANDINA'],
+    [null, 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'],
+    ['VENTAS NETAS', ...ventas],
+    ['Costo de Ventas', ...costo],
+    ['UTILIDAD BRUTA', ...utilB],
+    ['UTILIDAD OPERATIVA', ...resOp],
+  ];
+  const wsTexto = XLSX.utils.aoa_to_sheet(rowsTexto);
+  const rTexto = _extraerERMensualHojaEmpresa(wsTexto, sumVentas);
+  assert(!!rTexto, 'reconoce un encabezado de meses en texto ("ENERO", "FEBRERO"...), no solo fechas de Excel');
+  if (rTexto) {
+    const fV = rTexto.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fV && fV.valores[1] === 100000 && fV.valores[12] === 140000,
+      'asigna cada columna al número de mes real (1=enero..12=diciembre), no a su posición');
+    assert(!!rTexto.filas.find(f => f.conceptoStd === 'resOperativo'),
+      '"UTILIDAD OPERATIVA" se reconoce como Resultado Operativo (no solo "RESULTADO OPERATIVO")');
+  }
+
+  // Caso real ALFA SAU: los meses vienen como "MM/AAAA", con una columna de
+  // subtotal intercalada a mitad de año que NO es un mes y debe ignorarse.
+  const rowsMMYYYY = [
+    ['ALFA SAU'],
+    ['DETALLE', '01/2021', '02/2021', '03/2021', '04/2021', '05/2021', '06/2021', 'SUBTOTAL AL 30/06/2021', '07/2021', '08/2021', '09/2021', '10/2021', '11/2021', '12/2021'],
+    ['TOTAL VENTAS', ventas[0], ventas[1], ventas[2], ventas[3], ventas[4], ventas[5], ventas[0]+ventas[1]+ventas[2]+ventas[3]+ventas[4]+ventas[5], ventas[6], ventas[7], ventas[8], ventas[9], ventas[10], ventas[11]],
+    ['Costo de Ventas', costo[0], costo[1], costo[2], costo[3], costo[4], costo[5], null, costo[6], costo[7], costo[8], costo[9], costo[10], costo[11]],
+    ['UTILIDAD BRUTA', utilB[0], utilB[1], utilB[2], utilB[3], utilB[4], utilB[5], null, utilB[6], utilB[7], utilB[8], utilB[9], utilB[10], utilB[11]],
+    ['RESULTADO OPERATIVO', resOp[0], resOp[1], resOp[2], resOp[3], resOp[4], resOp[5], null, resOp[6], resOp[7], resOp[8], resOp[9], resOp[10], resOp[11]],
+  ];
+  const wsMMYYYY = XLSX.utils.aoa_to_sheet(rowsMMYYYY);
+  const rMMYYYY = _extraerERMensualHojaEmpresa(wsMMYYYY, sumVentas);
+  assert(!!rMMYYYY, 'reconoce un encabezado de meses en formato "MM/AAAA" (texto), ignorando la columna de subtotal intercalada');
+  if (rMMYYYY) {
+    const fV = rMMYYYY.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fV && fV.valores[1] === ventas[0] && fV.valores[6] === ventas[5] && fV.valores[7] === ventas[6],
+      'no desalinea los meses posteriores al subtotal intercalado (julio sigue siendo el mes 7, no el 8vo dato)');
+  }
+
+  // Caso real AGROARAUCO: la fila "INGRESOS" es solo un título de sección
+  // (sin datos) y aparece antes que la fila real "Ventas Brutas" — debe
+  // preferirse la fila con datos, no la primera que matchea el regex.
+  const rowsHeaderVacio = [
+    ['AGROARAUCO'],
+    [null, 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+    ['INGRESOS'], // título de sección, sin ningún valor
+    ['Ventas Brutas', ...ventas],
+    ['Costo de Ventas', ...costo],
+    ['UTILIDAD BRUTA', ...utilB],
+    ['UTILIDAD OPERATIVA', ...resOp],
+  ];
+  const wsHeaderVacio = XLSX.utils.aoa_to_sheet(rowsHeaderVacio);
+  const rHeaderVacio = _extraerERMensualHojaEmpresa(wsHeaderVacio, sumVentas);
+  assert(!!rHeaderVacio, 'no se rinde cuando la primera fila que menciona "ingresos" es un título de sección sin datos');
+  if (rHeaderVacio) {
+    const fV = rHeaderVacio.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fV && fV.lbl === 'Ventas Brutas',
+      'prefiere la fila que realmente tiene los montos mensuales ("Ventas Brutas") en vez del título de sección vacío ("INGRESOS")');
+  }
+});
+
+// ── _resolveHojaEmpresa: el texto del encabezado de columna del RESUMEN no
+//    siempre coincide letra por letra con el nombre real de la pestaña de
+//    esa empresa en el mismo libro. Bug real: "BR. SERVICIOS FINANCIEROS",
+//    "PUERTAS DE SOL" y "VIENTOS ARAUCO RENOVABLE" (texto del RESUMEN) no
+//    encontraban su pestaña ("BR SERVICIOS FINANCIEROS", "PUERTAS DEL
+//    SOL", "VIENTOS DE ARAUCO RENOVABLES") con el match exacto original,
+//    así que esas empresas nunca llegaban a intentar el detalle mensual. ─
+group('_resolveHojaEmpresa — nombre de columna del RESUMEN vs. nombre real de la pestaña', () => {
+  const wb = wbFromSheets({
+    RESUMEN: [['x']],
+    'BR SERVICIOS FINANCIEROS': [['dato']],
+    'PUERTAS DEL SOL': [['dato']],
+    'VIENTOS DE ARAUCO RENOVABLES': [['dato']],
+  });
+  assert(_resolveHojaEmpresa(wb, 'BR. SERVICIOS FINANCIEROS') === wb.Sheets['BR SERVICIOS FINANCIEROS'],
+    'ignora diferencias de puntuación ("BR." vs "BR")');
+  assert(_resolveHojaEmpresa(wb, 'PUERTAS DE SOL') === wb.Sheets['PUERTAS DEL SOL'],
+    'tolera artículos distintos ("DE SOL" vs "DEL SOL")');
+  assert(_resolveHojaEmpresa(wb, 'VIENTOS ARAUCO RENOVABLE') === wb.Sheets['VIENTOS DE ARAUCO RENOVABLES'],
+    'tolera singular/plural y un artículo faltante ("VIENTOS ARAUCO RENOVABLE" vs "VIENTOS DE ARAUCO RENOVABLES")');
+  assert(!_resolveHojaEmpresa(wb, 'UNA EMPRESA QUE NO EXISTE'),
+    'no inventa una coincidencia para un nombre sin ninguna pestaña razonablemente parecida');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);

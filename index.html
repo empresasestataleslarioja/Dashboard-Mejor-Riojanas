@@ -23005,15 +23005,39 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
   const RE_VENTAS_WEAK   = /VENTA|INGRESO/;
   const RE_COSTO         = /^COSTO\s*(DE\s*)?VENTA|COSTO\s*DE\s*LOS\s*SERVICIOS/;
   const RE_UTIL_BRUTA    = /(UTILIDAD|RESULTADO|GANANCIA)\s*BRUTA|RDO\.?\s*BRUTO|SUB.?TOTAL.*RDO\s*BRUTO/;
-  const RE_RES_OPERATIVO = /RESULTADO\s*OPERATIVO|GANANCIA\s*\(?PERDIDA\)?\s*OPERATIVA/;
-  const RE_RES_FINAL     = /GANANCIA\s*\(?PERDIDA\)?\s*DEL\s*EJERCICIO|RESULTADO\s*DEL\s*EJERCICIO|UTILIDAD\s*NETA|TOTAL\s*DEL\s*RESULTADO\s*INTEGRAL|RTDO\.?\s*NETO\s*POR\s*OPERACIONES\s*CONTINUAS/;
+  const RE_RES_OPERATIVO = /RESULTADO\s*OPERATIVO|GANANCIA\s*\(?PERDIDA\)?\s*OPERATIVA|UTILIDAD\s*OPERATIVA/;
+  const RE_RES_FINAL     = /GANANCIA\s*\(?PERDIDA\)?\s*DEL\s*EJERCICIO|RESULTADO\s*DEL\s*EJERCICIO|UTILIDAD\s*NETA|TOTAL\s*DEL\s*RESULTADO\s*INTEGRAL|RTDO\.?\s*NETO\s*POR\s*OPERACIONES\s*CONTINUAS|^UTILIDAD$/;
 
-  // Encabezado: fila con ≥8 celdas tipo fecha en las primeras 20 columnas
-  // (las hojas por empresa traen los meses como fecha, no como texto).
+  // Encabezado: fila con ≥8 celdas identificables como mes en las primeras
+  // 20 columnas. Los excel reales traen los meses de tres formas distintas
+  // según la empresa: como fecha real, como texto ("ENERO", "Febrero "),
+  // o como "MM/AAAA" — se reconocen las tres, y el mes de cada columna se
+  // toma del valor efectivamente reconocido (no de su posición), para no
+  // desalinear los datos cuando hay columnas intercaladas que no son mes
+  // (ej. "SUBTOTAL", "Acumulado al 30/06/2021").
+  const MESES_TXT = {
+    ENERO:1, FEBRERO:2, MARZO:3, ABRIL:4, MAYO:5, JUNIO:6, JULIO:7, AGOSTO:8,
+    SEPTIEMBRE:9, SETIEMBRE:9, OCTUBRE:10, NOVIEMBRE:11, DICIEMBRE:12,
+    ENE:1, FEB:2, MAR:3, ABR:4, MAY:5, JUN:6, JUL:7, AGO:8, SEP:9, SET:9, OCT:10, NOV:11, DIC:12,
+  };
+  const mesDeCelda = v => {
+    if (v instanceof Date) return v.getMonth() + 1;
+    if (typeof v === 'string') {
+      const mmYyyy = v.trim().match(/^(\d{1,2})[\/-]\d{4}$/);
+      if (mmYyyy) { const n = parseInt(mmYyyy[1], 10); if (n >= 1 && n <= 12) return n; }
+      const nrm = norm(v);
+      if (MESES_TXT[nrm] != null) return MESES_TXT[nrm];
+    }
+    return null;
+  };
   let hdrRow = -1, cols = [];
-  for (let r = 0; r < Math.min(10, rows.length); r++) {
+  for (let r = 0; r < Math.min(60, rows.length); r++) {
     const found = [];
-    for (let c = 1; c < 20; c++) { if (rows[r][c] instanceof Date) found.push(c); }
+    const seen = new Set();
+    for (let c = 1; c < 20; c++) {
+      const mes = mesDeCelda(rows[r][c]);
+      if (mes != null && !seen.has(mes)) { seen.add(mes); found.push({ c, mes }); }
+    }
     if (found.length >= 8) { hdrRow = r; cols = found; break; }
   }
   if (hdrRow < 0) return null;
@@ -23026,20 +23050,20 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
   const rowSum = r => {
     if (r == null) return null;
     let s = 0, any = false;
-    cols.forEach(c => { const v = rows[r][c]; if (typeof v === 'number') { s += v; any = true; } });
+    cols.forEach(({c}) => { const v = rows[r][c]; if (typeof v === 'number') { s += v; any = true; } });
     return any ? s : null;
   };
   const rowVals = r => {
     if (r == null) return null;
     const out = {};
-    cols.forEach((c, i) => { const v = rows[r][c]; if (typeof v === 'number') out[i+1] = v; });
+    cols.forEach(({c, mes}) => { const v = rows[r][c]; if (typeof v === 'number') out[mes] = v; });
     return out;
   };
   const diffVals = (rA, rB) => { // valores de rA - rB, mes a mes
     const out = {};
-    cols.forEach((c, i) => {
+    cols.forEach(({c, mes}) => {
       const a = rows[rA]?.[c], b = rows[rB]?.[c];
-      if (typeof a === 'number' || typeof b === 'number') out[i+1] = (typeof a==='number'?a:0) - (typeof b==='number'?b:0);
+      if (typeof a === 'number' || typeof b === 'number') out[mes] = (typeof a==='number'?a:0) - (typeof b==='number'?b:0);
     });
     return out;
   };
@@ -23048,13 +23072,22 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
   const costoR = findAll(RE_COSTO, from, to)[0] ?? null;
   const utilR  = findAll(RE_UTIL_BRUTA, from, to)[0] ?? null;
   const boundRow = costoR ?? utilR;
+  // Entre varios candidatos, preferir uno que realmente tenga valores
+  // mensuales cargados — algunas hojas repiten el título de la sección
+  // ("INGRESOS") sin datos justo antes de la fila real con los montos.
+  const pick = (list, last) => {
+    if (!list.length) return null;
+    const withData = list.filter(r => rowSum(r) != null);
+    const pool = withData.length ? withData : list;
+    return last ? pool[pool.length - 1] : pool[0];
+  };
   const strongV = findAll(RE_VENTAS_STRONG, from, to);
   const strongCand = boundRow != null ? strongV.filter(r => r < boundRow) : strongV;
-  let ventasR = strongCand.length ? strongCand[strongCand.length-1] : (strongV.length ? strongV[strongV.length-1] : null);
+  let ventasR = pick(strongCand, true) ?? pick(strongV, true);
   if (ventasR == null) {
     const weakV = findAll(RE_VENTAS_WEAK, from, to);
     const weakCand = boundRow != null ? weakV.filter(r => r < boundRow) : weakV;
-    ventasR = weakCand.length ? weakCand[0] : (weakV.length ? weakV[0] : null);
+    ventasR = pick(weakCand, false) ?? pick(weakV, false);
   }
   const resOpR  = findAll(RE_RES_OPERATIVO, from, to)[0] ?? null;
   const resFinR = findAll(RE_RES_FINAL, from, to)[0] ?? null;
@@ -23088,6 +23121,36 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef) {
     filas.push({ lbl: String(rows[resFinR][0]).trim(), conceptoStd:'resOperativo', valores: rowVals(resFinR) });
   }
   return { filas };
+}
+
+// ── Resuelve la hoja individual de una empresa dentro del libro del
+// RESUMEN a partir del texto crudo del encabezado de columna — que no
+// siempre coincide letra por letra con el nombre real de la pestaña
+// (ej. "BR. SERVICIOS FINANCIEROS" vs. pestaña "BR SERVICIOS
+// FINANCIEROS", "PUERTAS DE SOL" vs. pestaña "PUERTAS DEL SOL",
+// "VIENTOS ARAUCO RENOVABLE" vs. pestaña "VIENTOS DE ARAUCO
+// RENOVABLES"). Tolera puntuación, artículos ("DE"/"DEL"/"LA"/etc.) y
+// singular/plural antes de darse por vencido.
+function _resolveHojaEmpresa(wb, rawName) {
+  if (wb.Sheets[rawName]) return wb.Sheets[rawName];
+  const target = String(rawName || '').toUpperCase().trim();
+  const exact = wb.SheetNames.find(s => s.toUpperCase().trim() === target);
+  if (exact) return wb.Sheets[exact];
+  const normPunct = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const punctMatch = wb.SheetNames.find(s => normPunct(s) === normPunct(rawName));
+  if (punctMatch) return wb.Sheets[punctMatch];
+  const STOPWORDS = new Set(['DE','DEL','LA','EL','LOS','LAS']);
+  const canonTok = w => (w.length > 3 && w.endsWith('S')) ? w.slice(0, -1) : w;
+  const tokenSet = s => new Set(normPunct(s).split(' ').filter(w => w && !STOPWORDS.has(w)).map(canonTok));
+  const tset = tokenSet(rawName);
+  const fuzzy = wb.SheetNames.find(s => {
+    const ts = tokenSet(s);
+    if (ts.size !== tset.size || ts.size === 0) return false;
+    for (const t of ts) if (!tset.has(t)) return false;
+    return true;
+  });
+  return fuzzy ? wb.Sheets[fuzzy] : null;
 }
 
 // ── Parser nativo para archivos ER_20XX.xlsx ────────────────────
@@ -23239,7 +23302,7 @@ function tryParseERNativo(wb, fname) {
       // — nunca pisa un detalle mensual ya cargado para ese año.
       const yS = String(detectedYear);
       if (!DATA.er_mensual[emp]?.[yS]) {
-        const ws2 = wb.Sheets[rawName] || wb.Sheets[Object.keys(wb.Sheets).find(s => s.toUpperCase().trim() === String(rawName).toUpperCase().trim())];
+        const ws2 = _resolveHojaEmpresa(wb, rawName);
         const mensual = _extraerERMensualHojaEmpresa(ws2, erRow.ventas_netas);
         if (mensual) {
           if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
