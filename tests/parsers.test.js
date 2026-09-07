@@ -224,6 +224,67 @@ group('_mismoNombreEmpresa — reemplaza el matcheo por prefijo fijo (causaba fa
     'no inventa una coincidencia por compartir la raíz "RIOJA"');
 });
 
+// ── _confirmarRenombre: pedido real del usuario — "la unificación de
+//    empresas no debe eliminar registros pero sí la denominación
+//    elegida... debería desaparecer de ese reporte". Bug real: al
+//    renombrar una empresa (doble clic en el editor de rubros) a un
+//    nombre que YA existe, la función solo mostraba "Ya existe una
+//    empresa con ese nombre" y no hacía nada — a diferencia de
+//    Gestión → Renombrar/Fusionar, nunca ofrecía combinar los datos. La
+//    empresa vieja quedaba entonces con su rubro en blanco ("Sin rubro")
+//    y sus datos sueltos, sin que nada la borre del portafolio. ────────
+group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya existente) fusiona en vez de bloquear', () => {
+  const srcRenombrar   = extractFn(html, '_renombrarEmpresa');
+  const srcFusionar    = extractFn(html, '_fusionarEmpresas');
+  const srcConfirmar   = extractFn(html, '_confirmarRenombre');
+  const factory = new Function(
+    'let rubros = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{}}; let _balances = {};\n' +
+    'let confirmResult = true;\n' +
+    'function confirm(msg){ return confirmResult; }\n' +
+    'function saveRubros(){} function computeTotals(){} function saveDataToLocalCache(){}\n' +
+    'function marcarPendienteGuardar(){} function populateSelects(){} function rebuildActive(){} function buildRubros(){}\n' +
+    srcRenombrar + '\n' + srcFusionar + '\n' + srcConfirmar + '\n' +
+    'function setState(r,d,b){ rubros=r; DATA=d; _balances=b; }\n' +
+    'function getState(){ return { rubros, DATA, _balances }; }\n' +
+    'function setConfirmResult(v){ confirmResult = v; }\n' +
+    'return { _confirmarRenombre, setState, getState, setConfirmResult };'
+  );
+  const { _confirmarRenombre, setState, getState, setConfirmResult } = factory();
+
+  setState(
+    { 'LRT': 'Sin rubro', 'LA RIOJA TELECOMUNICACIONES': 'Servicios' },
+    {
+      fact: { 'LRT': { '2020': 1000000 }, 'LA RIOJA TELECOMUNICACIONES': { '2023': 5000000 } },
+      sit:  { 'LRT': { '2020': 50000 },   'LA RIOJA TELECOMUNICACIONES': { '2023': 200000 } },
+      personal: [], notas: {}, presupuesto: {},
+    },
+    { b1: { empresa: 'LRT', periodo: '2020' } }
+  );
+  setConfirmResult(true);
+  _confirmarRenombre('LRT', 'LA RIOJA TELECOMUNICACIONES');
+  const st = getState();
+  assert(!('LRT' in st.rubros), 'la empresa vieja ("LRT") desaparece del portafolio (rubros) tras unificar');
+  assert(st.DATA.fact['LA RIOJA TELECOMUNICACIONES']['2020'] === 1000000 && st.DATA.fact['LA RIOJA TELECOMUNICACIONES']['2023'] === 5000000,
+    'no se pierde ningún registro — la facturación de ambos nombres queda combinada bajo el elegido');
+  assert(st.DATA.sit['LA RIOJA TELECOMUNICACIONES']['2020'] === 50000 && st.DATA.sit['LA RIOJA TELECOMUNICACIONES']['2023'] === 200000,
+    'lo mismo para el resultado — se combinan, no se sobrescriben');
+  assert(st.rubros['LA RIOJA TELECOMUNICACIONES'] === 'Servicios',
+    'conserva el rubro de la empresa elegida (no lo pisa con "Sin rubro" del nombre viejo)');
+  assert(st._balances.b1.empresa === 'LA RIOJA TELECOMUNICACIONES',
+    'los balances de la empresa vieja quedan re-vinculados al nombre elegido, no huérfanos');
+
+  // Si el usuario cancela la confirmación, no debe tocar nada.
+  setState(
+    { 'PEA': 'Sin rubro', 'PARQUE EOLICO ARAUCO': 'Servicios' },
+    { fact: { 'PEA': { '2020': 1 } }, sit: {}, personal: [], notas: {}, presupuesto: {} },
+    {}
+  );
+  setConfirmResult(false);
+  _confirmarRenombre('PEA', 'PARQUE EOLICO ARAUCO');
+  const st2 = getState();
+  assert('PEA' in st2.rubros, 'si el usuario cancela la confirmación de unificar, no borra ni fusiona nada');
+});
+
 // ── _erDesdeMonthly: el panel "ER Provisorio — <empresa>" leía solo
 //    DATA.er_mensual (detalle mes a mes, cargado individualmente desde
 //    2025). Bug real: empresas cargadas antes vía RESUMEN histórico

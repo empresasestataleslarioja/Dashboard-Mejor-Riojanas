@@ -9456,31 +9456,33 @@ function _confirmarRenombre(empViejo, empNuevo) {
     buildRubros(); return;
   }
   empNuevo = empNuevo.toUpperCase();
-  if (rubros[empNuevo] !== undefined) {
-    alert('Ya existe una empresa con ese nombre.');
-    buildRubros(); return;
+  // Unificar denominación: si el nombre elegido ya existe (empresa
+  // renombrada para hacerla coincidir con otra ya cargada), fusionar los
+  // datos en vez de bloquear el cambio — antes esta función solo permitía
+  // renombrar a un nombre nuevo y mostraba "Ya existe una empresa con ese
+  // nombre" sin ofrecer combinar, así que la unificación quedaba a medio
+  // hacer: la empresa vieja seguía figurando (con su rubro en blanco, sin
+  // nadie que la borre) en vez de desaparecer con sus datos ya sumados en
+  // la elegida. Se usan _renombrarEmpresa/_fusionarEmpresas (las mismas
+  // funciones que Gestión → Renombrar/Fusionar), que sí migran también
+  // presupuesto, balances y el detalle mensual (fact_mensual/res_mensual/
+  // er_mensual) — esta función antes solo migraba fact/sit/notas/personal.
+  const yaExiste = rubros[empNuevo] !== undefined || DATA.fact[empNuevo] || DATA.sit[empNuevo];
+  if (yaExiste) {
+    if (!confirm(`Ya existe "${empNuevo}".\n\n¿Unificar "${empViejo}" en "${empNuevo}"? Los datos de "${empViejo}" (facturación, resultado, personal, balances, ER mensual) se suman a "${empNuevo}" y "${empViejo}" desaparece del portafolio.\n\nEsta operación no se puede deshacer.`)) {
+      buildRubros(); return;
+    }
+    _fusionarEmpresas(empViejo, empNuevo);
+  } else {
+    _renombrarEmpresa(empViejo, empNuevo);
   }
 
-  // Migrar en rubros
-  const rubroActual = rubros[empViejo];
-  rubros[empNuevo] = rubroActual;
-  delete rubros[empViejo];
-
-  // Migrar en DATA
-  ['fact','sit','notas'].forEach(modulo => {
-    if (DATA[modulo] && DATA[modulo][empViejo] !== undefined) {
-      DATA[modulo][empNuevo] = DATA[modulo][empViejo];
-      delete DATA[modulo][empViejo];
-    }
-  });
-  // Personal
-  const pd = (DATA.personal || []).find(d => d.e === empViejo);
-  if (pd) pd.e = empNuevo;
-
   saveRubros();
+  computeTotals();
   saveDataToLocalCache();
   marcarPendienteGuardar();
   populateSelects();
+  rebuildActive();
   buildRubros();
 }
 
