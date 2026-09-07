@@ -23195,10 +23195,18 @@ function _extraerERMensualHojaEmpresa(ws, ventasAnualRef, resOperativoAnualRef) 
   const strongV = findAll(RE_VENTAS_STRONG, from, to);
   const strongCand = boundRow != null ? strongV.filter(r => r < boundRow) : strongV;
   let ventasR = pick(strongCand, true) ?? pick(strongV, true);
+  const weakV = findAll(RE_VENTAS_WEAK, from, to);
+  const weakCand = boundRow != null ? weakV.filter(r => r < boundRow) : weakV;
   if (ventasR == null) {
-    const weakV = findAll(RE_VENTAS_WEAK, from, to);
-    const weakCand = boundRow != null ? weakV.filter(r => r < boundRow) : weakV;
     ventasR = pick(weakCand, false) ?? pick(weakV, false);
+  } else if (rowSum(ventasR) == null) {
+    // La fila "fuerte" (ej. "VENTAS NETAS") matchea pero está vacía —
+    // caso real: la hoja trae "Ventas Brutas" con los montos reales y
+    // "Ventas Netas"/"Devoluciones"/"Descuentos" como filas sin cargar
+    // (plantilla no completada). Preferir una candidata débil que sí
+    // tenga datos antes que aceptar una fuerte vacía.
+    const weakConDatos = pick(weakCand, false) ?? pick(weakV, false);
+    if (weakConDatos != null && rowSum(weakConDatos) != null) ventasR = weakConDatos;
   }
   let resOpR    = findAll(RE_RES_OPERATIVO, from, to)[0] ?? null;
   const resFinR = findAll(RE_RES_FINAL, from, to)[0] ?? null;
