@@ -14890,6 +14890,47 @@ function _erDesdeMonthly(emp) {
   return hayAlgo ? out : null;
 }
 
+// ── Control cruzado: el ER Provisorio (que muestran Resultado Operativo →
+// Desglose ER y Evolución Empresa → ER Provisorio, ambos vía
+// _erDesdeMonthly) puede diferir de la Facturación/Resultado Operativo
+// "oficiales" (DATA.fact/DATA.sit, usados en el resto del dashboard) —
+// cuando el detalle mensual se extrajo por anclas del excel original y
+// validó contra el RESUMEN dentro de una tolerancia, no de forma exacta.
+// Antes esa diferencia quedaba invisible salvo que alguien comparara los
+// dos módulos a mano; esto la detecta y la expone.
+function _crossCheckEREmpresaAnio(emp, yr) {
+  const er = (typeof _erDesdeMonthly === 'function') ? _erDesdeMonthly(emp) : null;
+  const yS = String(yr);
+  const erY = er ? (er[yS] ?? er[yr]) : null;
+  if (!erY) return null;
+  const fact = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[yS];
+  const sit  = DATA.sit?.[emp]?.[yr]  ?? DATA.sit?.[emp]?.[yS];
+  const diffs = [];
+  const cmp = (label, a, b) => {
+    if (a == null || b == null || a === b) return;
+    if (a === 0 && b === 0) return;
+    const base = Math.max(Math.abs(a), Math.abs(b), 1);
+    if (Math.abs(a - b) > 1000 && Math.abs(a - b) / base > 0.005) {
+      diffs.push({ label, erProvisorio: a, oficial: b, diffPct: (a - b) / base * 100 });
+    }
+  };
+  cmp('Facturación', erY.ventas_netas, fact);
+  cmp('Resultado Operativo', erY.resultado_operativo, sit);
+  return diffs.length ? diffs : null;
+}
+
+// Badge compacto para insertar junto al encabezado de un año/empresa en
+// Evolución Empresa o Resultado Operativo. Vacío si no hay diferencia.
+function _crossCheckBadgeHtml(emp, yr) {
+  const diffs = _crossCheckEREmpresaAnio(emp, yr);
+  if (!diffs) return '';
+  const fmtMonto = v => '$' + Math.round(Math.abs(v)).toLocaleString('es-AR') + (v < 0 ? ' (neg.)' : '');
+  const detalle = diffs.map(d =>
+    `${d.label}: ER Provisorio ${fmtMonto(d.erProvisorio)} vs. oficial ${fmtMonto(d.oficial)} (${d.diffPct >= 0 ? '+' : ''}${d.diffPct.toFixed(1)}%)`
+  ).join(' · ');
+  return ` <span title="${detalle.replace(/"/g, '&quot;')}" style="font-size:8.5px;color:#ffb347;border:1px solid #ffb34755;border-radius:3px;padding:1px 6px;cursor:help;white-space:nowrap">⚠ difiere de Facturación/Resultado — ${diffs.length} campo${diffs.length > 1 ? 's' : ''}</span>`;
+}
+
 function buildResDesglose() {
   const selEmp  = document.getElementById('sel-res-emp')?.value || '';
   const cont    = document.getElementById('res-desglose-content');
@@ -14989,12 +15030,17 @@ function buildResDesglose() {
       return;
     }
 
+    const crossDiscYears = yearsWithEr.filter(y => _crossCheckEREmpresaAnio(selEmp, y));
+    const crossBadgeRow = crossDiscYears.length ? `<div style="padding:6px 14px;font-size:9.5px;color:#ffb347;background:rgba(255,179,71,.08);border-bottom:1px solid var(--bd)">
+      ⚠ El ER Provisorio difiere de la Facturación/Resultado Operativo "oficiales" (los que se ven en el resto del dashboard) en ${crossDiscYears.length} año${crossDiscYears.length > 1 ? 's' : ''}: ${crossDiscYears.map(y => `<strong title="${(_crossCheckEREmpresaAnio(selEmp, y) || []).map(d => `${d.label}: ER ${d.erProvisorio<0?'−':''}$${Math.round(Math.abs(d.erProvisorio)).toLocaleString('es-AR')} vs. oficial ${d.oficial<0?'−':''}$${Math.round(Math.abs(d.oficial)).toLocaleString('es-AR')} (${d.diffPct>=0?'+':''}${d.diffPct.toFixed(1)}%)`).join(' · ').replace(/"/g,'&quot;')}" style="cursor:help;text-decoration:underline dotted">${y}</strong>`).join(', ')}.
+    </div>` : '';
     cont.innerHTML = `
       <div class="rowfull card" style="overflow-x:auto">
         <div class="card-hd">
           <span class="card-hd-title">ER Provisorio — ${selEmp}</span>
           <span class="card-hd-unit">$ completos</span>
         </div>
+        ${crossBadgeRow}
         <table class="tbl" style="min-width:520px;font-size:11px">
           <thead><tr>
             <th style="text-align:left;width:220px">Partida</th>
@@ -18145,7 +18191,7 @@ function buildEvolucionMensual(emp) {
         }).join('');
         return `<div style="margin-bottom:16px">
           <div style="font-size:11px;font-weight:600;margin-bottom:6px">${yr}
-            <span style="font-size:9px;color:var(--dim);font-weight:400">· ER anual (histórico, sin apertura mensual)</span></div>
+            <span style="font-size:9px;color:var(--dim);font-weight:400">· ER anual (histórico, sin apertura mensual)</span>${_crossCheckBadgeHtml(emp, yr)}</div>
           <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;max-width:420px">
             <thead><tr>
               <th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>
@@ -18422,7 +18468,7 @@ function buildEvolucionMensual(emp) {
             plugins:{ legend:{ display:true, labels:{ font:{size:10}, boxWidth:14 } } } }
         });
         return `<div style="margin-bottom:20px">
-          <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}</div>
+          <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${_crossCheckBadgeHtml(emp, yr)}</div>
           ${kpiHtml}
           <div class="card" style="padding:10px 10px 6px;position:relative">
             <canvas id="${chId}" style="width:100%;height:220px"></canvas>
@@ -18450,7 +18496,7 @@ function buildEvolucionMensual(emp) {
     const btnAgregar = edit ? `<div style="margin-top:8px"><button onclick="_erMensualAgregarFila('${empJS}','${yr}')" style="padding:4px 10px;font-size:10px;background:transparent;border:1px dashed var(--bd);border-radius:4px;color:var(--dim);cursor:pointer">+ Agregar concepto</button></div>` : '';
 
     return `<div style="margin-bottom:20px">
-      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${edit?' · modo edición':''}</div>
+      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">${yr} — ${meses.length} ${esTrim?'trimestres':'meses'}${edit?' · modo edición':''}${_crossCheckBadgeHtml(emp, yr)}</div>
       <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%">
         <thead><tr><th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--dim);border-bottom:2px solid var(--bd)">Concepto</th>${thMeses}${thTotal}${thPct}${thEdit}</tr></thead>
         <tbody>${filasHTML}</tbody>
@@ -24088,7 +24134,12 @@ function _aplicarVentasGastos() {
 
   try { computeTotals(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { _dispararAutoSync(); } catch(e) {}
+  // marcarPendienteGuardar (no _dispararAutoSync directo): además de
+  // disparar el auto-sync, marca _hayCambiosSinPublicar = true, que es lo
+  // que hace que el aviso de "cambios sin publicar" (al cerrar/recargar la
+  // pestaña) funcione si el auto-sync llega a fallar en silencio. Sin esto,
+  // una carga que no se terminó de publicar podía perderse sin ningún aviso.
+  try { marcarPendienteGuardar(); } catch(e) {}
 
   const t = document.getElementById('imp-vg-preview');
   if (t) t.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
@@ -24352,7 +24403,12 @@ function _aplicarERColumnas() {
 
   try { computeTotals(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { _dispararAutoSync(); } catch(e) {}
+  // marcarPendienteGuardar (no _dispararAutoSync directo): además de
+  // disparar el auto-sync, marca _hayCambiosSinPublicar = true, que es lo
+  // que hace que el aviso de "cambios sin publicar" (al cerrar/recargar la
+  // pestaña) funcione si el auto-sync llega a fallar en silencio. Sin esto,
+  // una carga que no se terminó de publicar podía perderse sin ningún aviso.
+  try { marcarPendienteGuardar(); } catch(e) {}
 
   const target = document.getElementById('imp-vg-preview');
   if (target) target.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
@@ -35253,12 +35309,26 @@ function _dispararAutoSync() {
     }
     const ind = document.getElementById('save-indicator');
     if (ind) { ind.textContent = '⏳ Guardando en Sheets…'; ind.style.color = '#47e8ff'; }
-    try {
-      await syncToCloud('Auto-sync');
-      if (ind) { ind.textContent = '✓ Guardado en Sheets'; ind.style.color = '#47ffb4'; }
-    } catch(e) {
-      if (ind) { ind.textContent = '⚠ Error al guardar — reintentando…'; ind.style.color = '#ff8c47'; }
-    }
+    // Reintento real (antes el mensaje decía "reintentando" pero nunca
+    // volvía a intentar) — si los 3 intentos fallan, el aviso queda fijo
+    // en pantalla en vez de perderse solo, porque _hayCambiosSinPublicar
+    // sigue en true (syncToCloud solo lo limpia si publica con éxito) y el
+    // dato realmente no llegó a Sheets todavía.
+    const _intentarAutoGuardar = async (intento) => {
+      try {
+        await syncToCloud('Auto-sync');
+        if (ind) { ind.textContent = '✓ Guardado en Sheets'; ind.style.color = '#47ffb4'; }
+      } catch(e) {
+        if (intento < 2) {
+          if (ind) { ind.textContent = `⚠ Error al guardar — reintentando (${intento + 1}/2)…`; ind.style.color = '#ff8c47'; }
+          setTimeout(() => _intentarAutoGuardar(intento + 1), 15000);
+        } else if (ind) {
+          ind.textContent = '⚠ No se pudo guardar en Sheets — hacé clic en "Guardar" o revisá la conexión';
+          ind.style.color = '#ff4766';
+        }
+      }
+    };
+    _intentarAutoGuardar(0);
   }, AUTOSYNC_DELAY);
 }
 

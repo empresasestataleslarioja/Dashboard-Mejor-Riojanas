@@ -69,10 +69,11 @@ function extractConstBlock(html, startMarker, endMarker) {
 }
 const erConsts = extractConstBlock(html, 'const ER_LABELS = {', 'const ER_ORDER = Object.keys(ER_LABELS);');
 const erDesdeMonthlySrc = extractFn(html, '_erDesdeMonthly');
-const { _erDesdeMonthly, setData } = new Function(
-  erConsts + '\n' + erDesdeMonthlySrc + '\n' +
+const crossCheckSrc = extractFn(html, '_crossCheckEREmpresaAnio');
+const { _erDesdeMonthly, _crossCheckEREmpresaAnio, setData } = new Function(
+  erConsts + '\n' + erDesdeMonthlySrc + '\n' + crossCheckSrc + '\n' +
   'let DATA = {};\nfunction setData(d) { DATA = d; }\n' +
-  'return { _erDesdeMonthly, setData };'
+  'return { _erDesdeMonthly, _crossCheckEREmpresaAnio, setData };'
 )();
 
 // tryParseERNativo también escribe sobre el global DATA y llama a funciones
@@ -232,6 +233,61 @@ group('_erDesdeMonthly — usa DATA.er (anual nativo) cuando no hay detalle mens
 
   const empEr = _erDesdeMonthly('CERAMICA RIOJANA'); // no cargada en absoluto
   assert(empEr === null, 'una empresa sin ningún dato (ni mensual, ni DATA.er, ni fact/sit) sigue devolviendo null');
+});
+
+// ── _crossCheckEREmpresaAnio: pedido real del usuario — "control cruzado
+//    entre los reportes de EVOLUCION EMPRESA y de RESULTADO OPERATIVO para
+//    detectar diferencias entre los importes expuestos". Ambos módulos
+//    muestran el ER Provisorio vía _erDesdeMonthly (suma de los anclas
+//    mensuales), que puede diferir de Facturación/Resultado Operativo
+//    "oficiales" (DATA.fact/DATA.sit) cuando el detalle mensual se extrajo
+//    por anclas y validó contra el RESUMEN dentro de una tolerancia, no de
+//    forma exacta. Antes esa diferencia quedaba invisible. ──────────────
+group('_crossCheckEREmpresaAnio — detecta diferencias entre el ER Provisorio y Facturación/Resultado "oficiales"', () => {
+  setData({
+    er_mensual: {
+      'EMPRESA CON DIFERENCIA': {
+        '2021': { filas: [
+          { conceptoStd: 'ventas', valores: { 1: 500000, 2: 520000 } },       // suma 1.020.000
+          { conceptoStd: 'resOperativo', valores: { 1: 40000, 2: 42000 } },   // suma 82.000
+        ] },
+      },
+      'EMPRESA SIN DIFERENCIA': {
+        '2021': { filas: [
+          { conceptoStd: 'ventas', valores: { 1: 500000, 2: 520000 } },
+          { conceptoStd: 'resOperativo', valores: { 1: 40000, 2: 42000 } },
+        ] },
+      },
+    },
+    er: {},
+    fact: {
+      'EMPRESA CON DIFERENCIA': { '2021': 1100000 }, // 7.8% más que el ER Provisorio (1.020.000)
+      'EMPRESA SIN DIFERENCIA': { '2021': 1020000 }, // coincide exacto
+    },
+    sit: {
+      'EMPRESA CON DIFERENCIA': { '2021': 82000 },   // coincide (solo Facturación difiere)
+      'EMPRESA SIN DIFERENCIA': { '2021': 82000 },
+    },
+  });
+  const diffs = _crossCheckEREmpresaAnio('EMPRESA CON DIFERENCIA', '2021');
+  assert(!!diffs && diffs.length === 1 && diffs[0].label === 'Facturación',
+    'detecta que Facturación difiere entre el ER Provisorio (suma mensual) y el valor "oficial" (DATA.fact)');
+  assert(diffs[0].erProvisorio === 1020000 && diffs[0].oficial === 1100000,
+    'informa ambos valores (el del ER Provisorio y el oficial) para poder comparar');
+
+  const sinDiff = _crossCheckEREmpresaAnio('EMPRESA SIN DIFERENCIA', '2021');
+  assert(sinDiff === null, 'no marca nada cuando el ER Provisorio y los valores oficiales coinciden');
+
+  // Diferencia menor a la tolerancia (0.5%) — no debe generar ruido por
+  // redondeos triviales.
+  setData({
+    er_mensual: { 'EMPRESA DIFERENCIA MINIMA': { '2021': { filas: [
+      { conceptoStd: 'ventas', valores: { 1: 1000000 } },
+    ] } } },
+    er: {}, fact: { 'EMPRESA DIFERENCIA MINIMA': { '2021': 1002000 } }, sit: {}, // 0.2%
+  });
+  assert(_crossCheckEREmpresaAnio('EMPRESA DIFERENCIA MINIMA', '2021') === null,
+    'no marca diferencias menores a la tolerancia (ruido de redondeo, no una discrepancia real)');
 });
 
 // ── tryParseERNativo: bug real — al recargar el RESUMEN histórico multi-
