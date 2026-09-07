@@ -20809,6 +20809,42 @@ function updateFixBtn(currentTheme, isDefault) {
   }
 }
 
+// ── Comparación robusta de nombres de empresa ─────────────────────
+// Reemplaza los matcheos por prefijo fijo (ej. primeros 8/10 caracteres)
+// que había antes en computeGaps/openGapModal — con nombres reales de
+// esta provincia (varios empiezan con "LA RIOJA " / "RIOJA ") ese tipo de
+// prefijo es demasiado corto y genérico: "LA RIOJA VITICOLA" y "LA RIOJA
+// TELECOMUNICACIONES" comparten los primeros 8 caracteres ("LA RIOJA"),
+// así que un balance de una terminaba apareciendo como si fuera de la
+// otra. Al mismo tiempo, un nombre corto como "VALLESOL" (8 caracteres)
+// quedaba excluido de cualquier comparación por un piso de longitud
+// mínima, así que nunca podía reconciliarse con "VALLE SOL" (con
+// espacio) aunque sea la misma empresa. Esta función prueba, en orden:
+// coincidencia exacta, coincidencia ignorando puntuación/acentos,
+// coincidencia ignorando también los espacios (cubre "VALLESOL" vs
+// "VALLE SOL"), y por último un conjunto de palabras sin artículos ni
+// sufijos societarios y tolerante a singular/plural (cubre "PUERTAS DE
+// SOL" vs "PUERTAS DEL SOL", "VIENTOS ARAUCO RENOVABLE" vs "VIENTOS DE
+// ARAUCO RENOVABLES") — nunca por un prefijo corto que pueda ser común a
+// dos empresas distintas.
+function _mismoNombreEmpresa(a, b) {
+  if (!a || !b) return false;
+  const target = s => String(s || '').toUpperCase().trim();
+  if (target(a) === target(b)) return true;
+  const normPunct = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const pa = normPunct(a), pb = normPunct(b);
+  if (pa === pb) return true;
+  if (pa.replace(/\s+/g, '') === pb.replace(/\s+/g, '')) return true;
+  const STOPWORDS = new Set(['DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'SA', 'SAU', 'SRL', 'SAPEM', 'SE']);
+  const canonTok = w => (w.length > 3 && w.endsWith('S')) ? w.slice(0, -1) : w;
+  const tokenSet = s => new Set(normPunct(s).split(' ').filter(w => w && !STOPWORDS.has(w)).map(canonTok));
+  const ta = tokenSet(a), tb = tokenSet(b);
+  if (ta.size === 0 || tb.size === 0 || ta.size !== tb.size) return false;
+  for (const t of ta) if (!tb.has(t)) return false;
+  return true;
+}
+
 // ── Gap detection ───────────────────────────────────────────
 function computeGaps() {
   const years = ys();
@@ -20817,30 +20853,12 @@ function computeGaps() {
     ...Object.keys(DATA.fact),
     ...Object.keys(DATA.sit),
     ...(DATA.personal||[]).map(p => p.e).filter(Boolean)
-  ])];
-
-  // Normalizar texto para comparación fuzzy (elimina acentos)
-  const _norm = s => (s||'').toUpperCase().trim()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  ])].sort();
 
   // Empresas con al menos un balance cargado
-  const empsConBalance = new Set(
-    Object.values(_balances || {}).map(b => _norm(b.empresa || ''))
-  );
+  const balancesList = Object.values(_balances || {});
   // Mapear nombre empresa del portafolio → tiene balance
-  const tieneBalance = emp => {
-    const empU = _norm(emp);
-    if (empsConBalance.has(empU)) return true;
-    return Object.values(_balances || {}).some(b => {
-      const bU = _norm(b.empresa||'');
-      if (bU === empU) return true;
-      // fuzzy: usar prefijo más largo posible, mínimo 5 chars
-      const minLen = Math.min(empU.length, bU.length);
-      if (minLen < 5) return false;
-      const prefLen = Math.min(10, minLen);
-      return bU.includes(empU.substring(0, prefLen)) || empU.includes(bU.substring(0, prefLen));
-    });
-  };
+  const tieneBalance = emp => balancesList.some(b => _mismoNombreEmpresa(emp, b.empresa));
 
   allEmps.forEach(emp => {
     // Descartar empresas sin ningún dato en años activos
@@ -20958,15 +20976,11 @@ function openGapModal() {
       const sitCells  = years.map(y => mkCell(missingSit.includes(y))).join('');
       const persCells = years.map(y => mkCell(missingPers.includes(y))).join('');
       const rowBg = (missingFact.length||missingSit.length) ? '' : 'background:rgba(100,100,80,.04)';
-      const balEmp = Object.values(_balances || {}).filter(function(b) {
-        var empU = (b.empresa||'').toUpperCase().trim();
-        var gapU = emp.toUpperCase().trim();
-        if (empU === gapU) return true;
-        var minLen = Math.min(empU.length, gapU.length);
-        if (minLen <= 8) return false;
-        var prefLen = Math.min(8, minLen);
-        return empU.includes(gapU.substring(0, prefLen)) || gapU.includes(empU.substring(0, prefLen));
-      });
+      // Mismo comparador que "Sin balance" arriba (_mismoNombreEmpresa) —
+      // antes esta columna usaba su propio matcheo por prefijo de 8
+      // caracteres, distinto del de computeGaps(), y podían quedar en
+      // desacuerdo entre sí para la misma empresa.
+      const balEmp = Object.values(_balances || {}).filter(b => _mismoNombreEmpresa(emp, b.empresa));
       // FIX 7: detectar balances sin fecha
       var balSinFecha = balEmp.filter(function(b){ return !b.periodo && !b.cierre && !b.año; });
       // FIX 8: detectar duplicados por año

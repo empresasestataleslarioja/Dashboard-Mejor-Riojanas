@@ -48,6 +48,7 @@ const {
   tryParseVentasGastos,
   tryParseERColumnasMeses,
   tryParseERMatricial,
+  _mismoNombreEmpresa,
 } = loadFns([
   '_esIngExcluido',
   '_matchEmpresaPortafolio',
@@ -55,6 +56,7 @@ const {
   'tryParseERColumnasMeses',
   '_parsearPestanasMensuales',
   'tryParseERMatricial',
+  '_mismoNombreEmpresa',
 ]);
 
 // _erDesdeMonthly lee/escribe sobre el global DATA y usa las consts
@@ -194,6 +196,32 @@ group('_matchEmpresaPortafolio', () => {
     'reconoce la empresa pese al sufijo societario ("SAPEM") ausente del portafolio');
   assert(_matchEmpresaPortafolio('UNA EMPRESA QUE NO EXISTE', candidatas) === '',
     'no inventa una coincidencia para un nombre fuera del portafolio');
+});
+
+// ── _mismoNombreEmpresa: usada por la alerta "Datos faltantes" (¿esta
+//    empresa tiene un balance cargado?) en vez del matcheo por prefijo
+//    fijo que había antes. Bugs reales reportados por el usuario:
+//    - LA RIOJA VITICOLA aparecía con balances que en realidad eran de
+//      LA RIOJA TELECOMUNICACIONES — ambas comparten los primeros 8
+//      caracteres ("LA RIOJA"), que era el largo de prefijo usado.
+//    - VALLESOL (8 caracteres exactos) nunca podía reconciliarse con
+//      "VALLE SOL" (con espacio) porque el código exigía más de 8
+//      caracteres para siquiera intentar la comparación difusa. ────────
+group('_mismoNombreEmpresa — reemplaza el matcheo por prefijo fijo (causaba falsos positivos y negativos)', () => {
+  assert(_mismoNombreEmpresa('LA RIOJA VITICOLA', 'LA RIOJA TELECOMUNICACIONES') === false,
+    'NO confunde dos empresas distintas que comparten un prefijo largo ("LA RIOJA ...") — bug real: LA RIOJA VITICOLA mostraba balances de LA RIOJA TELECOMUNICACIONES');
+  assert(_mismoNombreEmpresa('VALLESOL', 'VALLE SOL') === true,
+    'reconcilia un nombre corto (8 caracteres) con espacio de más/menos — bug real: VALLESOL nunca reconciliaba con "VALLE SOL" por un piso de longitud mínima');
+  assert(_mismoNombreEmpresa('PUERTAS DE SOL', 'PUERTAS DEL SOL') === true,
+    'tolera artículos distintos ("DE" vs "DEL")');
+  assert(_mismoNombreEmpresa('VIENTOS ARAUCO RENOVABLE', 'VIENTOS DE ARAUCO RENOVABLES') === true,
+    'tolera singular/plural y un artículo faltante');
+  assert(_mismoNombreEmpresa('CERAMICA RIOJANA', 'CERAMICA RIOJANA SAPEM') === true,
+    'ignora el sufijo societario');
+  assert(_mismoNombreEmpresa('RIOJA VIAL', 'RIOJA BUS') === false,
+    'no inventa una coincidencia entre dos empresas distintas que comparten una sola palabra');
+  assert(_mismoNombreEmpresa('AGUAS RIOJANAS', 'RIOJA BUS') === false,
+    'no inventa una coincidencia por compartir la raíz "RIOJA"');
 });
 
 // ── _erDesdeMonthly: el panel "ER Provisorio — <empresa>" leía solo
