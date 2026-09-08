@@ -1103,5 +1103,60 @@ group('tryParseERLibroMayorResumen — no se confunde con el formato con detalle
     'no reconoce el formato con columna "Cuenta" (detalle de cuentas) — queda exclusivo de tryParseERLibroMayor');
 });
 
+// ── _renombrarEmpresa / _fusionarEmpresas / _eliminarEmpresa: autoridades
+//    (director/presidente, síndico, etc.) es un historial por empresa
+//    agregado en este mismo turno — tiene que seguir el mismo criterio de
+//    migración que ya usan fact/sit/personal/notas/etc. en estos tres
+//    flujos: renombrar reapunta, fusionar reapunta (es un historial, no
+//    hay nada que "sumar"), eliminar limpia los registros de esa empresa. ─
+group('autoridades — sigue el mismo criterio de migración que el resto de los módulos al renombrar/fusionar/eliminar una empresa', () => {
+  function nuevoContexto() {
+    const src = [
+      extractFn(html, '_renombrarEmpresa'),
+      extractFn(html, '_fusionarEmpresas'),
+      extractFn(html, '_eliminarEmpresa'),
+    ].join('\n');
+    const factory = new Function(
+      'let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[]};\n' +
+      'let rubros = {};\nlet _balances = {};\n' +
+      src + '\n' +
+      'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, getDATA: () => DATA };'
+    );
+    return factory();
+  }
+
+  // Renombrar: reapunta el campo empresa de todos los registros del historial
+  const ctx1 = nuevoContexto();
+  ctx1.getDATA().autoridades = [
+    { empresa:'LRT', nombre:'Juan', apellido:'Perez', cargo:'Presidente', desde:'2020-01-01', hasta:'' },
+    { empresa:'LRT', nombre:'Ana',  apellido:'Diaz',  cargo:'Sindico',    desde:'2019-01-01', hasta:'' },
+  ];
+  ctx1._renombrarEmpresa('LRT', 'LA RIOJA TELECOMUNICACIONES');
+  assert(ctx1.getDATA().autoridades.every(a => a.empresa === 'LA RIOJA TELECOMUNICACIONES') && ctx1.getDATA().autoridades.length === 2,
+    '_renombrarEmpresa reapunta todos los registros de autoridades de la empresa renombrada (se conserva el historial completo)');
+
+  // Fusionar: reapunta los registros del origen al destino — no se "suman"
+  // valores (es un historial de personas, no un total), se conservan ambos
+  const ctx2 = nuevoContexto();
+  ctx2.getDATA().autoridades = [
+    { empresa:'LRT', nombre:'Juan', apellido:'Perez', cargo:'Presidente', desde:'2020-01-01', hasta:'' },
+    { empresa:'LA RIOJA TELECOMUNICACIONES', nombre:'Pedro', apellido:'Lopez', cargo:'Director', desde:'2021-01-01', hasta:'' },
+  ];
+  ctx2._fusionarEmpresas('LRT', 'LA RIOJA TELECOMUNICACIONES');
+  assert(ctx2.getDATA().autoridades.length === 2 && ctx2.getDATA().autoridades.every(a => a.empresa === 'LA RIOJA TELECOMUNICACIONES'),
+    '_fusionarEmpresas reapunta los registros del origen al destino y conserva los del destino — ambos historiales coexisten');
+
+  // Eliminar empresa: limpia sus registros de autoridades, no toca los de otras
+  const ctx3 = nuevoContexto();
+  ctx3.getDATA().autoridades = [
+    { empresa:'LRT', nombre:'Juan', apellido:'Perez', cargo:'Presidente', desde:'2020-01-01', hasta:'' },
+    { empresa:'PEA', nombre:'Carlos', apellido:'Lopez', cargo:'Presidente', desde:'2023-01-01', hasta:'' },
+  ];
+  ctx3._eliminarEmpresa('LRT');
+  const restantes = ctx3.getDATA().autoridades;
+  assert(restantes.length === 1 && restantes[0].empresa === 'PEA',
+    '_eliminarEmpresa borra solo los registros de autoridades de la empresa eliminada, no los de otras');
+});
+
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
 process.exit(fail ? 1 : 0);
