@@ -24533,6 +24533,147 @@ function tryParseERLibroMayor(wb, fname) {
   return null;
 }
 
+// ── Parser de ER en formato "libro mayor" CONDENSADO — variante de
+// tryParseERLibroMayor donde no hay detalle de cuentas ni filas "Total X"
+// intermedias: cada renglón bajo el encabezado ES directamente un rubro
+// contable, hasta cerrar en "TOTAL GENERAL" (formato real: Kallpa, Arauco
+// Energía — ER al 30/06/2026). El encabezado es "Cuentas" seguido directo
+// de los meses (sin la columna "Cuenta" intermedia), y los meses pueden
+// venir como texto abreviado ("ene-26") o como fecha de Excel según la
+// columna. A diferencia del resto de los rubros, acá el renglón de
+// Ingresos SÍ viene en positivo (no en convención débito) — en vez de
+// asumirlo, se reconstruye "TOTAL GENERAL" sumando los demás rubros ya
+// convertidos y solo se acepta el archivo si da exacto: es la única forma
+// de confirmar de qué lado quedó cada signo en este formato puntual.
+function tryParseERLibroMayorResumen(wb, fname) {
+  const MESES_ABR = {ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,SET:9,OCT:10,NOV:11,DIC:12};
+  const MESES_TXT = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,
+                    JULIO:7,AGOSTO:8,SEPTIEMBRE:9,SETIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+  const _mesDeCelda = (v) => {
+    if (v instanceof Date) return v.getMonth() + 1;
+    if (typeof v === 'number' && v > 30000 && v < 80000) {
+      try { const d = XLSX.SSF.parse_date_code(v); if (d) return d.m; } catch(e) {}
+    }
+    if (typeof v === 'string' && v.trim()) {
+      const vu = v.trim().toUpperCase();
+      if (MESES_TXT[vu]) return MESES_TXT[vu];
+      const mAbr = vu.match(/^([A-Z]{3})[.\-\/]?\d{0,2}$/);
+      if (mAbr && MESES_ABR[mAbr[1]]) return MESES_ABR[mAbr[1]];
+    }
+    return null;
+  };
+
+  // rubro → conceptoStd + si hay que invertir el signo para pasar de
+  // convención contable (débito positivo) a la del dashboard. "Otros
+  // Ingresos" se valida ANTES que Ingresos/Ventas porque su rótulo también
+  // contiene "INGRESO" — si no, quedaría mal clasificado como ventas.
+  const _clasif = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ').replace(/^\d+\s*-\s*/, '');
+    if (!t) return null;
+    if (/OTROS\s+INGRESO/.test(t)) return { cpt:'otrosIngresos', flip:true };
+    if (t.includes('INGRES') || t.includes('INGES')) return { cpt:'ventas', flip:false };
+    if (/COSTOS?\s+OPERATIV|COSTO\s+DE\s+VENTAS?/.test(t)) return { cpt:'costo', flip:true };
+    if (/GASTOS?\s+(DE\s+)?ADMIN/.test(t)) return { cpt:'gastoAdm', flip:true };
+    if (/GASTOS?\s+OPERATIV|GASTOS?\s+(DE\s+)?VENTA/.test(t)) return { cpt:'gastoCom', flip:true };
+    if (/RESULTADO\s+FINANC|FINANCIER/.test(t)) return { cpt:'resFinanciero', flip:true };
+    if (/IMPUESTO\s+A\s+LAS?\s+GANANCIAS?/.test(t)) return { cpt:'impuesto', flip:true };
+    return null;
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 5) continue;
+
+    // Encabezado: "Cuentas" en col 0, meses arrancando directo en col 1 (si
+    // col 1 es "Cuenta" es el otro formato, con detalle — no este).
+    let filaHdr = -1, colMeses = [];
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const c0 = String(rows[i][0] || '').trim().toUpperCase();
+      if (c0 !== 'CUENTAS') continue;
+      const c1 = String(rows[i][1] || '').trim().toUpperCase();
+      if (c1 === 'CUENTA') break;
+      const cols = [];
+      for (let c = 1; c < rows[i].length; c++) {
+        const mes = _mesDeCelda(rows[i][c]);
+        if (mes) cols.push({ col:c, mes });
+      }
+      if (cols.length >= 1) { filaHdr = i; colMeses = cols; }
+      break;
+    }
+    if (filaHdr < 0) continue;
+
+    let anio = null;
+    for (let i = 0; i < filaHdr; i++) {
+      const txt = (rows[i] || []).join(' ');
+      const mPeriodo = txt.match(/PERIODO\s+BASE.*?(\d{1,2})\s*\/\s*(\d{4})/i);
+      if (mPeriodo) { anio = mPeriodo[2]; break; }
+    }
+    if (!anio) { const mAnio = fname.match(/(20\d{2})/); if (mAnio) anio = mAnio[1]; }
+    if (!anio) continue;
+
+    let empresa = fname.replace(/\.xlsx?$/i,'')
+      .replace(/_/g,' ')
+      .replace(/\b(ESTADO\s+DE\s+RD?OS?|ESTADO\s+DE\s+RESULTADOS?|AL|\d{1,2}|\d{4})\b/gi,'')
+      .replace(/\s+/g,' ').trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    // Cada renglón bajo el encabezado ES un rubro (no hay detalle de cuentas
+    // ni filas "Total X" intermedias), hasta "TOTAL GENERAL".
+    const filas = [];
+    let totalGeneral = null;
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const lbl = String(rows[i][0] || '').trim();
+      if (!lbl) continue;
+      if (/^TOTAL\s+GENERAL$/i.test(lbl)) {
+        totalGeneral = {};
+        colMeses.forEach(({col, mes}) => {
+          const v = _num(rows[i][col]);
+          if (v != null) totalGeneral[mes] = v;
+        });
+        break;
+      }
+      const cl = _clasif(lbl);
+      if (!cl) continue;
+      const valores = {};
+      colMeses.forEach(({col, mes}) => {
+        const v = _num(rows[i][col]);
+        if (v != null && v !== 0) valores[mes] = cl.flip ? -v : v;
+      });
+      if (Object.keys(valores).length === 0) continue;
+      filas.push({ lbl: lbl.replace(/^\d+\s*-\s*/, ''), conceptoStd: cl.cpt, valores });
+    }
+
+    if (filas.length < 2 || !totalGeneral) continue;
+
+    // Validar contra TOTAL GENERAL: solo se acepta el archivo si la suma de
+    // los rubros ya convertidos reconstruye exacto el resultado reportado.
+    const meses = Object.keys(totalGeneral).map(Number);
+    let reconcilia = meses.length > 0;
+    for (const m of meses) {
+      const suma = filas.reduce((s, f) => s + (f.valores[m] || 0), 0);
+      const ref = totalGeneral[m];
+      const tol = Math.max(Math.abs(ref) * 0.0005, 5);
+      if (Math.abs(suma - ref) > tol) { reconcilia = false; break; }
+    }
+    if (!reconcilia) continue;
+
+    filas.push({ lbl: 'Total General', conceptoStd: 'resEjercicio', valores: totalGeneral });
+
+    return { empresa, anio, filas, hoja: sn, mesesCount: colMeses.length };
+  }
+  return null;
+}
+
 function _mostrarPreviewERColumnas(result, fname) {
   const NM = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const fmt = v => v == null ? '—' : (v < 0 ? '−' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
@@ -25164,6 +25305,16 @@ function handleImportWorkbook(wb, fname) {
   if (erLibroMayorResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erLibroMayorResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER en formato "libro mayor" CONDENSADO (un renglón
+  // por rubro, sin detalle de cuentas ni filas "Total X" intermedias) ──
+  const erLibroMayorResumenResult = tryParseERLibroMayorResumen(wb, fname);
+  console.log('[LR] tryParseERLibroMayorResumen:', erLibroMayorResumenResult ? erLibroMayorResumenResult.empresa+' '+erLibroMayorResumenResult.filas.length+' conceptos' : 'null');
+  if (erLibroMayorResumenResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erLibroMayorResumenResult, fname);
     return;
   }
 

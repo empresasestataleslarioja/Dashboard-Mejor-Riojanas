@@ -49,6 +49,7 @@ const {
   tryParseERColumnasMeses,
   tryParseERMatricial,
   tryParseERLibroMayor,
+  tryParseERLibroMayorResumen,
   _mismoNombreEmpresa,
 } = loadFns([
   '_esIngExcluido',
@@ -58,6 +59,7 @@ const {
   '_parsearPestanasMensuales',
   'tryParseERMatricial',
   'tryParseERLibroMayor',
+  'tryParseERLibroMayorResumen',
   '_mismoNombreEmpresa',
 ]);
 
@@ -889,6 +891,78 @@ group('tryParseERLibroMayor — no reconoce formatos que no calzan (evita falsos
 
   assert(!tryParseERLibroMayor(wbFromSheets({ RESUMEN: [['CONCEPTO', 'ENERO', 'FEBRERO']] }), 'x.xlsx'),
     'no reconoce una hoja RESUMEN de ER anual estándar (sin el encabezado "Cuentas | Cuenta")');
+});
+
+// ── tryParseERLibroMayorResumen: variante CONDENSADA del libro mayor
+//    (formato real: Kallpa, Arauco Energía — ER al 30/06/2026) — no hay
+//    detalle de cuentas ni filas "Total X" intermedias, cada renglón bajo
+//    el encabezado "Cuentas" ES directamente un rubro, hasta "TOTAL
+//    GENERAL". A diferencia del resto de los rubros, el renglón de
+//    Ingresos viene en positivo (no en convención débito) — el parser
+//    reconstruye "TOTAL GENERAL" a partir de los demás rubros ya
+//    convertidos y solo acepta el archivo si concilia exacto. Bug real
+//    detectado al construir este parser: "OTROS INGRESOS- EGRESOS"
+//    contiene la palabra "INGRESOS" y quedaba mal clasificado como
+//    Ventas si esa regla se evaluaba primero. ─────────────────────────
+group('tryParseERLibroMayorResumen — variante condensada (un renglón por rubro, sin detalle de cuentas)', () => {
+  // Enero: 1000 - (100+200+50+30+10+(-5)) = 615
+  // Febrero: 2000 - (150+250+60+(-40)+20+15) = 1545
+  const rows = [
+    ['', 'Periodo base', '', ':', '06/2026'],
+    [],
+    ['Cuentas', 'ene-26', new Date(2026, 1, 1)],
+    [],
+    ['426 - INGESOS VARIOS', 1000, 2000],
+    ['412 - COSTOS OPERATIVOS', 100, 150],
+    ['51102 - GASTOS  DE ADMINISTRACION', 200, 250],
+    ['51103 - GASTOS OPERATIVOS', 50, 60],
+    ['51108 - RESULTADO FINANCIERO Y POR TENENCIA', 30, -40],
+    ['6 - IMPUESTO A LAS GANANCIAS', 10, 20],
+    ['OTROS INGRESOS- EGRESOS', -5, 15],
+    ['TOTAL GENERAL', 615, 1545],
+  ];
+  const wb = wbFromSheets({ 'Pag.1': rows });
+  const r = tryParseERLibroMayorResumen(wb, 'KALLPA__ESTADO_DE_RESULTADOS_al_30062026.xls');
+  assert(!!r, 'reconoce el formato condensado por el encabezado "Cuentas" seguido directo de los meses (sin columna "Cuenta")');
+  if (r) {
+    assert(r.anio === '2026', 'toma el año del período base, no del nombre de archivo');
+    assert(r.mesesCount === 2, 'reconoce meses en texto abreviado ("ene-26") y como fecha de Excel en la misma fila de encabezado');
+    const fV = r.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fV && fV.valores[1] === 1000 && fV.valores[2] === 2000,
+      'toma Ingresos tal cual (sin invertir el signo) — es la excepción: acá sí viene positivo de origen');
+    const fC = r.filas.find(f => f.conceptoStd === 'costo');
+    assert(!!fC && fC.valores[1] === -100, 'invierte el signo de Costos (positivo en el origen → negativo en el dashboard)');
+    const fOI = r.filas.find(f => f.conceptoStd === 'otrosIngresos');
+    assert(!!fOI && fOI.valores[1] === 5 && fOI.valores[2] === -15,
+      'clasifica "OTROS INGRESOS- EGRESOS" como otrosIngresos (no como ventas, aunque su rótulo contenga "INGRESOS") y le invierte el signo');
+    const fGE = r.filas.find(f => f.conceptoStd === 'resEjercicio');
+    assert(!!fGE && fGE.valores[1] === 615 && fGE.valores[2] === 1545,
+      '"TOTAL GENERAL" se toma tal cual (ya viene en la convención correcta) como Resultado del Ejercicio');
+  }
+});
+
+group('tryParseERLibroMayorResumen — rechaza si no concilia contra TOTAL GENERAL (evita importar con el signo equivocado)', () => {
+  const rows = [
+    ['Cuentas', 'ene-26'],
+    ['426 - INGESOS VARIOS', 1000],
+    ['412 - COSTOS OPERATIVOS', 100],
+    ['51102 - GASTOS  DE ADMINISTRACION', 200],
+    ['TOTAL GENERAL', 999999], // no coincide con 1000 - (100+200) = 700
+  ];
+  assert(!tryParseERLibroMayorResumen(wbFromSheets({ 'Pag.1': rows }), 'x.xls'),
+    'no importa el archivo si la suma de los rubros no reconstruye "TOTAL GENERAL" — evita adivinar el signo');
+});
+
+group('tryParseERLibroMayorResumen — no se confunde con el formato con detalle de cuentas (tryParseERLibroMayor)', () => {
+  const rows = [
+    ['Cuentas', 'Cuenta', 'Enero', 'Febrero'],
+    ['411 - VENTAS NETAS DE SERVICIOS'],
+    ['', '41100000 - PRESTACION DE SERVI', -1000, -1100],
+    ['Total VENTAS NETAS DE SERVICIOS', '', -1000, -1100],
+    ['Total General', '', -1000, -1100],
+  ];
+  assert(!tryParseERLibroMayorResumen(wbFromSheets({ 'Pag.1': rows }), 'x.xlsx'),
+    'no reconoce el formato con columna "Cuenta" (detalle de cuentas) — queda exclusivo de tryParseERLibroMayor');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
