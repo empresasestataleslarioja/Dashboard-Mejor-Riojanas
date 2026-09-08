@@ -2808,11 +2808,21 @@ self.onmessage = async (e) => {
         <div class="card-hd" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="card-hd-title">👤 Autoridades</span>
           <span class="card-hd-unit" id="autoridades-tabla-lbl">director/presidente, síndico, etc.</span>
+          <select id="sel-autoridades-emp" onchange="buildAutoridades()"
+            style="margin-left:8px;padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+            <option value="">— Todas las empresas —</option>
+          </select>
           <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto">
             <input type="checkbox" id="chk-autoridades-historial" onchange="buildAutoridades()">
             Ver historial completo
           </label>
-          <label class="tba-btn tba-btn-file" title="Importar Excel/CSV: columnas Empresa | Nombre | Apellido | Cargo | Desde | Hasta (Hasta vacío = vigente)"
+          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
+            title="Al importar, borra los registros actuales de las empresas incluidas en el archivo y los reemplaza por completo (se pierde el historial cerrado de esas empresas). Si no se marca, el archivo se combina con lo que ya hay.">
+            <input type="checkbox" id="chk-autoridades-reemplazar">
+            🔁 Reemplazar al importar
+          </label>
+          <label class="tba-btn tba-btn-file" title="Importar Excel/CSV: columnas Empresa | Nombre y Apellido | Cargo | Desde | Hasta (Hasta vacío = vigente)"
             style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
             background:rgba(71,232,255,.08);border:1px solid rgba(71,232,255,.3);color:var(--acc);
             font-family:var(--mono);border-radius:3px;cursor:pointer">
@@ -2838,16 +2848,10 @@ self.onmessage = async (e) => {
                 font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;min-width:180px"></select>
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
-              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Nombre</label>
-              <input id="autoridad-form-nombre" type="text" placeholder="Nombre…"
+              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Nombre y Apellido</label>
+              <input id="autoridad-form-nombre" type="text" placeholder="Nombre y Apellido…"
                 style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
-                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:140px">
-            </div>
-            <div style="display:flex;flex-direction:column;gap:3px">
-              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Apellido</label>
-              <input id="autoridad-form-apellido" type="text" placeholder="Apellido…"
-                style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
-                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:140px">
+                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:200px">
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
               <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Cargo</label>
@@ -5754,7 +5758,8 @@ const DATA = {
   ],
 
   // Autoridades por empresa (director/presidente, síndico, etc.), con
-  // historial de vigencia — { empresa, nombre, apellido, cargo, desde, hasta }
+  // historial de vigencia — { empresa, nombre, cargo, desde, hasta }
+  // ("nombre" es Nombre y Apellido unificados en un solo campo)
   // "hasta" vacío/null = autoridad vigente.
   autoridades: [],
 
@@ -15711,7 +15716,17 @@ function buildAutoridades() {
   const lbl = document.getElementById('autoridades-tabla-lbl');
   if (!tbl) return;
 
-  const selEmp = document.getElementById('sel-pers-emp')?.value || '';
+  // Repoblar el filtro de empresa (propio de esta tabla, independiente del
+  // selector "Ver empresa" de dotación) preservando la selección actual.
+  const selEl = document.getElementById('sel-autoridades-emp');
+  const opciones = _autoridadesEmpresaOptions();
+  if (selEl) {
+    const prev = selEl.value;
+    selEl.innerHTML = '<option value="">— Todas las empresas —</option>' +
+      opciones.map(e => `<option value="${e}">${e}</option>`).join('');
+    selEl.value = opciones.includes(prev) ? prev : '';
+  }
+  const selEmp = selEl?.value || '';
   const verHistorial = document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy = new Date().toISOString().slice(0,10);
   const esVigente = a => !a.hasta || a.hasta >= hoy;
@@ -15734,7 +15749,6 @@ function buildAutoridades() {
   );
 
   const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—';
-  const colEmpresa = selEmp ? '' : '<th>Empresa</th>';
 
   if (filas.length === 0) {
     tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">
@@ -15742,34 +15756,53 @@ function buildAutoridades() {
     return;
   }
 
-  tbl.innerHTML = `
-    <thead><tr>${colEmpresa}<th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
-    <tbody>${filas.map(a => {
-      const vigente = esVigente(a);
-      const empCell = selEmp ? '' : `<td>${a.empresa}</td>`;
-      const hastaCell = a.hasta
-        ? fmtFecha(a.hasta)
-        : `<span style="color:var(--pos);font-size:8.5px;font-weight:600">VIGENTE</span>`;
-      return `<tr>
-        ${empCell}
-        <td>${a.nombre || ''}</td>
-        <td>${a.apellido || ''}</td>
-        <td>${a.cargo || ''}</td>
-        <td>${fmtFecha(a.desde)}</td>
-        <td>${hastaCell}</td>
-        <td style="white-space:nowrap">
-          <button onclick="toggleAutoridadForm(${a._idx})" title="Editar"
-            style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--dim);
-            font-size:9px;border-radius:3px;cursor:pointer;margin-right:3px">✎</button>
-          ${vigente ? `<button onclick="cerrarVigenciaAutoridad(${a._idx})" title="Cerrar vigencia (marcar hasta hoy)"
-            style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--dim);
-            font-size:9px;border-radius:3px;cursor:pointer;margin-right:3px">⏻</button>` : ''}
-          <button onclick="eliminarAutoridad(${a._idx})" title="Eliminar registro"
-            style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--neg);
-            font-size:9px;border-radius:3px;cursor:pointer">✕</button>
-        </td>
-      </tr>`;
-    }).join('')}</tbody>`;
+  const filaHtml = a => {
+    const vigente = esVigente(a);
+    const hastaCell = a.hasta
+      ? fmtFecha(a.hasta)
+      : `<span style="color:var(--pos);font-size:8.5px;font-weight:600">VIGENTE</span>`;
+    return `<tr>
+      <td>${a.nombre || ''}</td>
+      <td>${a.cargo || ''}</td>
+      <td>${fmtFecha(a.desde)}</td>
+      <td>${hastaCell}</td>
+      <td style="white-space:nowrap">
+        <button onclick="toggleAutoridadForm(${a._idx})" title="Editar"
+          style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--dim);
+          font-size:9px;border-radius:3px;cursor:pointer;margin-right:3px">✎</button>
+        ${vigente ? `<button onclick="cerrarVigenciaAutoridad(${a._idx})" title="Cerrar vigencia (marcar hasta hoy)"
+          style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--dim);
+          font-size:9px;border-radius:3px;cursor:pointer;margin-right:3px">⏻</button>` : ''}
+        <button onclick="eliminarAutoridad(${a._idx})" title="Eliminar registro"
+          style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--neg);
+          font-size:9px;border-radius:3px;cursor:pointer">✕</button>
+      </td>
+    </tr>`;
+  };
+
+  // Con una empresa puntual filtrada no hace falta agrupar (ya es una sola).
+  // En consolidado ("todas"), se unifican las filas por empresa: el nombre
+  // de la empresa aparece una sola vez como encabezado de grupo, en vez de
+  // repetirse en cada fila de autoridad.
+  let bodyHtml;
+  if (selEmp) {
+    bodyHtml = filas.map(filaHtml).join('');
+  } else {
+    let empresaActual = null;
+    bodyHtml = filas.map(a => {
+      let grupoHtml = '';
+      if (a.empresa !== empresaActual) {
+        empresaActual = a.empresa;
+        grupoHtml = `<tr class="autoridad-grupo-empresa">
+          <td colspan="5" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${empresaActual}</td>
+        </tr>`;
+      }
+      return grupoHtml + filaHtml(a);
+    }).join('');
+  }
+
+  tbl.innerHTML = `<thead><tr><th>Nombre y Apellido</th><th>Cargo</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+    <tbody>${bodyHtml}</tbody>`;
 }
 
 function toggleAutoridadForm(idx) {
@@ -15786,7 +15819,6 @@ function toggleAutoridadForm(idx) {
 
   const idxField    = document.getElementById('autoridad-form-idx');
   const nombreField = document.getElementById('autoridad-form-nombre');
-  const apField     = document.getElementById('autoridad-form-apellido');
   const cargoField  = document.getElementById('autoridad-form-cargo');
   const desdeField  = document.getElementById('autoridad-form-desde');
   const hastaField  = document.getElementById('autoridad-form-hasta');
@@ -15795,17 +15827,15 @@ function toggleAutoridadForm(idx) {
     const a = DATA.autoridades[idx];
     idxField.value    = idx;
     if (selEmpForm) selEmpForm.value = a.empresa || '';
-    nombreField.value = a.nombre   || '';
-    apField.value     = a.apellido || '';
-    cargoField.value  = a.cargo    || '';
-    desdeField.value  = a.desde    || '';
-    hastaField.value  = a.hasta    || '';
+    nombreField.value = a.nombre || '';
+    cargoField.value  = a.cargo  || '';
+    desdeField.value  = a.desde  || '';
+    hastaField.value  = a.hasta  || '';
   } else {
     idxField.value = '';
-    const empActual = document.getElementById('sel-pers-emp')?.value || '';
+    const empActual = document.getElementById('sel-autoridades-emp')?.value || '';
     if (selEmpForm && empActual) selEmpForm.value = empActual;
     nombreField.value = '';
-    apField.value     = '';
     cargoField.value  = '';
     desdeField.value  = '';
     hastaField.value  = '';
@@ -15819,17 +15849,16 @@ function guardarAutoridad() {
   const idxRaw  = document.getElementById('autoridad-form-idx')?.value;
   const empresa = document.getElementById('autoridad-form-emp')?.value?.trim() || '';
   const nombre  = document.getElementById('autoridad-form-nombre')?.value?.trim() || '';
-  const apellido= document.getElementById('autoridad-form-apellido')?.value?.trim() || '';
   const cargo   = document.getElementById('autoridad-form-cargo')?.value?.trim() || '';
   const desde   = document.getElementById('autoridad-form-desde')?.value || '';
   const hasta   = document.getElementById('autoridad-form-hasta')?.value || '';
 
   if (!empresa) { alert('Seleccioná la empresa.'); return; }
-  if (!nombre && !apellido) { alert('Ingresá al menos el nombre o el apellido.'); return; }
+  if (!nombre) { alert('Ingresá el nombre y apellido.'); return; }
   if (!cargo) { alert('Ingresá el cargo.'); return; }
   if (hasta && desde && hasta < desde) { alert('La fecha "Hasta" no puede ser anterior a "Desde".'); return; }
 
-  const registro = { empresa, nombre, apellido, cargo, desde, hasta };
+  const registro = { empresa, nombre, cargo, desde, hasta };
   const idx = idxRaw !== '' && idxRaw != null ? parseInt(idxRaw) : null;
   if (idx != null && DATA.autoridades[idx]) DATA.autoridades[idx] = registro;
   else DATA.autoridades.push(registro);
@@ -15842,7 +15871,7 @@ function guardarAutoridad() {
 function eliminarAutoridad(idx) {
   const a = DATA.autoridades[idx];
   if (!a) return;
-  if (!confirm(`¿Eliminar el registro de ${[a.nombre, a.apellido].filter(Boolean).join(' ')} (${a.cargo} — ${a.empresa})?`)) return;
+  if (!confirm(`¿Eliminar el registro de ${a.nombre} (${a.cargo} — ${a.empresa})?`)) return;
   DATA.autoridades.splice(idx, 1);
   marcarPendienteGuardar();
   buildAutoridades();
@@ -15855,7 +15884,7 @@ function cerrarVigenciaAutoridad(idx) {
   const a = DATA.autoridades[idx];
   if (!a) return;
   const hoy = new Date().toISOString().slice(0,10);
-  const fecha = prompt(`Fecha de cese para ${[a.nombre, a.apellido].filter(Boolean).join(' ')} (${a.cargo}):`, hoy);
+  const fecha = prompt(`Fecha de cese para ${a.nombre} (${a.cargo}):`, hoy);
   if (!fecha) return;
   if (a.desde && fecha < a.desde) { alert('La fecha de cese no puede ser anterior a la fecha "Desde".'); return; }
   a.hasta = fecha;
@@ -15887,10 +15916,16 @@ function _parseFechaAutoridad(v) {
 }
 
 // ── Importar autoridades desde Excel/CSV ─────────────────────
-// Columnas esperadas (cualquier orden): Empresa | Nombre | Apellido | Cargo
-// | Desde | Hasta. "Hasta" vacío = autoridad vigente. Re-importar el mismo
-// archivo actualiza en vez de duplicar (empareja por empresa+nombre+
-// apellido+cargo+desde).
+// Columnas esperadas (cualquier orden): Empresa | Nombre y Apellido (o
+// Nombre + Apellido en columnas separadas, se unifican) | Cargo/Puesto |
+// Desde | Hasta. "Hasta" vacío = autoridad vigente.
+// Dos modos (checkbox "Reemplazar al importar"):
+//  · Combinar (default): re-importar el mismo archivo actualiza en vez de
+//    duplicar (empareja por empresa+nombre+cargo+desde, solo pisa "hasta").
+//  · Reemplazar: borra los registros actuales de las empresas incluidas en
+//    el archivo (con su historial cerrado) y los carga de cero — para
+//    cuando el archivo es la conformación completa y vigente de un
+//    directorio, no un incremento.
 // Empareja el nombre de empresa crudo de un Excel de autoridades contra el
 // portafolio, tolerando lo que este tipo de planilla trae en la práctica:
 // razón social completa con sufijo (SAU/S.A.U./SAPEM/SA/SRL/SE), acentos,
@@ -15968,7 +16003,8 @@ function importarAutoridades(file) {
 
         const portafolio = Object.keys(rubros || {});
         const empresasNoReconocidas = new Set();
-        let importados = 0, actualizados = 0, saltados = 0;
+        let saltados = 0;
+        const parsed = [];
 
         // La empresa suele figurar solo en la primera fila de cada grupo
         // (filas siguientes del mismo directorio la dejan en blanco) — se
@@ -15980,12 +16016,15 @@ function importarAutoridades(file) {
           if (!empresaActual) return;
 
           const cargo = cols.cargo >= 0 ? String(row[cols.cargo] || '').trim() : '';
-          let nombre   = cols.nombre   >= 0 ? String(row[cols.nombre]   || '').trim() : '';
-          let apellido = cols.apellido >= 0 ? String(row[cols.apellido] || '').trim() : '';
-          if (!nombre && !apellido && cols.nombreCompleto >= 0) {
+          // Nombre y Apellido se unifican en un solo campo — si el archivo
+          // los trae en columnas separadas, se concatenan acá.
+          let nombre = cols.nombre >= 0 ? String(row[cols.nombre] || '').trim() : '';
+          const apellido = cols.apellido >= 0 ? String(row[cols.apellido] || '').trim() : '';
+          if (apellido) nombre = [nombre, apellido].filter(Boolean).join(' ');
+          if (!nombre && cols.nombreCompleto >= 0) {
             nombre = String(row[cols.nombreCompleto] || '').trim();
           }
-          if (!nombre && !apellido) { saltados++; return; }
+          if (!nombre) { saltados++; return; }
           if (!cargo) { saltados++; return; }
 
           const empresa = _matchEmpresaAutoridad(empresaActual, portafolio) || empresaActual;
@@ -15994,24 +16033,61 @@ function importarAutoridades(file) {
           const desde = cols.desde >= 0 ? _parseFechaAutoridad(row[cols.desde]) : '';
           const hasta = cols.hasta >= 0 ? _parseFechaAutoridad(row[cols.hasta]) : '';
 
-          const existente = DATA.autoridades.find(a =>
-            a.empresa === empresa && a.nombre === nombre && a.apellido === apellido &&
-            a.cargo === cargo && a.desde === desde);
-          if (existente) { existente.hasta = hasta; actualizados++; }
-          else { DATA.autoridades.push({ empresa, nombre, apellido, cargo, desde, hasta }); importados++; }
+          parsed.push({ empresa, nombre, cargo, desde, hasta });
         });
 
-        if (importados === 0 && actualizados === 0) {
-          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Nombre/Apellido y Cargo/Puesto).');
+        if (parsed.length === 0) {
+          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Nombre y Apellido, y Cargo/Puesto).');
         }
 
+        const chkReemplazar = document.getElementById('chk-autoridades-reemplazar');
+        const modoReemplazar = chkReemplazar?.checked || false;
+        let importados = 0, actualizados = 0, eliminados = 0;
+
+        if (modoReemplazar) {
+          // Reemplazo total: para cada empresa incluida en el archivo, se
+          // borran sus registros actuales (con su historial cerrado) y se
+          // cargan de cero los del archivo — es destructivo, se confirma
+          // antes de aplicar.
+          const empresasEnArchivo = new Set(parsed.map(p => p.empresa));
+          const aBorrar = DATA.autoridades.filter(a => empresasEnArchivo.has(a.empresa)).length;
+          const ok = confirm(
+            `⚠ Vas a REEMPLAZAR los registros de: ${[...empresasEnArchivo].join(', ')}.\n\n` +
+            `Se van a borrar los ${aBorrar} registro(s) actuales de esas empresas (incluido el historial cerrado) ` +
+            `y se van a reemplazar por los ${parsed.length} del archivo.\n\n¿Confirmás?`
+          );
+          if (!ok) return;
+          DATA.autoridades = DATA.autoridades.filter(a => !empresasEnArchivo.has(a.empresa));
+          const vistos = new Set();
+          parsed.forEach(p => {
+            const k = [p.empresa, p.nombre, p.cargo, p.desde].join('|');
+            if (vistos.has(k)) return; // el propio archivo trae la fila repetida
+            vistos.add(k);
+            DATA.autoridades.push(p);
+            importados++;
+          });
+          eliminados = aBorrar;
+        } else {
+          // Combinar (default): empareja por empresa+nombre+cargo+desde —
+          // si ya existe, solo actualiza "hasta"; si no, agrega.
+          parsed.forEach(p => {
+            const existente = DATA.autoridades.find(a =>
+              a.empresa === p.empresa && a.nombre === p.nombre && a.cargo === p.cargo && a.desde === p.desde);
+            if (existente) { existente.hasta = p.hasta; actualizados++; }
+            else { DATA.autoridades.push(p); importados++; }
+          });
+        }
+
+        if (chkReemplazar) chkReemplazar.checked = false;
         saveDataToLocalCache();
         marcarPendienteGuardar();
         buildAutoridades();
 
         if (msg) {
-          let texto = `✓ ${importados} autoridad(es) nueva(s) · ${actualizados} actualizada(s)` +
-            (saltados ? ` · ${saltados} fila(s) omitida(s) (sin nombre/apellido o sin cargo)` : '');
+          let texto = modoReemplazar
+            ? `✓ Reemplazado: ${eliminados} registro(s) anterior(es) eliminado(s) · ${importados} nuevo(s) cargado(s)`
+            : `✓ ${importados} autoridad(es) nueva(s) · ${actualizados} actualizada(s)`;
+          texto += (saltados ? ` · ${saltados} fila(s) omitida(s) (sin nombre o sin cargo)` : '');
           if (empresasNoReconocidas.size) {
             texto += ` · ⚠ no coinciden con ninguna empresa del portafolio: ${[...empresasNoReconocidas].join(', ')}`;
           }
@@ -35642,16 +35718,18 @@ function applyCloudData(cloud, opts) {
   }
 
   // ── Autoridades por empresa (director/presidente, síndico, etc.) ──
+  // Nombre y Apellido se guardan unificados en un solo campo "nombre" — si
+  // Sheets todavía trae filas del formato anterior (columna "apellido"
+  // separada, de una publicación previa), se concatenan acá sin perder el dato.
   if (Array.isArray(cloud.autoridades)) {
     DATA.autoridades = cloud.autoridades
       .filter(r => r.empresa && (r.nombre || r.apellido))
       .map(r => ({
-        empresa:  String(r.empresa),
-        nombre:   String(r.nombre   || ''),
-        apellido: String(r.apellido || ''),
-        cargo:    String(r.cargo    || ''),
-        desde:    String(r.desde    || ''),
-        hasta:    String(r.hasta    || ''),
+        empresa: String(r.empresa),
+        nombre:  [String(r.nombre || '').trim(), String(r.apellido || '').trim()].filter(Boolean).join(' '),
+        cargo:   String(r.cargo || ''),
+        desde:   String(r.desde || ''),
+        hasta:   String(r.hasta || ''),
       }));
   }
 
@@ -35979,14 +36057,14 @@ function buildCloudPayload() {
   }));
 
   // autoridades: director/presidente, síndico, etc. por empresa, con historial
-  // de vigencia (desde/hasta) — una fila por autoridad/período
+  // de vigencia (desde/hasta) — una fila por autoridad/período. Nombre y
+  // Apellido van unificados en un solo campo.
   const autoridadesRows = (DATA.autoridades || []).map(a => ({
-    empresa:  a.empresa  || '',
-    nombre:   a.nombre   || '',
-    apellido: a.apellido || '',
-    cargo:    a.cargo    || '',
-    desde:    a.desde    || '',
-    hasta:    a.hasta    || '',
+    empresa: a.empresa || '',
+    nombre:  a.nombre  || '',
+    cargo:   a.cargo   || '',
+    desde:   a.desde   || '',
+    hasta:   a.hasta   || '',
   }));
 
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
