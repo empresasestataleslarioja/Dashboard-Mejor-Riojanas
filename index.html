@@ -2812,6 +2812,15 @@ self.onmessage = async (e) => {
             <input type="checkbox" id="chk-autoridades-historial" onchange="buildAutoridades()">
             Ver historial completo
           </label>
+          <label class="tba-btn tba-btn-file" title="Importar Excel/CSV: columnas Empresa | Nombre | Apellido | Cargo | Desde | Hasta (Hasta vacío = vigente)"
+            style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
+            background:rgba(71,232,255,.08);border:1px solid rgba(71,232,255,.3);color:var(--acc);
+            font-family:var(--mono);border-radius:3px;cursor:pointer">
+            📥 Importar Excel
+            <input type="file" accept=".xlsx,.xls,.csv"
+              style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
+              onchange="importarAutoridades(this.files[0]);this.value=''">
+          </label>
           <button onclick="toggleAutoridadForm()"
             style="padding:3px 9px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
             color:var(--pos);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">+ Agregar autoridad</button>
@@ -15852,6 +15861,132 @@ function cerrarVigenciaAutoridad(idx) {
   a.hasta = fecha;
   marcarPendienteGuardar();
   buildAutoridades();
+}
+
+// Normaliza una celda de fecha (Date de Excel, serial numérico, o texto en
+// DD/MM/AAAA o AAAA-MM-DD) al formato AAAA-MM-DD usado por los registros y
+// por el input type="date" del formulario. Devuelve '' si está vacía o no
+// se puede interpretar (nunca inventa una fecha).
+function _parseFechaAutoridad(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) {
+    const y = v.getFullYear(), m = String(v.getMonth()+1).padStart(2,'0'), d = String(v.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof v === 'number' && v > 20000 && v < 90000) {
+    try {
+      const sd = XLSX.SSF.parse_date_code(v);
+      if (sd) return `${sd.y}-${String(sd.m).padStart(2,'0')}-${String(sd.d).padStart(2,'0')}`;
+    } catch(e) {}
+  }
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return '';
+}
+
+// ── Importar autoridades desde Excel/CSV ─────────────────────
+// Columnas esperadas (cualquier orden): Empresa | Nombre | Apellido | Cargo
+// | Desde | Hasta. "Hasta" vacío = autoridad vigente. Re-importar el mismo
+// archivo actualiza en vez de duplicar (empareja por empresa+nombre+
+// apellido+cargo+desde).
+function importarAutoridades(file) {
+  if (!file) return;
+  const msg = document.getElementById('pers-import-msg');
+
+  const doImport = () => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        if (!rows.length) throw new Error('Archivo vacío');
+
+        // Detectar fila de encabezado: busca "Empresa" y "Cargo" en las primeras filas
+        let headerRow = -1, cols = null;
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+          const hdrs = rows[i].map(c => String(c).trim().toUpperCase());
+          const iEmp = hdrs.indexOf('EMPRESA');
+          const iCargo = hdrs.indexOf('CARGO');
+          if (iEmp >= 0 && iCargo >= 0) {
+            headerRow = i;
+            cols = {
+              empresa: iEmp,
+              cargo: iCargo,
+              nombre: hdrs.indexOf('NOMBRE'),
+              apellido: hdrs.indexOf('APELLIDO'),
+              nombreCompleto: hdrs.findIndex(h => /NOMBRE.*APELLIDO|APELLIDO.*NOMBRE|NOMBRE\s+COMPLETO/.test(h)),
+              desde: hdrs.findIndex(h => /^DESDE$|FECHA.*DESDE|VIGENCIA.*DESDE/.test(h)),
+              hasta: hdrs.findIndex(h => /^HASTA$|FECHA.*HASTA|VIGENCIA.*HASTA|^CESE$/.test(h)),
+            };
+            break;
+          }
+        }
+        if (headerRow < 0) throw new Error('No se encontraron las columnas "Empresa" y "Cargo" en las primeras 5 filas.');
+
+        const portafolio = Object.keys(rubros || {});
+        const empresasNoReconocidas = new Set();
+        let importados = 0, actualizados = 0, saltados = 0;
+
+        rows.slice(headerRow + 1).forEach(row => {
+          const empresaRaw = String(row[cols.empresa] || '').trim();
+          if (!empresaRaw) return;
+          const cargo = cols.cargo >= 0 ? String(row[cols.cargo] || '').trim() : '';
+          let nombre   = cols.nombre   >= 0 ? String(row[cols.nombre]   || '').trim() : '';
+          let apellido = cols.apellido >= 0 ? String(row[cols.apellido] || '').trim() : '';
+          if (!nombre && !apellido && cols.nombreCompleto >= 0) {
+            nombre = String(row[cols.nombreCompleto] || '').trim();
+          }
+          if (!nombre && !apellido) { saltados++; return; }
+          if (!cargo) { saltados++; return; }
+
+          const empresa = (typeof _matchEmpresaPortafolio === 'function' ? _matchEmpresaPortafolio(empresaRaw, portafolio) : null) || empresaRaw;
+          if (!portafolio.includes(empresa)) empresasNoReconocidas.add(empresaRaw);
+
+          const desde = cols.desde >= 0 ? _parseFechaAutoridad(row[cols.desde]) : '';
+          const hasta = cols.hasta >= 0 ? _parseFechaAutoridad(row[cols.hasta]) : '';
+
+          const existente = DATA.autoridades.find(a =>
+            a.empresa === empresa && a.nombre === nombre && a.apellido === apellido &&
+            a.cargo === cargo && a.desde === desde);
+          if (existente) { existente.hasta = hasta; actualizados++; }
+          else { DATA.autoridades.push({ empresa, nombre, apellido, cargo, desde, hasta }); importados++; }
+        });
+
+        if (importados === 0 && actualizados === 0) {
+          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Nombre/Apellido y Cargo).');
+        }
+
+        saveDataToLocalCache();
+        marcarPendienteGuardar();
+        buildAutoridades();
+
+        if (msg) {
+          let texto = `✓ ${importados} autoridad(es) nueva(s) · ${actualizados} actualizada(s)` +
+            (saltados ? ` · ${saltados} fila(s) omitida(s) (sin nombre/apellido o sin cargo)` : '');
+          if (empresasNoReconocidas.size) {
+            texto += ` · ⚠ no coinciden con ninguna empresa del portafolio: ${[...empresasNoReconocidas].join(', ')}`;
+          }
+          msg.textContent = texto;
+          msg.style.color = empresasNoReconocidas.size ? '#ff8c47' : '#47ffb4';
+          setTimeout(function() { if (msg) msg.textContent = ''; }, 9000);
+        }
+      } catch(err) {
+        if (msg) { msg.textContent = '✗ Error: ' + err.message; msg.style.color = 'var(--neg)'; }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  if (window.XLSX) { doImport(); }
+  else {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = doImport;
+    document.head.appendChild(s);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -51,6 +51,7 @@ const {
   tryParseERLibroMayor,
   tryParseERLibroMayorResumen,
   _mismoNombreEmpresa,
+  _parseFechaAutoridad,
 } = loadFns([
   '_esIngExcluido',
   '_matchEmpresaPortafolio',
@@ -61,6 +62,7 @@ const {
   'tryParseERLibroMayor',
   'tryParseERLibroMayorResumen',
   '_mismoNombreEmpresa',
+  '_parseFechaAutoridad',
 ]);
 
 // _erDesdeMonthly lee/escribe sobre el global DATA y usa las consts
@@ -1156,6 +1158,26 @@ group('autoridades — sigue el mismo criterio de migración que el resto de los
   const restantes = ctx3.getDATA().autoridades;
   assert(restantes.length === 1 && restantes[0].empresa === 'PEA',
     '_eliminarEmpresa borra solo los registros de autoridades de la empresa eliminada, no los de otras');
+});
+
+// ── _parseFechaAutoridad: normaliza fechas para la importación de
+//    autoridades desde Excel — mismas variantes reales que puede traer un
+//    archivo (fecha de Excel, serial numérico, texto DD/MM/AAAA o ya en
+//    AAAA-MM-DD) al formato único AAAA-MM-DD que usan los registros y el
+//    input type="date" del formulario. ─────────────────────────────────
+group('_parseFechaAutoridad — normaliza las variantes de fecha que puede traer un Excel al formato AAAA-MM-DD', () => {
+  assert(_parseFechaAutoridad(new Date(2023, 0, 15)) === '2023-01-15',
+    'convierte un objeto Date de Excel (cellDates) a AAAA-MM-DD');
+  assert(_parseFechaAutoridad('15/01/2023') === '2023-01-15',
+    'convierte texto DD/MM/AAAA a AAAA-MM-DD');
+  assert(_parseFechaAutoridad('2023-01-15') === '2023-01-15',
+    'deja pasar un valor ya en AAAA-MM-DD');
+  assert(_parseFechaAutoridad(44941) === '2023-01-15',
+    'convierte un serial numérico de Excel (celda sin formato de fecha) a AAAA-MM-DD');
+  assert(_parseFechaAutoridad('') === '' && _parseFechaAutoridad(null) === '' && _parseFechaAutoridad(undefined) === '',
+    'una celda vacía da string vacío (no inventa una fecha) — es lo que representa "vigente" en Hasta');
+  assert(_parseFechaAutoridad('no es una fecha') === '',
+    'un valor no interpretable como fecha da string vacío en vez de un dato falso');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
