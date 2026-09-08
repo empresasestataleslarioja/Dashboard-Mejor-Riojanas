@@ -76,10 +76,12 @@ function extractConstBlock(html, startMarker, endMarker) {
 const erConsts = extractConstBlock(html, 'const ER_LABELS = {', 'const ER_ORDER = Object.keys(ER_LABELS);');
 const erDesdeMonthlySrc = extractFn(html, '_erDesdeMonthly');
 const crossCheckSrc = extractFn(html, '_crossCheckEREmpresaAnio');
-const { _erDesdeMonthly, _crossCheckEREmpresaAnio, setData } = new Function(
-  erConsts + '\n' + erDesdeMonthlySrc + '\n' + crossCheckSrc + '\n' +
-  'let DATA = {};\nfunction setData(d) { DATA = d; }\n' +
-  'return { _erDesdeMonthly, _crossCheckEREmpresaAnio, setData };'
+const repararSrc = extractFn(html, '_repararResultadoOperativoLibroMayor');
+const erStdAnualSrc = extractFn(html, '_erStdAnual');
+const { _erDesdeMonthly, _crossCheckEREmpresaAnio, _repararResultadoOperativoLibroMayor, _erStdAnual, setData } = new Function(
+  erConsts + '\n' + erDesdeMonthlySrc + '\n' + crossCheckSrc + '\n' + repararSrc + '\n' + erStdAnualSrc + '\n' +
+  'let DATA = {};\nfunction setData(d) { DATA = d; }\nfunction marcarPendienteGuardar(){}\n' +
+  'return { _erDesdeMonthly, _crossCheckEREmpresaAnio, _repararResultadoOperativoLibroMayor, _erStdAnual, setData };'
 )();
 
 // tryParseERNativo también escribe sobre el global DATA y llama a funciones
@@ -494,6 +496,94 @@ group('_erDesdeMonthly — con Gastos Operativos como única partida de gasto (s
   const er = _erDesdeMonthly('EMPRESA SOLO GASTOS OPERATIVOS')['2022'];
   assert(er.resultado_operativo === 500000,
     'deriva Resultado Operativo (Utilidad Bruta + Gastos Operativos) aunque no haya Gastos de Admin/Comercialización propios');
+});
+
+// ── _repararResultadoOperativoLibroMayor: bug real — PEA, AR, Kallpa y
+//    AESA ya habían sido cargados (con _aplicarERColumnas) ANTES de
+//    unificar la fórmula de Resultado Operativo, así que quedaron con el
+//    resultado FINAL del ejercicio guardado en DATA.sit — la corrección
+//    de la fórmula (arriba) no alcanza para ellos porque DATA.sit ya
+//    estaba guardado en Sheets con el valor viejo, y no se recalcula solo
+//    al refrescar. Esta reparación corre en cada sync y corrige esos
+//    casos sin pedirle al usuario que vuelva a subir el archivo. ───────
+group('_repararResultadoOperativoLibroMayor — corrige en Sheets el Resultado Operativo de empresas cargadas antes de unificar la fórmula', () => {
+  setData({
+    er_mensual: {
+      'PEA': { '2026': { filas: [
+        { conceptoStd: 'ventas',        valores: { 1: 1000000 } },
+        { conceptoStd: 'costo',         valores: { 1: -400000 } },
+        { conceptoStd: 'gastoAdm',      valores: { 1: -100000 } },
+        { conceptoStd: 'otrosIngresos', valores: { 1: 50000 } },
+        { conceptoStd: 'resFinanciero', valores: { 1: -300000 } },
+        { conceptoStd: 'resEjercicio',  valores: { 1: -150000 } }, // Total General: lo que había quedado en DATA.sit
+      ] } },
+      // Empresa con fila 'resOperativo' propia (ancla real, ej. RESUMEN
+      // histórico 2021-2024) — no debe tocarse: no tiene la firma del bug.
+      'EMPRESA CON ANCLA PROPIA': { '2022': { filas: [
+        { conceptoStd: 'ventas',       valores: { 1: 1000000 } },
+        { conceptoStd: 'resOperativo', valores: { 1: 120000 } },
+        { conceptoStd: 'resEjercicio', valores: { 1: 90000 } },
+      ] } },
+      // Ya reparada en una corrida anterior — no debe volver a marcarse.
+      'EMPRESA YA CORRECTA': { '2026': { filas: [
+        { conceptoStd: 'ventas',       valores: { 1: 500000 } },
+        { conceptoStd: 'costo',        valores: { 1: -200000 } },
+        { conceptoStd: 'resEjercicio', valores: { 1: 300000 } },
+      ] } },
+    },
+    er: {}, fact: {},
+    sit: {
+      'PEA': { '2026': -150000 }, // el resultado final, guardado por error
+      'EMPRESA CON ANCLA PROPIA': { '2022': 120000 },
+      'EMPRESA YA CORRECTA': { '2026': 300000 }, // Utilidad Bruta = 500000-200000 = 300000, ya coincide
+    },
+  });
+
+  const reparados = _repararResultadoOperativoLibroMayor();
+
+  assert(reparados.length === 1 && reparados[0].emp === 'PEA' && reparados[0].yr === '2026',
+    'detecta y corrige solo la empresa/año con la firma del bug (fila "resEjercicio" sin "resOperativo" propia y DATA.sit desactualizado)');
+  // Resultado Operativo = Ventas + Costo + GastoAdm + OtrosIngresos = 1.000.000-400.000-100.000+50.000 = 550.000
+  assert(reparados[0].antes === -150000 && reparados[0].despues === 550000,
+    'recalcula con la misma fórmula que el resto de los reportes (incluye Otros Ingresos, excluye Resultado Financiero)');
+
+  const er = _erDesdeMonthly('PEA')['2026'];
+  assert(er.resultado_operativo === 550000, 'el valor corregido queda disponible para el resto de los reportes');
+
+  const reparados2 = _repararResultadoOperativoLibroMayor();
+  assert(reparados2.length === 0, 'no vuelve a marcar nada una vez corregido (idempotente — no genera ruido en cada sync)');
+});
+
+// ── _erStdAnual: bug real detectado al verificar la reparación de arriba
+//    — clasificaba las filas de Otros Ingresos/Otros Egresos/Gastos
+//    Operativos por el TEXTO del rótulo (clasificar(f.lbl)) en vez de por
+//    conceptoStd directo, a diferencia de ventas/costo/gastoAdm/etc., que
+//    sí se reconocían por conceptoStd sin depender del texto. Con un
+//    rótulo que no matcheaba el clasificador de texto, la fila se perdía
+//    en silencio — mismo tipo de inconsistencia que el bug de Resultado
+//    Operativo ya corregido, esta vez en la vista "Evolución Empresa"
+//    (buildEvolucionMensual usa el mismo patrón, corregido en el mismo
+//    commit — no expuesta acá por depender del DOM). ───────────────────
+group('_erStdAnual — clasifica Otros Ingresos/Egresos y Gastos Operativos por conceptoStd, no por el texto del rótulo', () => {
+  setData({
+    er_mensual: {
+      'EMPRESA CON ROTULOS RAROS': { '2026': { filas: [
+        { lbl: 'x1', conceptoStd: 'ventas',        valores: { 1: 1000000 } },
+        { lbl: 'x2', conceptoStd: 'costo',         valores: { 1: -400000 } },
+        { lbl: 'x3', conceptoStd: 'gastoAdm',      valores: { 1: -100000 } },
+        // Rótulos que NO matchean ningún patrón de clasificar(lbl) —
+        // antes de este fix, estas dos filas se perdían en silencio.
+        { lbl: 'Ajuste 4821-B', conceptoStd: 'otrosIngresos', valores: { 1: 50000 } },
+        { lbl: 'Partida 9902-C', conceptoStd: 'otrosGastos',  valores: { 1: -20000 } },
+      ] } },
+    },
+    er: {}, fact: {}, sit: {},
+  });
+  const er = _erStdAnual('EMPRESA CON ROTULOS RAROS', '2026');
+  assert(er.otros_ingresos === 50000, 'reconoce Otros Ingresos por conceptoStd aunque el rótulo no sea reconocible por texto');
+  // Resultado Operativo = Utilidad Bruta(600.000) + GastoAdm(-100.000) + OtrosIngresos(50.000) + OtrosGastos(-20.000) = 530.000
+  assert(er.resultado_operativo === 530000,
+    'incluye Otros Ingresos/Egresos en Resultado Operativo aunque no se hayan podido clasificar por el texto del rótulo');
 });
 
 // ── tryParseERNativo: bug real — al recargar el RESUMEN histórico multi-

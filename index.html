@@ -14941,6 +14941,49 @@ function _erDesdeMonthly(emp) {
   return hayAlgo ? out : null;
 }
 
+// ── Reparación automática: Resultado Operativo mal guardado en DATA.sit
+// para archivos "libro mayor" (PEA, AR, Kallpa, AESA y cualquier futura
+// carga del mismo formato) cargados ANTES de que _aplicarERColumnas usara
+// esta misma derivación de Resultado Operativo (ventas_netas.md rev. la
+// unificación de fórmulas). Esos casos no traen una fila 'resOperativo'
+// propia (solo "Total General", el resultado final del ejercicio) y
+// quedaron con ese resultado final guardado directo en DATA.sit — visible
+// como una "diferencia" en el cruce contra Facturación/Resultado
+// "oficiales" que en realidad es un dato viejo, no un error de carga.
+// Corre en cada login/sync (idempotente y barata) y corrige sola,
+// SIN pedirle al usuario que vuelva a subir el archivo, cualquier
+// empresa/año detectado por esa firma (fila 'resEjercicio' sin fila
+// 'resOperativo' propia): recalcula con la misma fórmula que ya usa el
+// resto de los reportes y publica la corrección a Sheets.
+function _repararResultadoOperativoLibroMayor() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const tieneResEjercicio = data.filas.some(f => f.conceptoStd === 'resEjercicio');
+      const tieneResOperativoPropio = data.filas.some(f => f.conceptoStd === 'resOperativo');
+      if (!tieneResEjercicio || tieneResOperativoPropio) return;
+      const erDerivado = _erDesdeMonthly(emp);
+      const nuevo = erDerivado?.[yr]?.resultado_operativo;
+      if (nuevo == null) return;
+      const actual = DATA.sit?.[emp]?.[yr];
+      if (actual != null && Math.abs(actual - nuevo) < 1) return; // ya está corregido
+      if (!DATA.sit[emp]) DATA.sit[emp] = {};
+      DATA.sit[emp][yr] = nuevo;
+      huboCambios = true;
+      reparados.push({ emp, yr, antes: actual, despues: nuevo });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] Resultado Operativo recalculado (formato libro mayor) para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(); } catch(e) {}
+  }
+  return reparados;
+}
+
 // ── Control cruzado: el ER Provisorio (que muestran Resultado Operativo →
 // Desglose ER y Evolución Empresa → ER Provisorio, ambos vía
 // _erDesdeMonthly) puede diferir de la Facturación/Resultado Operativo
@@ -16875,6 +16918,9 @@ function _erStdAnual(emp, yr) {
     else if (cs === 'utilBruta') rb = 'utilBruta';
     else if (cs === 'gastoAdm') rb = 'gastoAdm';
     else if (cs === 'gastoCom') rb = 'gastoCom';
+    else if (cs === 'gastoOper') rb = 'gastoOper';
+    else if (cs === 'otrosIngresos') rb = 'otrosIngresos';
+    else if (cs === 'otrosGastos') rb = 'otrosGastos';
     else if (cs === 'resOperativo') rb = 'resOperativo';
     else if (cs === 'resFinanciero') rb = 'resFinanciero';
     else if (cs === 'resAntesImp') rb = 'resAntesImp';
@@ -16941,6 +16987,8 @@ function _erStdAnual(emp, yr) {
     sv('gastoAdm', m, gastoAdm);
     sv('gastoCom', m, gastoCom);
     sv('gastoOper', m, gastoOper);
+    sv('otrosIngresos', m, otrosIng);
+    sv('otrosGastos', m, otrosGas);
     sv('resOperativo', m, resOp);
     sv('resFinanciero', m, resFin);
     sv('resAntesImp', m, resAntesImp);
@@ -18378,6 +18426,9 @@ function buildEvolucionMensual(emp) {
         else if (cs === 'utilBruta') rubro = 'utilBruta';
         else if (cs === 'gastoAdm') rubro = 'gastoAdm';
         else if (cs === 'gastoCom') rubro = 'gastoCom';
+        else if (cs === 'gastoOper') rubro = 'gastoOper';
+        else if (cs === 'otrosIngresos') rubro = 'otrosIngresos';
+        else if (cs === 'otrosGastos') rubro = 'otrosGastos';
         else if (cs === 'resOperativo') rubro = 'resOperativo';
         else if (cs === 'resFinanciero') rubro = 'resFinanciero';
         else if (cs === 'resAntesImp') rubro = 'resAntesImp';
@@ -35161,6 +35212,8 @@ function applyCloudData(cloud, opts) {
     DATA.years = [...allYears].sort((a,b) => a-b);
     syncYearChips();
   }
+
+  try { _repararResultadoOperativoLibroMayor(); } catch(e) {}
 }
 
 // ── Convertir DATA → formato flat para el Sheet ──────────────────
