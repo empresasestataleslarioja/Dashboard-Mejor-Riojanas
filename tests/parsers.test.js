@@ -52,6 +52,7 @@ const {
   tryParseERLibroMayorResumen,
   _mismoNombreEmpresa,
   _parseFechaAutoridad,
+  _matchEmpresaAutoridad,
 } = loadFns([
   '_esIngExcluido',
   '_matchEmpresaPortafolio',
@@ -63,6 +64,7 @@ const {
   'tryParseERLibroMayorResumen',
   '_mismoNombreEmpresa',
   '_parseFechaAutoridad',
+  '_matchEmpresaAutoridad',
 ]);
 
 // _erDesdeMonthly lee/escribe sobre el global DATA y usa las consts
@@ -1178,6 +1180,30 @@ group('_parseFechaAutoridad — normaliza las variantes de fecha que puede traer
     'una celda vacía da string vacío (no inventa una fecha) — es lo que representa "vigente" en Hasta');
   assert(_parseFechaAutoridad('no es una fecha') === '',
     'un valor no interpretable como fecha da string vacío en vez de un dato falso');
+});
+
+// ── _matchEmpresaAutoridad: bug real — el archivo real de "conformación de
+//    directorios" trae la razón social completa con sufijo legal (SAU,
+//    S.A.U., SAPEM, S.E., SRL), con acentos, y con las abreviaturas reales
+//    del portafolio (PEA, LRT, EMSE) que no son variantes de puntuación
+//    sino nombres cortos distintos — ningún matcher genérico las resuelve
+//    solo. ─────────────────────────────────────────────────────────────
+group('_matchEmpresaAutoridad — empareja razón social completa (sufijo legal, acentos, abreviaturas reales) contra el portafolio', () => {
+  const portafolio = ['PEA', 'LRT', 'EMSE', 'CERAMICA RIOJANA', 'AGUAS RIOJANAS', 'ALFA', 'KAYNE', 'DRIPSA'];
+  assert(_matchEmpresaAutoridad('PARQUE EOLICO ARAUCO SAPEM', portafolio) === 'PEA',
+    'resuelve la abreviatura real PEA a partir de la razón social completa con sufijo SAPEM');
+  assert(_matchEmpresaAutoridad('LA RIOJA TELECOMUNICACIONES SAPEM', portafolio) === 'LRT',
+    'resuelve la abreviatura real LRT a partir de la razón social completa');
+  assert(_matchEmpresaAutoridad('CERÁMICA RIOJANA SAU', portafolio) === 'CERAMICA RIOJANA',
+    'tolera acento (CERÁMICA vs CERAMICA) y sufijo legal (SAU) vía _mismoNombreEmpresa');
+  assert(_matchEmpresaAutoridad('AGUAS RIOJANAS SAU', portafolio) === 'AGUAS RIOJANAS',
+    'quita el sufijo SAU aunque no haya diferencia de acentos');
+  assert(_matchEmpresaAutoridad('ALFA S.A.U.', portafolio) === 'ALFA',
+    'tolera el sufijo legal con puntos (S.A.U.)');
+  assert(_matchEmpresaAutoridad('KAYNE S.A.U.', portafolio) === 'KAYNE', 'ídem con otra empresa');
+  assert(_matchEmpresaAutoridad('DRIPSA S.A.U.', portafolio) === 'DRIPSA', 'ídem con otra empresa');
+  assert(_matchEmpresaAutoridad('UNA EMPRESA QUE NO EXISTE', portafolio) === '',
+    'no inventa una coincidencia para una empresa genuinamente ausente del portafolio');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);

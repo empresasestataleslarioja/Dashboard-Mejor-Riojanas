@@ -15891,6 +15891,32 @@ function _parseFechaAutoridad(v) {
 // | Desde | Hasta. "Hasta" vacío = autoridad vigente. Re-importar el mismo
 // archivo actualiza en vez de duplicar (empareja por empresa+nombre+
 // apellido+cargo+desde).
+// Empareja el nombre de empresa crudo de un Excel de autoridades contra el
+// portafolio, tolerando lo que este tipo de planilla trae en la práctica:
+// razón social completa con sufijo (SAU/S.A.U./SAPEM/SA/SRL/SE), acentos,
+// y unas pocas abreviaturas reales que no son variantes de puntuación sino
+// nombres cortos distintos (PEA, LRT, EMSE) — mismos alias que ya usa
+// tryParseERNativo para el mismo portafolio de empresas.
+function _matchEmpresaAutoridad(nombreRaw, portafolio) {
+  if (!nombreRaw) return '';
+  if (typeof _mismoNombreEmpresa === 'function') {
+    const tolerante = portafolio.find(e => _mismoNombreEmpresa(nombreRaw, e));
+    if (tolerante) return tolerante;
+  }
+  const ALIAS_LEGAL = {
+    'PARQUE EOLICO ARAUCO': 'PEA',
+    'LA RIOJA TELECOMUNICACIONES': 'LRT',
+    'ENERGIA Y MINERALES': 'EMSE',
+  };
+  const normSimple = s => String(s || '').toUpperCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/[^A-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const nNorm = normSimple(nombreRaw);
+  for (const [k, v] of Object.entries(ALIAS_LEGAL)) {
+    if (nNorm.includes(normSimple(k)) && portafolio.includes(v)) return v;
+  }
+  return (typeof _matchEmpresaPortafolio === 'function' ? _matchEmpresaPortafolio(nombreRaw, portafolio) : '') || '';
+}
+
 function importarAutoridades(file) {
   if (!file) return;
   const msg = document.getElementById('pers-import-msg');
@@ -15899,40 +15925,60 @@ function importarAutoridades(file) {
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const wb   = XLSX.read(e.target.result, { type: 'array' });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-        if (!rows.length) throw new Error('Archivo vacío');
+        const wb = XLSX.read(e.target.result, { type: 'array' });
 
-        // Detectar fila de encabezado: busca "Empresa" y "Cargo" en las primeras filas
-        let headerRow = -1, cols = null;
-        for (let i = 0; i < Math.min(5, rows.length); i++) {
-          const hdrs = rows[i].map(c => String(c).trim().toUpperCase());
-          const iEmp = hdrs.indexOf('EMPRESA');
-          const iCargo = hdrs.indexOf('CARGO');
-          if (iEmp >= 0 && iCargo >= 0) {
-            headerRow = i;
-            cols = {
-              empresa: iEmp,
-              cargo: iCargo,
-              nombre: hdrs.indexOf('NOMBRE'),
-              apellido: hdrs.indexOf('APELLIDO'),
-              nombreCompleto: hdrs.findIndex(h => /NOMBRE.*APELLIDO|APELLIDO.*NOMBRE|NOMBRE\s+COMPLETO/.test(h)),
-              desde: hdrs.findIndex(h => /^DESDE$|FECHA.*DESDE|VIGENCIA.*DESDE/.test(h)),
-              hasta: hdrs.findIndex(h => /^HASTA$|FECHA.*HASTA|VIGENCIA.*HASTA|^CESE$/.test(h)),
-            };
-            break;
+        // Detectar la primera hoja con columnas de "Empresa" y "Cargo/Puesto"
+        // reconocibles (algunos archivos traen varias hojas — ej. una vista
+        // alternativa "persona → empresas" sin cargo, que se ignora).
+        let headerRow = -1, cols = null, rows = null;
+        for (const sn of wb.SheetNames) {
+          const wsRows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+          for (let i = 0; i < Math.min(5, wsRows.length); i++) {
+            const hdrs = wsRows[i].map(c => String(c).trim().toUpperCase());
+            let iEmp = hdrs.findIndex(h => /EMPRESA/.test(h));
+            const iCargo = hdrs.findIndex(h => /CARGO|PUESTO|FUNCION|ROL/.test(h));
+            if (iEmp >= 0 && iCargo >= 0) {
+              // Encabezado de celda combinada ("Empresas" abarcando N°+Nombre,
+              // pero el texto solo aparece en la primera columna): si la
+              // columna detectada trae números correlativos en el cuerpo y la
+              // siguiente trae texto, la empresa real está una columna más allá.
+              const muestra = wsRows.slice(i + 1, i + 10);
+              const valoresCol = ci => muestra.map(r => r[ci]).filter(v => v !== '' && v != null);
+              const esNumerica = vals => vals.length > 0 && vals.every(v => typeof v === 'number' || /^\d+$/.test(String(v).trim()));
+              const volActual = valoresCol(iEmp), volSiguiente = valoresCol(iEmp + 1);
+              if (esNumerica(volActual) && volSiguiente.length > 0 && !esNumerica(volSiguiente)) {
+                iEmp = iEmp + 1;
+              }
+              headerRow = i; rows = wsRows;
+              cols = {
+                empresa: iEmp,
+                cargo: iCargo,
+                nombre: hdrs.indexOf('NOMBRE'),
+                apellido: hdrs.indexOf('APELLIDO'),
+                nombreCompleto: hdrs.findIndex(h => /NOMBRE.*APELLIDO|APELLIDO.*NOMBRE|NOMBRE\s+COMPLETO/.test(h)),
+                desde: hdrs.findIndex(h => /^DESDE$|FECHA.*DESDE|VIGENCIA.*DESDE/.test(h)),
+                hasta: hdrs.findIndex(h => /^HASTA$|FECHA.*HASTA|VIGENCIA.*HASTA|^CESE$/.test(h)),
+              };
+              break;
+            }
           }
+          if (headerRow >= 0) break;
         }
-        if (headerRow < 0) throw new Error('No se encontraron las columnas "Empresa" y "Cargo" en las primeras 5 filas.');
+        if (headerRow < 0) throw new Error('No se encontraron columnas de "Empresa" y "Cargo/Puesto" en ninguna hoja (primeras 5 filas de cada una).');
 
         const portafolio = Object.keys(rubros || {});
         const empresasNoReconocidas = new Set();
         let importados = 0, actualizados = 0, saltados = 0;
 
+        // La empresa suele figurar solo en la primera fila de cada grupo
+        // (filas siguientes del mismo directorio la dejan en blanco) — se
+        // "arrastra" hacia abajo la última empresa vista.
+        let empresaActual = '';
         rows.slice(headerRow + 1).forEach(row => {
-          const empresaRaw = String(row[cols.empresa] || '').trim();
-          if (!empresaRaw) return;
+          const empresaCell = String(row[cols.empresa] || '').trim();
+          if (empresaCell) empresaActual = empresaCell;
+          if (!empresaActual) return;
+
           const cargo = cols.cargo >= 0 ? String(row[cols.cargo] || '').trim() : '';
           let nombre   = cols.nombre   >= 0 ? String(row[cols.nombre]   || '').trim() : '';
           let apellido = cols.apellido >= 0 ? String(row[cols.apellido] || '').trim() : '';
@@ -15942,8 +15988,8 @@ function importarAutoridades(file) {
           if (!nombre && !apellido) { saltados++; return; }
           if (!cargo) { saltados++; return; }
 
-          const empresa = (typeof _matchEmpresaPortafolio === 'function' ? _matchEmpresaPortafolio(empresaRaw, portafolio) : null) || empresaRaw;
-          if (!portafolio.includes(empresa)) empresasNoReconocidas.add(empresaRaw);
+          const empresa = _matchEmpresaAutoridad(empresaActual, portafolio) || empresaActual;
+          if (!portafolio.includes(empresa)) empresasNoReconocidas.add(empresaActual);
 
           const desde = cols.desde >= 0 ? _parseFechaAutoridad(row[cols.desde]) : '';
           const hasta = cols.hasta >= 0 ? _parseFechaAutoridad(row[cols.hasta]) : '';
@@ -15956,7 +16002,7 @@ function importarAutoridades(file) {
         });
 
         if (importados === 0 && actualizados === 0) {
-          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Nombre/Apellido y Cargo).');
+          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Nombre/Apellido y Cargo/Puesto).');
         }
 
         saveDataToLocalCache();
