@@ -48,6 +48,7 @@ const {
   tryParseVentasGastos,
   tryParseERColumnasMeses,
   tryParseERMatricial,
+  tryParseERLibroMayor,
   _mismoNombreEmpresa,
 } = loadFns([
   '_esIngExcluido',
@@ -56,6 +57,7 @@ const {
   'tryParseERColumnasMeses',
   '_parsearPestanasMensuales',
   'tryParseERMatricial',
+  'tryParseERLibroMayor',
   '_mismoNombreEmpresa',
 ]);
 
@@ -795,6 +797,98 @@ group('_resolveHojaEmpresa — nombre de columna del RESUMEN vs. nombre real de 
     'tolera singular/plural y un artículo faltante ("VIENTOS ARAUCO RENOVABLE" vs "VIENTOS DE ARAUCO RENOVABLES")');
   assert(!_resolveHojaEmpresa(wb, 'UNA EMPRESA QUE NO EXISTE'),
     'no inventa una coincidencia para un nombre sin ninguna pestaña razonablemente parecida');
+});
+
+// ── tryParseERLibroMayor: exportación contable tipo "libro mayor" (formato
+//    real: Parque Eólico Arauco, ER al 30/06/2026) — encabezado "Cuentas |
+//    Cuenta | <meses>", secciones con código ("411 - VENTAS NETAS DE
+//    SERVICIOS"), cuentas de detalle debajo, y una fila "Total <rubro>" que
+//    agrega ese detalle, hasta cerrar en "Total General". Usa convención de
+//    saldo contable (débito positivo): Ventas queda en negativo y
+//    Costos/Gastos en positivo — inversa a la convención de presentación
+//    del dashboard — así que el parser debe invertir el signo. ───────────
+group('tryParseERLibroMayor — exportación contable con filas "Total <rubro>" y signo débito-positivo', () => {
+  const rowsBase = [
+    ['', 'Periodo base', '', ':', '06/2026'],
+    [],
+    ['Cuentas', 'Cuenta', 'Enero', 'Febrero'],
+    [],
+    ['411 - VENTAS NETAS DE SERVICIOS'],
+    [],
+    ['', '41100000 - PRESTACION DE SERVI', -1000, -1100],
+    [],
+    ['Total VENTAS NETAS DE SERVICIOS', '', -1000, -1100],
+    [],
+    ['412 - COSTOS OPERATIVOS'],
+    [],
+    ['', '51103002 - Combustibles y lubr', 300, 320],
+    [],
+    ['Total COSTOS OPERATIVOS', '', 300, 320],
+    [],
+    ['51102 - GASTOS  DE ADMINISTRACION'],
+    [],
+    ['', '51101001 - Sueldos y jornales', 400, 410],
+    [],
+    ['Total GASTOS  DE ADMINISTRACION', '', 400, 410],
+    [],
+    ['51103 - GASTOS OPERATIVOS'],
+    [],
+    ['', '51102014 - Repuestos e insumos', 50, 60],
+    [],
+    ['Total GASTOS OPERATIVOS', '', 50, 60],
+    [],
+    ['51108 - RESULTADO FINANCIERO Y POR TENENCIA'],
+    [],
+    ['', '42205000 - Intereses  prestamo', 80, 90],
+    [],
+    ['Total RESULTADO FINANCIERO Y POR TENENCIA', '', 80, 90],
+    [],
+    ['51109 - Otros Ingresos- Egresos'],
+    [],
+    ['', '42600000 - INGRESOS VARIOS', -20, -25],
+    [],
+    ['Total Otros Ingresos- Egresos', '', -20, -25],
+    [],
+    ['Total General', '', -190, -245],
+  ];
+  const wb = wbFromSheets({ 'Pag.1': rowsBase });
+  const r = tryParseERLibroMayor(wb, 'PEA__ESTADO_DE_RDO_AL_30062026.xlsx');
+  assert(!!r, 'reconoce el formato por el encabezado distintivo "Cuentas | Cuenta"');
+  if (r) {
+    assert(r.anio === '2026', 'toma el año del período base ("Periodo base : 06/2026"), no del nombre de archivo');
+    assert(r.mesesCount === 2, 'detecta los meses presentes aunque sean menos de 8 (carga parcial de año)');
+    const fV = r.filas.find(f => f.conceptoStd === 'ventas');
+    assert(!!fV && fV.valores[1] === 1000 && fV.valores[2] === 1100,
+      'invierte el signo de Ventas: negativo (débito-positivo) en el origen → positivo en el dashboard');
+    const fC = r.filas.find(f => f.conceptoStd === 'costo');
+    assert(!!fC && fC.valores[1] === -300, 'invierte el signo de Costos: positivo en el origen → negativo (se resta) en el dashboard');
+    const fGA = r.filas.find(f => f.conceptoStd === 'gastoAdm');
+    assert(!!fGA && fGA.valores[1] === -400, 'clasifica "GASTOS DE ADMINISTRACION" como gastoAdm, con signo invertido');
+    const fGO = r.filas.find(f => f.conceptoStd === 'gastoCom');
+    assert(!!fGO && fGO.valores[1] === -50, 'clasifica "GASTOS OPERATIVOS" (sección aparte de Costos Operativos) como gastoCom');
+    const fRF = r.filas.find(f => f.conceptoStd === 'resFinanciero');
+    assert(!!fRF && fRF.valores[1] === -80, 'clasifica "RESULTADO FINANCIERO Y POR TENENCIA" como resFinanciero');
+    const fOI = r.filas.find(f => f.conceptoStd === 'otrosIngresos');
+    assert(!!fOI && fOI.valores[1] === 20, 'clasifica "Otros Ingresos- Egresos" como otrosIngresos, con signo invertido');
+    const fGE = r.filas.find(f => f.conceptoStd === 'resEjercicio');
+    assert(!!fGE && fGE.valores[1] === 190, '"Total General" se toma como Resultado del Ejercicio (bottom line), signo invertido');
+    assert(r.filas.every(f => !/^\d+\s*-\s*/.test(f.lbl)),
+      'no confunde las filas de sección con código ("411 - VENTAS...") ni las cuentas de detalle con las filas "Total" — solo usa estas últimas');
+  }
+});
+
+group('tryParseERLibroMayor — no reconoce formatos que no calzan (evita falsos positivos)', () => {
+  const wbSinTotalGeneral = wbFromSheets({ 'Pag.1': [
+    ['Cuentas', 'Cuenta', 'Enero', 'Febrero'],
+    ['411 - VENTAS NETAS DE SERVICIOS'],
+    ['', '41100000 - PRESTACION DE SERVI', -1000, -1100],
+    ['Total VENTAS NETAS DE SERVICIOS', '', -1000, -1100],
+  ] });
+  assert(!tryParseERLibroMayor(wbSinTotalGeneral, 'x.xlsx'),
+    'rechaza si no llega a cerrar en "Total General" (evita falsos positivos con otras planillas contables)');
+
+  assert(!tryParseERLibroMayor(wbFromSheets({ RESUMEN: [['CONCEPTO', 'ENERO', 'FEBRERO']] }), 'x.xlsx'),
+    'no reconoce una hoja RESUMEN de ER anual estándar (sin el encabezado "Cuentas | Cuenta")');
 });
 
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
