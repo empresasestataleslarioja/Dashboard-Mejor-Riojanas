@@ -3942,6 +3942,13 @@ self.onmessage = async (e) => {
     <!-- ══ SOSTENIBILIDAD FISCAL ════════════════════════ -->
     <div class="panel" id="panel-sostenibilidad">
       <div class="kpi-strip" id="kpi-sost"></div>
+      <div class="rowfull card" style="margin-bottom:12px">
+        <div class="card-hd">
+          <span class="card-hd-title">Tendencia de dependencia estatal — consolidado</span>
+          <span class="card-hd-unit">transferencias / facturación % · todos los años activos</span>
+        </div>
+        <canvas id="ch-sost-trend" style="max-height:200px"></canvas>
+      </div>
       <div class="row2">
         <div class="card">
           <div class="card-hd">
@@ -3976,6 +3983,7 @@ self.onmessage = async (e) => {
               <option value="margen">Margen %</option>
               <option value="personal">Personal</option>
               <option value="neto">Resultado neto</option>
+              <option value="dependencia">Dependencia estatal %</option>
             </select>
             <select id="hm-sort" onchange="buildHeatmap()" style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:2px;cursor:pointer">
               <option value="alfa">A→Z</option>
@@ -15579,14 +15587,30 @@ function buildPersonal() {
         wrapMensual.style.display = 'none';
       }
     }
-    // KPI: costo laboral estimado desde ER mensual si hay datos
+    // KPI: costo laboral estimado desde ER mensual si hay datos, y su peso
+    // relativo sobre facturación y sobre gastos totales (facturación −
+    // resultado operativo) — indicadores clásicos de eficiencia laboral que
+    // el monto absoluto por sí solo no muestra.
     const costoLab = _costoLaboralDesdeER(selEmp, lastY);
     if (costoLab != null) {
       const kpiEl = document.getElementById('kpi-pers');
-      if (kpiEl) kpiEl.innerHTML += `<div class="kpi"><div class="kpi-accent" style="background:#ff8c47"></div>
-        <div class="kpi-label">Costo laboral est. ${lastY}</div>
-        <div class="kpi-value" style="font-size:15px">${fv(costoLab)}</div>
-        <div class="kpi-sub">desde ER mensual provisorio</div></div>`;
+      const factLastY = DATA.fact[selEmp]?.[lastY] || 0;
+      const resLastY  = DATA.sit[selEmp]?.[lastY];
+      const gastosTot = (factLastY && resLastY != null) ? (factLastY - resLastY) : null;
+      const pctFact   = factLastY > 0 ? (costoLab / factLastY * 100) : null;
+      const pctGastos = (gastosTot != null && gastosTot > 0) ? (costoLab / gastosTot * 100) : null;
+      if (kpiEl) {
+        kpiEl.innerHTML += `<div class="kpi"><div class="kpi-accent" style="background:#ff8c47"></div>
+          <div class="kpi-label">Costo laboral est. ${lastY}</div>
+          <div class="kpi-value" style="font-size:15px">${fv(costoLab)}</div>
+          <div class="kpi-sub">desde ER mensual provisorio</div></div>`;
+        if (pctFact != null) {
+          kpiEl.innerHTML += `<div class="kpi"><div class="kpi-accent" style="background:#c447ff"></div>
+            <div class="kpi-label">Costo laboral / Facturación</div>
+            <div class="kpi-value" style="font-size:15px">${pctFact.toFixed(1)}%</div>
+            <div class="kpi-sub">${lastY} · ${pctGastos!=null?pctGastos.toFixed(1)+'% de gastos totales':'sin resultado operativo para gastos totales'}</div></div>`;
+        }
+      }
     }
 
     // Ocultar tabla en modo empresa
@@ -16999,6 +17023,10 @@ function buildPortafolio() {
     const p    = pd?.y?.[String(refY)] || 0;
     const t    = _transEmpresa(e).filter(x=>String(x.año)===String(refY)).reduce((s,x)=>s+(x.importe||0),0);
     const margen = f && r != null ? (r/f*100) : null;
+    // Costo laboral / facturación — solo disponible para empresas con ER
+    // mensual importado (de donde se puede aislar el gasto en personal)
+    const costoLab = _costoLaboralDesdeER(e, refY);
+    const pctCostoLab = (costoLab != null && f > 0) ? (costoLab / f * 100) : null;
     // Indicadores del balance
     const bal  = balPorEmpresa[e];
     const ren  = bal?.indicadores?.rentabilidad || {};
@@ -17008,7 +17036,7 @@ function buildPortafolio() {
     const balResNeto  = ren.resultado_neto     ?? null;
     const balLiqCorr  = liq.liquidez_corriente ?? null;
     const balPeriodo  = bal?.periodo           || null;
-    return { e, f, r, p, t, margen, bal, balRoe, balResNeto, balLiqCorr, balPeriodo };
+    return { e, f, r, p, t, margen, costoLab, pctCostoLab, bal, balRoe, balResNeto, balLiqCorr, balPeriodo };
   }).filter(r=>r.f||r.r||r.p||r.t);
 
   // Sort
@@ -17049,6 +17077,7 @@ function buildPortafolio() {
     <th ${thR}>Facturación</th>
     <th ${thR}>Resultado</th>
     <th ${thR}>Margen</th>
+    <th ${thR} title="Costo laboral estimado (desde ER mensual) / Facturación — solo empresas con ER mensual importado">Costo lab./Fact.</th>
     <th ${thR}>Personal</th>
     <th ${thR}>Transferencias</th>
     <th ${thR}>Depend. estatal</th>
@@ -17072,6 +17101,10 @@ function buildPortafolio() {
     const resVal    = r.r == null ? '—' : fv(r.r);
     const mrgVal    = r.margen != null ? r.margen.toFixed(2)+'%' : '—';
     const mrgColor  = r.margen == null ? 'var(--dim)' : r.margen > 0 ? 'var(--pos)' : 'var(--neg)';
+    // Costo laboral / facturación — sin umbral de alerta fijo (varía mucho
+    // por rubro), solo se resalta si supera la mitad de la facturación
+    const clVal     = r.pctCostoLab != null ? r.pctCostoLab.toFixed(1)+'%' : '—';
+    const clColor   = r.pctCostoLab == null ? 'var(--dim)' : r.pctCostoLab > 50 ? '#ff8c47' : 'var(--text)';
     // Dependencia estatal: transferencias / facturación
     const dep       = r.f > 0 && r.t > 0 ? (r.t/r.f*100).toFixed(2)+'%' : r.f===0&&r.t>0 ? '∞' : '—';
     const depColor  = r.f > 0 && r.t > 0 ? (r.t/r.f > 0.5 ? '#ff8c47' : 'var(--dim)') : 'var(--dim)';
@@ -17092,6 +17125,7 @@ function buildPortafolio() {
       <td style="${tdR};color:${factColor}">${r.f>0?fv(r.f):'—'}</td>
       <td style="${tdR};color:${resColor}">${resVal}</td>
       <td style="${tdR};color:${mrgColor}">${mrgVal}</td>
+      <td style="${tdR};color:${clColor}" title="${r.pctCostoLab==null?'Requiere ER mensual importado para esta empresa':''}">${clVal}</td>
       <td style="${tdR}">${r.p>0?fn(r.p):'—'}</td>
       <td style="${tdR};color:${r.t>0?'#c447ff':'var(--dim)'}">${r.t>0?fv(r.t):'—'}</td>
       <td style="${tdR};color:${depColor}">${dep}</td>
@@ -26592,6 +26626,44 @@ function buildSostenibilidad() {
     if (empKey) transEmp[empKey] = (transEmp[empKey]||0) + t.importe;
   });
 
+  // ── Tendencia de dependencia consolidada — todos los años activos ──
+  // A diferencia del cuadrante (que es una foto del año seleccionado), esto
+  // responde "¿el portafolio en conjunto se está volviendo más o menos
+  // dependiente de transferencias con el tiempo?".
+  const transEmpTodos = {};
+  (DATA.transferencias||[]).forEach(t=>{
+    const empKey = t.empresa || t.beneficiario || '';
+    if (!empKey) return;
+    const k = empKey+'|'+String(t.año);
+    transEmpTodos[k] = (transEmpTodos[k]||0) + t.importe;
+  });
+  const depPorAnio = years.map(y => {
+    const yS = String(y);
+    let totF = 0, totT = 0;
+    emps.forEach(e => {
+      totF += DATA.fact[e]?.[yS] || 0;
+      totT += transEmpTodos[e+'|'+yS] || 0;
+    });
+    return totF > 0 ? (totT/totF*100) : null;
+  });
+  mkChart('ch-sost-trend','line',{
+    labels: years,
+    datasets:[{
+      label:'Dependencia consolidada', data: depPorAnio,
+      borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.35, pointRadius:5,
+      spanGaps:true,
+    }]
+  },{
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw!=null?c.raw.toFixed(2)+'% del portafolio':'sin datos'}}},
+    scales:{y:{ticks:{callback:v=>v+'%'},beginAtZero:true}}
+  });
+  // Dependencia por empresa/año (para la columna de variación de la tabla)
+  const depEmpAnio = (e,y) => {
+    const f = DATA.fact[e]?.[String(y)] || 0;
+    if (f<=0) return null;
+    return (transEmpTodos[e+'|'+String(y)]||0)/f*100;
+  };
+
   const rows = emps.map(e => {
     const f    = DATA.fact[e]?.[yr]  || 0;
     const r    = DATA.sit[e]?.[yr]   ?? null;
@@ -26599,6 +26671,9 @@ function buildSostenibilidad() {
     const neto = r != null ? r + t   : null;
     const dep  = f > 0 && t > 0 ? t/f*100 : 0;
     const margen = f > 0 && r != null ? r/f*100 : null;
+    // Variación de dependencia: primer vs último año activo con facturación
+    const depAnios = years.map(y=>depEmpAnio(e,y)).filter(v=>v!=null);
+    const depVar = depAnios.length >= 2 ? (depAnios[depAnios.length-1] - depAnios[0]) : null;
     // Clasificación cuadrante
     let cuad = '—';
     if (r != null && f > 0) {
@@ -26607,7 +26682,7 @@ function buildSostenibilidad() {
       else if (r < 0  && dep <= 30) cuad = 'Déficit moderado';
       else cuad = 'Crítica';
     }
-    return {e, f, r, t, neto, dep, margen, cuad};
+    return {e, f, r, t, neto, dep, margen, depVar, cuad};
   }).filter(r => r.f > 0 || r.t > 0);
 
   // KPIs
@@ -26665,19 +26740,26 @@ function buildSostenibilidad() {
   tbl.innerHTML = `<thead><tr>
     <th>Empresa</th><th class="r">Facturación</th><th class="r">Resultado</th>
     <th class="r">Transferencias</th><th class="r">Resultado neto</th>
-    <th class="r">Dependencia %</th><th>Clasificación</th>
+    <th class="r">Dependencia %</th>
+    <th class="r" title="Variación en puntos porcentuales entre el primer y el último año activo con facturación">Var. dependencia</th>
+    <th>Clasificación</th>
   </tr></thead><tbody>${rows.sort((a,b)=>
     ['Autosuficiente','Subsidiada viable','Déficit moderado','Crítica'].indexOf(a.cuad) -
     ['Autosuficiente','Subsidiada viable','Déficit moderado','Crítica'].indexOf(b.cuad)
-  ).map(r=>`<tr style="background:${cuadBg[r.cuad]||''}">
+  ).map(r=>{
+    const depVarTxt = r.depVar==null ? '—' :
+      `<span style="color:${r.depVar>0?'var(--neg)':r.depVar<0?'var(--pos)':'var(--dim)'}">${r.depVar>0?'▲':r.depVar<0?'▼':'—'} ${Math.abs(r.depVar).toFixed(2)}pp</span>`;
+    return `<tr style="background:${cuadBg[r.cuad]||''}">
     <td>${r.e}${getNotaBadge(r.e)}</td>
     <td class="r">${fvFull(r.f)}</td>
     <td class="r" style="color:${r.r==null?'var(--dim)':r.r>=0?'var(--pos)':'var(--neg)'}">${r.r!=null?fvFull(r.r):'—'}</td>
     <td class="r" style="color:#c447ff">${r.t>0?fvFull(r.t):'—'}</td>
     <td class="r" style="color:${r.neto==null?'var(--dim)':r.neto>=0?'var(--pos)':'var(--neg)'};font-weight:500">${r.neto!=null?fvFull(r.neto):'—'}</td>
     <td class="r">${r.dep>0?r.dep.toFixed(2)+'%':'—'}</td>
+    <td class="r">${depVarTxt}</td>
     <td><span style="background:${cuadColors[r.cuad]||'var(--s3)'}22;color:${cuadColors[r.cuad]||'var(--dim)'};padding:1px 8px;border-radius:2px;font-size:9px">${r.cuad}</span></td>
-  </tr>`).join('')}</tbody>`;
+  </tr>`;
+  }).join('')}</tbody>`;
   document.getElementById('sost-tbl-lbl').textContent = `${rows.length} empresas · año ${yr}`;
 }
 
@@ -26690,7 +26772,7 @@ function buildHeatmap() {
   const sortBy  = document.getElementById('hm-sort')?.value   || 'alfa';
   const emps    = empresasFiltradas();
 
-  const metricLabels = {resultado:'Resultado operativo',facturacion:'Facturación',margen:'Margen %',personal:'Personal (empleados)',neto:'Resultado neto'};
+  const metricLabels = {resultado:'Resultado operativo',facturacion:'Facturación',margen:'Margen %',personal:'Personal (empleados)',neto:'Resultado neto',dependencia:'Dependencia estatal %'};
   const lbl = document.getElementById('hm-metric-lbl');
   if (lbl) lbl.textContent = metricLabels[metric]||metric;
 
@@ -26715,6 +26797,11 @@ function buildHeatmap() {
     if (metric==='neto') {
       const r=DATA.sit[e]?.[y]; const t=transEmpYr[e+'|'+y]||0;
       return r!=null ? r+t : null;
+    }
+    if (metric==='dependencia') {
+      const f=DATA.fact[e]?.[y]||0, t=transEmpYr[e+'|'+y]||0;
+      if (f<=0) return t>0 ? null : 0; // sin facturación no se puede calcular el %
+      return t/f*100;
     }
     return null;
   };
@@ -26744,6 +26831,14 @@ function buildHeatmap() {
       const r=Math.round(71+(232-71)*t), g=Math.round(232+(255-232)*t), b=Math.round(255+(71-255)*t);
       return `rgba(${r},${g},${b},${0.15+t*0.7})`;
     }
+    if (metric==='dependencia') {
+      // Escala secuencial (no divergente): 0% = autosuficiente (verde),
+      // 100%+ = totalmente dependiente de transferencias (rojo). A diferencia
+      // de resultado/margen/neto, acá "más alto" siempre es peor, nunca mejor.
+      const t = Math.min(v/100, 1);
+      const r=Math.round(71+(255-71)*t), g=Math.round(255+(71-255)*t), b=Math.round(180+(102-180)*t);
+      return `rgba(${r},${g},${b},${0.15+t*0.7})`;
+    }
     const t = v/absMax; // -1 a 1
     if (t>=0) return `rgba(71,255,180,${0.1+t*0.75})`;
     return `rgba(255,71,102,${0.1+Math.abs(t)*0.75})`;
@@ -26752,7 +26847,7 @@ function buildHeatmap() {
   // Formatear valor en celda
   const fmtCell = (v) => {
     if (v==null) return '—';
-    if (metric==='margen') return v.toFixed(2)+'%';
+    if (metric==='margen'||metric==='dependencia') return v.toFixed(2)+'%';
     if (metric==='personal') return fn(v);
     return fvFull(v);
   };
@@ -26770,7 +26865,7 @@ function buildHeatmap() {
     const row = years.map(y=>{
       const v=getValue(e,String(y));
       const bg=cellColor(v);
-      const tc=v!=null?(metric==='margen'||metric==='personal')?'var(--text)':v>=0?'var(--pos)':'var(--neg)':'var(--dim)';
+      const tc=v!=null?(metric==='margen'||metric==='personal'||metric==='dependencia')?'var(--text)':v>=0?'var(--pos)':'var(--neg)':'var(--dim)';
       return `<td style="padding:4px 8px;text-align:right;background:${bg};color:${tc};border-bottom:1px solid var(--bd2)">${fmtCell(v)}</td>`;
     }).join('');
     grid += `<tr>
@@ -26787,6 +26882,8 @@ function buildHeatmap() {
   if (legEl) {
     if (metric==='facturacion'||metric==='personal') {
       legEl.innerHTML = '<span>Bajo</span><div style="width:120px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(100,100,80,.2),rgba(100,100,80,.9))"></div><span>Alto</span>';
+    } else if (metric==='dependencia') {
+      legEl.innerHTML = '<span style="color:#1a9e68">Baja (autosuficiente)</span><div style="width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(71,255,180,.8),rgba(255,71,102,.8))"></div><span style="color:var(--neg)">Alta (dependiente)</span>';
     } else {
       legEl.innerHTML = '<span style="color:var(--neg)">Déficit</span><div style="width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgba(255,71,102,.8),var(--s3),rgba(71,255,180,.8))"></div><span style="color:#1a9e68">Superávit</span>';
     }
@@ -26795,6 +26892,15 @@ function buildHeatmap() {
   // KPIs heatmap
   const lastY = String(years[years.length-1]);
   const vals = sortedEmps.map(e=>getValue(e,lastY)).filter(v=>v!=null);
+  if (metric==='dependencia') {
+    const baja = vals.filter(v=>v<=30).length, alta = vals.filter(v=>v>50).length;
+    document.getElementById('kpi-heatmap').innerHTML = `
+      <div class="kpi"><div class="kpi-accent" style="background:#2ecc8a"></div><div class="kpi-label">Baja dependencia ${lastY}</div><div class="kpi-value">${baja}</div><div class="kpi-sub">≤30% de transferencias/facturación</div></div>
+      <div class="kpi"><div class="kpi-accent" style="background:#ff4766"></div><div class="kpi-label">Alta dependencia ${lastY}</div><div class="kpi-value">${alta}</div><div class="kpi-sub">&gt;50% de transferencias/facturación</div></div>
+      <div class="kpi"><div class="kpi-accent" style="background:#47e8ff"></div><div class="kpi-label">Empresas mapeadas</div><div class="kpi-value">${sortedEmps.length}</div><div class="kpi-sub">${years.length} años</div></div>
+      <div class="kpi"><div class="kpi-accent" style="background:#e8ff47"></div><div class="kpi-label">Métrica</div><div class="kpi-value" style="font-size:13px">${metricLabels[metric]||metric}</div><div class="kpi-sub">selector arriba</div></div>`;
+    return;
+  }
   const pos = vals.filter(v=>v>0).length, neg = vals.filter(v=>v<0).length;
   document.getElementById('kpi-heatmap').innerHTML = `
     <div class="kpi"><div class="kpi-accent" style="background:#2ecc8a"></div><div class="kpi-label">Positivos ${lastY}</div><div class="kpi-value">${pos}</div><div class="kpi-sub">empresas sobre 0</div></div>
