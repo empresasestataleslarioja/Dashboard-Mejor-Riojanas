@@ -448,6 +448,54 @@ group('_crossCheckEREmpresaAnio — detecta diferencias entre el ER Provisorio y
     'no marca diferencias menores a la tolerancia (ruido de redondeo, no una discrepancia real)');
 });
 
+// ── _erDesdeMonthly: bug real — Parque Eólico Arauco (ER 2026, formato
+//    "libro mayor"). El panel Evolución Empresa (cascada propia) SÍ sumaba
+//    Otros Ingresos al derivar Resultado Operativo; _erDesdeMonthly (usado
+//    por Resultado Operativo → Desglose ER, y por el cruce contra
+//    Facturación/Resultado "oficiales") no lo hacía — mismos datos,
+//    Resultado Operativo salía distinto según qué pantalla lo mostrara,
+//    sin que hubiera ningún error real en los datos. ────────────────────
+group('_erDesdeMonthly — deriva Resultado Operativo incluyendo Otros Ingresos/Egresos y Gastos Operativos (igual que Evolución Empresa)', () => {
+  setData({
+    er_mensual: {
+      'PEA': { '2026': { filas: [
+        { conceptoStd: 'ventas',        valores: { 1: 60714891 } },
+        { conceptoStd: 'costo',         valores: { 1: -313252065 } },
+        { conceptoStd: 'gastoAdm',      valores: { 1: -705811310 } },
+        { conceptoStd: 'gastoCom',      valores: { 1: -21442246 } },
+        { conceptoStd: 'resFinanciero', valores: { 1: -1036821249 } },
+        { conceptoStd: 'otrosIngresos', valores: { 1: 404881000 } },
+        { conceptoStd: 'resEjercicio',  valores: { 1: -1611730980 } },
+      ] } },
+    },
+    er: {}, fact: {}, sit: {},
+  });
+  const er = _erDesdeMonthly('PEA')['2026'];
+  // Utilidad Bruta = 60.714.891 - 313.252.065 = -252.537.174
+  // Resultado Operativo = Utilidad Bruta + Gastos Adm + Gastos Com + Otros Ingresos
+  //                      = -252.537.174 - 705.811.310 - 21.442.246 + 404.881.000 = -574.909.730
+  assert(er.resultado_operativo === -574909730,
+    'incluye Otros Ingresos en la derivación de Resultado Operativo (antes quedaba afuera: daba -979.790.730)');
+  assert(er.otros_ingresos === 404881000, 'expone Otros Ingresos como partida propia (antes se perdía: no había clave en el mapeo)');
+  assert(er.gastos_financieros === -1036821249, 'Resultado Financiero sigue expuesto aparte, sin entrar en Resultado Operativo (va después en la cascada)');
+});
+
+group('_erDesdeMonthly — con Gastos Operativos como única partida de gasto (sin Admin ni Comercialización) también deriva Resultado Operativo', () => {
+  setData({
+    er_mensual: {
+      'EMPRESA SOLO GASTOS OPERATIVOS': { '2022': { filas: [
+        { conceptoStd: 'ventas',   valores: { 1: 1000000 } },
+        { conceptoStd: 'costo',    valores: { 1: -400000 } },
+        { conceptoStd: 'gastoOper', valores: { 1: -100000 } },
+      ] } },
+    },
+    er: {}, fact: {}, sit: {},
+  });
+  const er = _erDesdeMonthly('EMPRESA SOLO GASTOS OPERATIVOS')['2022'];
+  assert(er.resultado_operativo === 500000,
+    'deriva Resultado Operativo (Utilidad Bruta + Gastos Operativos) aunque no haya Gastos de Admin/Comercialización propios');
+});
+
 // ── tryParseERNativo: bug real — al recargar el RESUMEN histórico multi-
 //    empresa de 2022 (ER_2022_ultimo.xlsx), el dashboard lo tomaba como si
 //    fuera un archivo de UNA sola empresa (Agroandina), en vez del desglose

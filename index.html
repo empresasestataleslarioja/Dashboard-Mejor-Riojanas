@@ -14842,6 +14842,9 @@ function _erDesdeMonthly(emp) {
       utilBruta:     'utilidad_bruta',
       gastoAdm:      'gastos_admin',
       gastoCom:      'gastos_comercializacion',
+      gastoOper:     'gastos_operativos',
+      otrosIngresos: 'otros_ingresos',
+      otrosGastos:   'otros_egresos',
       resOperativo:  'resultado_operativo',
       resFinanciero: 'gastos_financieros',   // resultado financiero como partida
     };
@@ -14880,9 +14883,16 @@ function _erDesdeMonthly(emp) {
       // por separado, así que sin este chequeo esto quedaba calculando
       // Resultado Operativo = Utilidad Bruta (sin restar ningún gasto) en
       // vez de caer al valor anual "oficial" (DATA.sit) de abajo.
+      // Otros Ingresos/Egresos y Gastos Operativos SÍ se suman una vez que
+      // la derivación se dispara (mismo criterio que Evolución Empresa y
+      // Resultado Operativo → Desglose ER, que ya los incluían) — antes
+      // quedaban afuera acá específicamente, lo que hacía que esta misma
+      // cifra ("Resultado Operativo") saliera distinta según qué pantalla
+      // la mostrara, sin que hubiera ningún error real en los datos.
       if (acc.resultado_operativo == null && acc.utilidad_bruta != null &&
-          (acc.gastos_admin != null || acc.gastos_comercializacion != null)) {
-        acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0);
+          (acc.gastos_admin != null || acc.gastos_comercializacion != null || acc.gastos_operativos != null)) {
+        acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0) +
+          (acc.gastos_operativos || 0) + (acc.otros_ingresos || 0) + (acc.otros_egresos || 0);
       }
       // Fallback: si todavía no hay resultado_operativo, derivarlo de fact/sit de ese año
       if (acc.resultado_operativo == null) {
@@ -24790,7 +24800,19 @@ function _aplicarERColumnas() {
     meses.forEach(m => { if (fRes.valores[m] != null) DATA.res_mensual[emp][yS][m] = fRes.valores[m]; });
     const totR = meses.reduce((s,m) => s + (fRes.valores[m] || 0), 0);
     if (!DATA.sit[emp]) DATA.sit[emp] = {};
-    DATA.sit[emp][yS] = totR;
+    // DATA.sit es el "Resultado Operativo oficial" que se ve en el resto del
+    // dashboard (Resumen Consolidado, Rankings, etc.) — no "Resultado del
+    // Ejercicio". Los formatos tipo libro mayor (tryParseERLibroMayor y su
+    // variante condensada) no traen una fila 'resOperativo' propia, solo el
+    // resultado final ("Total General"); usar ese total directo acá
+    // comparaba conceptos distintos (pre y post resultado financiero) contra
+    // el resto del dashboard, marcando como "diferencia" algo que no era un
+    // error de datos. Se usa la misma derivación de Resultado Operativo que
+    // el resto de los reportes (_erDesdeMonthly) y solo se cae al resultado
+    // final reportado si no hay forma de derivarlo.
+    const erDerivado = (typeof _erDesdeMonthly === 'function') ? _erDesdeMonthly(emp) : null;
+    const resOpDerivado = erDerivado?.[yS]?.resultado_operativo;
+    DATA.sit[emp][yS] = resOpDerivado != null ? resOpDerivado : totR;
   }
   if (!DATA.years.includes(parseInt(yS))) { DATA.years.push(parseInt(yS)); DATA.years.sort((a,b)=>a-b); }
   try { syncYearChips(); } catch(e) {}
