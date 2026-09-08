@@ -1221,6 +1221,10 @@ body.layout-compacto .kpi-value { font-size: 20px; }
 .tbl td { padding:8px 10px; border-bottom:1px solid #0d1018; font-size:11px; }
 #tbl-flujos-lista th { padding:4px 8px; font-size:8px; }
 #tbl-flujos-lista td { padding:2px 7px; font-size:9px; white-space:nowrap; }
+#tbl-autoridades th { padding:5px 8px; font-size:8px; }
+#tbl-autoridades td { padding:4px 8px; font-size:9.5px; }
+#tbl-autoridades th:last-child, #tbl-autoridades td:last-child { width:1%; white-space:nowrap; }
+#tbl-autoridades thead { position:sticky; top:0; background:var(--s1); z-index:1; }
 .tbl tr:last-child td { border-bottom:none; }
 .tbl tr:hover td { background:var(--s2); }
 .tbl .r { text-align:right; font-variant-numeric:tabular-nums; }
@@ -2713,9 +2717,16 @@ self.onmessage = async (e) => {
           <div id="pers-manual-meses-wrap" style="display:none;width:100%;
             margin-top:10px;padding:10px 12px;background:var(--s2);
             border:1px solid var(--bd);border-radius:4px">
-            <div style="font-size:8.5px;color:var(--dim);font-family:var(--mono);
-              margin-bottom:8px">Detalle mensual por mes
-              <span style="color:var(--dim);margin-left:6px;opacity:.7">(complementario — el total anual ingresado tiene prioridad)</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <div style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Detalle mensual
+                <span style="color:var(--dim);margin-left:4px;opacity:.7">(complementario — el total anual ingresado arriba tiene prioridad)</span>
+              </div>
+              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono);margin-left:auto;display:flex;align-items:center;gap:4px">
+                Año:
+                <select id="pers-manual-mes-anio" onchange="_persRenderMesesGrid()"
+                  style="padding:3px 7px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
+                  font-family:var(--mono);font-size:9px;border-radius:3px"></select>
+              </label>
             </div>
             <div id="pers-manual-meses-grid"></div>
           </div>
@@ -2804,7 +2815,7 @@ self.onmessage = async (e) => {
       </div>
 
       <!-- Autoridades por empresa -->
-      <div id="pers-autoridades-wrap" class="card" style="margin-top:12px">
+      <div id="pers-autoridades-wrap" class="card" style="margin-top:12px;max-width:900px">
         <div class="card-hd" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="card-hd-title">👤 Autoridades</span>
           <span class="card-hd-unit" id="autoridades-tabla-lbl">director/presidente, síndico, etc.</span>
@@ -2834,6 +2845,9 @@ self.onmessage = async (e) => {
           <button onclick="toggleAutoridadForm()"
             style="padding:3px 9px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
             color:var(--pos);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">+ Agregar autoridad</button>
+          <button onclick="_rptAutoridades()" title="Generar reporte imprimible de autoridades"
+            style="padding:3px 9px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.3);
+            color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">🖨 Reporte</button>
         </div>
 
         <!-- Formulario de alta/edición -->
@@ -2888,7 +2902,7 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
-        <div style="overflow-x:auto">
+        <div style="overflow:auto;max-height:340px">
           <table class="tbl" id="tbl-autoridades" style="font-size:9.5px"></table>
         </div>
       </div>
@@ -15892,6 +15906,103 @@ function cerrarVigenciaAutoridad(idx) {
   buildAutoridades();
 }
 
+// ── Reporte imprimible de autoridades ────────────────────────────
+// Respeta el filtro de empresa y el toggle "Ver historial completo" que
+// estén activos en el panel al momento de generarlo.
+function _rptAutoridades() {
+  const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
+  const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
+  const hoy         = new Date().toISOString().slice(0,10);
+  const esVigente   = a => !a.hasta || a.hasta >= hoy;
+  const fmtFecha    = f => f ? f.split('-').reverse().join('/') : '—';
+
+  let filas = (DATA.autoridades || []).slice();
+  if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
+  if (!verHistorial) filas = filas.filter(esVigente);
+  filas.sort((a,b) =>
+    (a.empresa||'').localeCompare(b.empresa||'') ||
+    (a.cargo||'').localeCompare(b.cargo||'') ||
+    (b.desde||'').localeCompare(a.desde||'')
+  );
+
+  const nEmpresas = new Set(filas.map(a => a.empresa)).size;
+  const nVigentes = filas.filter(esVigente).length;
+  const subt = (selEmp || 'Todas las empresas') + ' · ' +
+    (verHistorial ? 'historial completo' : 'autoridades vigentes');
+
+  const filaRpt = a => `<tr>
+    <td>${a.nombre || ''}</td>
+    <td style="text-align:left">${a.cargo || ''}</td>
+    <td>${fmtFecha(a.desde)}</td>
+    <td>${a.hasta ? fmtFecha(a.hasta) : '<span style="color:#0f6e56;font-weight:700">VIGENTE</span>'}</td>
+  </tr>`;
+
+  let filasHtml;
+  if (filas.length === 0) {
+    filasHtml = '<tr><td colspan="4" style="text-align:center;color:#888;padding:14px">Sin autoridades para mostrar.</td></tr>';
+  } else if (selEmp) {
+    filasHtml = filas.map(filaRpt).join('');
+  } else {
+    let empresaActual = null;
+    filasHtml = filas.map(a => {
+      let grupo = '';
+      if (a.empresa !== empresaActual) {
+        empresaActual = a.empresa;
+        grupo = `<tr class="sr"><td colspan="4">${empresaActual}</td></tr>`;
+      }
+      return grupo + filaRpt(a);
+    }).join('');
+  }
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Autoridades</title>'+_rptCSS()+'</head><body><div class="pg">'
+    + _rptHeader('Autoridades', subt)
+    + `<div class="kg3">
+        ${_rptKpi('Registros listados', filas.length, verHistorial ? 'incluye historial' : 'vigentes', '#185fa5')}
+        ${_rptKpi('Empresas con autoridades', nEmpresas, selEmp ? selEmp : 'en el listado', '#0f6e56')}
+        ${_rptKpi('Autoridades vigentes', nVigentes, 'a la fecha del reporte', '#534ab7')}
+      </div>`
+    + `<div class="tw"><table><thead><tr>
+        <th style="text-align:left">Nombre y Apellido</th><th style="text-align:left">Cargo</th>
+        <th>Desde</th><th>Hasta</th>
+      </tr></thead><tbody>${filasHtml}</tbody></table></div>`
+    + _rptFooter()
+    + '</div></body></html>';
+
+  let overlay = document.getElementById('_aut_rpt_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_aut_rpt_overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;flex-direction:column;background:#1a1f2e';
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0';
+  bar.innerHTML = `<span style="color:#aaa;font-size:9pt;font-family:monospace;flex:1">Reporte — Autoridades · ${subt}</span>`;
+
+  const btnPrint = document.createElement('button');
+  btnPrint.textContent = '🖨 Imprimir';
+  btnPrint.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
+  btnPrint.onclick = () => iframe.contentWindow.print();
+
+  const btnClose = document.createElement('button');
+  btnClose.textContent = '✕ Cerrar';
+  btnClose.style.cssText = 'padding:6px 14px;background:#333;color:#aaa;border:1px solid #555;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace';
+  btnClose.onclick = () => overlay.remove();
+
+  bar.appendChild(btnPrint);
+  bar.appendChild(btnClose);
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'flex:1;border:none;width:100%;background:#eef0f5';
+
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  document.body.appendChild(overlay);
+
+  const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
+  _ifrDoc.open(); _ifrDoc.write(html); _ifrDoc.close();
+}
+
 // Normaliza una celda de fecha (Date de Excel, serial numérico, o texto en
 // DD/MM/AAAA o AAAA-MM-DD) al formato AAAA-MM-DD usado por los registros y
 // por el input type="date" del formulario. Devuelve '' si está vacía o no
@@ -16153,6 +16264,10 @@ function _persManualInicializar() {
 function _persManualAutocargar(empresa) {
   if (!empresa || empresa.length < 2) return;
 
+  // Nueva empresa → descartar el borrador de meses de la carga anterior
+  _persMesesBorrador = {};
+  _persMesAnioRenderizado = null;
+
   // Buscar empresa con match flexible (exacto primero, luego parcial)
   const empL = empresa.toLowerCase().trim();
   let pd = DATA.personal.find(function(d) { return d.e.toLowerCase() === empL; });
@@ -16243,10 +16358,34 @@ function _persToggleDetalleMes(checked) {
   if (checked) _persRenderMesesGrid();
 }
 
+// ── Capturar en el borrador los valores tipeados para el año actualmente
+// pintado en la grilla, antes de reemplazarla por otro año o de guardar.
+// Sin esto, cambiar el filtro de año destruye los inputs del año anterior
+// y se pierde lo tipeado si todavía no se guardó.
+function _persCapturarMesAnioActual() {
+  const y = _persMesAnioRenderizado;
+  if (!y) return;
+  const el0 = document.getElementById('pers-mes-' + y + '-0');
+  if (!el0) return; // la grilla no tiene pintado ese año, nada que capturar
+  const meses = [];
+  for (let i = 0; i < 12; i++) {
+    const v = parseInt(document.getElementById('pers-mes-' + y + '-' + i)?.value);
+    meses.push(isNaN(v) ? null : v);
+  }
+  _persMesesBorrador[y] = meses;
+}
+
 // ── Renderizar grilla de inputs mensuales ─────────────────────────
+// Muestra un solo año a la vez (seleccionado con el filtro "Año") con los
+// 12 meses en una sola fila — antes se apilaban los 12 meses de TODOS los
+// años uno debajo del otro, lo que hacía el formulario muy alto.
 function _persRenderMesesGrid() {
   const grid = document.getElementById('pers-manual-meses-grid');
   if (!grid) return;
+
+  // Guardar en el borrador lo tipeado para el año que se estaba mostrando
+  // antes de reemplazarlo por el nuevo año seleccionado.
+  _persCapturarMesAnioActual();
 
   const pYrs = ys().map(String);
   const años = pYrs.length ? pYrs : ['2024','2025','2026'];
@@ -16256,36 +16395,41 @@ function _persRenderMesesGrid() {
   const emp = document.getElementById('pers-manual-emp')?.value?.trim();
   const pd  = emp ? DATA.personal.find(d => d.e.toLowerCase() === emp.toLowerCase()) : null;
 
-  let html = '';
-  años.forEach(y => {
-    const mActual = pd ? _persGetMeses(pd, y) : Array(12).fill(null);
-    const totalActual = pd ? _persGetTotal(pd, y) : '';
-    html += `<div style="margin-bottom:12px">
-      <div style="font-size:8.5px;color:var(--acc);font-family:var(--mono);
-        margin-bottom:6px;font-weight:600">${y}</div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px">
-        ${MESES_LABELS.map((m, i) => `
-          <div style="display:flex;flex-direction:column;gap:2px">
-            <label style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">${m}</label>
-            <input type="number" min="0" step="1"
-              id="pers-mes-${y}-${i}"
-              value="${mActual[i] != null ? mActual[i] : ''}"
-              placeholder="—"
-              style="padding:3px 5px;background:var(--s3);border:1px solid var(--bd2);
-              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;
-              outline:none;width:100%;text-align:center"
-              oninput="_persActualizarTotalMes('${y}')">
-          </div>`).join('')}
-      </div>
-      <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-top:4px">
-        Último mes cargado (total anual): <span id="pers-mes-total-${y}" style="color:var(--pos);font-weight:600">
-          ${totalActual || '—'}
-        </span>
-      </div>
-    </div>`;
-  });
+  // Repoblar el selector de año preservando la selección actual
+  const selAnio = document.getElementById('pers-manual-mes-anio');
+  if (selAnio) {
+    const prev = selAnio.value;
+    selAnio.innerHTML = años.map(y => `<option value="${y}">${y}</option>`).join('');
+    selAnio.value = años.includes(prev) ? prev : años[años.length - 1];
+  }
+  const y = selAnio?.value || años[años.length - 1];
 
-  grid.innerHTML = html;
+  // El borrador (lo tipeado en esta sesión de carga) tiene prioridad sobre lo ya guardado
+  const mActual = _persMesesBorrador[y] || (pd ? _persGetMeses(pd, y) : Array(12).fill(null));
+  const totalActual = pd ? _persGetTotal(pd, y) : '';
+
+  grid.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:4px">
+      ${MESES_LABELS.map((m, i) => `
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <label style="font-size:7.5px;color:var(--dim);font-family:var(--mono)">${m}</label>
+          <input type="number" min="0" step="1"
+            id="pers-mes-${y}-${i}"
+            value="${mActual[i] != null ? mActual[i] : ''}"
+            placeholder="—"
+            style="padding:3px 4px;background:var(--s3);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px;
+            outline:none;width:100%;text-align:center"
+            oninput="_persActualizarTotalMes('${y}')">
+        </div>`).join('')}
+    </div>
+    <div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-top:6px">
+      Último mes cargado (total anual): <span id="pers-mes-total-${y}" style="color:var(--pos);font-weight:600">
+        ${totalActual || '—'}
+      </span>
+    </div>`;
+
+  _persMesAnioRenderizado = y;
 }
 
 // ── Actualizar referencia al cambiar un mes (muestra último mes cargado como total anual) ─
@@ -16371,15 +16515,15 @@ function guardarPersonalManual() {
   const tieneDetalleMes = document.getElementById('pers-manual-detalle-mes')?.checked;
   const mData = {};
   if (tieneDetalleMes) {
+    // La grilla solo pinta un año a la vez (filtro de año); capturar en el
+    // borrador el año visible en este momento antes de leer todo el conjunto,
+    // así se incluyen también los años tipeados antes de cambiar el filtro.
+    _persCapturarMesAnioActual();
     años.forEach(function(y) {
-      const meses = [];
+      const meses = _persMesesBorrador[y];
+      if (!meses) return; // año no tocado en esta carga → no modificar lo ya guardado
       let alguno = false;
-      for (let i = 0; i < 12; i++) {
-        const v = parseInt(document.getElementById('pers-mes-' + y + '-' + i)?.value);
-        const val = isNaN(v) ? null : v;
-        meses.push(val);
-        if (val != null) alguno = true;
-      }
+      for (let i = 0; i < 12; i++) { if (meses[i] != null) { alguno = true; break; } }
       if (alguno) {
         mData[y] = meses;
         // Solo usar último mes cargado si el usuario NO ingresó el total anual manualmente
@@ -16449,6 +16593,15 @@ function limpiarPersonalManual() {
     const inp = document.getElementById('pers-m-' + y);
     if (inp) inp.value = '';
   });
+  // Descartar el borrador de meses y ocultar/resetear el detalle mensual
+  _persMesesBorrador = {};
+  _persMesAnioRenderizado = null;
+  const chkMes = document.getElementById('pers-manual-detalle-mes');
+  if (chkMes) chkMes.checked = false;
+  const wrapMes = document.getElementById('pers-manual-meses-wrap');
+  if (wrapMes) wrapMes.style.display = 'none';
+  const gridMes = document.getElementById('pers-manual-meses-grid');
+  if (gridMes) gridMes.innerHTML = '';
 }
 
 function importarNomina(file) {
@@ -16612,6 +16765,8 @@ function exportarNomina() {
 }
 
 var _persTablaSort = { col: '__last__', dir: -1 };
+var _persMesesBorrador = {};
+var _persMesAnioRenderizado = null;
 
 function renderTablaPersonal() {
   const tbl  = document.getElementById('tbl-personal');
@@ -16657,11 +16812,13 @@ function renderTablaPersonal() {
     return sd * (va - vb);
   });
 
-  function thSort(col, lbl) {
+  function thSort(col, lbl, align) {
     const active = _persTablaSort.col === col;
     const arrow  = active ? (_persTablaSort.dir > 0 ? ' ▲' : ' ▼') : '';
     const newDir = active ? -_persTablaSort.dir : -1;
-    const style  = 'cursor:pointer;white-space:nowrap;' + (active ? 'color:#b8a000' : '');
+    // Alinear el encabezado con los datos de su columna (años/Var. a la derecha,
+    // igual que las celdas <td> correspondientes; Empresa queda a la izquierda).
+    const style  = 'cursor:pointer;white-space:nowrap;text-align:' + (align || 'left') + ';' + (active ? 'color:#b8a000' : '');
     // Usar onclick inline con data-col codificado en el atributo
     return '<th style="' + style + '" data-col="' + col + '" data-dir="' + newDir + '"' +
            ' onclick="_persTablaSort={col:this.dataset.col,dir:parseInt(this.dataset.dir)};renderTablaPersonal()">' +
@@ -16677,8 +16834,8 @@ function renderTablaPersonal() {
 
   var html = '<thead><tr style="position:sticky;top:0;background:var(--s1)">' +
     thSort('__emp__', 'Empresa') +
-    pYrs.map(function(y) { return thSort(y, y); }).join('') +
-    thSort('__var__', 'Var. ' + (ys().map(String)[0]||baseY) + '→' + lastY) +
+    pYrs.map(function(y) { return thSort(y, y, 'right'); }).join('') +
+    thSort('__var__', 'Var. ' + (ys().map(String)[0]||baseY) + '→' + lastY, 'right') +
     '</tr></thead><tbody>';
 
   datos.forEach(function(d, i) {
