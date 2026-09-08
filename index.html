@@ -1906,9 +1906,6 @@ self.onmessage = async (e) => {
     <button class="nav-item" onclick="showPanel('personal',this)">
       <span class="nav-dot"></span>👥 <strong>Personal</strong>
     </button>
-    <button class="nav-item" onclick="showPanel('ranking',this)">
-      <span class="nav-dot"></span>🏆 <strong>Rankings</strong>
-    </button>
     <button class="nav-item" onclick="showPanel('portafolio',this)">
       <span class="nav-dot"></span>🗂 <strong>Portafolio</strong>
     </button>
@@ -2558,6 +2555,30 @@ self.onmessage = async (e) => {
           <canvas id="ch-port-bubble" style="max-height:260px"></canvas>
         </div>
       </div>
+
+      <!-- Serie histórica (fusionado desde el ex-panel Rankings): a diferencia
+           de la vista cruzada de arriba (que solo muestra el año de referencia),
+           acá se ve la facturación año a año de todas las empresas en una sola
+           tabla, ordenable por distintos criterios. -->
+      <div class="rowfull card" style="margin-top:12px">
+        <div class="card-hd" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="card-hd-title">Serie histórica — todas las empresas por año</span>
+          <span class="card-hd-unit">$ completos</span>
+          <span style="font-size:9px;color:var(--dim);margin-left:auto">Ordenar por</span>
+          <select id="port-hist-criterio" onchange="buildPortafolio()"
+            style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);
+            font-size:9px;padding:3px 6px;border-radius:2px;cursor:pointer;min-width:190px">
+            <option value="fact_total">Facturación total (todos los años)</option>
+            <option value="fact_ultimo">Facturación último año</option>
+            <option value="crecimiento">Crecimiento interanual (%)</option>
+            <option value="resultado">Resultado acumulado</option>
+            <option value="margen">Margen (resultado/facturación)</option>
+          </select>
+        </div>
+        <div id="port-hist-desc" style="font-size:9px;color:var(--dim);padding:0 16px 4px;font-family:var(--mono)"></div>
+        <div id="port-hist-lideres" style="padding:0 16px 8px;line-height:1.9"></div>
+        <div style="overflow-x:auto"><table class="tbl" id="tbl-port-hist"></table></div>
+      </div>
     </div>
 
     <!-- ══ FACTURACIÓN ═══════════════════════════════════ -->
@@ -2905,38 +2926,6 @@ self.onmessage = async (e) => {
         <div style="overflow:auto;max-height:340px">
           <table class="tbl" id="tbl-autoridades" style="font-size:9.5px"></table>
         </div>
-      </div>
-    </div>
-
-    <!-- ══ RANKINGS ══════════════════════════════════════ -->
-    <div class="panel" id="panel-ranking">
-      <div class="kpi-strip" id="kpi-rank"></div>
-
-      <!-- Selector de criterio de ranking -->
-      <div class="rowfull card" style="margin-bottom:12px;padding:12px 16px">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">Ordenar por</span>
-          <select class="sel" id="rank-criterio" onchange="buildRanking()" style="min-width:200px">
-            <option value="fact_total">Facturación total (todos los años)</option>
-            <option value="fact_ultimo">Facturación último año</option>
-            <option value="crecimiento">Crecimiento interanual (%)</option>
-            <option value="resultado">Resultado acumulado</option>
-            <option value="margen">Margen (resultado/facturación)</option>
-          </select>
-          <span id="rank-criterio-desc" style="font-size:10px;color:var(--dim)"></span>
-        </div>
-      </div>
-
-      <!-- Barras comparativas -->
-      <div class="rowfull card" style="margin-bottom:12px">
-        <div class="card-hd"><span class="card-hd-title" id="rank-barras-titulo">Comparación visual</span></div>
-        <div id="rank-barras" style="padding:12px 16px"></div>
-      </div>
-
-      <!-- Tabla completa -->
-      <div class="rowfull card">
-        <div class="card-hd"><span class="card-hd-title">Ranking completo por año — con resultado y variación</span></div>
-        <div style="overflow-x:auto"><table class="tbl" id="tbl-rank"></table></div>
       </div>
     </div>
 
@@ -16867,38 +16856,48 @@ function renderTablaPersonal() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  PANEL: RANKING
+//  PORTAFOLIO — Serie histórica (fusionado desde el ex-panel Rankings)
 // ═══════════════════════════════════════════════════════════
-function buildRanking() {
+// A diferencia de la tabla cruzada de Portafolio (que solo muestra el año
+// de referencia elegido), acá se ve la facturación año a año de todas las
+// empresas filtradas en una sola tabla, ordenable por 5 criterios. Se
+// descartó el gráfico de barras "top 15" que tenía el panel Rankings
+// original porque duplicaba a los que ya existen en Facturación, Resultado
+// operativo y Resumen consolidado; se conservó en cambio el detalle de
+// "líder por año" (única pieza que no está en ningún otro panel) y la
+// tabla completa con variación interanual, resultado acumulado y margen.
+function _buildPortafolioHistorico(empFiltradas) {
   const years = ys();
   const lastY = years[years.length-1];
   const prevY = years.length > 1 ? years[years.length-2] : null;
-  const empFiltradas = new Set(empresasFiltradas());
-  const criterio = document.getElementById('rank-criterio')?.value || 'fact_total';
+  const criterio = document.getElementById('port-hist-criterio')?.value || 'fact_total';
 
-  // KPIs: líderes por año
-  document.getElementById('kpi-rank').innerHTML = years.map((y,i)=>{
-    const sorted = Object.entries(DATA.fact).filter(([e,f])=>f[y]>0&&empFiltradas.has(e)).sort((a,b)=>b[1][y]-a[1][y]);
-    const leader = sorted[0];
-    const ac = YC[y];
-    return `<div class="kpi"><div class="kpi-accent" style="background:${ac}"></div>
-      <div class="kpi-label">Líder ${y}</div>
-      <div class="kpi-value" style="font-size:16px">${leader?leader[0]:'—'}</div>
-      <div class="kpi-sub">${leader?fv(leader[1][y]):''}</div></div>`;
-  }).join('');
+  // Líderes de facturación por año
+  const lidEl = document.getElementById('port-hist-lideres');
+  if (lidEl) {
+    lidEl.innerHTML = years.map(y=>{
+      const sorted = Object.entries(DATA.fact).filter(([e,f])=>f[y]>0&&empFiltradas.has(e)).sort((a,b)=>b[1][y]-a[1][y]);
+      const leader = sorted[0];
+      return `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:16px;font-size:9.5px">
+        <span style="color:${YC[y]};font-weight:600">${y}</span>
+        <span style="color:var(--dim)">líder:</span>
+        <span style="font-weight:600">${leader?leader[0]:'—'}</span>
+        ${leader?`<span style="color:var(--dim)">(${fv(leader[1][y])})</span>`:''}
+      </span>`;
+    }).join('');
+  }
 
   // Construir datos por empresa
   const allEmps = [...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit)])].filter(e=>empFiltradas.has(e));
   const datos = allEmps.map(e=>{
     const fTotal   = years.reduce((s,y)=>s+(DATA.fact[e]?.[y]||0),0);
     const fByYear  = years.map(y=>DATA.fact[e]?.[y]||0);
-    const sByYear  = years.map(y=>DATA.sit[e]?.[y]);
     const sTotal   = years.reduce((s,y)=>s+(DATA.sit[e]?.[y]||0),0);
     const fUltimo  = DATA.fact[e]?.[lastY] || 0;
     const fPrev    = prevY ? (DATA.fact[e]?.[prevY] || 0) : 0;
     const crecim   = fPrev > 0 ? ((fUltimo - fPrev) / fPrev * 100) : null;
     const margen   = fTotal > 0 ? (sTotal / fTotal * 100) : null;
-    return { e, fTotal, fByYear, sByYear, sTotal, fUltimo, fPrev, crecim, margen };
+    return { e, fTotal, fByYear, sTotal, fUltimo, crecim, margen };
   }).filter(r=>r.fTotal>0 || r.sTotal!==0);
 
   // Ordenar según criterio
@@ -16909,7 +16908,7 @@ function buildRanking() {
     resultado:   'Suma de resultados (superávit/déficit)',
     margen:      'Resultado total / Facturación total',
   };
-  const descEl = document.getElementById('rank-criterio-desc');
+  const descEl = document.getElementById('port-hist-desc');
   if (descEl) descEl.textContent = desc[criterio] || '';
 
   const sortFn = {
@@ -16921,48 +16920,9 @@ function buildRanking() {
   }[criterio];
   datos.sort(sortFn);
 
-  // Valor a graficar en barras según criterio
-  const valBarra = (r) => ({
-    fact_total:  r.fTotal,
-    fact_ultimo: r.fUltimo,
-    crecimiento: r.crecim ?? 0,
-    resultado:   r.sTotal,
-    margen:      r.margen ?? 0,
-  }[criterio]);
-  const fmtBarra = (r) => {
-    const v = valBarra(r);
-    if (criterio === 'crecimiento' || criterio === 'margen')
-      return (v>=0?'+':'') + v.toLocaleString('es-AR',{maximumFractionDigits:1}) + '%';
-    return fvFull(v);
-  };
-
-  // ── BARRAS comparativas ──
-  const top = datos.slice(0, 15);
-  const maxAbs = Math.max(...top.map(r=>Math.abs(valBarra(r))), 1);
-  const tituloEl = document.getElementById('rank-barras-titulo');
-  if (tituloEl) tituloEl.textContent = 'Comparación visual — ' + (desc[criterio]||'');
-
-  const barrasHTML = top.map((r,i)=>{
-    const v = valBarra(r);
-    const pct = Math.abs(v) / maxAbs * 100;
-    const neg = v < 0;
-    const col = (criterio==='crecimiento'||criterio==='margen'||criterio==='resultado')
-      ? (neg ? 'var(--neg)' : 'var(--pos)')
-      : YC[lastY] || '#47e8ff';
-    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
-      <div style="width:22px;font-size:10px;color:var(--dim);text-align:right">${i+1}</div>
-      <div style="width:160px;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.e}">${r.e}</div>
-      <div style="flex:1;background:rgba(255,255,255,.04);border-radius:3px;height:18px;position:relative">
-        <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;opacity:.85"></div>
-      </div>
-      <div style="width:120px;font-size:10px;text-align:right;font-weight:500;color:${neg?'var(--neg)':'var(--text)'}">${fmtBarra(r)}</div>
-    </div>`;
-  }).join('');
-  const barrasEl = document.getElementById('rank-barras');
-  if (barrasEl) barrasEl.innerHTML = barrasHTML || '<div style="color:var(--dim);font-size:10px">Sin datos para mostrar.</div>';
-
   // ── TABLA con variación interanual ──
-  const tbl = document.getElementById('tbl-rank');
+  const tbl = document.getElementById('tbl-port-hist');
+  if (!tbl) return;
   tbl.innerHTML = `<thead><tr>
     <th>#</th><th>Empresa</th><th>Rubro</th>
     ${years.map(y=>`<th class="r"><span style="color:${YC[y]}">${y}</span></th>`).join('')}
@@ -17192,6 +17152,8 @@ function buildPortafolio() {
       y:{title:{display:true,text:'Resultado operativo',color:'var(--dim)',font:{size:9}},ticks:{callback:v=>fvShort(v*1e6),font:{size:8}}}
     }
   });
+
+  _buildPortafolioHistorico(emps);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -19763,7 +19725,6 @@ const TITLES = {
   facturacion:    'Facturación <em>Comparativa</em>',
   resultado:      'Resultado <em>Operativo</em>',
   personal:       'Evolución de <em>Personal</em>',
-  ranking:        'Rankings <em>por Año</em>',
   inflacion:      'Inflación <em>INDEC</em>',
   empresa:        'Análisis por <em>Empresa</em>',
   comparar:       'Comparar <em>Empresas</em>',
@@ -21232,7 +21193,7 @@ function buildTransferencias() {
   }
 }
 
-const BUILDERS = { resumen:buildResumen, facturacion:buildFacturacion, resultado:buildResultado, personal:buildPersonal, ranking:buildRanking, portafolio:buildPortafolio, inflacion:buildInflacion, empresa:buildEmpresa, comparar:buildComparar, rubros:buildRubros, transferencias:buildTransferencias, importar:()=>{}, sostenibilidad:buildSostenibilidad, heatmap:buildHeatmap, presupuesto:buildPresupuesto, balances:buildBalances, flujos:buildFlujos };
+const BUILDERS = { resumen:buildResumen, facturacion:buildFacturacion, resultado:buildResultado, personal:buildPersonal, portafolio:buildPortafolio, inflacion:buildInflacion, empresa:buildEmpresa, comparar:buildComparar, rubros:buildRubros, transferencias:buildTransferencias, importar:()=>{}, sostenibilidad:buildSostenibilidad, heatmap:buildHeatmap, presupuesto:buildPresupuesto, balances:buildBalances, flujos:buildFlujos };
 
 function showPanel(id, btn) {
   // Auto-guardar el editor de datos del balance si está abierto y tiene inputs con valor
@@ -21874,14 +21835,28 @@ function exportXLSX() {
       pYrs.forEach(y=>d2.push([y, DATA.pers_totals[String(y)]||0]));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d2), 'Totales nómina');
 
-    } else if (currentPanel === 'ranking') {
-      const lastY = years[years.length-1];
-      const d1 = [['#','Empresa',...years.map(y=>`Fact. ${y}`),...years.map(y=>`Result. ${y}`),'Total fact.']];
-      const allEmps = [...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit)])];
+    } else if (currentPanel === 'portafolio') {
+      const emps = new Set(empresasFiltradas());
+      const refY = parseInt(document.getElementById('port-yr')?.value) || years[years.length-1];
+      const allEmps = [...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit)])].filter(e=>emps.has(e));
+      // Hoja 1: vista cruzada del año de referencia (misma info que la tabla en pantalla)
+      const d1 = [['Empresa','Rubro',`Facturación ${refY}`,`Resultado ${refY}`,'Margen %','Personal',`Transferencias ${refY}`]];
+      allEmps.forEach(e => {
+        const f = DATA.fact[e]?.[refY] || 0;
+        const r = DATA.sit[e]?.[refY]  ?? null;
+        const pd = DATA.personal.find(d=>d.e===e);
+        const p = pd?.y?.[String(refY)] || 0;
+        const t = _transEmpresa(e).filter(x=>String(x.año)===String(refY)).reduce((s,x)=>s+(x.importe||0),0);
+        const margen = f && r != null ? parseFloat((r/f*100).toFixed(2)) : null;
+        d1.push([e, getRuboLabel(e), f, r, margen, p, t]);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d1), 'Portafolio '+refY);
+      // Hoja 2: serie histórica — facturación y resultado año a año, todas las empresas
+      const d2 = [['#','Empresa','Rubro',...years.map(y=>`Fact. ${y}`),...years.map(y=>`Result. ${y}`),'Total fact.']];
       allEmps.map(e=>({e,tot:years.reduce((s,y)=>s+(DATA.fact[e]?.[y]||0),0)}))
         .filter(r=>r.tot>0).sort((a,b)=>b.tot-a.tot)
-        .forEach((r,i) => d1.push([i+1,r.e,...years.map(y=>DATA.fact[r.e]?.[y]||0),...years.map(y=>DATA.sit[r.e]?.[y]||null),r.tot]));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d1), 'Ranking');
+        .forEach((r,i) => d2.push([i+1,r.e,getRuboLabel(r.e),...years.map(y=>DATA.fact[r.e]?.[y]||0),...years.map(y=>DATA.sit[r.e]?.[y]??null),r.tot]));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(d2), 'Serie histórica');
 
     } else if (currentPanel === 'inflacion') {
       const d1 = [['Año','IPC anual %','IPC base Dic2016=100','Deflactor base 2021']];
@@ -22017,7 +21992,7 @@ async function exportPDF() {
 
     function addFooter() {
       const pages = doc.internal.getNumberOfPages();
-      const panelNames = {resumen:'Resumen Consolidado',facturacion:'Facturación',resultado:'Resultado Operativo',personal:'Personal',ranking:'Ranking',inflacion:'Inflación',empresa:'Por Empresa',comparar:'Comparar Empresas',rubros:'Rubros Comerciales',transferencias:'Transferencias'};
+      const panelNames = {resumen:'Resumen Consolidado',facturacion:'Facturación',resultado:'Resultado Operativo',personal:'Personal',portafolio:'Portafolio',inflacion:'Inflación',empresa:'Por Empresa',comparar:'Comparar Empresas',rubros:'Rubros Comerciales',transferencias:'Transferencias'};
       for (let p=1; p<=pages; p++) {
         doc.setPage(p);
         fill(C.s1); doc.rect(0,H-7,W,7,'F');
@@ -22141,9 +22116,9 @@ async function exportPDF() {
       });
     }
 
-    // ── RANKING ─────────────────────────────────────────────
-    else if (panel === 'ranking') {
-      addHeader('Ranking por Facturación', `Top empresas ${years[0]}–${lastY}`);
+    // ── PORTAFOLIO ──────────────────────────────────────────
+    else if (panel === 'portafolio') {
+      addHeader('Portafolio Consolidado', `Serie histórica por facturación ${years[0]}–${lastY}`);
       let y=17;
       // KPI: líder por año
       years.forEach((yr,i)=>{
@@ -22151,13 +22126,13 @@ async function exportPDF() {
         kpiBox(`Líder ${yr}`,ldr?ldr[0].slice(0,12):'—',M+i*67,y,64,18);
       });
       y+=22;
-      sectionTitle(`Ranking consolidado — años activos: ${years.join(', ')}`,M,y); y+=4;
+      sectionTitle(`Serie histórica — años activos: ${years.join(', ')}`,M,y); y+=4;
       const rCols=[8,50,...years.map(()=>28),28,30];
       const rHdrs=['#','Empresa',...years.map(String),'Total','Rubro'];
       y=tableHeader(rHdrs,M,y,rCols);
       const allEmps=[...new Set([...Object.keys(DATA.fact),...Object.keys(DATA.sit)])];
       allEmps.map(e=>({e,tot:sum(DATA.fact[e]||{},years)})).filter(r=>r.tot>0).sort((a,b)=>b.tot-a.tot).forEach(({e,tot},ri)=>{
-        if (y>H-14) { doc.addPage(); addHeader('Ranking (cont.)'); y=17; y=tableHeader(rHdrs,M,y,rCols); }
+        if (y>H-14) { doc.addPage(); addHeader('Portafolio (cont.)'); y=17; y=tableHeader(rHdrs,M,y,rCols); }
         if(ri%2===0){fill(C.s2);doc.rect(M,y-1,W-M*2,5.5,'F');}
         row([String(ri+1),e.slice(0,20),...years.map(yr=>fv(DATA.fact[e]?.[yr]||0)),fv(tot),(getRubro(e)||'—').slice(0,12)],M+2,y+3.5,rCols,{size:6.8,colors:[C.dim,C.text,...years.map(()=>C.text),C.acc,C.dim]});
         y+=5.5;
@@ -25521,7 +25496,7 @@ function _aplicarERColumnas() {
     const totR = meses.reduce((s,m) => s + (fRes.valores[m] || 0), 0);
     if (!DATA.sit[emp]) DATA.sit[emp] = {};
     // DATA.sit es el "Resultado Operativo oficial" que se ve en el resto del
-    // dashboard (Resumen Consolidado, Rankings, etc.) — no "Resultado del
+    // dashboard (Resumen Consolidado, Portafolio, etc.) — no "Resultado del
     // Ejercicio". Los formatos tipo libro mayor (tryParseERLibroMayor y su
     // variante condensada) no traen una fila 'resOperativo' propia, solo el
     // resultado final ("Total General"); usar ese total directo acá
@@ -32680,7 +32655,7 @@ function _balEditorGuardarInterno() {
   marcarPendienteGuardar();
   saveDataToLocalCache();
   // Actualizar todos los paneles que consumen datos de _balances
-  // (resumen, empresa, portafolio, sostenibilidad, heatmap, ranking)
+  // (resumen, empresa, portafolio, sostenibilidad, heatmap)
   rebuildActive();
 
   // Refrescar el ER con el tipo de empresa actualizado
@@ -32849,7 +32824,7 @@ function runSearch(q) {
 
   // Paneles
   const panelMap = {resumen:'Resumen consolidado',facturacion:'Facturación',resultado:'Resultado operativo',
-    personal:'Personal',ranking:'Rankings',portafolio:'Portafolio',inflacion:'Inflación INDEC',
+    personal:'Personal',portafolio:'Portafolio',inflacion:'Inflación INDEC',
     empresa:'Evolución empresa',comparar:'Comparar empresas',rubros:'Rubros comerciales',
     transferencias:'Transferencias',sostenibilidad:'Sostenibilidad fiscal',
     heatmap:'Mapa de calor',presupuesto:'Presupuesto vs real'};
@@ -32931,7 +32906,7 @@ function searchKeyNav(e) {
 // ═══════════════════════════════════════════════════════════
 //  MODO PRESENTACIÓN
 // ═══════════════════════════════════════════════════════════
-const PRES_PANELS = ['resumen','portafolio','facturacion','resultado','personal','ranking','sostenibilidad','heatmap','empresa','comparar','transferencias'];
+const PRES_PANELS = ['resumen','portafolio','facturacion','resultado','personal','sostenibilidad','heatmap','empresa','comparar','transferencias'];
 let _presIdx = 0;
 
 function enterPresMode() {
@@ -32966,7 +32941,7 @@ function updatePresBar() {
   if (lbl) {
     const id = PRES_PANELS[_presIdx];
     const titles = {resumen:'Resumen consolidado',portafolio:'Portafolio',facturacion:'Facturación',
-      resultado:'Resultado operativo',personal:'Personal',ranking:'Rankings',
+      resultado:'Resultado operativo',personal:'Personal',
       sostenibilidad:'Sostenibilidad fiscal',heatmap:'Mapa de calor',empresa:'Por empresa',
       comparar:'Comparar',transferencias:'Transferencias'};
     lbl.textContent = `${_presIdx+1}/${PRES_PANELS.length} — ${titles[id]||id}`;
