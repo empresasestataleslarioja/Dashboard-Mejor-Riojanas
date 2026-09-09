@@ -1941,14 +1941,10 @@ self.onmessage = async (e) => {
       <span class="nav-dot"></span>🏷 <strong>Rubros comerciales</strong>
     </button>
 
-    <!-- Sostenibilidad fiscal y Mapa de calor: build*() completos (ver buildSostenibilidad()
-         y buildHeatmap()) pero ocultos del menú a la espera de una decisión sobre si se
-         reactivan, se documentan como "en evaluación" o se retiran del código. No borrar
-         ni reactivar sin esa decisión. -->
-    <button class="nav-item" onclick="showPanel('sostenibilidad',this)" style="display:none">
+    <button class="nav-item" onclick="showPanel('sostenibilidad',this)">
       <span class="nav-dot"></span>🟢 <strong>Sostenibilidad fiscal</strong>
     </button>
-    <button class="nav-item" onclick="showPanel('heatmap',this)" style="display:none">
+    <button class="nav-item" onclick="showPanel('heatmap',this)">
       <span class="nav-dot"></span>🔥 <strong>Mapa de calor</strong>
     </button>
   </nav>
