@@ -2535,6 +2535,7 @@ self.onmessage = async (e) => {
             </select>
             <select id="port-yr" onchange="buildPortafolio()" style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:9px;padding:3px 6px;border-radius:2px;cursor:pointer">
             </select>
+            <button onclick="imprimirPanelActivo()" style="padding:3px 10px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.3);color:#b8a000;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600;height:26px">🖨 Reporte</button>
           </div>
         </div>
         <div style="overflow-x:auto">
@@ -6098,6 +6099,7 @@ function imprimirPanelActivo() {
   else if (panelId === 'resumen')        reportHTML = _rptResumen();
   else if (panelId === 'facturacion')    reportHTML = _rptFacturacion();
   else if (panelId === 'resultado')      reportHTML = _rptResultado();
+  else if (panelId === 'portafolio')     reportHTML = _rptPortafolio();
   else if (panelId === 'empresa')        reportHTML = _rptERMensual();
   else if (panelId === 'transferencias') {
     try {
@@ -6175,6 +6177,7 @@ function imprimirPanelActivo() {
           else if (pid3==='resumen')        html3 = _rptResumen();
           else if (pid3==='facturacion')    html3 = _rptFacturacion();
           else if (pid3==='resultado')      html3 = _rptResultado();
+          else if (pid3==='portafolio')     html3 = _rptPortafolio();
           else if (pid3==='empresa')        html3 = _rptERMensual();
           if (html3) html3 = html3.replace('</head>', autoprintScript+'</head>');
         } catch(e3) { html3 = '<html><body><pre>'+String(e3)+'</pre></body></html>'; }
@@ -6673,6 +6676,78 @@ function _rptFacturacion() {
     + _rptFooter() + '</div></body></html>';
 }
 
+// ── Reporte: Portafolio consolidado ──
+function _rptPortafolio() {
+  const years = ys().map(String);
+  const lastY = years[years.length-1];
+  const refY  = document.getElementById('port-yr')?.value || lastY;
+  const fmt = v => { if(v==null)return'—'; return(v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':''); };
+  const emps = new Set(empresasFiltradas());
+  const allEmps = [...new Set([...Object.keys(DATA.fact), ...Object.keys(DATA.sit)])].filter(e=>emps.has(e));
+
+  const rows = allEmps.map(e => {
+    const f = DATA.fact[e]?.[refY] || 0;
+    const r = DATA.sit[e]?.[refY]  ?? null;
+    const pd = DATA.personal.find(d=>d.e===e);
+    const p = pd?.y?.[String(refY)] || 0;
+    const t = _transEmpresa(e).filter(x=>String(x.año)===String(refY)).reduce((s,x)=>s+(x.importe||0),0);
+    const margen = f && r != null ? (r/f*100) : null;
+    const dep = f>0 ? (t/f*100) : null;
+    return { e, f, r, p, t, margen, dep };
+  }).filter(r=>r.f||r.r||r.p||r.t).sort((a,b)=>b.f-a.f);
+
+  const conDatos = rows.filter(r=>r.f>0).length;
+  const superav  = rows.filter(r=>r.r!=null&&r.r>0).length;
+  const deficit  = rows.filter(r=>r.r!=null&&r.r<0).length;
+  const totFact  = rows.reduce((s,r)=>s+r.f,0);
+  const kpis = '<div class="kg">'
+    + _rptKpi(`Empresas con datos ${refY}`, String(conDatos), `de ${rows.length} en portafolio`, '#185fa5')
+    + _rptKpi('Facturación consolidada', fmt(totFact), `Año ${refY}`, '#185fa5')
+    + _rptKpi('Con superávit', String(superav), `empresas positivas ${refY}`, '#0f6e56')
+    + _rptKpi('Con déficit', String(deficit), `empresas negativas ${refY}`, '#c0392b')
+    + '</div>';
+
+  const filas = rows.map(r => `<tr>
+    <td style="padding:3px 8px">${r.e}</td>
+    <td style="padding:3px 8px;color:#666;font-size:8pt">${getRubro(r.e)||'—'}</td>
+    <td style="text-align:right">${r.f>0?fmt(r.f):'—'}</td>
+    <td style="text-align:right;color:${r.r==null?'#888':r.r>=0?'#0f6e56':'#c0392b'}">${r.r!=null?fmt(r.r):'—'}</td>
+    <td style="text-align:right">${r.margen!=null?r.margen.toFixed(2)+'%':'—'}</td>
+    <td style="text-align:right">${r.p>0?r.p.toLocaleString('es-AR'):'—'}</td>
+    <td style="text-align:right">${r.t>0?fmt(r.t):'—'}</td>
+    <td style="text-align:right">${r.dep!=null?r.dep.toFixed(2)+'%':'—'}</td>
+  </tr>`).join('');
+  const tablaCruzada = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
+    <thead><tr style="background:#f0f4ff">
+      <th style="text-align:left;padding:5px 8px">Empresa</th><th style="text-align:left;padding:5px 8px">Rubro</th>
+      <th style="text-align:right">Facturación</th><th style="text-align:right">Resultado</th>
+      <th style="text-align:right">Margen</th><th style="text-align:right">Personal</th>
+      <th style="text-align:right">Transferencias</th><th style="text-align:right">Dependencia</th>
+    </tr></thead><tbody>${filas}</tbody></table>`;
+
+  // Serie histórica — top 15 por facturación total, para mantener el reporte legible
+  const histRows = allEmps.map(e => ({
+    e, tot: years.reduce((s,y)=>s+(DATA.fact[e]?.[y]||0),0),
+    porAnio: years.map(y=>DATA.fact[e]?.[y]||0),
+  })).filter(r=>r.tot>0).sort((a,b)=>b.tot-a.tot).slice(0,15);
+  const thsHist = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+  const filasHist = histRows.map(r => `<tr>
+    <td style="padding:3px 8px">${r.e}</td>
+    ${r.porAnio.map(v=>`<td style="text-align:right">${v>0?fmt(v):'—'}</td>`).join('')}
+    <td style="text-align:right;font-weight:700">${fmt(r.tot)}</td>
+  </tr>`).join('');
+  const tablaHist = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
+    <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Empresa</th>${thsHist}<th style="text-align:right">Total</th></tr></thead>
+    <tbody>${filasHist}</tbody></table>`;
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+    + _rptHeader('Portafolio Consolidado', `Vista cruzada · ${refY}`)
+    + kpis
+    + '<div class="st">Vista cruzada — todas las empresas · '+refY+'</div><div class="tw">'+tablaCruzada+'</div>'
+    + '<div class="st">Serie histórica — top 15 por facturación total</div><div class="tw">'+tablaHist+'</div>'
+    + _rptFooter() + '</div></body></html>';
+}
+
 // ── Reporte: Resultado (superávit / déficit) ──
 function _rptResultado() {
   const years = ys().map(String);
@@ -6721,7 +6796,53 @@ function _rptResultado() {
   // Desglose ER cuando está activa esa vista
   const vista = (typeof _resVista !== 'undefined') ? _resVista : 'resumen';
 
-  if (vista === 'desglose' || vista === 'auditoria') {
+  if (vista === 'auditoria') {
+    // Reporte propio de cobertura empresa×año — antes caía al de Desglose,
+    // que muestra el Estado de Resultados por partida, un contenido
+    // totalmente distinto al de esta vista (cobertura de datos cargados).
+    const yearsAud = (typeof _resAnioSel !== 'undefined' && _resAnioSel) ? [parseInt(_resAnioSel)] : years.map(Number);
+    const todasEmp = [...new Set([
+      ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+      ...Object.keys(DATA.er || {}), ...Object.keys(DATA.er_mensual || {}),
+    ].filter(Boolean))].sort();
+    const tieneResultado = (emp, y) => {
+      const yS = String(y);
+      if (DATA.sit?.[emp]?.[yS] != null && DATA.sit[emp][yS] !== 0) return true;
+      if (DATA.er?.[emp]?.[yS]?.resultado_operativo) return true;
+      const erM = DATA.er_mensual?.[emp]?.[yS];
+      if (erM && Array.isArray(erM.filas) && erM.filas.some(f => f.conceptoStd === 'resOperativo' && Object.keys(f.valores||{}).length)) return true;
+      return false;
+    };
+    let conDato = 0, sinDato = 0;
+    const filasAud = todasEmp.map(emp => {
+      const celdas = yearsAud.map(y => {
+        const ok = tieneResultado(emp, y);
+        if (ok) conDato++; else sinDato++;
+        return `<td style="text-align:center;color:${ok?'#0f6e56':'#c0392b'};font-weight:700">${ok?'✓':'✕'}</td>`;
+      }).join('');
+      const faltantes = yearsAud.filter(y => !tieneResultado(emp, y));
+      const estado = faltantes.length === 0 ? 'completo' : `faltan ${faltantes.length}`;
+      return `<tr><td style="padding:3px 8px">${emp}</td>${celdas}<td style="text-align:center;font-size:8pt;color:${faltantes.length?'#c0392b':'#0f6e56'}">${estado}</td></tr>`;
+    }).join('');
+    const totalCeldas = conDato + sinDato;
+    const cobertura = totalCeldas > 0 ? Math.round(conDato/totalCeldas*100) : 0;
+    const thsAud = yearsAud.map(y=>`<th style="text-align:center">${y}</th>`).join('');
+    const tablaAud = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
+      <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Empresa</th>${thsAud}<th>Estado</th></tr></thead>
+      <tbody>${filasAud}</tbody></table>`;
+    const kpisAud = '<div class="kg3">'
+      + _rptKpi('Con resultado', String(conDato), 'celdas empresa·año', '#0f6e56')
+      + _rptKpi('Sin dato', String(sinDato), 'celdas empresa·año', '#c0392b')
+      + _rptKpi('Cobertura', cobertura+'%', (typeof _resAnioSel !== 'undefined' && _resAnioSel)?'año '+_resAnioSel:'todos los años', cobertura>=80?'#0f6e56':cobertura>=50?'#e67e22':'#c0392b')
+      + '</div>';
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+      + _rptHeader('Resultado Operativo — Auditoría de cobertura', (typeof _resAnioSel !== 'undefined' && _resAnioSel)?'Año '+_resAnioSel:years[0]+'–'+years[years.length-1])
+      + kpisAud
+      + '<div class="st">Estado de resultados cargado por empresa y año — ✓ tiene resultado operativo · ✕ falta</div><div class="tw">'+tablaAud+'</div>'
+      + _rptFooter() + '</div></body></html>';
+  }
+
+  if (vista === 'desglose') {
     // Reporte desglose: solo ER provisorios (er_mensual), igual que la vista interactiva
     const erEmps = Object.keys(DATA.er_mensual || {});
     const erResuelto = {};
