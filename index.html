@@ -7395,7 +7395,10 @@ function _rptBalance(autoPrint) {
     .filter(bx => bx.empresa === b.empresa)
     .sort((a, bx) => String(a.periodo).localeCompare(String(bx.periodo)));
   const idxActual = todosBal.findIndex(bx => bx === b || bx.periodo === b.periodo);
-  const comparativos = todosBal.slice(0, idxActual + 1).slice(-4); // hasta 4 años
+  // Serie histórica completa hasta el balance actual (antes tope de 4) —
+  // el resto de la función ya arma la tabla con ancho dinámico según
+  // comparativos.length.
+  const comparativos = todosBal.slice(0, idxActual + 1);
 
   // ── Helper: extraer indicadores de un balance ─────────────────────
   const getInd = bx => {
@@ -30456,7 +30459,10 @@ function buildIndicadoresResultados(b, ren, efi, scores) {
 
 // ── Comparativo plurianual — Estado de resultados ───────────
 function buildPluriER(b, priores) {
-  const hist = [...(priores || []).slice(-2), b];
+  // Serie histórica completa del balance de esta empresa, no solo los
+  // últimos 2 + el actual — la tabla ya es de ancho dinámico (nCols según
+  // hist.length), no había necesidad estructural para el límite de 3.
+  const hist = [...(priores || []), b];
   if (!hist.length) return '<div style="color:var(--dim);padding:20px;text-align:center;font-size:10px">Sin datos</div>';
   const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
   const fmtM = v => v == null
@@ -30741,7 +30747,10 @@ function _periodoYear(periodo) {
 }
 
 function buildComparativoPlurianual(b, priores) {
-  const hist = [...(priores || []).slice(-2), b];
+  // Serie histórica completa del balance de esta empresa, no solo los
+  // últimos 2 + el actual — la tabla ya es de ancho dinámico (nCols según
+  // hist.length), no había necesidad estructural para el límite de 3.
+  const hist = [...(priores || []), b];
   const fmt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
   const fmtM = v => v == null
     ? '<span style="color:var(--dim)">—</span>'
@@ -30807,7 +30816,10 @@ function buildComparativoPlurianual(b, priores) {
 
 // ── Comparativo de indicadores (multi-período) ─────────────
 function buildComparativoIndicadores(b, priores) {
-  const hist = [...(priores || []).slice(-2), b];
+  // Serie histórica completa del balance de esta empresa, no solo los
+  // últimos 2 + el actual — la tabla ya es de ancho dinámico (nCols según
+  // hist.length), no había necesidad estructural para el límite de 3.
+  const hist = [...(priores || []), b];
   const showTrend = hist.length > 1;
   const nCols = hist.length + 1 + (showTrend ? 1 : 0);
   const fmtN = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
@@ -31474,7 +31486,7 @@ function showBalanceResult() {
   if (pluriEl)    pluriEl.innerHTML    = buildComparativoPlurianual(b, _balsEmpresa);
   if (pluriEREl)  pluriEREl.innerHTML  = buildPluriER(b, _balsEmpresa);
   if (compIndEl)  compIndEl.innerHTML  = buildComparativoIndicadores(b, _balsEmpresa);
-  const _periodos = [..._balsEmpresa.slice(-2), b].map(bx=>bx.periodo).join(' · ');
+  const _periodos = [..._balsEmpresa, b].map(bx=>bx.periodo).join(' · ');
   if (pluriLbl)    pluriLbl.textContent    = _periodos;
   if (pluriERLbl)  pluriERLbl.textContent  = _periodos;
   if (compIndLbl)  compIndLbl.textContent  = _periodos;
