@@ -3833,6 +3833,27 @@ self.onmessage = async (e) => {
           <canvas id="ch-trans-trend" style="max-height:180px"></canvas>
         </div>
 
+        <!-- Ranking de mayor variación interanual por empresa -->
+        <div class="rowfull card" style="margin-top:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Mayor variación interanual por empresa</span>
+            <span class="card-hd-unit" id="trans-var-lbl">transferencias recibidas</span>
+          </div>
+          <div style="overflow-x:auto"><table class="tbl" id="tbl-trans-var" style="font-size:9.5px"></table></div>
+        </div>
+
+        <!-- Cruce Transferencias (SIDIF) vs Presupuesto cargado -->
+        <div class="rowfull card" style="margin-top:12px" id="trans-cruce-pres-wrap">
+          <div class="card-hd">
+            <span class="card-hd-title">Transferencias vs. Presupuesto</span>
+            <span class="card-hd-unit">lo efectivamente girado (SIDIF) vs. lo presupuestado</span>
+          </div>
+          <div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-bottom:8px;padding:6px 8px;background:rgba(232,255,71,.05);border:1px solid var(--y21);border-radius:3px">
+            ℹ Comparación válida solo si el presupuesto cargado representa una asignación fiscal esperada. Si en cambio es un objetivo de ventas (ver módulo Presupuesto vs Real), esta diferencia no es un desvío de transferencias.
+          </div>
+          <div style="overflow-x:auto"><table class="tbl" id="tbl-trans-cruce-pres" style="font-size:9.5px"></table></div>
+        </div>
+
         <!-- tabla detalle -->
         <div class="rowfull card" style="margin-top:12px;overflow-x:auto">
           <div class="card-hd" style="cursor:pointer" onclick="toggleTransTabla()">
@@ -21478,10 +21499,112 @@ function buildTransferencias() {
   // Tendencia multi-año
   buildTransTendencia();
 
+  // Ranking de mayor variación interanual por empresa
+  buildTransRankingVariacion();
+
+  // Cruce Transferencias (SIDIF) vs Presupuesto cargado
+  buildTransCrucePresupuesto();
+
   // Mantener tabla abierta si ya estaba visible
   if (document.getElementById('trans-tabla-wrap')?.style.display !== 'none') {
     renderTransTabla(rows);
   }
+}
+
+// ── Ranking de mayor variación interanual de transferencias por empresa ──
+// Complementa la tendencia consolidada (que solo muestra el total del
+// portafolio por año) con el detalle de qué empresa concentra el mayor
+// cambio, positivo o negativo, entre los dos últimos años activos.
+function buildTransRankingVariacion() {
+  const tbl = document.getElementById('tbl-trans-var');
+  const lbl = document.getElementById('trans-var-lbl');
+  if (!tbl) return;
+  const years = ys().map(String);
+  if (years.length < 2) {
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Hace falta al menos 2 años activos para calcular variación interanual.</td></tr>';
+    return;
+  }
+  const lastY = years[years.length-1], prevY = years[years.length-2];
+  if (lbl) lbl.textContent = `transferencias recibidas · ${prevY}→${lastY}`;
+
+  const emps = [...new Set([
+    ...Object.keys(DATA.fact||{}), ...Object.keys(DATA.sit||{}),
+    ...(DATA.transferencias||[]).map(t=>_resolverEmpresaTransferencia(t)),
+  ])].filter(Boolean).sort();
+
+  const rows = emps.map(e => {
+    const rowsEmp = _transEmpresa(e);
+    const tLast = rowsEmp.filter(x=>String(x.año)===lastY).reduce((s,x)=>s+(x.importe||0),0);
+    const tPrev = rowsEmp.filter(x=>String(x.año)===prevY).reduce((s,x)=>s+(x.importe||0),0);
+    const varPct = tPrev>0 ? (tLast-tPrev)/tPrev*100 : (tLast>0 ? null : null);
+    return { e, tLast, tPrev, varPct, delta: tLast-tPrev };
+  }).filter(r => r.tLast>0 || r.tPrev>0)
+    .sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 15);
+
+  if (!rows.length) {
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en los años activos.</td></tr>';
+    return;
+  }
+  tbl.innerHTML = `<thead><tr>
+    <th>Empresa</th><th class="r">${prevY}</th><th class="r">${lastY}</th>
+    <th class="r">Variación $</th><th class="r">Variación %</th>
+  </tr></thead><tbody>${rows.map(r => {
+    const col = r.delta>=0 ? 'var(--pos)' : 'var(--neg)';
+    const varTxt = r.varPct==null ? (r.tLast>0?'nuevo':'—') :
+      `${r.varPct>=0?'▲ +':'▼ '}${Math.abs(r.varPct).toFixed(2)}%`;
+    return `<tr>
+      <td>${r.e}</td>
+      <td class="r">${r.tPrev>0?fvFull(r.tPrev):'—'}</td>
+      <td class="r">${r.tLast>0?fvFull(r.tLast):'—'}</td>
+      <td class="r" style="color:${col};font-weight:500">${r.delta>=0?'+':''}${fvFull(r.delta)}</td>
+      <td class="r" style="color:${col}">${varTxt}</td>
+    </tr>`;
+  }).join('')}</tbody>`;
+}
+
+// ── Cruce Transferencias (SIDIF) vs Presupuesto cargado ──────────────
+// El chequeo gerencial más directo entre dos módulos que hasta ahora no
+// se cruzaban: ¿lo que efectivamente giró el Estado coincide con lo
+// presupuestado? Solo tiene sentido si el presupuesto representa una
+// asignación fiscal — se advierte explícitamente en el propio panel
+// porque el módulo Presupuesto vs Real documenta esa ambigüedad.
+function buildTransCrucePresupuesto() {
+  const tbl  = document.getElementById('tbl-trans-cruce-pres');
+  const wrap = document.getElementById('trans-cruce-pres-wrap');
+  if (!tbl) return;
+  const hasPres = Object.keys(DATA.presupuesto||{}).length > 0;
+  if (!hasPres) { if (wrap) wrap.style.display = 'none'; return; }
+  if (wrap) wrap.style.display = '';
+
+  const years = ys().map(String);
+  const lastY = years[years.length-1];
+  const emps = Object.keys(DATA.presupuesto).filter(e => (DATA.presupuesto[e]||{})[lastY] > 0);
+
+  const rows = emps.map(e => {
+    const pres = DATA.presupuesto[e][lastY];
+    const trans = _transEmpresa(e).filter(x=>String(x.año)===lastY).reduce((s,x)=>s+(x.importe||0),0);
+    const pct = pres>0 ? (trans/pres*100) : null;
+    return { e, pres, trans, delta: trans-pres, pct };
+  }).sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  if (!rows.length) {
+    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin empresas con presupuesto cargado para ${lastY}.</td></tr>`;
+    return;
+  }
+  tbl.innerHTML = `<thead><tr>
+    <th>Empresa</th><th class="r">Presupuestado ${lastY}</th><th class="r">Transferencias SIDIF ${lastY}</th>
+    <th class="r">Diferencia</th><th class="r">% del presupuesto</th>
+  </tr></thead><tbody>${rows.map(r => {
+    const col = r.delta>=0 ? 'var(--pos)' : 'var(--neg)';
+    return `<tr>
+      <td>${r.e}</td>
+      <td class="r">${fvFull(r.pres)}</td>
+      <td class="r">${r.trans>0?fvFull(r.trans):'—'}</td>
+      <td class="r" style="color:${col};font-weight:500">${r.delta>=0?'+':''}${fvFull(r.delta)}</td>
+      <td class="r">${r.pct!=null?r.pct.toFixed(2)+'%':'—'}</td>
+    </tr>`;
+  }).join('')}</tbody>`;
 }
 
 const BUILDERS = { resumen:buildResumen, facturacion:buildFacturacion, resultado:buildResultado, personal:buildPersonal, portafolio:buildPortafolio, inflacion:buildInflacion, empresa:buildEmpresa, comparar:buildComparar, rubros:buildRubros, transferencias:buildTransferencias, importar:()=>{}, sostenibilidad:buildSostenibilidad, heatmap:buildHeatmap, presupuesto:buildPresupuesto, balances:buildBalances, flujos:buildFlujos };
