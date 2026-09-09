@@ -3167,8 +3167,19 @@ self.onmessage = async (e) => {
           <canvas id="ch-rub-pers"></canvas>
         </div>
       </div>
-      <!-- Detalle por rubro + editor de asignación -->
+      <!-- Benchmarking intra-rubro: cada empresa vs. el promedio de SU rubro,
+           no contra el portafolio general — un costo laboral o dependencia
+           alta puede ser normal para un rubro y anómala para otro. -->
       <div class="rowfull card">
+        <div class="card-hd">
+          <span class="card-hd-title">Benchmarking intra-rubro</span>
+          <span class="card-hd-unit" id="rub-bench-lbl">margen, dependencia estatal y costo laboral vs. promedio del rubro</span>
+        </div>
+        <div style="overflow-x:auto"><table class="tbl" id="tbl-rub-bench" style="font-size:9.5px"></table></div>
+      </div>
+
+      <!-- Detalle por rubro + editor de asignación -->
+      <div class="rowfull card" style="margin-top:12px">
         <div class="card-hd">
           <span class="card-hd-title">Asignación de empresas por rubro</span>
           <span style="display:flex;gap:6px;align-items:center">
@@ -4014,6 +4025,20 @@ self.onmessage = async (e) => {
       <div id="pres-content" style="display:none">
         <div style="font-size:9.5px;color:var(--dim);font-family:var(--mono);margin-bottom:10px;padding:7px 10px;background:rgba(71,232,255,.05);border:1px solid #47e8ff33;border-radius:3px">
           ℹ "Real" en este panel es la <strong style="color:var(--text)">facturación total</strong> de la empresa (módulo Facturación), no lo efectivamente girado por el Estado (módulo Transferencias) — son cosas distintas si el presupuesto cargado es una asignación fiscal en vez de un objetivo de ventas.
+        </div>
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Serie histórica de ejecución presupuestaria</span>
+            <span class="card-hd-unit">% ejecutado consolidado · todos los años con presupuesto cargado</span>
+          </div>
+          <canvas id="ch-pres-tendencia" style="max-height:200px"></canvas>
+        </div>
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Ejecución presupuestaria por rubro</span>
+            <span class="card-hd-unit" id="pres-rubro-lbl">% ejecutado consolidado por rubro</span>
+          </div>
+          <div style="overflow-x:auto"><table class="tbl" id="tbl-pres-rubro" style="font-size:9.5px"></table></div>
         </div>
         <div class="row2">
           <div class="card">
@@ -9480,6 +9505,85 @@ function buildRubros() {
       borderRadius: 2,
     }))
   });
+
+  // ── Benchmarking intra-rubro ──────────────────────────────────────
+  // Compara cada empresa contra el promedio de SU PROPIO rubro (no contra
+  // el portafolio general): un margen o una dependencia estatal alta puede
+  // ser normal para un rubro (ej. transporte) y anómala para otro (ej.
+  // comercial). Los umbrales de "outlier" son indicativos, no un estándar
+  // contable — sirven para dirigir la atención, no como veredicto.
+  {
+    const bLbl = document.getElementById('rub-bench-lbl');
+    if (bLbl) bLbl.textContent = `margen, dependencia estatal y costo laboral vs. promedio del rubro · ${lastY}`;
+
+    const benchData = allEmps.map(e => {
+      const f = DATA.fact[e]?.[lastY] || 0;
+      const r = DATA.sit[e]?.[lastY];
+      const margen = (f>0 && r!=null) ? r/f*100 : null;
+      const t = _transEmpresa(e).filter(x=>String(x.año)===String(lastY)).reduce((s,x)=>s+(x.importe||0),0);
+      const dep = f>0 ? t/f*100 : null;
+      const costoLab = _costoLaboralDesdeER(e, lastY);
+      const clPct = (costoLab!=null && f>0) ? costoLab/f*100 : null;
+      return { e, rubro: getRubro(e), margen, dep, clPct };
+    }).filter(d => d.margen!=null || d.dep!=null || d.clPct!=null);
+
+    const avg = arr => arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null;
+    const avgPorRubro = {};
+    RUBRO_LIST.forEach(r => {
+      const dEmp = benchData.filter(d=>d.rubro===r);
+      avgPorRubro[r] = {
+        margen: avg(dEmp.map(d=>d.margen).filter(v=>v!=null)),
+        dep:    avg(dEmp.map(d=>d.dep).filter(v=>v!=null)),
+        clPct:  avg(dEmp.map(d=>d.clPct).filter(v=>v!=null)),
+        n: dEmp.length,
+      };
+    });
+
+    const UMBRAL_MARGEN = 15; // puntos porcentuales de distancia al promedio del rubro
+    const UMBRAL_DEP    = 20;
+    const benchRows = benchData.map(d => {
+      const a = avgPorRubro[d.rubro] || {};
+      const dMargen = (d.margen!=null && a.margen!=null) ? d.margen - a.margen : null;
+      const dDep    = (d.dep!=null && a.dep!=null) ? d.dep - a.dep : null;
+      const dCl     = (d.clPct!=null && a.clPct!=null) ? d.clPct - a.clPct : null;
+      const outlier = (dMargen!=null && Math.abs(dMargen)>UMBRAL_MARGEN) || (dDep!=null && Math.abs(dDep)>UMBRAL_DEP);
+      return { ...d, avgR: a, dMargen, dDep, dCl, outlier };
+    }).sort((x,y) => x.rubro!==y.rubro ? x.rubro.localeCompare(y.rubro) : Math.abs(y.dMargen||0)-Math.abs(x.dMargen||0));
+
+    const fmtDelta = (v,suf) => v==null ? '' :
+      ` <span style="color:${v>=0?'var(--pos)':'var(--neg)'};font-size:8.5px">(${v>=0?'+':''}${v.toFixed(1)}${suf})</span>`;
+    const tblBench = document.getElementById('tbl-rub-bench');
+    if (tblBench) {
+      if (!benchRows.length) {
+        tblBench.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin datos suficientes para calcular promedios por rubro en ${lastY}.</td></tr>`;
+      } else {
+        let rubroActual = null;
+        const body = benchRows.map(d => {
+          let grupo = '';
+          if (d.rubro !== rubroActual) {
+            rubroActual = d.rubro;
+            const a = avgPorRubro[d.rubro] || {};
+            grupo = `<tr><td colspan="4" style="padding:6px 8px;font-weight:700;background:var(--s2);
+              border-top:1px solid var(--bd2);color:${RUBRO_COLORS[d.rubro]||'var(--text)'}">
+              ${d.rubro} — promedio: margen ${a.margen!=null?a.margen.toFixed(1)+'%':'—'} ·
+              dependencia ${a.dep!=null?a.dep.toFixed(1)+'%':'—'}
+              ${a.clPct!=null?' · costo lab./fact. '+a.clPct.toFixed(1)+'%':''} (${a.n} empresas)
+            </td></tr>`;
+          }
+          return grupo + `<tr style="${d.outlier?'background:#ff8c4712':''}">
+            <td>${d.e}${d.outlier?' <span style="color:#ff8c47;font-size:8.5px" title="Se desvía significativamente del promedio de su rubro">⚠ outlier</span>':''}</td>
+            <td class="r">${d.margen!=null?d.margen.toFixed(1)+'%':'—'}${fmtDelta(d.dMargen,'pp')}</td>
+            <td class="r">${d.dep!=null?d.dep.toFixed(1)+'%':'—'}${fmtDelta(d.dDep,'pp')}</td>
+            <td class="r">${d.clPct!=null?d.clPct.toFixed(1)+'%':'—'}${fmtDelta(d.dCl,'pp')}</td>
+          </tr>`;
+        }).join('');
+        tblBench.innerHTML = `<thead><tr>
+          <th>Empresa</th><th class="r">Margen (vs. rubro)</th>
+          <th class="r">Dependencia (vs. rubro)</th><th class="r">Costo lab./Fact. (vs. rubro)</th>
+        </tr></thead><tbody>${body}</tbody>`;
+      }
+    }
+  }
 
   // Editor de asignaciones — con rename + agregar empresa + agregar rubro
   const editor = document.getElementById('rub-editor');
@@ -26978,8 +27082,70 @@ function buildPresupuesto() {
     const real = DATA.fact[e]?.[yr]||0;
     const pct  = pres > 0 ? real/pres*100 : null;
     const dev  = real - pres;
-    return {e,pres,real,pct,dev};
+    // Variación de ejecución: primer vs último año activo con presupuesto
+    // cargado para esta empresa (no solo el año seleccionado en el panel).
+    const pctAnio = y => { const p=DATA.presupuesto[e]?.[y]||0; const r=DATA.fact[e]?.[y]||0; return p>0?r/p*100:null; };
+    const pctAnios = years.map(y=>pctAnio(String(y))).filter(v=>v!=null);
+    const execVar = pctAnios.length >= 2 ? (pctAnios[pctAnios.length-1] - pctAnios[0]) : null;
+    return {e,pres,real,pct,dev,execVar};
   }).filter(r=>r.pres>0).sort((a,b)=>b.pres-a.pres);
+
+  // ── Serie histórica de ejecución consolidada — todos los años con
+  // presupuesto cargado (no solo el año seleccionado en el panel) ──────
+  const añosConPres = years.filter(y => Object.values(DATA.presupuesto).some(p=>p[String(y)]>0));
+  const ejecPorAnio = añosConPres.map(y => {
+    const yS = String(y);
+    let totPres = 0, totReal = 0;
+    Object.keys(DATA.presupuesto).forEach(e => {
+      const p = DATA.presupuesto[e]?.[yS] || 0;
+      if (p > 0) { totPres += p; totReal += DATA.fact[e]?.[yS] || 0; }
+    });
+    return totPres > 0 ? (totReal/totPres*100) : null;
+  });
+  mkChart('ch-pres-tendencia','line',{
+    labels: añosConPres,
+    datasets:[{
+      label:'Ejecución consolidada', data: ejecPorAnio,
+      borderColor:'#47e8ff', backgroundColor:'#47e8ff20', fill:true, tension:.35, pointRadius:5,
+      spanGaps:true,
+    }]
+  },{
+    plugins:{legend:{display:false},annotation:{annotations:{line100:{type:'line',yMin:100,yMax:100,borderColor:'#94a3b8',borderDash:[4,4],borderWidth:1}}},
+      tooltip:{callbacks:{label:c=>c.raw!=null?c.raw.toFixed(2)+'% ejecutado':'sin datos'}}},
+    scales:{y:{ticks:{callback:v=>v+'%'}}}
+  });
+
+  // ── Ejecución por rubro — agrega presupuesto/real del año seleccionado
+  // agrupando por rubro comercial, para ver qué sector se desvía más ──────
+  {
+    const porRubro = {};
+    rows.forEach(r => {
+      const rb = getRubro(r.e);
+      if (!porRubro[rb]) porRubro[rb] = { pres:0, real:0, n:0 };
+      porRubro[rb].pres += r.pres; porRubro[rb].real += r.real; porRubro[rb].n++;
+    });
+    const rubroRows = Object.entries(porRubro).map(([rb,v]) => ({
+      rb, ...v, pct: v.pres>0 ? v.real/v.pres*100 : null,
+    })).sort((a,b)=>b.pres-a.pres);
+    const tblRb = document.getElementById('tbl-pres-rubro');
+    const lblRb = document.getElementById('pres-rubro-lbl');
+    if (lblRb) lblRb.textContent = `% ejecutado consolidado por rubro · ${yr}`;
+    if (tblRb) {
+      tblRb.innerHTML = rubroRows.length ? `<thead><tr>
+        <th>Rubro</th><th class="r">Empresas</th><th class="r">Presupuesto</th>
+        <th class="r">Real</th><th class="r">Ejecución %</th>
+      </tr></thead><tbody>${rubroRows.map(v => {
+        const col = v.pct==null?'#94a3b8':v.pct>=100?'#47ffb4':v.pct>=80?'#ff8c47':'#ff4766';
+        return `<tr>
+          <td style="color:${RUBRO_COLORS[v.rb]||'var(--text)'}">${v.rb}</td>
+          <td class="r">${v.n}</td>
+          <td class="r">${fvFull(v.pres)}</td>
+          <td class="r">${fvFull(v.real)}</td>
+          <td class="r" style="font-weight:500;color:${col}">${v.pct!=null?v.pct.toFixed(2)+'%':'—'}</td>
+        </tr>`;
+      }).join('')}</tbody>` : `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin datos para ${yr}.</td></tr>`;
+    }
+  }
 
   // KPIs
   const exec = rows.filter(r=>r.pct!=null);
@@ -27034,14 +27200,19 @@ function buildPresupuesto() {
 
   // Tabla
   const tbl = document.getElementById('tbl-pres');
-  tbl.innerHTML = `<thead><tr><th>Empresa</th><th class="r">Presupuesto</th><th class="r">Real</th><th class="r">Desvío $</th><th class="r">Ejecución %</th><th>Semáforo</th></tr></thead>
+  tbl.innerHTML = `<thead><tr><th>Empresa</th><th class="r">Presupuesto</th><th class="r">Real</th><th class="r">Desvío $</th><th class="r">Ejecución %</th>
+    <th class="r" title="Variación en puntos porcentuales entre el primer y el último año activo con presupuesto cargado para esta empresa">Var. ejecución</th>
+    <th>Semáforo</th></tr></thead>
   <tbody>${rows.map(r=>{
     const semColor = r.pct==null?'#94a3b8':r.pct>=100?'#47ffb4':r.pct>=80?'#ff8c47':'#ff4766';
     const semLabel = r.pct==null?'Sin datos':r.pct>=100?'Ejecutado':r.pct>=80?'En riesgo':'Bajo';
+    const execVarTxt = r.execVar==null ? '—' :
+      `<span style="color:${r.execVar>=0?'var(--pos)':'var(--neg)'}">${r.execVar>=0?'▲':'▼'} ${Math.abs(r.execVar).toFixed(2)}pp</span>`;
     return `<tr>
       <td>${r.e}</td><td class="r">${fvFull(r.pres)}</td><td class="r">${fvFull(r.real)}</td>
       <td class="r" style="color:${r.dev>=0?'var(--pos)':'var(--neg)'}">${fvFull(r.dev)}</td>
       <td class="r" style="font-weight:500;color:${semColor}">${r.pct!=null?r.pct.toFixed(2)+'%':'—'}</td>
+      <td class="r">${execVarTxt}</td>
       <td><span style="background:${semColor}22;color:${semColor};padding:1px 8px;border-radius:2px;font-size:9px">${semLabel}</span></td>
     </tr>`;
   }).join('')}</tbody>`;
