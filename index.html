@@ -3859,9 +3859,9 @@ self.onmessage = async (e) => {
             <span class="card-hd-title">📋 Detalle de transferencias</span>
             <span id="trans-tabla-toggle" style="font-size:10px;color:var(--dim)">▼ mostrar</span>
           </div>
-          <div id="trans-tabla-wrap" style="display:none;overflow-x:auto">
-            <div class="tbl-wrap" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-            <table class="tbl" id="tbl-trans" style="font-size:10px;min-width:800px"></table>
+          <div id="trans-tabla-wrap" style="display:none">
+            <div class="tbl-wrap">
+            <table class="tbl" id="tbl-trans" style="font-size:9.5px;width:100%"></table>
           </div>
           </div>
         </div>
@@ -20307,11 +20307,13 @@ function toggleTransTabla() {
 function renderTransTabla(rows) {
   const tbl = document.getElementById('tbl-trans');
   if (!tbl) return;
-  const COLS = ['SAF','Organismo','Beneficiario','FF','CGto','Observación','Mes','Año','Importe','Categoría','Archivo'];
+  const COLS = ['SAF','Organismo','Beneficiario','FF','CGto','Observación','Fecha','Importe','Categoría','Archivo'];
   // Columnas filtrables: índice → propiedad del objeto transferencia
+  // (la columna "Fecha" fusiona mes+año; el filtro rápido de esta columna
+  // opera sobre el año — el mes tiene su propio filtro global en la barra)
   const FILTER_COLS = {
     0:'saf', 1:'organismo', 2:'beneficiario', 4:'cgto',
-    5:'observacion', 6:'mes', 7:'año', 9:'categoria', 10:'_archivo'
+    5:'observacion', 6:'año', 8:'categoria', 9:'_archivo'
   };
 
   // Construir valores únicos por columna para los dropdowns
@@ -20320,7 +20322,6 @@ function renderTransTabla(rows) {
     const vals = [...new Set(rows.map(t => {
       const v = t[prop];
       if (v == null || v === '') return '__vacio__';
-      if (prop === 'mes') return String(v);
       return String(v);
     }))].sort((a,b) => {
       if (a === '__vacio__') return -1;
@@ -20373,13 +20374,14 @@ function renderTransTabla(rows) {
         style="transition:background .15s;cursor:default;background:${rowBg}"
         onmouseover="this.style.background='var(--s2)'"
         onmouseout="if(!this.classList.contains('editing'))this.style.background='${rowBg}'">
-        <td style="padding:3px 8px;color:${sinSAF?'#ff8c47':'var(--dim)'};white-space:nowrap">${t.saf||'<span style=\"color:#ff8c47;font-size:8px\">sin dato</span>'}</td>
-        <td style="padding:3px 8px;font-size:9px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-          title="${(t.organismo||'').replace(/"/g,"'")}">${(t.organismo||'—').slice(0,20)}</td>
-        <td style="padding:3px 8px;font-weight:600;white-space:nowrap;color:${sinBen?'#ff8c47':''}">${t.beneficiario||'<span style=\"color:#ff8c47;font-size:8px\">sin beneficiario</span>'}</td>
-        <td style="padding:3px 8px;color:var(--dim);text-align:center">${t.ff||''}</td>
-        <td style="padding:3px 8px;font-family:monospace;text-align:center">${t.cgto||''}</td>
-        <td style="padding:2px 4px;max-width:260px" title="${(t.observacion||'').replace(/"/g,"'")}">
+        <td style="padding:3px 6px;color:${sinSAF?'#ff8c47':'var(--dim)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px">${t.saf||'<span style=\"color:#ff8c47;font-size:8px\">s/d</span>'}</td>
+        <td style="padding:3px 6px;font-size:9px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          title="${(t.organismo||'').replace(/"/g,"'")}">${(t.organismo||'—').slice(0,16)}</td>
+        <td style="padding:3px 6px;font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${sinBen?'#ff8c47':''}"
+          title="${(t.beneficiario||'').replace(/"/g,"'")}">${t.beneficiario||'<span style=\"color:#ff8c47;font-size:8px\">sin beneficiario</span>'}</td>
+        <td style="padding:3px 4px;color:var(--dim);text-align:center">${t.ff||''}</td>
+        <td style="padding:3px 4px;font-family:monospace;text-align:center">${t.cgto||''}</td>
+        <td style="padding:2px 4px;max-width:190px" title="${(t.observacion||'').replace(/"/g,"'")}">
           <span onclick="editarCeldaTrans(this,${realIdx},'observacion')"
             style="display:block;font-size:9px;overflow:hidden;text-overflow:ellipsis;
             white-space:nowrap;cursor:pointer;padding:2px 4px;border-radius:3px;
@@ -20387,36 +20389,42 @@ function renderTransTabla(rows) {
             onmouseover="this.style.borderColor='var(--bd2)'"
             onmouseout="this.style.borderColor='transparent'"
             title="${sinObs?'Sin observación — click para editar':'Click para editar'}"
-          >${sinObs?'<em style="color:#ff8c47;font-size:8px">sin obs.</em>':(t.observacion||'').slice(0,65)+((t.observacion||'').length>65?'…':'')}</span>
+          >${sinObs?'<em style="color:#ff8c47;font-size:8px">sin obs.</em>':(t.observacion||'').slice(0,45)+((t.observacion||'').length>45?'…':'')}</span>
         </td>
-        <td style="padding:2px 4px;text-align:center;min-width:60px">
-          <span onclick="editarCeldaTrans(this,${realIdx},'mes')"
-            style="display:block;font-size:9px;cursor:pointer;padding:2px 4px;
-            border-radius:3px;border:1px solid transparent;
-            color:${sinMes?'#ff8c47':'var(--text)'};"
-            onmouseover="this.style.borderColor='var(--bd2)'"
-            onmouseout="this.style.borderColor='transparent'"
-            title="Click para editar mes"
-          >${sinMes?'<em style="color:#ff8c47;font-size:8px">—</em>':(TRANS_MESES[t.mes]||t.mes||'')}</span>
-        </td>
-        <td style="padding:2px 4px;text-align:center;min-width:52px">
-          ${sinAño
-            ? `<input type="number" value="" placeholder="Año"
-                onchange="editarAnoTrans(${realIdx}, this.value)"
-                style="width:56px;padding:3px 4px;background:rgba(255,140,71,.15);
-                border:1px solid #ff8c47;color:#ff8c47;font-family:var(--mono);
-                font-size:9px;border-radius:3px;text-align:center;outline:none"
-                title="Asignar año">`
-            : `<span onclick="editarCeldaTrans(this,${realIdx},'año')"
-                style="display:block;font-size:9px;cursor:pointer;padding:2px 4px;
-                border-radius:3px;border:1px solid transparent;"
+        <td style="padding:2px 4px;text-align:center;white-space:nowrap">
+          ${t.dia && !sinMes && !sinAño
+            ? `<span onclick="editarCeldaTrans(this,${realIdx},'mes')"
+                style="display:inline-block;font-size:9px;font-family:var(--mono);cursor:pointer;
+                padding:2px 4px;border-radius:3px;border:1px solid transparent;color:var(--text)"
                 onmouseover="this.style.borderColor='var(--bd2)'"
                 onmouseout="this.style.borderColor='transparent'"
-                title="Click para editar año">${t.año}</span>`
+                title="Fecha exacta del archivo importado — click para corregir mes/año"
+              >${String(t.dia).padStart(2,'0')}/${String(t.mes).padStart(2,'0')}/${t.año}</span>`
+            : `<span onclick="editarCeldaTrans(this,${realIdx},'mes')"
+                style="display:inline-block;font-size:9px;cursor:pointer;padding:2px 4px;
+                border-radius:3px;border:1px solid transparent;color:${sinMes?'#ff8c47':'var(--text)'}"
+                onmouseover="this.style.borderColor='var(--bd2)'"
+                onmouseout="this.style.borderColor='transparent'"
+                title="Click para editar mes"
+              >${sinMes?'<em style="color:#ff8c47;font-size:8px">s/mes</em>':(TRANS_MESES[t.mes]||t.mes||'').slice(0,3)}</span>${
+              sinAño
+                ? `<input type="number" value="" placeholder="Año"
+                    onchange="editarAnoTrans(${realIdx}, this.value)"
+                    style="width:46px;padding:2px 3px;background:rgba(255,140,71,.15);
+                    border:1px solid #ff8c47;color:#ff8c47;font-family:var(--mono);
+                    font-size:8.5px;border-radius:3px;text-align:center;outline:none;margin-left:2px"
+                    title="Asignar año">`
+                : `<span onclick="editarCeldaTrans(this,${realIdx},'año')"
+                    style="display:inline-block;font-size:9px;cursor:pointer;padding:2px 4px;
+                    border-radius:3px;border:1px solid transparent;margin-left:2px"
+                    onmouseover="this.style.borderColor='var(--bd2)'"
+                    onmouseout="this.style.borderColor='transparent'"
+                    title="Click para editar año">${t.año}</span>`
+            }`
           }
         </td>
-        <td style="padding:3px 8px;text-align:right;font-family:monospace;white-space:nowrap;color:${sinImp?'#ff8c47':''}">${sinImp?'<span style=\"color:#ff8c47;font-size:8px\">sin importe</span>':fvFull(t.importe)}</td>
-        <td style="padding:2px 6px;white-space:nowrap">
+        <td style="padding:3px 6px;text-align:right;font-family:monospace;white-space:nowrap;color:${sinImp?'#ff8c47':''}">${sinImp?'<span style=\"color:#ff8c47;font-size:8px\">sin importe</span>':fvFull(t.importe)}</td>
+        <td style="padding:2px 4px;white-space:nowrap;max-width:130px">
           <div style="display:flex;align-items:center;gap:4px">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
               background:${color};flex-shrink:0"></span>
@@ -20425,12 +20433,12 @@ function renderTransTabla(rows) {
               onblur="desresaltarFilaTrans(${realIdx})"
               style="background:transparent;border:none;color:${color};
               font-size:9px;padding:0 2px;cursor:pointer;font-family:var(--mono);
-              font-weight:500;max-width:140px;outline:none">
+              font-weight:500;max-width:110px;outline:none">
               ${TRANS_CATS.map(c=>`<option value="${c}" ${c===cat?'selected':''} style="color:var(--text);background:var(--s2)">${c}</option>`).join('')}
             </select>
           </div>
         </td>
-        <td style="padding:3px 8px;font-size:8.5px;color:var(--dim);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis"
+        <td style="padding:3px 6px;font-size:8.5px;color:var(--dim);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis"
           title="${t._archivo||''}"
         >${archivo||'—'}</td>
       </tr>`;
@@ -20696,7 +20704,7 @@ function abrirDropTrans(event, colIdx) {
   const btn  = event.currentTarget;
   const rect = btn.getBoundingClientRect();
   const PROP_MAP = { 0:'saf', 1:'organismo', 2:'beneficiario', 4:'cgto',
-                     5:'observacion', 6:'mes', 7:'año', 9:'categoria', 10:'_archivo' };
+                     5:'observacion', 6:'año', 8:'categoria', 9:'_archivo' };
   const prop = PROP_MAP[colIdx];
   if (!prop) return;
 
@@ -20739,7 +20747,7 @@ function abrirDropTrans(event, colIdx) {
     <div style="padding:8px 12px;border-bottom:1px solid var(--bd);
       display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--acc)">
-        Filtrar: ${['SAF','Organismo','Beneficiario','','CGto','Observación','Mes','Año','','Categoría','Archivo'][colIdx]||''}
+        Filtrar: ${['SAF','Organismo','Beneficiario','','CGto','Observación','Fecha (año)','','Categoría','Archivo'][colIdx]||''}
       </span>
       <button onclick="cerrarDropsTrans()"
         style="background:none;border:none;color:var(--dim);cursor:pointer;
@@ -20847,7 +20855,7 @@ function cerrarDropsTrans() {
 // Aplicar todos los filtros de columna al DOM de la tabla
 function aplicarFiltrosColumnasTrans() {
   const PROP_MAP = {0:'saf',1:'organismo',2:'beneficiario',4:'cgto',
-                   5:'observacion',6:'mes',7:'año',9:'categoria',10:'_archivo'};
+                   5:'observacion',6:'año',8:'categoria',9:'_archivo'};
   const tbody = document.querySelector('#tbl-trans tbody');
   if (!tbody) return;
 
@@ -20885,7 +20893,7 @@ function aplicarFiltrosColumnasTrans() {
     const total = tbody.querySelectorAll('tr').length;
     const activos = Object.keys(_transColFiltros).length;
     const COLS_N = {0:'SAF',1:'Organismo',2:'Beneficiario',4:'CGto',
-                   5:'Observación',6:'Mes',7:'Año',9:'Categoría',10:'Archivo'};
+                   5:'Observación',6:'Fecha',8:'Categoría',9:'Archivo'};
     resEl.textContent = activos > 0
       ? `Filtros activos (${Object.keys(_transColFiltros).map(c=>COLS_N[c]).join(', ')}) — ${visible} de ${total} registros`
       : `${total} registros`;
@@ -24158,7 +24166,7 @@ function tryParseSIDIF(wb, fname) {
       rows.push({ saf, organismo:org, beneficiario:ben, ff,
                   cgto: cgto || nroSIDIF,
                   observacion:observ, incluye_sueldos:suel,
-                  mes:mes||null, año:año||null, importe:imp,
+                  mes:mes||null, año:año||null, dia:_diaFecha||null, importe:imp,
                   semana: _semana,
                   esMesCompleto: _esMesCompleto,
                   categoria, _hoja: sheetName,
