@@ -2478,7 +2478,7 @@ self.onmessage = async (e) => {
           <canvas id="ch-r-fact"></canvas>
         </div>
         <div class="card">
-          <div class="card-hd"><span class="card-hd-title">Resultado neto consolidado (Superávit − Déficit)</span><span class="card-hd-unit">$ millones</span></div>
+          <div class="card-hd"><span class="card-hd-title">Resultado operativo consolidado (Superávit − Déficit)</span><span class="card-hd-unit">$ millones</span></div>
           <canvas id="ch-r-supdef"></canvas>
         </div>
       </div>
@@ -2643,7 +2643,7 @@ self.onmessage = async (e) => {
         </div>
         <div class="row2">
           <div class="card">
-            <div class="card-hd"><span class="card-hd-title" id="res-sup-lbl">Resultado neto consolidado por año</span><span class="card-hd-unit">$ millones</span></div>
+            <div class="card-hd"><span class="card-hd-title" id="res-sup-lbl">Resultado operativo consolidado por año</span><span class="card-hd-unit">$ millones</span></div>
             <canvas id="ch-rs-sup"></canvas>
           </div>
           <div class="card">
@@ -6544,7 +6544,7 @@ function _rptResumen() {
 
   const kpis = `<div class="kg">
     ${_rptKpi('Facturación '+lastY, fmt(totFact), years.length+' ejercicios', '#185fa5')}
-    ${_rptKpi('Resultado neto '+lastY, fmt(rNeto), rNeto>=0?'Consolidado positivo':'Consolidado negativo', rNeto>=0?'#0f6e56':'#c0392b')}
+    ${_rptKpi('Resultado operativo '+lastY, fmt(rNeto), rNeto>=0?'Consolidado positivo':'Consolidado negativo', rNeto>=0?'#0f6e56':'#c0392b')}
     ${_rptKpi('Empresas positivas', nSup+' superávit', nDef+' con déficit', '#0f6e56')}
     ${_rptKpi('Transferencias '+lastY, totTrans>0?fmt(totTrans):'Sin datos', transPct, '#1565c0')}
   </div>`;
@@ -6566,7 +6566,7 @@ function _rptResumen() {
       <tr style="background:#fff"><td style="padding:4px 8px">Facturación total</td>${filaFact}</tr>
       <tr style="background:#f9fff9"><td style="padding:4px 8px">Superávit acumulado</td>${filaSup}</tr>
       <tr style="background:#fff9f9"><td style="padding:4px 8px">Déficit acumulado</td>${filaDef}</tr>
-      <tr style="background:#f0f4ff;font-weight:700"><td style="padding:4px 8px">Resultado neto</td>${filaRNeto}</tr>
+      <tr style="background:#f0f4ff;font-weight:700"><td style="padding:4px 8px">Resultado operativo consolidado</td>${filaRNeto}</tr>
       <tr style="background:#f0f8ff"><td style="padding:4px 8px">Transferencias recibidas</td>${filaTrans}</tr>
     </tbody>
   </table>`;
@@ -6582,7 +6582,7 @@ function _rptResumen() {
 
   const chartsResumen = '<div class="r2">'
     + _rptChartCard('Facturación por año', '$ millones', _rptCanvasPng('ch-r-fact'))
-    + _rptChartCard('Resultado neto consolidado', '$ millones', _rptCanvasPng('ch-r-supdef'))
+    + _rptChartCard('Resultado operativo consolidado', '$ millones', _rptCanvasPng('ch-r-supdef'))
     + '</div>'
     + '<div class="r2">'
     + _rptChartCard('Top empresas por facturación', '$ millones', _rptCanvasPng('ch-r-top8'))
@@ -6684,7 +6684,7 @@ function _rptResultado() {
   const selEmp = document.getElementById('sel-res-emp')?.value || '';
   const charts = '<div class="r2">'
     + _rptChartCard('Resultado operativo anual', '$ millones', _rptCanvasPng('ch-rs-multi'))
-    + _rptChartCard(selEmp ? 'Facturación vs Resultado' : 'Superávit acumulado', '$ millones', _rptCanvasPng('ch-rs-sup'))
+    + _rptChartCard(selEmp ? 'Facturación vs Resultado' : 'Resultado operativo consolidado por año', '$ millones', _rptCanvasPng('ch-rs-sup'))
     + '</div>'
     + _rptChartCard(selEmp ? 'Gastos estimados (fact − resultado)' : 'Cantidad sup./déficit', selEmp?'$ millones':'empresas', _rptCanvasPng('ch-rs-cnt'));
 
@@ -8890,6 +8890,18 @@ function _transEmpresa(e) {
 function _beneficiarioCanonico(raw) {
   if (!raw) return raw;
   return _matchEmpresaPortafolio(raw) || raw;
+}
+
+// ── Empresa "dueña" de una transferencia — punto único de resolución ──
+// t.empresa nunca se completa al importar SIDIF (solo t.beneficiario, con
+// la razón social vigente al momento del pago). Antes, cada panel que
+// necesitaba agrupar transferencias por empresa resolvía esto por su
+// cuenta: algunos con match exacto sin normalizar (perdían transferencias
+// de empresas cuyo beneficiario no coincide letra por letra, ej. "EDELAR
+// SAPEM" vs "EDELAR"), otros directamente rotos por depender solo de
+// t.empresa. Todos deben pasar por acá en vez de repetir la resolución.
+function _resolverEmpresaTransferencia(t) {
+  return t.empresa || _beneficiarioCanonico(t.beneficiario) || '';
 }
 function getRuboLabel(emp) {
   const r = getRubro(emp);
@@ -14532,7 +14544,9 @@ function buildResumen() {
   const first = years[0], last = years[years.length-1];
   const tf = DATA.totals_fact, ts = DATA.totals_sup, td = DATA.totals_def;
 
-  // ── Resultado neto consolidado por año (superávit neto de déficit) ──
+  // ── Resultado operativo consolidado por año (suma de superávit y déficit,
+  // sin transferencias — no confundir con "resultado neto" de otros paneles,
+  // que sí las incluye) ──
   const rNeto = y => (ts[y]||0) + (td[y]||0);
 
   // ── Concentración top 3 / top 5 por año más reciente ──
@@ -14563,7 +14577,7 @@ function buildResumen() {
   const kpiItems = [
     { lbl:`Facturación ${last}`,      val:fv(tf[last]),    sub:`×${tf[first]?((tf[last]/tf[first]).toFixed(2)):'—'} vs ${first}`, cls:'up', ac:'#c4d600' },
     { lbl:'Ejercicios analizados',    val:years.length,    sub:years.join(' · '), cls:'', ac:'#47e8ff' },
-    { lbl:`Resultado neto ${last}`,   val:fv(rNetoLast),   sub:`${DATA.sup_count[last]||0} pos · ${DATA.def_count[last]||0} neg`, cls: rNetoLast>=0?'up':'dn', ac: rNetoLast>=0?'#47ffb4':'#ff4766' },
+    { lbl:`Resultado operativo ${last}`, val:fv(rNetoLast),   sub:`${DATA.sup_count[last]||0} pos · ${DATA.def_count[last]||0} neg`, cls: rNetoLast>=0?'up':'dn', ac: rNetoLast>=0?'#47ffb4':'#ff4766' },
     { lbl:`Nómina ${last}`,           val:fn(persLast),    sub:persSub, cls:'up', ac:'#c447ff' },
     { lbl:`Concentración top 3 ${last}`, val:top3pct.toFixed(2)+'%', sub:`${concLabel} · Top5: ${top5pct.toFixed(2)}%`, cls: top3pct>=60?'dn':'', ac:'#ff8c47' },
     { lbl:`Transferencias ${last}`,   val:totalTrans>0?fv(totalTrans):'Sin datos', sub: transPctFact!=null?`${transPctFact.toFixed(2)}% de la facturación`:'', cls:'', ac:'#47b4ff' },
@@ -14587,11 +14601,11 @@ function buildResumen() {
     datasets:[{ label:'Facturación', data:years.map(y=>tf[y]/1e6), backgroundColor:years.map(y=>YCa(y)), borderRadius:4 }]
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-  // ── Resultado neto consolidado (barras +/-) ──
+  // ── Resultado operativo consolidado (barras +/-) ──
   mkChart('ch-r-supdef','bar',{
     labels: years.map(String),
     datasets:[{
-      label:'Resultado neto',
+      label:'Resultado operativo',
       data: years.map(y=>rNeto(y)/1e6),
       backgroundColor: years.map(y=>rNeto(y)>=0?'#2ecc8a99':'#ff476699'),
       borderColor:     years.map(y=>rNeto(y)>=0?'#2ecc8aee':'#ff4766ee'),
@@ -15538,19 +15552,22 @@ function buildResultado() {
 
   } else {
     // ── MODO CONSOLIDADO ─────────────────────────────────
-    // KPI: resultado neto (sup+def) por año — no solo superávit bruto
+    // KPI: resultado operativo consolidado (sup+def) por año — no solo
+    // superávit bruto. No incluye transferencias — "resultado neto" queda
+    // reservado para donde sí se suman (Evolución empresa, Portafolio,
+    // Sostenibilidad fiscal), para no llamar igual a dos números distintos.
     document.getElementById('kpi-res2').innerHTML = years.map(y => {
       const rNeto = (ts[y]||0) + (td[y]||0);
       const col = rNeto > 0 ? 'var(--pos)' : rNeto < 0 ? 'var(--neg)' : 'var(--text)';
       const acC = rNeto >= 0 ? '#47ffb4' : '#ff4766';
       return `<div class="kpi"><div class="kpi-accent" style="background:${acC}"></div>
-        <div class="kpi-label">Resultado neto ${y}</div>
+        <div class="kpi-label">Resultado operativo ${y}</div>
         <div class="kpi-value" style="color:${col}">${fv(rNeto)}</div>
         <div class="kpi-sub">${DATA.sup_count[y]||0} sup · ${DATA.def_count[y]||0} déf</div></div>`;
     }).join('');
 
     document.getElementById('res-multi-lbl').textContent = `Resultado operativo por empresa — top 12 (${last})`;
-    document.getElementById('res-sup-lbl').textContent   = 'Resultado neto consolidado por año';
+    document.getElementById('res-sup-lbl').textContent   = 'Resultado operativo consolidado por año';
     document.getElementById('res-cnt-lbl').textContent   = 'Empresas superavitarias vs deficitarias';
 
     // Top 12: ordenar por valor absoluto del año más reciente
@@ -15568,11 +15585,11 @@ function buildResultado() {
       }))
     },{plugins:{legend:{position:'bottom'}},scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-    // Resultado neto consolidado como barras +/- con línea de cero
+    // Resultado operativo consolidado como barras +/- con línea de cero
     mkChart('ch-rs-sup','bar',{
       labels: years.map(String),
       datasets:[{
-        label:'Resultado neto',
+        label:'Resultado operativo',
         data: years.map(y=>((ts[y]||0)+(td[y]||0))/1e6),
         backgroundColor: years.map(y=>(ts[y]||0)+(td[y]||0)>=0?'#2ecc8a99':'#ff476699'),
         borderColor:     years.map(y=>(ts[y]||0)+(td[y]||0)>=0?'#2ecc8aee':'#ff4766ee'),
@@ -17480,24 +17497,30 @@ function buildEmpresa() {
 
   // Margen
   const margenYs = years.filter(y=>(fact[y]||0)>0&&sit[y]!=null&&sit[y]!==0);
-  // For margen, real line = margen points shifted by inflation (margen actual vs margen deflactado)
-  const margenReal = margenYs.map((y,i) => {
+  // Variación del margen en puntos porcentuales entre año y año anterior.
+  // El margen (resultado/facturación) ya es una razón de pesos del MISMO
+  // año en numerador y denominador — la inflación se cancela entre ambos
+  // y no corresponde deflactarla de nuevo (a diferencia de un nivel, como
+  // facturación o resultado en $, donde sí hace falta realGrowthPct). Acá
+  // había una resta de INFL.anual[y]/10 sin ningún respaldo económico:
+  // ni el /10 tiene explicación, ni deflactar un ratio es lo mismo que
+  // deflactar un nivel.
+  const margenVar = margenYs.map((y,i) => {
     if (i===0) return null;
     const prev = margenYs[i-1];
     const m = (sit[y]||0)/(fact[y]||1)*100;
     const mp = (sit[prev]||0)/(fact[prev]||1)*100;
     if (!mp) return null;
-    // Real change in margin points adjusted for inflation
-    return parseFloat((m - mp - (INFL.anual[y]||0)/10).toFixed(2));
+    return parseFloat((m - mp).toFixed(2));
   });
   mkChart('ch-e-margen','line',{
     labels: margenYs.map(String),
     datasets:[
       {label:'Margen %', data:margenYs.map(y=>parseFloat(((sit[y]||0)/(fact[y]||1)*100).toFixed(2))),
         borderColor:'#ff8c47', backgroundColor:'#ff8c4720', fill:true, tension:.4, pointRadius:6, yAxisID:'y'},
-      {label:'Var. real', data:margenReal, type:'line', borderColor:'#2ecc8a', backgroundColor:'transparent',
-        borderDash:[4,3], borderWidth:1.8, pointRadius:margenReal.map(v=>v!==null?4:0),
-        pointBackgroundColor:margenReal.map(v=>v!==null?(v>=0?'#2ecc8a':'#ff4766'):'transparent'),
+      {label:'Var. margen (pp)', data:margenVar, type:'line', borderColor:'#2ecc8a', backgroundColor:'transparent',
+        borderDash:[4,3], borderWidth:1.8, pointRadius:margenVar.map(v=>v!==null?4:0),
+        pointBackgroundColor:margenVar.map(v=>v!==null?(v>=0?'#2ecc8a':'#ff4766'):'transparent'),
         tension:.35, yAxisID:'yR', spanGaps:false},
     ]
   },{plugins:{legend:{labels:{filter:i=>i.text!==''}}},scales:{y:{ticks:{callback:v=>v+'%'}},...yRightAxis}});
@@ -17511,7 +17534,7 @@ function buildEmpresa() {
   },{plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v}}}});
 
   // Variación real ajustada por inflación
-  buildVarRealChart(emp, years, fact, INFL.anual);
+  buildVarRealChart(emp, years, fact);
 
   // Gráficos de Estado de Resultados desde balances cargados
   renderERGraficosEmpresa(emp);
@@ -26660,11 +26683,8 @@ function checkAlerts() {
   });
 
   // Transferencia > 50% de facturación
-  // t.empresa nunca se completa al importar SIDIF (solo t.beneficiario) —
-  // resolver acá con la misma canonicalización que usa el resto del
-  // dashboard (_beneficiarioCanonico), o esta alerta nunca dispara.
   (DATA.transferencias || []).forEach(t => {
-    const emp = t.empresa || _beneficiarioCanonico(t.beneficiario);
+    const emp = _resolverEmpresaTransferencia(t);
     const f = DATA.fact[emp]?.[t.año] || 0;
     if (f > 0 && t.importe / f > 0.5)
       alerts.push({ tipo:'dep', msg: emp + ' ' + t.año + ': transferencias >50% de la facturación' });
@@ -26732,7 +26752,7 @@ function buildSostenibilidad() {
   // Calcular transferencias por empresa para ese año
   const transEmp = {};
   (DATA.transferencias||[]).filter(t=>String(t.año)===yr).forEach(t=>{
-    const empKey = t.empresa || t.beneficiario || '';
+    const empKey = _resolverEmpresaTransferencia(t);
     if (empKey) transEmp[empKey] = (transEmp[empKey]||0) + t.importe;
   });
 
@@ -26742,7 +26762,7 @@ function buildSostenibilidad() {
   // dependiente de transferencias con el tiempo?".
   const transEmpTodos = {};
   (DATA.transferencias||[]).forEach(t=>{
-    const empKey = t.empresa || t.beneficiario || '';
+    const empKey = _resolverEmpresaTransferencia(t);
     if (!empKey) return;
     const k = empKey+'|'+String(t.año);
     transEmpTodos[k] = (transEmpTodos[k]||0) + t.importe;
@@ -26887,11 +26907,9 @@ function buildHeatmap() {
   if (lbl) lbl.textContent = metricLabels[metric]||metric;
 
   // Calcular valores
-  // t.empresa nunca se completa al importar SIDIF (solo t.beneficiario) —
-  // sin esta resolución, "neto" y "dependencia" quedaban siempre en 0/null.
   const transEmpYr = {};
   (DATA.transferencias||[]).forEach(t=>{
-    const emp = t.empresa || _beneficiarioCanonico(t.beneficiario);
+    const emp = _resolverEmpresaTransferencia(t);
     if (!emp) return;
     const k = emp+'|'+t.año;
     transEmpYr[k] = (transEmpYr[k]||0) + t.importe;
@@ -34423,13 +34441,16 @@ function buildTransTendencia() {
 // ═══════════════════════════════════════════════════════════
 //  VARIACIÓN REAL en panel empresa
 // ═══════════════════════════════════════════════════════════
-function buildVarRealChart(emp, years, fact, inflData) {
+function buildVarRealChart(emp, years, fact) {
+  // Variación real vía realGrowthPct() — la misma fórmula (índice IPC
+  // acumulado, no la tasa anual sola) que usa el resto del dashboard
+  // (Facturación, Resumen, Inflación), en vez de reimplementarla acá con
+  // un cálculo Fisher-simplificado propio.
   const pairs = years.slice(1).map((y,i)=>{
     const prev=years[i], f0=fact[String(prev)]||0, f1=fact[String(y)]||0;
     if (!f0) return null;
     const nom = (f1-f0)/Math.abs(f0)*100;
-    const infl= (inflData||INFL.anual)[y]||0;
-    const real= ((1+nom/100)/(1+infl/100)-1)*100;
+    const real = realGrowthPct(f1, y, f0, prev) ?? 0;
     return {lbl:`${prev}→${y}`,nom,real};
   }).filter(Boolean);
   if (!pairs.length) return;
