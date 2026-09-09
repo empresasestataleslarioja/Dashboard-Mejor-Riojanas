@@ -3140,6 +3140,9 @@ self.onmessage = async (e) => {
 
     <!-- ══ RUBROS ══════════════════════════════════════════ -->
     <div class="panel" id="panel-rubros">
+      <div style="font-size:9.5px;color:var(--dim);font-family:var(--mono);margin-bottom:10px;padding:7px 10px;background:rgba(71,232,255,.05);border:1px solid #47e8ff33;border-radius:3px">
+        ℹ En este dashboard "rubro" es siempre el <strong style="color:var(--text)">sector de actividad</strong> de la empresa (Servicios, Alimentos, Industrias, Productivas) — no una partida o categoría de gasto. Para el detalle de partidas del Estado de Resultados (Ventas, Costo de ventas, Gastos de Administración, etc.), ver "Desglose ER" en el módulo Resultado operativo.
+      </div>
       <!-- KPI por rubro -->
       <div class="rub-kpi-strip" id="rub-kpis"></div>
       <!-- gráficos por rubro -->
@@ -8795,29 +8798,6 @@ function irAEmpresa(emp) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  ÍTEM 7C: Historial de cambios por empresa
-// ══════════════════════════════════════════════════════════════════
-// _cambiosPorEmpresa: { empresa: [{ts, campo, valorAntes, valorDespues}] }
-const _cambiosPorEmpresa = {};
-
-function registrarCambioEmpresa(empresa, año, campo, antes, despues) {
-  if (!empresa) return;
-  if (!_cambiosPorEmpresa[empresa]) _cambiosPorEmpresa[empresa] = [];
-  _cambiosPorEmpresa[empresa].push({
-    ts: nowAR(), año, campo,
-    antes: antes ?? null,
-    despues: despues ?? null,
-  });
-  // Mantener últimos 50 cambios por empresa
-  if (_cambiosPorEmpresa[empresa].length > 50)
-    _cambiosPorEmpresa[empresa] = _cambiosPorEmpresa[empresa].slice(-50);
-}
-
-function getCambiosEmpresa(empresa) {
-  return (_cambiosPorEmpresa[empresa] || []).slice().reverse();
-}
-
-// ══════════════════════════════════════════════════════════════════
 //  ÍTEM 7D: Ocultar Presupuesto si sin datos
 // ══════════════════════════════════════════════════════════════════
 function _actualizarVisibilidadPresupuesto() {
@@ -9508,14 +9488,15 @@ function buildRubros() {
     }))
   },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-  // Personal por rubro
-  const pYrs = ['2020','2021','2022','2023','2024','2025','2026'];
+  // Personal por rubro — respeta el filtro de años activos en vez de un
+  // rango fijo (antes ['2020'…'2026'], desalineado del resto del panel
+  // y con solo 5 colores para hasta 7 barras).
   mkChart('ch-rub-pers','bar',{
     labels: RUBRO_LIST,
-    datasets: pYrs.map((py,i) => ({
-      label: py,
-      data: RUBRO_LIST.map(r => DATA.personal.filter(d=>getRubro(d.e)===r).reduce((s,d)=>s+(d.y[py]||0),0)),
-      backgroundColor: ['#2a2f40','#e8ff4777','#47e8ff77','#ff8c4799','#c447ff99'][i],
+    datasets: years.map((py) => ({
+      label: String(py),
+      data: RUBRO_LIST.map(r => DATA.personal.filter(d=>getRubro(d.e)===r).reduce((s,d)=>s+(d.y[String(py)]||0),0)),
+      backgroundColor: YCa(py),
       borderRadius: 2,
     }))
   });
@@ -11420,8 +11401,13 @@ function _renderListaFlujos() {
     }
     fEmp.forEach(f => {
       const necAct = necSignada(f);
-      // Período anterior: primero el campo guardado, luego buscar on-the-fly por fecha
-      let necAnt = f.necesidad_fondos_ant != null ? -Math.abs(f.necesidad_fondos_ant) : null;
+      // Período anterior: primero el campo guardado, luego buscar on-the-fly por fecha.
+      // Usar el valor guardado tal cual (sin forzar el signo a negativo): se
+      // graba con el signo real de necesidad_fondos al momento de cargar el
+      // flujo (ver guardarFlujoManual/import) — forzarlo acá a "siempre
+      // déficit" mostraba como negativo un período que en realidad había
+      // sido superavitario.
+      let necAnt = f.necesidad_fondos_ant ?? null;
       if (necAnt == null) {
         const _thisP = _parsePeriodoFlujoStr(f.periodo);
         const _thisAbs = _thisP ? _absInicioPeriodo(_thisP) : null;
@@ -12167,8 +12153,13 @@ function buildVistaIndividualFlujo(claveOverride) {
   const ingA = _flujoIngTotal(f);
   const ingAOp = _flujoIngOperativo(f);
   const egrA = _flujoEgrTotal(f);
+  // Cobertura vía egresos SIN impCredDeb/gastos bancarios (_flujoEgrDetTotal),
+  // igual que ya hacen la vista de comparación y el reporte imprimible —
+  // acá usaba el total bruto (egrA), dando un % de cobertura distinto al
+  // que mostraba el mismo flujo en esos otros dos lugares.
+  const egrADetCov = _flujoEgrDetTotal(f) ?? egrA;
   const labA_ind = _flujoLaboral(f);
-  const covA     = (ingAOp && egrA)   ? (ingAOp / Math.abs(egrA)   * 100).toFixed(2) + '%' : '—';
+  const covA     = (ingAOp && egrADetCov) ? (ingAOp / Math.abs(egrADetCov) * 100).toFixed(2) + '%' : '—';
   const covLabA  = (ingAOp && labA_ind) ? (ingAOp / Math.abs(labA_ind) * 100).toFixed(2) + '%' : null;
   const _ingOpRows_ind = _flujoIngOperativoRows(f);
   const _labRows_ind   = _flujoLaboralRows(f);
@@ -14341,8 +14332,11 @@ async function generarInformeFlujo() {
 
     // Calcular valores
     const ipc = ipcInput > 0 ? ipcInput : (fA.ipc || 0);
-    const necA = _flujoNecesidad(fA);
-    const necB = _flujoNecesidad(fB);
+    // _flujoNecesidadSignada (no _flujoNecesidad, que siempre devuelve un
+    // valor absoluto) — fmtM más abajo distingue déficit por el signo, y
+    // con el valor sin signo esa etiqueta nunca aparecía en el Word.
+    const necA = _flujoNecesidadSignada(fA);
+    const necB = _flujoNecesidadSignada(fB);
     const varNom  = (necA!=null&&necB&&necB!==0) ? (Math.abs(necA)-Math.abs(necB))/Math.abs(necB)*100 : null;
     const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
     const ingA = _flujoIngTotal(fA);
@@ -15338,7 +15332,7 @@ function buildResDesglose() {
           </tbody>
         </table>
       </div>
-      ${buildErChartSection(erEmps, years)}
+      ${buildErChartSection(erEmps, years, erResuelto)}
     `;
   } else {
     // ── Vista empresa: solo ER provisorio (er_mensual) ──
@@ -15399,12 +15393,17 @@ function buildResDesglose() {
   }
 }
 
-function buildErChartSection(emps, years) {
-  // Mini gráfico de barras: resultado operativo por empresa para el último año con datos
-  const lastYwithEr = [...years].reverse().find(y => emps.some(e => DATA.er[e]?.[y]?.resultado_operativo));
+function buildErChartSection(emps, years, erResuelto) {
+  // Lee de erResuelto (basado en _erDesdeMonthly, que incorpora er_mensual)
+  // — la misma fuente que ya usa la tabla de arriba en esta vista. Antes
+  // leía DATA.er directo, que no tiene entrada para empresas cuyo único
+  // origen de ER es er_mensual: esas empresas aparecían en la tabla pero
+  // faltaban en este gráfico, sin ningún aviso.
+  erResuelto = erResuelto || {};
+  const lastYwithEr = [...years].reverse().find(y => emps.some(e => erResuelto[e]?.[y]?.resultado_operativo));
   if (!lastYwithEr) return '';
   const empData = emps
-    .map(e => ({ e, v: DATA.er[e]?.[lastYwithEr]?.resultado_operativo || 0 }))
+    .map(e => ({ e, v: erResuelto[e]?.[lastYwithEr]?.resultado_operativo || 0 }))
     .filter(d => d.v !== 0)
     .sort((a,b) => Math.abs(b.v) - Math.abs(a.v))
     .slice(0,15);
@@ -16935,14 +16934,25 @@ function renderTablaPersonal() {
            (!q || d.e.toLowerCase().includes(q));
   });
 
+  // Variación de cada empresa contra SU propio primer año con datos dentro
+  // del rango (no necesariamente baseY) — misma base que usa la celda que
+  // se muestra en la fila, para que ordenar por "Var." coincida con lo que
+  // el usuario lee al lado.
+  function varPctFor(d) {
+    var empBase = pYrs.find(function(y){ return _persGetTotal(d,y)>0; }) || baseY;
+    var vBase = _persGetTotal(d, empBase);
+    var vLast = _persGetTotal(d, lastY);
+    return vBase > 0 && vLast > 0 ? (vLast - vBase) / vBase * 100 : null;
+  }
+
   const sc = _persTablaSort.col;
   const sd = _persTablaSort.dir;
   datos = datos.sort(function(a, b) {
     var va, vb;
     if (sc === '__last__')     { va = a.y[lastY]||0; vb = b.y[lastY]||0; }
     else if (sc === '__var__') {
-      va = (a.y[baseY]||0)>0 ? ((a.y[lastY]||0)-a.y[baseY])/a.y[baseY]*100 : -999;
-      vb = (b.y[baseY]||0)>0 ? ((b.y[lastY]||0)-b.y[baseY])/b.y[baseY]*100 : -999;
+      va = varPctFor(a); va = va == null ? -999 : va;
+      vb = varPctFor(b); vb = vb == null ? -999 : vb;
     } else if (sc === '__emp__') { return sd * a.e.localeCompare(b.e); }
     else { va = a.y[sc]||0; vb = b.y[sc]||0; }
     return sd * (va - vb);
@@ -16971,16 +16981,11 @@ function renderTablaPersonal() {
   var html = '<thead><tr style="position:sticky;top:0;background:var(--s1)">' +
     thSort('__emp__', 'Empresa') +
     pYrs.map(function(y) { return thSort(y, y, 'right'); }).join('') +
-    thSort('__var__', 'Var. ' + (ys().map(String)[0]||baseY) + '→' + lastY, 'right') +
+    thSort('__var__', 'Var. ' + baseY + '→' + lastY, 'right') +
     '</tr></thead><tbody>';
 
   datos.forEach(function(d, i) {
-    // Usar el primer año con datos de ESTA empresa como base real
-    var empBase = pYrs.find(function(y){ return _persGetTotal(d,y)>0; }) || baseY;
-    var vEmpBase = _persGetTotal(d, empBase);
-    var vEmpLast = _persGetTotal(d, lastY);
-    var varPct = vEmpBase > 0 && vEmpLast > 0
-      ? (vEmpLast - vEmpBase) / vEmpBase * 100 : null;
+    var varPct = varPctFor(d);
     var bg = i%2===0 ? '' : 'background:var(--s2)';
     html += '<tr style="' + bg + '"><td style="white-space:nowrap;font-weight:600">' + d.e + '</td>' +
       pYrs.map(function(y) { return '<td style="text-align:right;font-family:var(--mono)">' + fmtV(_persGetTotal(d,y)) + '</td>'; }).join('') +
@@ -17525,8 +17530,9 @@ function buildEmpresa() {
     ]
   },{plugins:{legend:{labels:{filter:i=>i.text!==''}}},scales:{y:{ticks:{callback:v=>v+'%'}},...yRightAxis}});
 
-  // Personal
-  const pYrs = ['2020','2021','2022','2023','2024','2025','2026'];
+  // Personal — respeta el filtro de años activos (antes ['2020'…'2026']
+  // fijo, desalineado del resto de los gráficos de este mismo panel).
+  const pYrs = ys().map(String);
   mkChart('ch-e-pers','bar',{
     labels: pYrs,
     datasets:[{label:'Empleados', data:pYrs.map(y=>pers?.y[y]||0),
@@ -17829,21 +17835,20 @@ function buildAuditERProvisorio(emp) {
   const erM = DATA.er_mensual?.[emp] || {};
 
   // Fuente 1: DATA.er (viene de importación matricial ER_20XX.xlsx)
+  // Match tolerante a acentos/sufijo legal/plural vía _mismoNombreEmpresa()
+  // — antes comparaba solo los primeros 8 caracteres del nombre normalizado,
+  // el mismo patrón que el propio dashboard identificó como poco confiable
+  // en otro punto del código (falsos positivos entre empresas con nombres
+  // que comparten prefijo, ej. "LA RIOJA VITICOLA" / "LA RIOJA TELECOM...").
   let erB = DATA.er?.[emp] || {};
   if (!Object.keys(erB).length && DATA.er) {
-    const empNorm = emp.toUpperCase().trim().replace(/\s+/g,' ');
-    const match = Object.keys(DATA.er).find(k =>
-      k.toUpperCase().trim().replace(/\s+/g,' ') === empNorm ||
-      k.toUpperCase().trim().replace(/\s+/g,' ').includes(empNorm.substring(0,8)) ||
-      empNorm.includes(k.toUpperCase().trim().replace(/\s+/g,' ').substring(0,8))
-    );
+    const match = Object.keys(DATA.er).find(k => _mismoNombreEmpresa(emp, k));
     if (match) erB = DATA.er[match];
   }
 
   // Fuente 2: _balances individuales (Análisis de Balances)
   // Si DATA.er no tiene datos, construir erB desde ind.rentabilidad de _balances
   if (!Object.keys(erB).length && typeof _balances !== 'undefined') {
-    const empNorm = emp.toUpperCase().trim();
     // Mapeo de keys de ind.rentabilidad → keys de DATA.er
     const REN2ER = {
       ventas_ingresos:        'ventas_netas',
@@ -17859,11 +17864,7 @@ function buildAuditERProvisorio(emp) {
       otros_ingresos:         'otros_ingresos',
     };
     Object.values(_balances || {}).forEach(b => {
-      const bEmpNorm = (b.empresa || '').toUpperCase().trim();
-      if (!bEmpNorm) return;
-      if (bEmpNorm !== empNorm &&
-          !bEmpNorm.includes(empNorm.substring(0,8)) &&
-          !empNorm.includes(bEmpNorm.substring(0,8))) return;
+      if (!b.empresa || !_mismoNombreEmpresa(emp, b.empresa)) return;
       // Detectar año del período (ej "2023", "EJERCICIO 2024", etc.)
       const mYr = String(b.periodo || '').match(/20\d\d/);
       if (!mYr) return;
@@ -19741,7 +19742,10 @@ function buildComparar() {
     }))
   },{scales:{y:{ticks:{callback:v=>fvShort(v*1e6)}}}});
 
-  const pYrs = ['2020','2021','2022','2023','2024','2025','2026'];
+  // Respeta el filtro de años activos (antes ['2020'…'2026'] fijo,
+  // inconsistente con facturación/resultado/margen del mismo panel, que sí
+  // lo respetan).
+  const pYrs = years.map(String);
   mkChart('ch-c-pers','line',{
     labels: pYrs,
     datasets: sels.map((e,i)=>{
@@ -21429,9 +21433,16 @@ const ACUM_2020_2024 = ((INFL.ipc[2024]/INFL.ipc[2020])-1)*100;
 let showInflation = true;
 let currentPanel = 'resumen';
 
+// Año base de deflactado — reportado en pesos constantes de este año en
+// toda la UI ("pesos constantes de 2021", "Deflactor base 2021", etc.).
+// Nombrado como constante (antes el 2021 estaba hardcodeado directo en el
+// cálculo, documentado solo como texto suelto en inflBanner) para que un
+// cambio de año base no pueda quedar desincronizado entre el cálculo real
+// y lo que la interfaz dice estar mostrando.
+const DEFLACT_BASE_YEAR = 2021;
 function deflact(val, year) {
   if (!INFL.ipc[year]) return val;
-  return val * (INFL.ipc[2021] / INFL.ipc[year]);
+  return val * (INFL.ipc[DEFLACT_BASE_YEAR] / INFL.ipc[year]);
 }
 function realGrowthPct(v2, y2, v1, y1) {
   if (!v1 || !INFL.ipc[y2] || !INFL.ipc[y1]) return null;
@@ -21456,9 +21467,15 @@ function inflBanner(years) {
     return `<div style="${dimStyle}${accent}"><div class="infl-yr-label">${y}</div><div class="infl-yr-val">${label}</div>${note}</div>`;
   }).join('');
   const acum = INFL.ipc[2024] && INFL.ipc[2021] ? ((INFL.ipc[2024]/INFL.ipc[2021])-1)*100 : null;
+  // Este banner se reutiliza en paneles donde los $ que se muestran son
+  // nominales (Resumen no deflacta nada; Facturación solo agrega una
+  // variación real como serie/KPI aparte, el gráfico de nivel sigue en
+  // pesos corrientes) — antes decía "Valores deflactados en pesos
+  // constantes de 2021", una afirmación falsa en ambos casos: ningún panel
+  // muestra los MONTOS ya deflactados, solo la variación % real al lado.
   return `<div class="infl-banner">
     <div><div class="infl-banner-title">IPC INDEC — Inflación anual</div><div class="infl-rates">${rates}</div></div>
-    <div class="infl-note">Valores deflactados en <strong>pesos constantes de 2021</strong>. 2025: acumulado 12 meses completo. 2026: se actualiza mes a mes.${acum ? ` Acumulado 2021→2024: <strong>${acum.toFixed(2)}%</strong>.` : ''}</div>
+    <div class="infl-note">Referencia INDEC — <strong>pesos constantes de 2021</strong> donde se indique variación real. Los montos en $ de este panel son nominales. 2025: acumulado 12 meses completo. 2026: se actualiza mes a mes.${acum ? ` Acumulado 2021→2024: <strong>${acum.toFixed(2)}%</strong>.` : ''}</div>
   </div>`;
 }
 
