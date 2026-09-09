@@ -28058,6 +28058,97 @@ function _limpiarLabelExcel(txt) {
     .trim();
 }
 
+// ── Ratios financieros de balance — única fuente de verdad ───────────────────
+// Usada por las 4 vías que cargan o editan indicadores de balance:
+// parsearExcelBalance (importación desde Excel), analizarBalanceLocal
+// (análisis de PDF/texto), y el Editor de Datos manual (_balEditorRecalcCalcs
+// para la vista previa en vivo, _balEditorGuardarInterno al guardar). Antes
+// cada una tenía su propia copia de estas fórmulas, con guards ligeramente
+// distintos entre sí (p.ej. protección contra Infinity presente en unas y
+// no en otras, o "truthy" en vez de "!= null" para valores que legítimamente
+// pueden ser 0) que las hacía divergir con el tiempo. Opera sobre
+// ind.{liquidez,solvencia,rentabilidad,eficiencia}, mutándolo in place — los
+// campos cuyos insumos no estén disponibles quedan sin calcular (null), no
+// se inventa ningún dato.
+function _safeDivBalance(n, d) {
+  if (n == null || d == null || d === 0) return null;
+  const r = n / d;
+  return isFinite(r) ? r : null;
+}
+
+function calcularRatiosBalance(ind) {
+  if (!ind) return ind;
+  const liq = ind.liquidez     = ind.liquidez     || {};
+  const sol = ind.solvencia    = ind.solvencia    || {};
+  const ren = ind.rentabilidad = ind.rentabilidad || {};
+  const efi = ind.eficiencia   = ind.eficiencia   || {};
+  const safe = _safeDivBalance;
+
+  // ── Liquidez ──
+  if (liq.activo_corriente != null && liq.pasivo_corriente != null) {
+    liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
+    liq.capital_trabajo    = liq.activo_corriente - liq.pasivo_corriente;
+    if (liq.inventarios != null)
+      liq.liquidez_seca = safe(liq.activo_corriente - liq.inventarios, liq.pasivo_corriente);
+  }
+
+  // ── Solvencia ──
+  if (sol.pasivo_total != null && sol.activo_total != null)
+    sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
+  if (sol.pasivo_total != null && sol.patrimonio_neto != null)
+    sol.deuda_patrimonio = safe(sol.pasivo_total, sol.patrimonio_neto);
+  if (sol.activo_total != null && liq.activo_corriente != null)
+    sol.activo_no_corriente = sol.activo_no_corriente ?? (sol.activo_total - liq.activo_corriente);
+  if (sol.pasivo_total != null && liq.pasivo_corriente != null)
+    sol.pasivo_no_corriente = sol.pasivo_no_corriente ?? (sol.pasivo_total - liq.pasivo_corriente);
+
+  // ── Rentabilidad ──
+  if (ren.resultado_neto != null && sol.patrimonio_neto != null)
+    ren.roe = safe(ren.resultado_neto, sol.patrimonio_neto);
+  if (ren.resultado_neto != null && sol.activo_total != null)
+    ren.roa = safe(ren.resultado_neto, sol.activo_total);
+  if (ren.resultado_neto != null && ren.ventas_ingresos != null)
+    ren.margen_neto = safe(ren.resultado_neto, ren.ventas_ingresos);
+  if (ren.resultado_operativo != null && ren.ventas_ingresos != null)
+    ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
+  if (ren.utilidad_bruta != null && ren.ventas_ingresos != null) {
+    ren.margen_bruto = safe(ren.utilidad_bruta, ren.ventas_ingresos);
+  } else if (ren.ventas_ingresos != null && ren.costo_ventas != null) {
+    const utilBruta = ren.ventas_ingresos - Math.abs(ren.costo_ventas);
+    ren.utilidad_bruta = ren.utilidad_bruta ?? utilBruta;
+    ren.margen_bruto   = safe(utilBruta, ren.ventas_ingresos);
+  }
+
+  // ── Eficiencia ──
+  if (ren.ventas_ingresos != null && sol.activo_total != null) {
+    const rot = safe(ren.ventas_ingresos, sol.activo_total);
+    ren.rotacion_activos = rot; // compatibilidad — algunas vistas leen rotación desde rentabilidad
+    efi.rotacion_activos = rot;
+  }
+  if (liq.inventarios != null && ren.costo_ventas != null)
+    efi.rotacion_inventarios = safe(Math.abs(ren.costo_ventas), liq.inventarios);
+  if (efi.cuentas_cobrar != null && ren.ventas_ingresos != null && ren.ventas_ingresos !== 0)
+    efi.dias_cobro = Math.abs(efi.cuentas_cobrar) / Math.abs(ren.ventas_ingresos) * 365;
+  if (efi.cuentas_pagar != null && ren.costo_ventas != null && ren.costo_ventas !== 0)
+    efi.dias_pago = Math.abs(efi.cuentas_pagar) / Math.abs(ren.costo_ventas) * 365;
+
+  return ind;
+}
+
+// Lista de rutas de ratios que produce calcularRatiosBalance() — usada por el
+// Editor de Datos para copiar solo los ratios calculados (nunca los insumos
+// crudos) desde un objeto temporal hacia el balance real.
+const RATIO_FIELDS_BALANCE = [
+  'liquidez.liquidez_corriente', 'liquidez.capital_trabajo', 'liquidez.liquidez_seca',
+  'solvencia.razon_endeudamiento', 'solvencia.deuda_patrimonio',
+  'solvencia.activo_no_corriente', 'solvencia.pasivo_no_corriente',
+  'rentabilidad.roe', 'rentabilidad.roa', 'rentabilidad.margen_neto',
+  'rentabilidad.margen_operativo', 'rentabilidad.margen_bruto', 'rentabilidad.utilidad_bruta',
+  'rentabilidad.rotacion_activos',
+  'eficiencia.rotacion_activos', 'eficiencia.rotacion_inventarios',
+  'eficiencia.dias_cobro', 'eficiencia.dias_pago',
+];
+
 // ── Parser estructural de Excel para balances ────────────────────────────────
 // Lee fila a fila respetando fórmulas y estructura del archivo.
 // Produce estructura_er con grupos de suma explícitos.
@@ -28588,25 +28679,9 @@ function parsearExcelBalance(wb, XLSX) {
     if (!rubro.key) rubro.key = 'extra_' + rubro.fila; // campo no mapeado
   });
 
-  // Calcular ratios
-  const ren = ind.rentabilidad, sol = ind.solvencia, liq = ind.liquidez;
-  const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
-  // safe() ya descarta null/undefined/división por 0 — los guardas "&&" que
-  // había antes acá usaban verdad numérica: si un activo/pasivo corriente
-  // era legítimamente 0, el ratio quedaba "sin dato" en vez de 0, y además
-  // deuda_patrimonio/ROE/ROA compartían un único guard (patrimonio_neto Y
-  // activo_total) aunque cada ratio solo necesita uno de los dos.
-  liq.liquidez_corriente  = safe(liq.activo_corriente, liq.pasivo_corriente);
-  sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
-  sol.deuda_patrimonio    = safe(sol.pasivo_total, sol.patrimonio_neto);
-  ren.roe = safe(ren.resultado_neto, sol.patrimonio_neto);
-  ren.roa = safe(ren.resultado_neto, sol.activo_total);
-  ren.margen_neto      = safe(ren.resultado_neto, ren.ventas_ingresos);
-  ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
-  if (liq.activo_corriente != null && liq.pasivo_corriente != null)
-    liq.capital_trabajo = liq.activo_corriente - liq.pasivo_corriente;
-  if (sol.activo_total != null && liq.activo_corriente != null)
-    sol.activo_no_corriente = sol.activo_no_corriente ?? sol.activo_total - liq.activo_corriente;
+  // Calcular ratios — ver calcularRatiosBalance(), compartida con las otras
+  // 3 vías que cargan/editan indicadores de balance.
+  calcularRatiosBalance(ind);
 
   return { estructura_er, indicadores: ind };
 }
@@ -29545,9 +29620,10 @@ function analizarBalanceLocal(filename, texto) {
   ]);
 
   // ── 9. Calcular ratios ────────────────────────────────────
+  // "safe" se mantiene acá solo para cobInt e intereses, que no forman parte
+  // del modelo estándar de ind.* (ver calcularRatiosBalance más abajo).
   const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
 
-  const liqCorr  = safe(activoC, pasivoC);
   // ── Estructura real del ER detectado (para el Editor de Datos dinámico) ──────
   // Construida en el ORDEN en que aparecen en el texto, con label real del archivo.
   // buscar() ahora registra la posición de cada match para poder ordenar.
@@ -29614,28 +29690,42 @@ function analizarBalanceLocal(filename, texto) {
   // Ordenar por posición de aparición en el texto
   const _erRubros = Object.values(_erMap).sort((a, b) => a.pos - b.pos);
 
-  // Fix: solo calcular liquidez seca cuando inventarios está explícitamente disponible.
-  // Si inv es null, dejar liqSeca en null (no igualar a liquidez_corriente: induciría a error).
-  const liqSeca  = (activoC != null && inv != null && pasivoC) ? safe(activoC - inv, pasivoC) : null;
-  const capTrab  = (activoC != null && pasivoC != null) ? activoC - pasivoC : null;
-  const endeudam = safe(pasivoT, activoT);
-  const dPat     = safe(pasivoT, patrimon);
-  const cobInt   = safe(resOp, intereses ? Math.abs(intereses) : null);
-  const roe      = safe(resNeto, patrimon);
-  const roa      = safe(resNeto, activoT);
-  const margenN  = safe(resNeto, ventas);
-  const margenOp = safe(resOp, ventas);
-  // Margen bruto: requiere utilidad_bruta — calculada más arriba o estimada
-  const utilBrutaVal = utilBruta ?? (ventas != null && costo != null ? ventas + (costo > 0 ? -costo : costo) : null);
-  const margenBruto  = safe(utilBrutaVal, ventas);
-  // Rotación de activos: si ventas es null pero hay segmentos, usar suma de ventas agro
+  // Ratios financieros — calculados por calcularRatiosBalance(), la misma
+  // función que usan la importación desde Excel y el Editor de Datos manual,
+  // para que ninguna de las 4 vías de carga/edición de balances calcule un
+  // ratio distinto para los mismos datos.
+  const _indTmp = {
+    liquidez:     { activo_corriente: activoC, pasivo_corriente: pasivoC, inventarios: inv },
+    solvencia:    { pasivo_total: pasivoT, activo_total: activoT, patrimonio_neto: patrimon },
+    rentabilidad: { resultado_neto: resNeto, resultado_operativo: resOp, ventas_ingresos: ventas,
+                    costo_ventas: costo, utilidad_bruta: utilBruta },
+    eficiencia:   { cuentas_cobrar: cxc, cuentas_pagar: cxp },
+  };
+  calcularRatiosBalance(_indTmp);
+  const liqCorr      = _indTmp.liquidez.liquidez_corriente;
+  const liqSeca      = _indTmp.liquidez.liquidez_seca;
+  const capTrab      = _indTmp.liquidez.capital_trabajo;
+  const endeudam     = _indTmp.solvencia.razon_endeudamiento;
+  const dPat         = _indTmp.solvencia.deuda_patrimonio;
+  // cobertura_intereses no forma parte del modelo estándar de ind.* (el dato
+  // "intereses" viene de una búsqueda de texto ad hoc, no de un campo editable)
+  const cobInt       = safe(resOp, intereses ? Math.abs(intereses) : null);
+  const roe          = _indTmp.rentabilidad.roe;
+  const roa          = _indTmp.rentabilidad.roa;
+  const margenN      = _indTmp.rentabilidad.margen_neto;
+  const margenOp     = _indTmp.rentabilidad.margen_operativo;
+  const utilBrutaVal = _indTmp.rentabilidad.utilidad_bruta;
+  const margenBruto  = _indTmp.rentabilidad.margen_bruto;
+  const rotInv       = _indTmp.eficiencia.rotacion_inventarios;
+  const diasCob      = _indTmp.eficiencia.dias_cobro;
+  const diasPag      = _indTmp.eficiencia.dias_pago;
+  // Rotación de activos: si ventas es null pero hay segmentos, usar suma de
+  // ventas agro (caso específico del análisis de PDF; no aplica al resto de
+  // las vías de carga, que no tienen segmentos por rubro).
   const _segsSum = [ventaSemillas, ventaHacienda, ventaFrigorifico, ventaLocales, produccionAgro]
     .filter(v => v != null && v > 0).reduce((s, v) => s + v, 0);
   const ventasEfectivas = ventas != null ? ventas : (_segsSum > 0 ? _segsSum : null);
-  const rotAct   = safe(ventasEfectivas, activoT);
-  const rotInv   = (inv && costo) ? safe(costo, inv) : null;
-  const diasCob  = (cxc && ventas && ventas > 0) ? cxc / ventas * 365 : null;
-  const diasPag  = (cxp && costo && costo !== 0) ? Math.abs(cxp) / Math.abs(costo) * 365 : null;
+  const rotAct = _indTmp.eficiencia.rotacion_activos ?? safe(ventasEfectivas, activoT);
 
   // ── 10. Alertas ───────────────────────────────────────────
   const alertas = [];
@@ -33026,35 +33116,20 @@ function _balEditorRecalcCalcs(changedInput) {
   });
 
   // Sincronizar indTemp → _balances en tiempo real para que los coeficientes
-  // (ratios de liquidez, solvencia, rentabilidad) se actualicen sin necesitar
-  // presionar "Guardar". Solo actualiza si hay un balance activo.
+  // (ratios de liquidez, solvencia, rentabilidad, eficiencia) se actualicen
+  // sin necesitar presionar "Guardar". Solo actualiza si hay un balance activo.
+  // Los ratios se calculan con calcularRatiosBalance(), la misma función que
+  // usan la importación desde Excel, el análisis de PDF y el guardado del
+  // editor — así la vista previa en vivo nunca muestra un valor distinto del
+  // que va a quedar grabado.
   const _activeKey = document.getElementById('bal-sel')?.value;
   if (_activeKey && _balances[_activeKey]) {
     const _ind = _balances[_activeKey].indicadores;
-    // Copiar valores calculados y ratios al objeto real
-    const _safe = (n,d) => (n!=null&&d!=null&&d!==0) ? n/d : null;
-    const _liq = indTemp.liquidez    || {};
-    const _sol = indTemp.solvencia   || {};
-    const _ren = indTemp.rentabilidad|| {};
-    // Ratios de liquidez
-    if (_liq.activo_corriente!=null && _liq.pasivo_corriente!=null) {
-      (_ind.liquidez=_ind.liquidez||{}).liquidez_corriente = _safe(_liq.activo_corriente, _liq.pasivo_corriente);
-      _ind.liquidez.capital_trabajo = _liq.activo_corriente - _liq.pasivo_corriente;
-    }
-    // Ratios de solvencia
-    if (_sol.pasivo_total!=null && _sol.activo_total!=null)
-      (_ind.solvencia=_ind.solvencia||{}).razon_endeudamiento = _safe(_sol.pasivo_total, _sol.activo_total);
-    if (_sol.pasivo_total!=null && _sol.patrimonio_neto!=null)
-      (_ind.solvencia=_ind.solvencia||{}).deuda_patrimonio = _safe(_sol.pasivo_total, _sol.patrimonio_neto);
-    // Ratios de rentabilidad
-    if (_ren.resultado_neto!=null && _sol.patrimonio_neto!=null)
-      (_ind.rentabilidad=_ind.rentabilidad||{}).roe = _safe(_ren.resultado_neto, _sol.patrimonio_neto);
-    if (_ren.resultado_neto!=null && _sol.activo_total!=null)
-      (_ind.rentabilidad=_ind.rentabilidad||{}).roa = _safe(_ren.resultado_neto, _sol.activo_total);
-    if (_ren.resultado_neto!=null && _ren.ventas_ingresos!=null)
-      (_ind.rentabilidad=_ind.rentabilidad||{}).margen_neto = _safe(_ren.resultado_neto, _ren.ventas_ingresos);
-    if (_ren.resultado_operativo!=null && _ren.ventas_ingresos!=null)
-      (_ind.rentabilidad=_ind.rentabilidad||{}).margen_operativo = _safe(_ren.resultado_operativo, _ren.ventas_ingresos);
+    calcularRatiosBalance(indTemp);
+    RATIO_FIELDS_BALANCE.forEach(path => {
+      const v = _getIndPath(indTemp, path);
+      if (v != null) _setIndPath(_ind, path, v);
+    });
     // Campos calc de resultados
     allFields.forEach(f => {
       if (!f.calc || !f.calcFn) return;
@@ -33190,63 +33265,10 @@ function _balEditorGuardarInterno() {
     }
   }
 
-  // Recalcular ratios derivados
-  const liq = ind.liquidez     || {};
-  const sol = ind.solvencia    || {};
-  const ren = ind.rentabilidad || {};
-  const efi = ind.eficiencia   || {};  // ← necesario para rotacion_activos
-  const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
-
-  if (liq.activo_corriente!=null && liq.pasivo_corriente!=null) {
-    liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
-    liq.capital_trabajo    = liq.activo_corriente - liq.pasivo_corriente;
-    liq.liquidez_seca = liq.inventarios != null
-      ? safe(liq.activo_corriente - liq.inventarios, liq.pasivo_corriente)
-      : null;
-  }
-  if (sol.pasivo_total!=null && sol.activo_total!=null)
-    sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
-  if (sol.pasivo_total!=null && sol.patrimonio_neto!=null)
-    sol.deuda_patrimonio = safe(sol.pasivo_total, sol.patrimonio_neto);
-  if (ren.resultado_neto!=null && sol.patrimonio_neto!=null)
-    ren.roe = safe(ren.resultado_neto, sol.patrimonio_neto);
-  if (ren.resultado_neto!=null && sol.activo_total!=null)
-    ren.roa = safe(ren.resultado_neto, sol.activo_total);
-  if (ren.resultado_neto!=null && ren.ventas_ingresos!=null)
-    ren.margen_neto = safe(ren.resultado_neto, ren.ventas_ingresos);
-  if (ren.utilidad_bruta!=null && ren.ventas_ingresos!=null)
-    ren.margen_bruto = safe(ren.utilidad_bruta, ren.ventas_ingresos);
-  // FIX 10 — Fallback: calcular margen_bruto si utilidad_bruta no fue detectada
-  if (ren.margen_bruto == null && ren.ventas_ingresos != null && ren.costo_ventas != null) {
-    const _utilBruta = ren.ventas_ingresos - Math.abs(ren.costo_ventas);
-    ren.utilidad_bruta = ren.utilidad_bruta ?? _utilBruta;
-    ren.margen_bruto   = safe(_utilBruta, ren.ventas_ingresos);
-  }
-  if (ren.resultado_operativo!=null && ren.ventas_ingresos!=null)
-    ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
-  if (ren.ventas_ingresos!=null && sol.activo_total!=null) {
-    const rot = safe(ren.ventas_ingresos, sol.activo_total);
-    ren.rotacion_activos = rot; // compatibilidad
-    efi.rotacion_activos = rot; // usado por diagnóstico y radar
-  }
-
-  // Calcular campos de eficiencia desde datos del editor
-  if (ren.ventas_ingresos != null && sol.activo_total != null) {
-    const rot = safe(ren.ventas_ingresos, sol.activo_total);
-    efi.rotacion_activos = rot;
-    ren.rotacion_activos = rot;
-  }
-  // Rotación inventarios: costo_ventas / inventarios (fórmula estándar)
-  if (liq.inventarios != null) {
-    const costoRot = ren.costo_ventas != null ? Math.abs(ren.costo_ventas) : null;
-    if (costoRot != null)
-      efi.rotacion_inventarios = safe(costoRot, liq.inventarios);
-    liq.liquidez_seca = safe(liq.activo_corriente - liq.inventarios, liq.pasivo_corriente);
-  }
-  if (efi.cuentas_cobrar != null && ren.ventas_ingresos != null && ren.ventas_ingresos !== 0)
-    efi.dias_cobro = Math.abs(efi.cuentas_cobrar) / Math.abs(ren.ventas_ingresos) * 365;
-  if (efi.cuentas_pagar != null && ren.costo_ventas != null && ren.costo_ventas !== 0)
-    efi.dias_pago = Math.abs(efi.cuentas_pagar) / Math.abs(ren.costo_ventas) * 365;
+  // Recalcular ratios derivados — calcularRatiosBalance(), compartida con la
+  // importación desde Excel, el análisis de PDF y la vista previa en vivo
+  // del editor (_balEditorRecalcCalcs).
+  calcularRatiosBalance(ind);
 
   if (msg) {
     msg.style.color = '#47ffb4';
