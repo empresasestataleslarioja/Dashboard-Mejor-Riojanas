@@ -7294,6 +7294,12 @@ function _rptBalance(autoPrint) {
           pC: pasivoC, pNC: pasivoNC, pT: pasivoT, pn: patrimon } = getInd(b);
   // Merge con los objetos originales para acceso directo
   Object.assign(ren, ren_); Object.assign(liq, liq_);
+  // Endeudamiento resuelto una sola vez — el valor mostrado usa un fallback
+  // (pasivoT/activoT) que antes el semáforo de color/texto ignoraba, y ese
+  // semáforo tenía además dos defaults contradictorios para "sin dato"
+  // (verde en el color, "alto" en el texto). Umbral 0,6, igual que en el
+  // resto del dashboard (Reporte Integral, diagnóstico financiero, etc.).
+  const endResuelto = sol.razon_endeudamiento ?? (pasivoT!=null && activoT ? pasivoT/activoT : null);
 
   const fM = v => { if(v==null)return'—'; return (v<0?'($ ':'$ ')+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':''); };
   const fP = v => v==null?'—':(v>0?'+':'')+v.toFixed(2)+'%';
@@ -7391,7 +7397,7 @@ function _rptBalance(autoPrint) {
   .ind-lbl{font-size:9px;color:#555}
   .ind-val{font-size:10px;font-weight:700;font-family:monospace;color:#333}
   .pill{font-size:7px;padding:1px 5px;border-radius:10px;margin-left:5px;font-family:monospace}
-  .pill-ok{background:#e8f5e9;color:#1a9e68}.pill-bad{background:#fce8e6;color:#d93025}
+  .pill-ok{background:#e8f5e9;color:#1a9e68}.pill-bad{background:#fce8e6;color:#d93025}.pill-dim{background:#eee;color:#888}
   table.comp{width:100%;border-collapse:collapse}
   table.comp thead tr{background:linear-gradient(135deg,#0d1b4b,#1a3a8f)}
   table.comp thead th{color:rgba(255,255,255,.85);padding:8px 10px;text-align:right;
@@ -7578,7 +7584,7 @@ function _rptBalance(autoPrint) {
     </div>
     <div class="ind-block">
       <div class="ind-title">Solvencia</div>
-      <div class="ind-row"><span class="ind-lbl">Endeudamiento</span><span class="ind-val">${fR(sol.razon_endeudamiento ?? (pasivoT!=null&&activoT?pasivoT/activoT:null))}<span class="pill ${(sol.razon_endeudamiento??0)<=0.7?'pill-ok':'pill-bad'}">${(sol.razon_endeudamiento??1)<=0.7?'bajo':'alto'}</span></span></div>
+      <div class="ind-row"><span class="ind-lbl">Endeudamiento</span><span class="ind-val">${fR(endResuelto)}<span class="pill ${endResuelto==null?'pill-dim':endResuelto<=0.6?'pill-ok':'pill-bad'}">${endResuelto==null?'s/d':endResuelto<=0.6?'bajo':'alto'}</span></span></div>
       <div class="ind-row"><span class="ind-lbl">Deuda / Patrimonio</span><span class="ind-val">${fR(sol.deuda_patrimonio)}</span></div>
       <div class="ind-row"><span class="ind-lbl">Cobertura de intereses</span><span class="ind-val">${fR(sol.cobertura_intereses)}</span></div>
     </div>
@@ -14829,7 +14835,7 @@ function buildFacturacion() {
 
     // Gráfico 4: margen operativo top empresas con resultado
     const empConSit = Object.entries(DATA.sit||{})
-      .filter(([,s])=>s[last]!=null && (DATA.fact[last]||DATA.fact[_]||true))
+      .filter(([,s])=>s[last]!=null)
       .map(([e,s])=>({ e, margen: DATA.fact[e]?.[last] ? parseFloat((s[last]/DATA.fact[e][last]*100).toFixed(2)) : null }))
       .filter(x=>x.margen!=null)
       .sort((a,b)=>b.margen-a.margen)
@@ -26658,10 +26664,14 @@ function checkAlerts() {
   });
 
   // Transferencia > 50% de facturación
+  // t.empresa nunca se completa al importar SIDIF (solo t.beneficiario) —
+  // resolver acá con la misma canonicalización que usa el resto del
+  // dashboard (_beneficiarioCanonico), o esta alerta nunca dispara.
   (DATA.transferencias || []).forEach(t => {
-    const f = DATA.fact[t.empresa]?.[t.año] || 0;
+    const emp = t.empresa || _beneficiarioCanonico(t.beneficiario);
+    const f = DATA.fact[emp]?.[t.año] || 0;
     if (f > 0 && t.importe / f > 0.5)
-      alerts.push({ tipo:'dep', msg: t.empresa + ' ' + t.año + ': transferencias >50% de la facturación' });
+      alerts.push({ tipo:'dep', msg: emp + ' ' + t.año + ': transferencias >50% de la facturación' });
   });
 
   // Caída de personal > 20%
@@ -26881,9 +26891,13 @@ function buildHeatmap() {
   if (lbl) lbl.textContent = metricLabels[metric]||metric;
 
   // Calcular valores
+  // t.empresa nunca se completa al importar SIDIF (solo t.beneficiario) —
+  // sin esta resolución, "neto" y "dependencia" quedaban siempre en 0/null.
   const transEmpYr = {};
   (DATA.transferencias||[]).forEach(t=>{
-    const k = t.empresa+'|'+t.año;
+    const emp = t.empresa || _beneficiarioCanonico(t.beneficiario);
+    if (!emp) return;
+    const k = emp+'|'+t.año;
     transEmpYr[k] = (transEmpYr[k]||0) + t.importe;
   });
 
@@ -28275,22 +28289,21 @@ function parsearExcelBalance(wb, XLSX) {
   // Calcular ratios
   const ren = ind.rentabilidad, sol = ind.solvencia, liq = ind.liquidez;
   const safe = (n,d) => { if (n==null||d==null||d===0) return null; const r=n/d; return isFinite(r)?r:null; };
-  if (liq.activo_corriente && liq.pasivo_corriente)
-    liq.liquidez_corriente = safe(liq.activo_corriente, liq.pasivo_corriente);
-  if (sol.pasivo_total && sol.activo_total)
-    sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
-  if (sol.patrimonio_neto && sol.activo_total) {
-    sol.deuda_patrimonio = safe(sol.pasivo_total, sol.patrimonio_neto);
-    ren.roe = safe(ren.resultado_neto, sol.patrimonio_neto);
-    ren.roa = safe(ren.resultado_neto, sol.activo_total);
-  }
-  if (ren.resultado_neto && ren.ventas_ingresos)
-    ren.margen_neto = safe(ren.resultado_neto, ren.ventas_ingresos);
-  if (ren.resultado_operativo && ren.ventas_ingresos)
-    ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
-  if (liq.activo_corriente && liq.pasivo_corriente)
+  // safe() ya descarta null/undefined/división por 0 — los guardas "&&" que
+  // había antes acá usaban verdad numérica: si un activo/pasivo corriente
+  // era legítimamente 0, el ratio quedaba "sin dato" en vez de 0, y además
+  // deuda_patrimonio/ROE/ROA compartían un único guard (patrimonio_neto Y
+  // activo_total) aunque cada ratio solo necesita uno de los dos.
+  liq.liquidez_corriente  = safe(liq.activo_corriente, liq.pasivo_corriente);
+  sol.razon_endeudamiento = safe(sol.pasivo_total, sol.activo_total);
+  sol.deuda_patrimonio    = safe(sol.pasivo_total, sol.patrimonio_neto);
+  ren.roe = safe(ren.resultado_neto, sol.patrimonio_neto);
+  ren.roa = safe(ren.resultado_neto, sol.activo_total);
+  ren.margen_neto      = safe(ren.resultado_neto, ren.ventas_ingresos);
+  ren.margen_operativo = safe(ren.resultado_operativo, ren.ventas_ingresos);
+  if (liq.activo_corriente != null && liq.pasivo_corriente != null)
     liq.capital_trabajo = liq.activo_corriente - liq.pasivo_corriente;
-  if (sol.activo_total && liq.activo_corriente)
+  if (sol.activo_total != null && liq.activo_corriente != null)
     sol.activo_no_corriente = sol.activo_no_corriente ?? sol.activo_total - liq.activo_corriente;
 
   return { estructura_er, indicadores: ind };
@@ -29326,7 +29339,11 @@ function analizarBalanceLocal(filename, texto) {
   const alertas = [];
   if (patrimon != null && patrimon < 0)      alertas.push('Patrimonio neto negativo');
   if (liqCorr  != null && liqCorr < 1)       alertas.push('Liquidez corriente menor a 1');
-  if (endeudam != null && endeudam > 0.7)    alertas.push(`Endeudamiento elevado (${(endeudam*100).toFixed(2)}% del activo)`);
+  // Umbral 0,6 — igual al que usa el diagnóstico narrativo más abajo en esta
+  // misma función y al resto del dashboard (Reporte Integral, Portafolio).
+  // Antes era 0,7 acá: entre 60% y 70% el diagnóstico decía "elevado" sin
+  // que se registrara ninguna alerta.
+  if (endeudam != null && endeudam > 0.6)    alertas.push(`Endeudamiento elevado (${(endeudam*100).toFixed(2)}% del activo)`);
   if (roe      != null && roe < 0)           alertas.push('ROE negativo — pérdidas sobre el patrimonio');
   if (resNeto  != null && resNeto < 0)       alertas.push('Resultado del ejercicio negativo');
   if (dPat     != null && dPat > 2)          alertas.push('Deuda mayor al doble del patrimonio');
