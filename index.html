@@ -2315,12 +2315,11 @@ self.onmessage = async (e) => {
           box-sizing:border-box;margin-bottom:9px"
           onfocus="this.style.borderColor='#47e8ff'" onblur="this.style.borderColor='var(--bd2)'">
         <div id="inp-cloud-token" style="display:none"></div>
-        <div style="font-size:9px;color:var(--dim);margin-bottom:5px">Tu nombre (aparece en el registro):</div>
-        <input id="inp-cloud-user" placeholder="Ej: Ana García"
+        <div style="font-size:9px;color:var(--dim);margin-bottom:5px">Usuario que queda registrado (según tu login, no editable):</div>
+        <input id="inp-cloud-user" disabled
           style="width:100%;padding:6px 8px;background:var(--s3);border:1px solid var(--bd2);
-          color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none;
-          box-sizing:border-box;margin-bottom:12px"
-          onfocus="this.style.borderColor='#c447ff'" onblur="this.style.borderColor='var(--bd2)'">
+          color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none;
+          box-sizing:border-box;margin-bottom:12px;cursor:not-allowed">
         <button onclick="saveCloudCfg()"
           style="width:100%;padding:8px;background:rgba(71,255,180,.15);border:1px solid #2ecc8a;
           color:#1a9e68;font-size:10px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
@@ -5020,6 +5019,19 @@ initHashedUsers();
 const LOGIN_SESSION_HORAS = 8;
 const LOGIN_KEY = 'lr_auth_v1';
 
+// Usuario de la sesión activa (login real) — es la única fuente confiable
+// para identificar quién hace un cambio; nunca un campo de texto libre.
+function _sesionUsuarioActivo() {
+  try {
+    const raw = sessionStorage.getItem(LOGIN_KEY) || localStorage.getItem(LOGIN_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s.exp > Date.now() && s.user) return s.user;
+    }
+  } catch(e) {}
+  return null;
+}
+
 function checkAuth() {
   // Verificar si ya hay sesión activa
   try {
@@ -5147,13 +5159,25 @@ function ocultarLogin() {
   overlay.style.transition = 'opacity .3s';
   overlay.style.opacity = '0';
   setTimeout(() => { overlay.style.display = 'none'; }, 300);
-  // Mostrar usuario activo en topbar
+  // Mostrar usuario activo en topbar y usarlo como identidad del registro
+  // de auditoría (reemplaza el campo de texto libre que existía antes)
   try {
     const raw = sessionStorage.getItem(LOGIN_KEY) || localStorage.getItem(LOGIN_KEY);
     if (raw) {
       const s = JSON.parse(raw);
       const lbl = document.getElementById('login-user-lbl');
       if (lbl) lbl.textContent = s.user || '—';
+      if (s.user && typeof _cloudUser !== 'undefined') {
+        _cloudUser = s.user;
+        try {
+          const cfgRaw = localStorage.getItem(LS_CFG_KEY);
+          const cfg = cfgRaw ? JSON.parse(cfgRaw) : {};
+          cfg.user = s.user;
+          localStorage.setItem(LS_CFG_KEY, JSON.stringify(cfg));
+        } catch(e2) {}
+        const inpUser = document.getElementById('inp-cloud-user');
+        if (inpUser) inpUser.value = s.user;
+      }
     }
   } catch(e) {}
   // Aplicar modo solo lectura si corresponde
@@ -33346,7 +33370,6 @@ let _cloudUser  = '';   // nombre visible del usuario activo
 function saveCloudCfg() {
   const url   = (document.getElementById('inp-cloud-url')?.value   || '').trim();
   const token = (document.getElementById('inp-cloud-token')?.value || '').trim();
-  const user  = (document.getElementById('inp-cloud-user')?.value  || '').trim();
   const msg   = document.getElementById('cloud-cfg-msg');
 
   if (!url || !url.includes('script.google.com')) {
@@ -33354,7 +33377,9 @@ function saveCloudCfg() {
     return;
   }
   _cloudUrl  = url;
-  _cloudUser = user || 'usuario';
+  // El usuario del registro de auditoría se toma siempre del login activo,
+  // nunca de un campo editable (ver _sesionUsuarioActivo).
+  _cloudUser = _sesionUsuarioActivo() || _cloudUser || 'usuario';
   if (token && token !== '••••••••') _cloudToken = token;
   try {
     localStorage.setItem(LS_CFG_KEY, JSON.stringify({ url:_cloudUrl, token:_cloudToken, user:_cloudUser }));
@@ -35630,7 +35655,7 @@ async function syncSoloTransferencias() {
     // los problemas de orden/timing entre lotes.
     setMsg(`⏳ Publicando ${total} transferencias…`);
     const payload = {
-      updatedBy: _cloudUser || 'cargador',
+      updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador',
       nota:      'Publicación de transferencias',
       data: {
         transferencias: transRows,
@@ -35674,7 +35699,7 @@ async function syncSoloBalances() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando balances…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _cloudUser||'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros } });
+    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros } });
     if (ind) { ind.textContent = '✓ Balances publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
@@ -35686,7 +35711,7 @@ async function syncSoloFlujos() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando flujos…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _cloudUser||'cargador', nota: 'Publicación flujos', data: { flujos: payload.flujos, flujos_config: payload.flujos_config, flujos_a_eliminar: payload.flujos_a_eliminar } });
+    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación flujos', data: { flujos: payload.flujos, flujos_config: payload.flujos_config, flujos_a_eliminar: payload.flujos_a_eliminar } });
     if (ind) { ind.textContent = '✓ Flujos publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
@@ -35698,7 +35723,7 @@ async function syncSoloPersonal() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando personal…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _cloudUser||'cargador', nota: 'Publicación personal', data: { personal: payload.personal } });
+    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación personal', data: { personal: payload.personal } });
     if (ind) { ind.textContent = '✓ Personal publicado'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
@@ -35762,7 +35787,7 @@ async function syncToCloud(nota) {
     const payload = {
       tab:       'all',
       nota:      nota || 'Actualización manual',
-      updatedBy: _cloudUser || 'cargador',
+      updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador',
       data:      restoData
     };
 
@@ -35837,7 +35862,7 @@ async function syncToCloud(nota) {
         _backupTransferenciasLocal('antes de sync-to-cloud');
         showStorageStatus(`⏳ Publicando ${transferencias.length.toLocaleString('es-AR')} transferencias…`, '#47e8ff');
         const tPayload = {
-          updatedBy: _cloudUser || 'cargador',
+          updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador',
           nota:      'Transferencias',
           data: { transferencias: transferencias, _trans_modo: 'reemplazar' }
         };
