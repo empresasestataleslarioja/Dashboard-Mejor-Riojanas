@@ -20437,6 +20437,14 @@ function renderTransTabla(rows) {
                 onmouseout="this.style.borderColor='transparent'"
                 title="Fecha exacta del archivo importado — click para corregir mes/año"
               >${String(t.dia).padStart(2,'0')}/${String(t.mes).padStart(2,'0')}/${t.año}</span>`
+            : t.semana && !sinMes && !sinAño
+            ? `<span onclick="editarCeldaTrans(this,${realIdx},'mes')"
+                style="display:inline-block;font-size:9px;font-family:var(--mono);cursor:pointer;
+                padding:2px 4px;border-radius:3px;border:1px solid transparent;color:var(--dim)"
+                onmouseover="this.style.borderColor='var(--bd2)'"
+                onmouseout="this.style.borderColor='transparent'"
+                title="Semana detectada del nombre del archivo — no es el día exacto de este pago, sino el rango del lote. Click para corregir mes/año"
+              >~${_rangoSemanaISO(t.año, t.semana)}</span>`
             : `<span onclick="editarCeldaTrans(this,${realIdx},'mes')"
                 style="display:inline-block;font-size:9px;cursor:pointer;padding:2px 4px;
                 border-radius:3px;border:1px solid transparent;color:${sinMes?'#ff8c47':'var(--text)'}"
@@ -21071,6 +21079,25 @@ function _isoWeek(d) {
   return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
 }
 
+// Lunes de una semana ISO dada — única fuente de verdad, usada por el
+// reporte semanal de Transferencias, la alerta de cobertura y la columna
+// "Fecha" del detalle (antes cada una tenía su propia copia).
+function _lunesISO(anio, sem) {
+  const jan4 = new Date(anio, 0, 4);
+  const lunes = new Date(jan4);
+  lunes.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1 + (sem - 1) * 7);
+  return lunes;
+}
+function _fmtFechaCorta(d) {
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// Rango lunes-viernes de una semana ISO, formateado "DD/MM–DD/MM"
+function _rangoSemanaISO(anio, sem) {
+  const ini = _lunesISO(anio, sem);
+  const fin = new Date(ini); fin.setDate(fin.getDate() + 4);
+  return `${_fmtFechaCorta(ini)}–${_fmtFechaCorta(fin)}`;
+}
+
 // Semanas con al menos un día hábil (lun-vie, no feriado) hasta 'hasta' inclusive
 function _semanasLaboralesHasta(anio, hasta) {
   const semanas = new Set();
@@ -21166,14 +21193,7 @@ function _alertaTransCoberturaUpdate() {
   // Agrupar semanas faltantes con referencia de fechas aproximadas
   const rangos = [];
   if (semanasFaltantes.length) {
-    // Helper: fecha del lunes de una semana ISO
-    const _lunesISO = (anio, sem) => {
-      const jan4 = new Date(anio, 0, 4);
-      const lunes = new Date(jan4);
-      lunes.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1 + (sem - 1) * 7);
-      return lunes;
-    };
-    const _fmtCorto = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    const _fmtCorto = _fmtFechaCorta; // alias — ver _lunesISO/_fmtFechaCorta compartidas
 
     let ini = semanasFaltantes[0], ant = ini;
     for (let i = 1; i <= semanasFaltantes.length; i++) {
@@ -21725,19 +21745,8 @@ function buildTransSemanal() {
   });
   const semanasOrdenadas = Object.keys(porSemana).map(Number).sort((a,b) => a-b);
 
-  // Rango de fechas (lunes-viernes) de una semana ISO
-  const _lunesISO = (anio, sem) => {
-    const jan4 = new Date(anio, 0, 4);
-    const lunes = new Date(jan4);
-    lunes.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1 + (sem - 1) * 7);
-    return lunes;
-  };
-  const _fmtCorto = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
-  const _rango = sem => {
-    const ini = _lunesISO(añoSel, sem);
-    const fin = new Date(ini); fin.setDate(fin.getDate()+4);
-    return `${_fmtCorto(ini)}–${_fmtCorto(fin)}`;
-  };
+  // Rango de fechas (lunes-viernes) de una semana ISO — ver _rangoSemanaISO compartida
+  const _rango = sem => _rangoSemanaISO(añoSel, sem);
 
   const labels = semanasOrdenadas.map(s => `Sem ${s} (${_rango(s)})`);
   const data   = semanasOrdenadas.map(s => porSemana[s].total / 1e6);
@@ -24387,12 +24396,29 @@ function tryParseSIDIF(wb, fname) {
       } else {
         // Sin fecha exacta: intentar detectar desde nombre del archivo
         const _fnLow = (fname || '').toLowerCase();
+        // Lotes semanales tipo "pagado empresas estatales semana del
+        // 03-08 al 07-08 del 2026.xls": no da el día exacto de cada pago
+        // dentro del lote, pero sí un RANGO real de fechas — mucho más
+        // preciso que asumir "mes completo". No se inventa un día: la
+        // columna Fecha del detalle muestra el rango, no una fecha exacta.
+        const _semRangoMatch = _fnLow.match(
+          /sem(?:ana)?\s*(?:del)?\s*(\d{1,2})[/\-](\d{1,2})\s*al\s*(\d{1,2})[/\-](\d{1,2})\s*(?:del)?\s*(\d{4})/
+        );
         const _semMatch = _fnLow.match(/[Ss]em(?:ana)?[\s_\-]*(\d{1,2})/);
         const _mesNomMatch = _fnLow.match(/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/);
         const _mesNumMatch = !_mesNomMatch && _fnLow.match(/\b(0?[1-9]|1[0-2])\b/);
-        _semana = _semMatch ? parseInt(_semMatch[1]) : null;
-        if (!_semana) {
-          if (_mesNomMatch || _mesNumMatch) _esMesCompleto = true;
+        if (_semRangoMatch) {
+          const [, dIniArch, mIniArch, , , anioArch] = _semRangoMatch;
+          _semana = _isoWeek(new Date(parseInt(anioArch), parseInt(mIniArch) - 1, parseInt(dIniArch)));
+          // F.Registro PG sigue siendo la fuente de verdad para mes/año;
+          // el nombre del archivo solo completa si esa columna no dio nada.
+          if (!mes) mes = parseInt(mIniArch);
+          if (!año) año = parseInt(anioArch);
+        } else {
+          _semana = _semMatch ? parseInt(_semMatch[1]) : null;
+          if (!_semana) {
+            if (_mesNomMatch || _mesNumMatch) _esMesCompleto = true;
+          }
         }
       }
 
