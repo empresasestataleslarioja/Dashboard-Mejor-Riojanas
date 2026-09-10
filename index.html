@@ -3520,6 +3520,22 @@ self.onmessage = async (e) => {
           cursor:pointer;white-space:nowrap">🔧 Asignar mes masivo</button>
       </div>
 
+      <!-- Mapa SAF → Organismo: completa la columna Organismo, vacía en los
+           archivos SIDIF de pagos, a partir de un listado de referencia
+           (Excel de una columna, filas "NNN - Nombre del organismo") -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;
+        padding:6px 10px;background:var(--s2);border:1px solid var(--bd2);border-radius:3px">
+        <span style="font-size:8px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">Organismo (por SAF):</span>
+        <span id="saf-org-estado" style="font-size:9px;font-family:var(--mono);color:var(--dim)">Sin cargar — el Organismo del detalle de transferencias queda vacío</span>
+        <label style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 10px;
+          background:rgba(71,232,255,.08);border:1px solid #47e8ff40;border-radius:2px;cursor:pointer;
+          font-size:9px;color:var(--acc);font-family:var(--mono);white-space:nowrap">
+          📥 Cargar listado SAF
+          <input type="file" id="file-saf-org" accept=".xlsx,.xls" style="display:none"
+            onchange="importSafOrganismo(this.files[0])">
+        </label>
+      </div>
+
       <!-- Panel de auditoría de transferencias -->
       <!-- Reset de emergencia -->
       <div id="panel-reset-trans" style="display:none;margin-bottom:10px;padding:12px 14px;
@@ -21328,6 +21344,8 @@ function buildTransferencias() {
   const empty   = document.getElementById('trans-empty');
   const content = document.getElementById('trans-content');
 
+  try { _renderSafOrganismoEstado(); } catch(e) {}
+
   if (!DATA.transferencias.length) {
     if (empty)   empty.style.display   = '';
     if (content) content.style.display = 'none';
@@ -24135,6 +24153,95 @@ function handleImportFromBuffer(buffer, fname) {
 
 
 
+// ═══════════════════════════════════════════════════════════
+//  MAPA SAF → ORGANISMO
+// ═══════════════════════════════════════════════════════════
+// Los archivos SIDIF de pagos no traen el nombre del organismo (solo el
+// código SAF). Este mapa es un listado de referencia aparte —
+// "Listado_SAF.xlsx" del Ministerio de Hacienda, formato de una sola
+// columna: "NNN - Nombre del organismo" (algunas filas sin espacio antes
+// del guión, y el nombre puede tener guiones propios, ej. "910 - Oblig
+// Tesoro - SAPEM") — que se carga una vez desde el módulo Importar y queda
+// guardado en el navegador para completar el Organismo automáticamente.
+DATA.saf_organismo = {}; // { '910': 'Oblig Tesoro - SAPEM', ... } — clave SAF sin ceros a la izquierda
+
+// Normaliza un código SAF (con o sin ceros a la izquierda, con o sin texto
+// alrededor) a la clave usada en DATA.saf_organismo.
+function _safKey(saf) {
+  if (saf == null) return '';
+  const n = parseInt(String(saf).replace(/\D/g, ''), 10);
+  return isNaN(n) ? '' : String(n);
+}
+
+// Organismo correspondiente a un código SAF, según el mapa cargado (o ''
+// si no hay mapa o el SAF no está en el listado).
+function _orgParaSAF(saf) {
+  const k = _safKey(saf);
+  return (k && DATA.saf_organismo[k]) || '';
+}
+
+// Completa DATA.transferencias existentes que tengan SAF pero no
+// Organismo, usando el mapa cargado. No pisa un organismo que ya venía
+// del archivo SIDIF.
+function _backfillOrganismoTransferencias() {
+  let n = 0;
+  (DATA.transferencias || []).forEach(t => {
+    if (!t.organismo && t.saf) {
+      const org = _orgParaSAF(t.saf);
+      if (org) { t.organismo = org; n++; }
+    }
+  });
+  return n;
+}
+
+function importSafOrganismo(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      const mapa = {};
+      let detectados = 0;
+      rows.forEach(r => {
+        const celda = String(r[0] || '').trim();
+        if (!celda) return;
+        // "NNN - Organismo" (el guión puede no tener espacio antes; el
+        // nombre puede contener más guiones, ej. "910 - Oblig Tesoro - SAPEM")
+        const m = celda.match(/^(\d+)\s*-\s*(.+)$/);
+        if (!m) return;
+        mapa[String(parseInt(m[1], 10))] = m[2].trim();
+        detectados++;
+      });
+      if (!detectados) {
+        alert('No se pudo reconocer el formato del archivo.\nSe espera una columna con filas tipo "300 - Min de Hac y Finan Públicas".');
+        return;
+      }
+      DATA.saf_organismo = mapa;
+      const nBackfill = _backfillOrganismoTransferencias();
+      saveDataToLocalCache();
+      try { marcarPendienteGuardar(); } catch(err) {}
+      if (typeof buildTransferencias === 'function' && currentPanel === 'transferencias') buildTransferencias();
+      _renderSafOrganismoEstado();
+      setCtrlMsg(`✓ Mapa SAF → Organismo cargado: ${detectados} organismos — ${nBackfill} transferencias completadas`);
+    } catch(err) {
+      alert('Error al leer archivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _renderSafOrganismoEstado() {
+  const el = document.getElementById('saf-org-estado');
+  if (!el) return;
+  const n = Object.keys(DATA.saf_organismo || {}).length;
+  el.textContent = n
+    ? `✓ ${n} organismos cargados`
+    : 'Sin cargar — el Organismo del detalle de transferencias queda vacío';
+  el.style.color = n ? '#1a9e68' : 'var(--dim)';
+}
+
 // ── Parser nativo para archivos SIDIF de transferencias ─────────
 // Detecta archivos tipo "Pagos_SAPEM_XXX.xls/xlsx" con columnas SIDIF
 // Lee TODAS las pestañas que tengan el formato correcto
@@ -24153,7 +24260,13 @@ function tryParseSIDIF(wb, fname) {
     };
 
     const iSAF  = idx(['etd. emisora op','etd. emisora pg','etd','saf']);
-    const iOrg  = idx(['denominación saf','organismo','saf']);
+    // Nota: "saf" NO debe ser término de "iOrg" — coincide con la propia
+    // columna de código SAF (ambas empiezan con "saf") cuando el archivo
+    // no trae una columna de organismo dedicada, haciendo que el código
+    // numérico del SAF se lea como si fuera el nombre del organismo. En
+    // ese caso preferimos dejar iOrg=-1 y completar el organismo con el
+    // mapa SAF→Organismo (ver _orgParaSAF) en vez de inventar un nombre.
+    const iOrg  = idx(['denominación saf','organismo']);
     const iBen  = idx(['denominación beneficiario','beneficiario','benef']);
     const iFF   = idx(['f.f.','ff ']);
     const iCGto = idx(['cgto','nro. sidif','nro sidif','sidif']);
@@ -24186,7 +24299,7 @@ function tryParseSIDIF(wb, fname) {
       const observ = String(row[iObs]||'').trim();
       const cgto   = String(iCGto>=0 ? (row[iCGto]||'') : '').trim().toUpperCase();
       const saf    = String(iSAF>=0 ? (row[iSAF]||'') : '').trim();
-      const org    = String(iOrg>=0 ? (row[iOrg]||'') : '').trim();
+      const org    = String(iOrg>=0 ? (row[iOrg]||'') : '').trim() || _orgParaSAF(saf);
       const ff     = String(iFF>=0  ? (row[iFF]||'')  : '').trim();
       const suel   = String(iSuel>=0? (row[iSuel]||''):'').trim();
       const nroSIDIF = iSIDIF>=0 ? String(row[iSIDIF]||'').trim() : '';
@@ -36979,6 +37092,7 @@ function saveDataToLocalCache() {
       transferencias: DATA.transferencias || [],
       notas:         DATA.notas || {},
       presupuesto:   DATA.presupuesto || {},
+      saf_organismo: DATA.saf_organismo || {},
       importHistory: DATA.importHistory || [],
       _balances:     Object.values(_balances || {}),
       _rubros:       rubros || {},
@@ -37708,6 +37822,8 @@ setTimeout(() => {
 
   // Cargar datos locales primero para mostrar algo de inmediato
   loadDataFromLocalCache();
+  // Completar Organismo en transferencias existentes con el mapa SAF ya cargado
+  try { _backfillOrganismoTransferencias(); _renderSafOrganismoEstado(); } catch(e) {}
   arrancar();
 
   // Si Sheets está configurado, sincronizar automáticamente al abrir
