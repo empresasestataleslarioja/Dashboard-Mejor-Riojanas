@@ -3853,6 +3853,28 @@ self.onmessage = async (e) => {
           <div style="overflow-x:auto"><table class="tbl" id="tbl-trans-cruce-pres" style="font-size:9.5px"></table></div>
         </div>
 
+        <!-- Transferencias semanales por mes -->
+        <div class="rowfull card" style="margin-top:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Transferencias semanales por mes</span>
+            <span class="card-hd-unit">apertura por semana ISO</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Mes:</label>
+            <select id="sel-trans-sem-mes" onchange="buildTransSemanal()"
+              style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+              cursor:pointer;outline:none"></select>
+          </div>
+          <div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-bottom:8px;padding:6px 8px;background:rgba(232,255,71,.05);border:1px solid var(--y21);border-radius:3px">
+            ℹ La apertura semanal requiere la fecha exacta de cada pago (día de registro,
+            columna "Fecha" del detalle). Las transferencias cargadas sin esa fecha
+            (mes completo o datos de antes de esta función) se agrupan aparte, sin inventarles una semana.
+          </div>
+          <canvas id="ch-trans-semanal" style="max-height:200px"></canvas>
+          <div style="overflow-x:auto;margin-top:10px"><table class="tbl" id="tbl-trans-semanal" style="font-size:9.5px"></table></div>
+        </div>
+
         <!-- tabla detalle -->
         <div class="rowfull card" style="margin-top:12px;overflow-x:auto">
           <div class="card-hd" style="cursor:pointer" onclick="toggleTransTabla()">
@@ -20307,13 +20329,14 @@ function toggleTransTabla() {
 function renderTransTabla(rows) {
   const tbl = document.getElementById('tbl-trans');
   if (!tbl) return;
-  const COLS = ['SAF','Organismo','Beneficiario','FF','CGto','Observación','Fecha','Importe','Categoría','Archivo'];
+  const COLS = ['SAF','Organismo','Beneficiario','CGto','Observación','Fecha','Importe','Categoría'];
   // Columnas filtrables: índice → propiedad del objeto transferencia
   // (la columna "Fecha" fusiona mes+año; el filtro rápido de esta columna
-  // opera sobre el año — el mes tiene su propio filtro global en la barra)
+  // opera sobre el año — el mes tiene su propio filtro global en la barra.
+  // FF y Archivo se sacaron de la tabla: no aportaban información útil.)
   const FILTER_COLS = {
-    0:'saf', 1:'organismo', 2:'beneficiario', 4:'cgto',
-    5:'observacion', 6:'año', 8:'categoria', 9:'_archivo'
+    0:'saf', 1:'organismo', 2:'beneficiario', 3:'cgto',
+    4:'observacion', 5:'año', 7:'categoria'
   };
 
   // Construir valores únicos por columna para los dropdowns
@@ -20368,7 +20391,6 @@ function renderTransTabla(rows) {
       const sinObs   = !t.observacion;
       const incompleto = sinAño || sinMes || sinBen || sinImp;
       const rowBg    = incompleto ? 'rgba(255,140,71,.07)' : '';
-      const archivo  = (t._archivo || '').replace(/^.*[\\/]/, '').replace(/\.xls[x]?$/i,'');
 
       return `<tr id="trans-row-${realIdx}"
         style="transition:background .15s;cursor:default;background:${rowBg}"
@@ -20379,7 +20401,6 @@ function renderTransTabla(rows) {
           title="${(t.organismo||'').replace(/"/g,"'")}">${(t.organismo||'—').slice(0,16)}</td>
         <td style="padding:3px 6px;font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${sinBen?'#ff8c47':''}"
           title="${(t.beneficiario||'').replace(/"/g,"'")}">${t.beneficiario||'<span style=\"color:#ff8c47;font-size:8px\">sin beneficiario</span>'}</td>
-        <td style="padding:3px 4px;color:var(--dim);text-align:center">${t.ff||''}</td>
         <td style="padding:3px 4px;font-family:monospace;text-align:center">${t.cgto||''}</td>
         <td style="padding:2px 4px;max-width:190px" title="${(t.observacion||'').replace(/"/g,"'")}">
           <span onclick="editarCeldaTrans(this,${realIdx},'observacion')"
@@ -20438,9 +20459,6 @@ function renderTransTabla(rows) {
             </select>
           </div>
         </td>
-        <td style="padding:3px 6px;font-size:8.5px;color:var(--dim);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis"
-          title="${t._archivo||''}"
-        >${archivo||'—'}</td>
       </tr>`;
     }).join('')}
     </tbody>`;
@@ -20703,8 +20721,8 @@ function abrirDropTrans(event, colIdx) {
 
   const btn  = event.currentTarget;
   const rect = btn.getBoundingClientRect();
-  const PROP_MAP = { 0:'saf', 1:'organismo', 2:'beneficiario', 4:'cgto',
-                     5:'observacion', 6:'año', 8:'categoria', 9:'_archivo' };
+  const PROP_MAP = { 0:'saf', 1:'organismo', 2:'beneficiario', 3:'cgto',
+                     4:'observacion', 5:'año', 7:'categoria' };
   const prop = PROP_MAP[colIdx];
   if (!prop) return;
 
@@ -20747,7 +20765,7 @@ function abrirDropTrans(event, colIdx) {
     <div style="padding:8px 12px;border-bottom:1px solid var(--bd);
       display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--acc)">
-        Filtrar: ${['SAF','Organismo','Beneficiario','','CGto','Observación','Fecha (año)','','Categoría','Archivo'][colIdx]||''}
+        Filtrar: ${['SAF','Organismo','Beneficiario','CGto','Observación','Fecha (año)','','Categoría'][colIdx]||''}
       </span>
       <button onclick="cerrarDropsTrans()"
         style="background:none;border:none;color:var(--dim);cursor:pointer;
@@ -20854,8 +20872,8 @@ function cerrarDropsTrans() {
 
 // Aplicar todos los filtros de columna al DOM de la tabla
 function aplicarFiltrosColumnasTrans() {
-  const PROP_MAP = {0:'saf',1:'organismo',2:'beneficiario',4:'cgto',
-                   5:'observacion',6:'año',8:'categoria',9:'_archivo'};
+  const PROP_MAP = {0:'saf',1:'organismo',2:'beneficiario',3:'cgto',
+                   4:'observacion',5:'año',7:'categoria'};
   const tbody = document.querySelector('#tbl-trans tbody');
   if (!tbody) return;
 
@@ -20892,8 +20910,8 @@ function aplicarFiltrosColumnasTrans() {
   if (resEl) {
     const total = tbody.querySelectorAll('tr').length;
     const activos = Object.keys(_transColFiltros).length;
-    const COLS_N = {0:'SAF',1:'Organismo',2:'Beneficiario',4:'CGto',
-                   5:'Observación',6:'Fecha',8:'Categoría',9:'Archivo'};
+    const COLS_N = {0:'SAF',1:'Organismo',2:'Beneficiario',3:'CGto',
+                   4:'Observación',5:'Fecha',7:'Categoría'};
     resEl.textContent = activos > 0
       ? `Filtros activos (${Object.keys(_transColFiltros).map(c=>COLS_N[c]).join(', ')}) — ${visible} de ${total} registros`
       : `${total} registros`;
@@ -21537,6 +21555,9 @@ function buildTransferencias() {
   // Cruce Transferencias (SIDIF) vs Presupuesto cargado
   buildTransCrucePresupuesto();
 
+  // Apertura semanal por mes
+  buildTransSemanal();
+
   // Mantener tabla abierta si ya estaba visible
   if (document.getElementById('trans-tabla-wrap')?.style.display !== 'none') {
     renderTransTabla(rows);
@@ -21637,6 +21658,105 @@ function buildTransCrucePresupuesto() {
       <td class="r">${r.pct!=null?r.pct.toFixed(2)+'%':'—'}</td>
     </tr>`;
   }).join('')}</tbody>`;
+}
+
+// ── Apertura semanal dentro de un mes (usa la fecha exacta de pago, día de
+// registro SIDIF, ya guardada como t.dia/t.semana) ─────────────────────────
+function buildTransSemanal() {
+  const sel   = document.getElementById('sel-trans-sem-mes');
+  const tbl   = document.getElementById('tbl-trans-semanal');
+  if (!sel || !tbl) return;
+
+  // Meses con al menos una transferencia con año+mes conocidos
+  const clavesMes = [...new Set(
+    (DATA.transferencias||[])
+      .filter(t => t.año && t.mes)
+      .map(t => `${t.año}-${String(t.mes).padStart(2,'0')}`)
+  )].sort().reverse(); // más reciente primero
+
+  if (!clavesMes.length) {
+    sel.innerHTML = '';
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">No hay transferencias con mes y año asignados.</td></tr>';
+    return;
+  }
+
+  const valorActual = clavesMes.includes(sel.value) ? sel.value : clavesMes[0];
+  sel.innerHTML = clavesMes.map(k => {
+    const [y, m] = k.split('-');
+    return `<option value="${k}" ${k===valorActual?'selected':''}>${TRANS_MESES[parseInt(m)]||m} ${y}</option>`;
+  }).join('');
+
+  const [añoSel, mesSel] = valorActual.split('-').map(Number);
+  const rowsMes = (DATA.transferencias||[]).filter(t => parseInt(t.año)===añoSel && parseInt(t.mes)===mesSel);
+
+  // Agrupar por semana ISO — las transferencias sin `semana` (carga mensual o
+  // datos previos a esta función, sin fecha exacta) se agrupan aparte, nunca
+  // se les inventa una semana.
+  const porSemana = {};
+  let sinSemanaTotal = 0, sinSemanaCant = 0;
+  rowsMes.forEach(t => {
+    if (t.semana) {
+      const k = parseInt(t.semana);
+      if (!porSemana[k]) porSemana[k] = { total: 0, cant: 0 };
+      porSemana[k].total += (t.importe || 0);
+      porSemana[k].cant++;
+    } else {
+      sinSemanaTotal += (t.importe || 0);
+      sinSemanaCant++;
+    }
+  });
+  const semanasOrdenadas = Object.keys(porSemana).map(Number).sort((a,b) => a-b);
+
+  // Rango de fechas (lunes-viernes) de una semana ISO
+  const _lunesISO = (anio, sem) => {
+    const jan4 = new Date(anio, 0, 4);
+    const lunes = new Date(jan4);
+    lunes.setDate(jan4.getDate() - (jan4.getDay() || 7) + 1 + (sem - 1) * 7);
+    return lunes;
+  };
+  const _fmtCorto = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+  const _rango = sem => {
+    const ini = _lunesISO(añoSel, sem);
+    const fin = new Date(ini); fin.setDate(fin.getDate()+4);
+    return `${_fmtCorto(ini)}–${_fmtCorto(fin)}`;
+  };
+
+  const labels = semanasOrdenadas.map(s => `Sem ${s} (${_rango(s)})`);
+  const data   = semanasOrdenadas.map(s => porSemana[s].total / 1e6);
+  const colors = semanasOrdenadas.map(() => '#47e8ff');
+  if (sinSemanaCant) { labels.push('Sin fecha exacta'); data.push(sinSemanaTotal / 1e6); colors.push('#94a3b8'); }
+
+  if (document.getElementById('ch-trans-semanal')) {
+    mkChart('ch-trans-semanal', 'bar', {
+      labels,
+      datasets: [{ label: 'Total transferido', data, backgroundColor: colors, borderRadius: 4 }]
+    }, {
+      plugins: { legend: { display:false },
+        tooltip: { callbacks: { label: ctx => ' $' + (ctx.raw*1e6).toLocaleString('es-AR') } } },
+      scales: {
+        y: { ticks: { color:'var(--dim)', font:{size:9}, callback: v => '$'+v+'M' }, grid:{color:'rgba(255,255,255,.05)'} },
+        x: { ticks: { color:'var(--dim)', font:{size:8} }, grid:{display:false} }
+      }
+    });
+  }
+
+  const totalMes = rowsMes.reduce((s,t) => s+(t.importe||0), 0);
+  const filas = semanasOrdenadas.map(s => ({
+    lbl: `Semana ${s}`, rango: _rango(s), total: porSemana[s].total, cant: porSemana[s].cant,
+  }));
+  if (sinSemanaCant) filas.push({ lbl:'Sin fecha exacta', rango:'mes completo', total:sinSemanaTotal, cant:sinSemanaCant });
+
+  if (!filas.length) {
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias para el mes seleccionado.</td></tr>';
+    return;
+  }
+  tbl.innerHTML = `<thead><tr>
+    <th>Semana</th><th>Rango</th><th class="r">Cant.</th><th class="r">Total</th><th class="r">% del mes</th>
+  </tr></thead><tbody>${filas.map(f => `<tr>
+    <td>${f.lbl}</td><td>${f.rango}</td><td class="r">${f.cant}</td>
+    <td class="r">${fvFull(f.total)}</td>
+    <td class="r">${totalMes>0?(f.total/totalMes*100).toFixed(1)+'%':'—'}</td>
+  </tr>`).join('')}</tbody>`;
 }
 
 const BUILDERS = { resumen:buildResumen, facturacion:buildFacturacion, resultado:buildResultado, personal:buildPersonal, portafolio:buildPortafolio, inflacion:buildInflacion, empresa:buildEmpresa, comparar:buildComparar, rubros:buildRubros, transferencias:buildTransferencias, importar:()=>{}, sostenibilidad:buildSostenibilidad, heatmap:buildHeatmap, presupuesto:buildPresupuesto, balances:buildBalances, flujos:buildFlujos };
