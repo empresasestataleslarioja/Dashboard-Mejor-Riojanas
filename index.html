@@ -18300,9 +18300,14 @@ function _informeEjecutivoRender(emp) {
   // Transferencias de esta empresa
   const transEmp = _transEmpresa(emp);
   const transXanio = {};
+  const transMesesXanio = {}; // { año: Set(meses con al menos una transferencia) }
   transEmp.forEach(t => {
     const y = String(t.año);
     transXanio[y] = (transXanio[y] || 0) + (t.importe || 0);
+    if (t.mes) {
+      if (!transMesesXanio[y]) transMesesXanio[y] = new Set();
+      transMesesXanio[y].add(parseInt(t.mes));
+    }
   });
   const transOrgs = {};
   transEmp.forEach(t => {
@@ -18766,23 +18771,6 @@ function _informeEjecutivoRender(emp) {
   // ── Sección 5: Flujos de fondos ───────────────────────────────────────────────
   let htmlFlujos = '';
   if (flujos.length) {
-    // Detalle de rubros del flujo más reciente
-    const ultFlujo = flujos[flujos.length - 1];
-    const rubrosUlt = (ultFlujo.rubros || []).filter(r => r.actual != null || r.anterior != null);
-    const detalleRubros = rubrosUlt.length ? `
-    <h3 class="ie-h3">Detalle de rubros — ${ultFlujo.periodo} (${ultFlujo.tipo || ''})</h3>
-    <table class="ie-tabla">
-      <thead><tr><th>Concepto</th><th style="text-align:right">Actual</th><th style="text-align:right">Anterior</th><th style="text-align:right">Var. %</th></tr></thead>
-      <tbody>${rubrosUlt.map(r => `
-        <tr>
-          <td style="${['ingreso','total'].includes(r.tipo)?'font-weight:600':'padding-left:12px;color:#555'}">${r.label||r.key}</td>
-          <td style="text-align:right;color:${r.tipo==='egreso'&&r.actual>0?'#c0392b':'inherit'}">${m(r.actual)}</td>
-          <td style="text-align:right;color:#888">${m(r.anterior)}</td>
-          <td style="text-align:right;color:${r.var_pct!=null?(r.var_pct>0?'#1a7a4a':'#c0392b'):'#888'}">${r.var_pct!=null?pct(r.var_pct):'—'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>` : '';
-
     htmlFlujos = `
     <table class="ie-tabla">
       <thead><tr><th>Período</th><th>Tipo</th><th style="text-align:right">Ingresos</th><th style="text-align:right">Egresos</th><th style="text-align:right">Necesidad fondos</th><th style="text-align:right">IPC acum.</th></tr></thead>
@@ -18798,8 +18786,7 @@ function _informeEjecutivoRender(emp) {
         </tr>`;
       }).join('')}
       </tbody>
-    </table>
-    ${detalleRubros}`;
+    </table>`;
   }
 
   // ── Sección 6: Transferencias ─────────────────────────────────────────────────
@@ -18813,16 +18800,23 @@ function _informeEjecutivoRender(emp) {
       <div>
         <h3 class="ie-h3">Transferencias por año</h3>
         <table class="ie-tabla">
-          <thead><tr><th>Año</th><th style="text-align:right">Importe</th><th style="text-align:right">% s/fact.</th></tr></thead>
+          <thead><tr><th>Año</th><th style="text-align:right">Importe</th><th style="text-align:right">Promedio mensual</th><th style="text-align:right">% s/fact.</th></tr></thead>
           <tbody>${Object.entries(transXanio).sort().map(([y,t]) => {
             const fY = fact[y];
+            // Año cerrado ÷12, año en curso ÷ meses de calendario ya
+            // transcurridos — mismo criterio que el resto del dashboard
+            // (buildTransPromedioMensual / buildTransferenciasEmpresa).
+            const hoy = new Date();
+            const mesesDivisor = (parseInt(y) === hoy.getFullYear()) ? (hoy.getMonth() + 1) : 12;
+            const promedioMensual = t / mesesDivisor;
             return `<tr>
               <td>${y}</td>
               <td style="text-align:right;color:#7d3c98">${m(t)}</td>
+              <td style="text-align:right;color:#7d3c98">${m(promedioMensual)}</td>
               <td style="text-align:right;color:#888">${(fY && fY>0) ? p(t/fY) : '—'}</td>
             </tr>`;
           }).join('')}
-          <tr class="ie-tr-bold"><td>TOTAL PERÍODO</td><td style="text-align:right;color:#7d3c98">${m(totalTrans)}</td><td></td></tr>
+          <tr class="ie-tr-bold"><td>TOTAL PERÍODO</td><td style="text-align:right;color:#7d3c98">${m(totalTrans)}</td><td></td><td></td></tr>
           </tbody>
         </table>
       </div>
