@@ -25840,6 +25840,138 @@ function _aplicarVentasGastos() {
   try { buildFacturacion(); buildResultado(); rebuildActive(); } catch(e) {}
 }
 
+// ── Parser: ER provisorio con una hoja POR MES (nombre de hoja "MM-AA") ──
+// Detecta archivos tipo "Estado_de_Resultados_012026_a_062026_BR.xlsx" donde
+// cada mes es una hoja aparte (ej. "01-26", "02-26", …), y cada hoja es un ER
+// de dos columnas sin fila de encabezado: columna A = concepto, columna B =
+// monto (sin desglose de cuentas, sin detalle de meses en columnas). Distinto
+// de tryParseERColumnasMeses (una sola hoja, meses en columnas) y de los
+// formatos "libro mayor" (que sí traen encabezado CUENTAS/CUENTA).
+//
+// IMPORTANTE: el mes/año se toma del NOMBRE de la hoja, no del título de la
+// fila 1 ("ESTADO DE RESULTADOS <MES> <AÑO>") — en archivos reales se vio que
+// el texto del título puede tener un año mal tipeado (copiado de otro mes)
+// mientras el nombre de la pestaña es correcto; confiar en el título habría
+// cargado esos meses con el año equivocado.
+function tryParseERHojasMensuales(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+
+  // Clasificación de rubros — mismos criterios generales que el resto de
+  // los parsers de ER de este dashboard (ver tryParseERColumnasMeses).
+  const _clasif = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
+    if (!t) return null;
+    if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS?|INGRESOS\s+TOTALES?/.test(t)) return 'ventas';
+    if (_esIngExcluido(t)) return 'otrosIngresos';
+    if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+    if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
+    if (/COSTO\s+DE\s+VENTAS?/.test(t)) return 'costo';
+    if (/RESULTADO\s+OPERATIVO|UTILIDAD\s+OPERATIVA|GANANCIA\s+OPERATIVA/.test(t)) return 'resOperativo';
+    if (/ANTES\s+DE\s+IMPUESTOS?/.test(t)) return 'resAntesImp';
+    if (/RTADO\.?\s+NETO|RESULTADO\s+NETO|RESULTADO\s+DEL\s+EJERCICIO|UTILIDAD\s+NETA/.test(t)) return 'resEjercicio';
+    if (/IMPUESTO\s+A\s+LAS?\s+GANANCIAS?/.test(t)) return 'impuesto';
+    if (/RECPAM/.test(t)) return 'resFinanciero';
+    if (/GASTOS?\s+FINANC|INGRESOS?\s+FINANC/.test(t)) return 'resFinanciero';
+    if (/GASTOS?\s+(DE\s+)?ADMIN/.test(t)) return 'gastoAdm';
+    if (/GASTOS?\s+FISCAL|TASA|CONTRIBUC/.test(t)) return 'gastoAdm';
+    if (/GASTOS?\s+(DE\s+)?OPERACION|GASTOS?\s+(DE\s+)?VENTA/.test(t)) return 'gastoCom';
+    if (/GASTOS?\s+BANCARIO/.test(t)) return 'gastoAdm';
+    if (/OTROS\s+EGRESO/.test(t)) return 'gastoAdm';
+    if (/AMORTIZAC/.test(t)) return 'gastoAdm';
+    return null;
+  };
+
+  // Hojas cuyo NOMBRE es "MM-AA" o "MM-AAAA" — una por mes
+  const hojasMes = [];
+  for (const sn of wb.SheetNames) {
+    const m = sn.trim().match(/^(\d{1,2})[\-\/](\d{2}|\d{4})$/);
+    if (!m) continue;
+    const mes = parseInt(m[1]);
+    let anio = parseInt(m[2]);
+    if (mes < 1 || mes > 12) continue;
+    if (anio < 100) anio += 2000;
+    hojasMes.push({ sn, mes, anio });
+  }
+  if (!hojasMes.length) return null;
+
+  // Por cada hoja: leer pares concepto/monto en columnas A/B. Si alguna fila
+  // tiene datos también en la columna C, no es este formato (son meses en
+  // columnas) — se descarta el archivo completo.
+  const filasPorClave = {}; // { "AAAA-M": [{lbl, conceptoStd, valor}] }
+  for (const { sn, mes, anio } of hojasMes) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+    if (rows.length < 5) continue;
+    if (rows.some(r => r[2] != null && _num(r[2]) != null)) return null;
+
+    const filas = [];
+    let tieneVentas = false, tieneResultadoFinal = false;
+    rows.forEach(row => {
+      const lblRaw = row[0];
+      if (lblRaw == null || String(lblRaw).trim() === '') return;
+      const lbl = String(lblRaw).trim();
+      if (/^ESTADO\s+DE\s+RESULTADOS/i.test(lbl)) return; // título de la hoja
+      if (/^INGRESOS$/i.test(lbl)) return; // encabezado de sección, sin monto propio
+      const val = _num(row[1]);
+      if (val == null) return;
+      const cpt = _clasif(lbl);
+      if (!cpt) return;
+      if (cpt === 'ventas') tieneVentas = true;
+      if (cpt === 'resEjercicio' || cpt === 'resOperativo') tieneResultadoFinal = true;
+      filas.push({ lbl, conceptoStd: cpt, valor: val });
+    });
+    if (!tieneVentas || !tieneResultadoFinal || filas.length < 3) continue;
+    filasPorClave[`${anio}-${mes}`] = filas;
+  }
+
+  const claves = Object.keys(filasPorClave);
+  if (!claves.length) return null;
+
+  // Todas las hojas válidas deben pertenecer al mismo año — si mezclan años
+  // no corresponde asumir nada, se descarta (no es un caso contemplado).
+  const anios = [...new Set(claves.map(k => k.split('-')[0]))];
+  if (anios.length !== 1) return null;
+  const anio = anios[0];
+
+  // Unificar en un renglón por concepto (mismo lbl+conceptoStd), con un
+  // valor por mes — mismo formato de salida que tryParseERColumnasMeses,
+  // reutiliza su misma UI de vista previa y aplicación.
+  const conceptosOrden = [];
+  const vistos = new Set();
+  claves.forEach(k => filasPorClave[k].forEach(f => {
+    const key = f.conceptoStd + '|' + f.lbl;
+    if (vistos.has(key)) return;
+    vistos.add(key);
+    conceptosOrden.push({ lbl: f.lbl, conceptoStd: f.conceptoStd });
+  }));
+
+  const filasFinal = conceptosOrden.map(({ lbl, conceptoStd }) => {
+    const valores = {};
+    claves.forEach(k => {
+      const mesNum = parseInt(k.split('-')[1]);
+      const match = filasPorClave[k].find(f => f.lbl === lbl && f.conceptoStd === conceptoStd);
+      if (match) valores[mesNum] = match.valor;
+    });
+    return { lbl, conceptoStd, valores };
+  });
+
+  let empresa = fname.replace(/\.xlsx?$/i,'')
+    .replace(/_/g,' ')
+    .replace(/\b(ESTADO\s+DE\s+RESULTADOS?|A|\d{6}|\d{4})\b/gi,'')
+    .replace(/\s+/g,' ').trim().toUpperCase();
+  if (!empresa) empresa = 'SIN NOMBRE';
+
+  return { empresa, anio, filas: filasFinal, hoja: hojasMes.map(h => h.sn).join(', '), mesesCount: claves.length };
+}
+
 // ── Parser de Estados de Resultados matriciales (formato origen del dashboard) ──
 // Detecta hoja RESUMEN con empresas en columnas y conceptos en filas.
 // Extrae Ventas Netas (facturación) y Resultado Operativo por empresa.
@@ -26844,6 +26976,15 @@ function handleImportWorkbook(wb, fname) {
   if (vgResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewVentasGastos(vgResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER provisorio con una hoja por mes (nombre "MM-AA") ──
+  const erHojasMesResult = tryParseERHojasMensuales(wb, fname);
+  console.log('[LR] tryParseERHojasMensuales:', erHojasMesResult ? erHojasMesResult.empresa+' '+erHojasMesResult.filas.length+' conceptos, '+erHojasMesResult.mesesCount+' meses' : 'null');
+  if (erHojasMesResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erHojasMesResult, fname);
     return;
   }
 
