@@ -18576,13 +18576,17 @@ function _informeEjecutivoRender(emp) {
   const erYears = Object.keys(erEmp).sort();
   let htmlERDet = '';
   if (erYears.length) {
-    const rubrosER = ['ventas','costo','utilBruta','gastoAdm','gastoCom','gastoOper','otrosIngresos','resOperativo','resFinanciero','impuesto','resEjercicio'];
+    // Mismo universo de conceptos estándar que usa el resto del dashboard
+    // para ER mensual (ver CONCEPTOS_STD en buildEvolucionMensual) — antes
+    // faltaban acá 'otrosGastos' y 'resAntesImp', así que una empresa con
+    // esos rubros cargados los perdía silenciosamente en este cuadro.
+    const rubrosER = ['ventas','costo','utilBruta','gastoAdm','gastoCom','gastoOper','otrosIngresos','otrosGastos','resOperativo','resFinanciero','resAntesImp','impuesto','resEjercicio'];
     const lblER = {
       ventas:'Ventas / Ingresos', costo:'Costo de ventas', utilBruta:'UTILIDAD BRUTA',
       gastoAdm:'G. Administración', gastoCom:'G. Comercialización', gastoOper:'G. Operativos',
-      otrosIngresos:'Otros ingresos / egresos', resOperativo:'RESULTADO OPERATIVO',
-      resFinanciero:'Resultado financiero', impuesto:'Impuesto a las ganancias',
-      resEjercicio:'RESULTADO DEL EJERCICIO'
+      otrosIngresos:'Otros ingresos', otrosGastos:'Otros egresos', resOperativo:'RESULTADO OPERATIVO',
+      resFinanciero:'Resultado financiero', resAntesImp:'RESULTADO ANTES DE IMP.',
+      impuesto:'Impuesto a las ganancias', resEjercicio:'RESULTADO DEL EJERCICIO'
     };
     const calcAnual = (yr, rb) => {
       const filas = (erEmp[yr] || {}).filas || [];
@@ -18591,8 +18595,8 @@ function _informeEjecutivoRender(emp) {
       const tot = Object.values(fila.valores || {}).reduce((s, v) => s + (v || 0), 0);
       return tot === 0 ? null : tot;
     };
-    const isBold   = rb => ['utilBruta','resOperativo','resEjercicio'].includes(rb);
-    const isSep    = rb => ['utilBruta','resOperativo','resFinanciero'].includes(rb);
+    const isBold   = rb => ['utilBruta','resOperativo','resAntesImp','resEjercicio'].includes(rb);
+    const isSep    = rb => ['utilBruta','resOperativo','resFinanciero','resAntesImp'].includes(rb);
     const rowsER   = rubrosER.filter(rb => erYears.some(y => calcAnual(y, rb) != null));
     if (rowsER.length) {
       // Agregar fila de margen operativo y neto si hay ventas
@@ -18657,36 +18661,31 @@ function _informeEjecutivoRender(emp) {
           ${rowBal('PATRIMONIO NETO', pn, true)}
         </tbody>
       </table>
-    </div>
+    </div>`;
 
-    <h3 class="ie-h3">Ratios Financieros — ${ub.periodo}</h3>
-    <table class="ie-tabla">
-      <thead><tr><th>Categoría</th><th>Indicador</th><th style="text-align:right">Valor</th><th>Referencia</th><th style="text-align:center">Estado</th></tr></thead>
-      <tbody>
-        <tr class="ie-tr-cat"><td colspan="5">LIQUIDEZ</td></tr>
-        <tr><td></td><td>Liquidez corriente</td><td style="text-align:right">${r2(liq.liquidez_corriente)}</td><td>≥ 1.0</td><td style="text-align:center">${sem(liq.liquidez_corriente, v=>v>=1.5, v=>v>=1)}</td></tr>
-        <tr><td></td><td>Liquidez seca</td>
-          <td style="text-align:right">${liq.liquidez_seca != null ? r2(liq.liquidez_seca) : '<em style="color:#aaa;font-size:8pt">sin inventarios</em>'}</td>
-          <td>≥ 1.0</td>
-          <td style="text-align:center">${liq.liquidez_seca != null ? sem(liq.liquidez_seca, v=>v>=1, v=>v>=0.7) : '<span style="color:#aaa">—</span>'}</td></tr>
-        <tr><td></td><td>Capital de trabajo</td><td style="text-align:right">${m(liq.capital_trabajo)}</td><td>&gt; 0</td><td style="text-align:center">${sem(liq.capital_trabajo, v=>v>0, v=>v===0)}</td></tr>
-        <tr class="ie-tr-cat"><td colspan="5">SOLVENCIA</td></tr>
-        <tr><td></td><td>Endeudamiento</td><td style="text-align:right">${p(sol.razon_endeudamiento)}</td><td>&lt; 60%</td><td style="text-align:center">${sem(sol.razon_endeudamiento, v=>v<0.4, v=>v<0.6)}</td></tr>
-        <tr><td></td><td>Deuda / Patrimonio</td><td style="text-align:right">${r2(sol.deuda_patrimonio)}</td><td>&lt; 1.0</td><td style="text-align:center">${sem(sol.deuda_patrimonio, v=>v<0.5, v=>v<1)}</td></tr>
-        ${sol.cobertura_intereses != null ? `<tr><td></td><td>Cobertura de intereses</td><td style="text-align:right">${r2(sol.cobertura_intereses)}x</td><td>&gt; 1.5x</td><td style="text-align:center">${sem(sol.cobertura_intereses, v=>v>=2, v=>v>=1.5)}</td></tr>` : ''}
-        <tr class="ie-tr-cat"><td colspan="5">RENTABILIDAD</td></tr>
-        <tr><td></td><td>ROE</td><td style="text-align:right">${p(ren.roe)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.roe, v=>v>0.08, v=>v>0)}</td></tr>
-        <tr><td></td><td>ROA</td><td style="text-align:right">${p(ren.roa)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.roa, v=>v>0.05, v=>v>0)}</td></tr>
-        <tr><td></td><td>Margen neto</td><td style="text-align:right">${p(ren.margen_neto)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.margen_neto, v=>v>0.05, v=>v>0)}</td></tr>
-        <tr><td></td><td>Margen operativo</td><td style="text-align:right">${p(ren.margen_operativo)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.margen_operativo, v=>v>0.05, v=>v>0)}</td></tr>
-        ${ren.margen_bruto != null ? `<tr><td></td><td>Margen bruto</td><td style="text-align:right">${p(ren.margen_bruto)}</td><td>&gt; 0%</td><td style="text-align:center">${sem(ren.margen_bruto, v=>v>0.15, v=>v>0)}</td></tr>` : ''}
-        <tr class="ie-tr-cat"><td colspan="5">EFICIENCIA</td></tr>
-        <tr><td></td><td>Rotación activos</td><td style="text-align:right">${r2(efi.rotacion_activos)}</td><td>&gt; 0.5</td><td style="text-align:center">${sem(efi.rotacion_activos, v=>v>=1, v=>v>=0.5)}</td></tr>
-        ${efi.dias_cobro != null ? `<tr><td></td><td>Días de cobro</td><td style="text-align:right">${dd(efi.dias_cobro)}</td><td>&lt; 60 días</td><td style="text-align:center">${sem(efi.dias_cobro, v=>v<30, v=>v<60)}</td></tr>` : ''}
-        ${efi.dias_pago  != null ? `<tr><td></td><td>Días de pago</td><td style="text-align:right">${dd(efi.dias_pago)}</td><td>&gt; 20 días</td><td style="text-align:center">${sem(efi.dias_pago, v=>v>=30, v=>v>=20)}</td></tr>` : ''}
-        ${efi.rotacion_inventarios != null ? `<tr><td></td><td>Rotación inventarios</td><td style="text-align:right">${r2(efi.rotacion_inventarios)}</td><td>&gt; 1.0</td><td style="text-align:center">${sem(efi.rotacion_inventarios, v=>v>=3, v=>v>=1)}</td></tr>` : ''}
-      </tbody>
-    </table>`;
+    // Ratios complementarios: solo los que el Diagnóstico General NO muestra
+    // (Liquidez corriente, Capital de trabajo, Endeudamiento, Deuda/Patrimonio,
+    // ROE, ROA, Margen neto, Margen operativo y Rotación de activos ya están
+    // ahí, con semáforo y tendencia histórica — no se repiten acá).
+    const ratiosComp = [
+      liq.liquidez_seca != null && { lbl:'Liquidez seca', val:r2(liq.liquidez_seca), ref:'≥ 1.0', est:sem(liq.liquidez_seca, v=>v>=1, v=>v>=0.7) },
+      sol.cobertura_intereses != null && { lbl:'Cobertura de intereses', val:r2(sol.cobertura_intereses)+'x', ref:'> 1.5x', est:sem(sol.cobertura_intereses, v=>v>=2, v=>v>=1.5) },
+      ren.margen_bruto != null && { lbl:'Margen bruto', val:p(ren.margen_bruto), ref:'> 0%', est:sem(ren.margen_bruto, v=>v>0.15, v=>v>0) },
+      efi.dias_cobro != null && { lbl:'Días de cobro', val:dd(efi.dias_cobro), ref:'< 60 días', est:sem(efi.dias_cobro, v=>v<30, v=>v<60) },
+      efi.dias_pago != null && { lbl:'Días de pago', val:dd(efi.dias_pago), ref:'> 20 días', est:sem(efi.dias_pago, v=>v>=30, v=>v>=20) },
+      efi.rotacion_inventarios != null && { lbl:'Rotación inventarios', val:r2(efi.rotacion_inventarios), ref:'> 1.0', est:sem(efi.rotacion_inventarios, v=>v>=3, v=>v>=1) },
+    ].filter(Boolean);
+
+    if (ratiosComp.length) {
+      htmlBal += `
+      <h3 class="ie-h3">Ratios complementarios — ${ub.periodo} <span style="font-weight:400;color:#888;font-size:8pt">(liquidez, solvencia, rentabilidad y eficiencia principales en Diagnóstico General)</span></h3>
+      <table class="ie-tabla">
+        <thead><tr><th>Indicador</th><th style="text-align:right">Valor</th><th>Referencia</th><th style="text-align:center">Estado</th></tr></thead>
+        <tbody>${ratiosComp.map(r => `
+          <tr><td>${r.lbl}</td><td style="text-align:right">${r.val}</td><td>${r.ref}</td><td style="text-align:center">${r.est}</td></tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
 
     // Alertas contables
     if (ub.alertas?.length) {
