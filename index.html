@@ -18368,10 +18368,8 @@ function _informeEjecutivoRender(emp) {
       return hits ? hits[hits.length - 1] : String(periodo);
     };
 
-    // Datos operativos por año para cada balance
-    const transTotal = (y) => {
-      try { const tr = DATA?.transferencias?.[emp]; return tr ? Object.values(tr).reduce((a,v)=>a+(v[y]||0),0) : 0; } catch(e){return 0;}
-    };
+    // Datos operativos por año para cada balance (transXanio ya calculado más arriba)
+    const transTotal = (y) => transXanio[String(y)] || 0;
 
     // Definición de grupos y métricas (sin columna Ref — va al pie)
     const diagGrupos = [
@@ -18418,34 +18416,6 @@ function _informeEjecutivoRender(emp) {
           { lbl:'Rotación activos', get: b => b.indicadores?.eficiencia?.rotacion_activos,
             fmt: r2, ok: v => v >= 1, warn: v => v >= 0.5, inv: false },
         ]
-      },
-    ];
-
-    // Métricas operativas integradas (columnas = años de cada balance)
-    const operMetricas = [
-      {
-        lbl: 'Facturación',
-        get: b => fact[yearOf(b.periodo)] ?? null,
-        fmt: m,
-        ok: v => v > 0, warn: v => false, inv: false,
-        trendOk: (v0,v1) => v1 > v0,
-      },
-      {
-        lbl: 'Resultado del ejercicio',
-        get: b => sit[yearOf(b.periodo)] ?? null,
-        fmt: m,
-        ok: v => v > 0, warn: v => false, inv: false,
-        trendOk: (v0,v1) => v1 > v0,
-      },
-      {
-        lbl: '% Transferencias / Facturación',
-        get: b => {
-          const y = yearOf(b.periodo); const f = fact[y]; const t = transTotal(y);
-          return (f && t > 0) ? t / f * 100 : null;
-        },
-        fmt: v => v.toFixed(2) + '%',
-        ok: v => v < 30, warn: v => v < 60, inv: true,
-        trendOk: (v0,v1) => v1 < v0,
       },
     ];
 
@@ -18542,22 +18512,6 @@ function _informeEjecutivoRender(emp) {
         ${filas}`;
     }).join('');
 
-    // ── Filas de métricas operativas (integradas en la misma tabla) ───────────
-    const operFilt = operMetricas.filter(met => bals.some(b => met.get(b) != null));
-    const tablaOper = operFilt.length ? `
-      <tr><td colspan="${nCols}"
-        style="background:#eceff1;color:#37474f;font-weight:700;font-size:8.5pt;
-               padding:5px 8px;letter-spacing:.5px;border-top:2px solid #37474f">
-        🏭&nbsp; OPERATIVO
-        <span style="font-weight:400;font-size:7.5pt;margin-left:8px;opacity:.7">Facturación · Resultado · % Transferencias (verde &lt;30%, amarillo &lt;60%, rojo ≥60%)</span>
-      </td></tr>
-      ${operFilt.map(met => `
-        <tr style="border-bottom:1px solid #f0f0f0">
-          <td style="padding:4px 8px 4px 16px;color:#444;font-size:8.5pt">${met.lbl}</td>
-          ${bals.map(b => semCell(met.get(b), met)).join('')}
-          ${bals.length > 1 ? tendCell(met, bals) : ''}
-        </tr>`).join('')}` : '';
-
     htmlDiag = `
     <h2 class="ie-h2">Diagnóstico General</h2>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 14px">
@@ -18574,7 +18528,6 @@ function _informeEjecutivoRender(emp) {
       </thead>
       <tbody>
         ${tablaGrupos}
-        ${tablaOper}
       </tbody>
     </table>
     </div>`;
@@ -18734,32 +18687,6 @@ function _informeEjecutivoRender(emp) {
         ${efi.rotacion_inventarios != null ? `<tr><td></td><td>Rotación inventarios</td><td style="text-align:right">${r2(efi.rotacion_inventarios)}</td><td>&gt; 1.0</td><td style="text-align:center">${sem(efi.rotacion_inventarios, v=>v>=3, v=>v>=1)}</td></tr>` : ''}
       </tbody>
     </table>`;
-
-    // Evolución de balances (si hay más de uno)
-    if (bals.length > 1) {
-      const metricas = [
-        { lbl:'Activo total',         get: b => getInds(b).aT,  fmt: m },
-        { lbl:'Pasivo total',         get: b => getInds(b).pT,  fmt: m },
-        { lbl:'Patrimonio Neto',      get: b => getInds(b).pn,  fmt: m },
-        { lbl:'Liquidez corriente',   get: b => b.indicadores?.liquidez?.liquidez_corriente, fmt: r2 },
-        { lbl:'Endeudamiento',        get: b => b.indicadores?.solvencia?.razon_endeudamiento, fmt: p },
-        { lbl:'ROE',                  get: b => b.indicadores?.rentabilidad?.roe, fmt: p },
-        { lbl:'ROA',                  get: b => b.indicadores?.rentabilidad?.roa, fmt: p },
-        { lbl:'Margen operativo',     get: b => b.indicadores?.rentabilidad?.margen_operativo, fmt: p },
-        { lbl:'Rotación activos',     get: b => b.indicadores?.eficiencia?.rotacion_activos, fmt: r2 },
-      ];
-      htmlBal += `
-      <h3 class="ie-h3">Evolución de Balances</h3>
-      <table class="ie-tabla">
-        <thead><tr><th>Indicador</th>${bals.map(b=>`<th style="text-align:right">${b.periodo}</th>`).join('')}</tr></thead>
-        <tbody>${metricas.map(met => `
-          <tr><td>${met.lbl}</td>${bals.map(b => {
-            const v = met.get(b);
-            return `<td style="text-align:right;color:${v!=null&&typeof v==='number'&&v<0?'#c0392b':'inherit'}">${met.fmt(v)}</td>`;
-          }).join('')}</tr>`).join('')}
-        </tbody>
-      </table>`;
-    }
 
     // Alertas contables
     if (ub.alertas?.length) {
