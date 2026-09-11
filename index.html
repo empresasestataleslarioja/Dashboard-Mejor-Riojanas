@@ -36357,6 +36357,32 @@ async function syncToCloud(nota) {
       showStorageStatus(`⚠ Balances omitidos del sync (0 locales vs ${_balPrevio} en Sheets). Descargá desde Sheets para restaurarlos.`, '#ff8c47');
     }
 
+    // Mismo criterio que la guardia de balances, para las secciones que ya
+    // se vieron afectadas por vaciados accidentales (ER mensual/anual,
+    // fact+resultado mensual, autoridades): si el dashboard va a publicar 0
+    // filas para una sección que antes tenía datos, se omite del payload en
+    // vez de mandarla vacía. Esto protege a Sheets aunque el Apps Script
+    // desplegado todavía no tenga el fix del lado servidor (requiere volver
+    // a descargar y desplegar el bridge manualmente — ver botón "🔧
+    // Descargar Bridge"), y también cubre el caso de una pestaña recién
+    // abierta que dispara un autosync antes de terminar de sincronizar hacia
+    // abajo sus propios datos.
+    const _guardiaSeccionVacia = (campo, lsKey, camposRelacionados) => {
+      const nuevo  = (restoData[campo] || []).length;
+      const previo = parseInt(localStorage.getItem(lsKey) || '0', 10);
+      if (previo > 0 && nuevo === 0) {
+        console.warn(`[Sync] Guardia ${campo}: 0 locales vs ${previo} previos — omitiendo del payload`);
+        delete restoData[campo];
+        (camposRelacionados || []).forEach(c => delete restoData[c]);
+        showStorageStatus(`⚠ "${campo}" omitido del sync (0 locales vs ${previo} en Sheets). Descargá desde Sheets para restaurarlo.`, '#ff8c47');
+      }
+      return nuevo;
+    };
+    const _mensualNuevo     = _guardiaSeccionVacia('mensual',     'lr_mensual_last_count');
+    const _erMensualNuevo   = _guardiaSeccionVacia('er_mensual',  'lr_er_mensual_last_count');
+    const _erDetalleNuevo   = _guardiaSeccionVacia('er_detalle',  'lr_er_detalle_last_count');
+    const _autoridadesNuevo = _guardiaSeccionVacia('autoridades', 'lr_autoridades_last_count');
+
     const payload = {
       tab:       'all',
       nota:      nota || 'Actualización manual',
@@ -36463,6 +36489,10 @@ async function syncToCloud(nota) {
     if (_balNuevo > 0) {
       localStorage.setItem(_LS_BAL_LAST_CNT, String(_balNuevo));
     }
+    if (_mensualNuevo     > 0) localStorage.setItem('lr_mensual_last_count',     String(_mensualNuevo));
+    if (_erMensualNuevo   > 0) localStorage.setItem('lr_er_mensual_last_count',  String(_erMensualNuevo));
+    if (_erDetalleNuevo   > 0) localStorage.setItem('lr_er_detalle_last_count',  String(_erDetalleNuevo));
+    if (_autoridadesNuevo > 0) localStorage.setItem('lr_autoridades_last_count', String(_autoridadesNuevo));
 
     const pubDate = (result.savedAt||'').slice(0,16).replace('T',' ');
     updateCloudStatusBar('ok', 'Publicado ' + pubDate);
