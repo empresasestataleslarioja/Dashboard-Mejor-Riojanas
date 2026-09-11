@@ -21195,11 +21195,20 @@ function _alertaTransCoberturaUpdate() {
   transAnio.forEach(t => { if (t.semana) semanasCubiertas.add(parseInt(t.semana)); });
   mesMensual.forEach(mes => _semanasDelMes(anioRef, mes).forEach(s => semanasCubiertas.add(s)));
 
-  // Semanas faltantes dentro de meses con carga semanal
+  // Semanas faltantes dentro de meses con carga semanal — nunca la semana
+  // en curso ni semanas futuras: no tiene sentido marcar como "faltante"
+  // un período que todavía no terminó de transcurrir (antes esto hacía
+  // que, apenas un mes tenía UN registro con semana calculada, se
+  // marcaran como "sin datos" todas las semanas restantes del mes aunque
+  // fueran del futuro — ej. la semana en curso o las 3 siguientes).
+  const semanaActualISO   = _isoWeek(hoy);
+  const lunesSemanaActual = _lunesISO(anioActual, semanaActualISO);
   const semanasFaltantes = [];
   mesSemanal.forEach(mes => {
     _semanasDelMes(anioRef, mes).forEach(s => {
-      if (!semanasCubiertas.has(s)) semanasFaltantes.push(s);
+      if (semanasCubiertas.has(s)) return;
+      if (anioRef === anioActual && _lunesISO(anioRef, s) >= lunesSemanaActual) return;
+      semanasFaltantes.push(s);
     });
   });
   semanasFaltantes.sort((a,b) => a-b);
@@ -21242,8 +21251,11 @@ function _alertaTransCoberturaUpdate() {
     ? `<span style="color:#86efac"><strong>Mes completo:</strong> ${mesesMensualNom.join(', ')}</span>`
     : '';
 
-  // Meses con carga semanal sin faltantes (informativo en verde)
+  // Meses con carga semanal sin faltantes (informativo en verde) — el mes
+  // en curso no cuenta como "completo" aunque sus semanas ya transcurridas
+  // estén cubiertas: todavía le quedan semanas futuras por transcurrir.
   const mesSemOK = [...mesSemanal].filter(m => {
+    if (anioRef === anioActual && m === mesLimite + 1) return false;
     return ![...semanasFaltantes].some(s => _semanasDelMes(anioRef, m).has(s));
   }).sort((a,b)=>a-b).map(m=>MESES_NOM[m-1]);
   const mesesSemLabel = mesSemOK.length
