@@ -19953,11 +19953,13 @@ function renderFlujosEmpresa(emp) {
 function buildTransferenciasEmpresa(emp) {
   let wrap = document.getElementById('emp-trans-wrap');
   if (!wrap) {
-    const anchor = document.getElementById('emp-flujos-wrap') || document.getElementById('emp-er-wrap');
+    // Va justo después de los 4 gráficos principales (Facturación, Resultado,
+    // Margen, Personal) y antes del diagnóstico de balance / ER / Flujos.
+    const anchor = document.getElementById('emp-bal-diag-wrap');
     if (!anchor) return;
     wrap = document.createElement('div');
     wrap.id = 'emp-trans-wrap';
-    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+    anchor.parentNode.insertBefore(wrap, anchor);
   }
 
   const filas = _transEmpresa(emp);
