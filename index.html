@@ -3891,6 +3891,24 @@ self.onmessage = async (e) => {
           <div style="overflow-x:auto;margin-top:10px"><table class="tbl" id="tbl-trans-semanal" style="font-size:9.5px"></table></div>
         </div>
 
+        <!-- Promedio mensual de transferencias por empresa -->
+        <div class="rowfull card" style="margin-top:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">Promedio mensual de transferencias por empresa</span>
+            <span class="card-hd-unit">$ transferido por mes, año completo o en curso</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Año:</label>
+            <select id="sel-trans-prom-anio" onchange="buildTransPromedioMensual()"
+              style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+              cursor:pointer;outline:none"></select>
+          </div>
+          <div id="trans-prom-nota" style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-bottom:8px;padding:6px 8px;background:rgba(232,255,71,.05);border:1px solid var(--y21);border-radius:3px"></div>
+          <canvas id="ch-trans-promedio" style="max-height:320px"></canvas>
+          <div style="overflow-x:auto;margin-top:10px"><table class="tbl" id="tbl-trans-promedio" style="font-size:9.5px"></table></div>
+        </div>
+
         <!-- tabla detalle -->
         <div class="rowfull card" style="margin-top:12px;overflow-x:auto">
           <div class="card-hd" style="cursor:pointer" onclick="toggleTransTabla()">
@@ -21596,6 +21614,9 @@ function buildTransferencias() {
   // Apertura semanal por mes
   buildTransSemanal();
 
+  // Promedio mensual por empresa
+  buildTransPromedioMensual();
+
   // Mantener tabla abierta si ya estaba visible
   if (document.getElementById('trans-tabla-wrap')?.style.display !== 'none') {
     renderTransTabla(rows);
@@ -21783,6 +21804,96 @@ function buildTransSemanal() {
     <td>${f.lbl}</td><td>${f.rango}</td><td class="r">${f.cant}</td>
     <td class="r">${fvFull(f.total)}</td>
     <td class="r">${totalMes>0?(f.total/totalMes*100).toFixed(1)+'%':'—'}</td>
+  </tr>`).join('')}</tbody>`;
+}
+
+// ── Promedio mensual de transferencias por empresa (año completo o en
+// curso) ────────────────────────────────────────────────────────────────
+function buildTransPromedioMensual() {
+  const sel  = document.getElementById('sel-trans-prom-anio');
+  const tbl  = document.getElementById('tbl-trans-promedio');
+  const nota = document.getElementById('trans-prom-nota');
+  if (!sel || !tbl) return;
+
+  const añosConDatos = [...new Set(
+    (DATA.transferencias || [])
+      .map(t => parseInt(t.año))
+      .filter(y => y >= 2000 && y <= 2100)
+  )].sort((a,b) => b - a); // más reciente primero
+
+  if (!añosConDatos.length) {
+    sel.innerHTML = '';
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">No hay transferencias con año asignado.</td></tr>';
+    return;
+  }
+
+  const valorActual = añosConDatos.includes(parseInt(sel.value)) ? parseInt(sel.value) : añosConDatos[0];
+  sel.innerHTML = añosConDatos.map(y => `<option value="${y}" ${y===valorActual?'selected':''}>${y}</option>`).join('');
+
+  const hoy = new Date();
+  const esAnioActual = valorActual === hoy.getFullYear();
+  // Año completo → promedio sobre 12 meses. Año en curso → sobre los meses
+  // calendario ya transcurridos (no sobre los meses "con datos": si a un
+  // mes todavía no se le cargó el archivo SIDIF, no corresponde bajar el
+  // promedio de golpe, pero tampoco inventar que ya se giró algo).
+  const mesesDivisor = esAnioActual ? (hoy.getMonth() + 1) : 12;
+
+  if (nota) {
+    nota.textContent = esAnioActual
+      ? `ℹ ${valorActual} es el año en curso — el promedio divide el total por ${mesesDivisor} mes${mesesDivisor!==1?'es':''} transcurrido${mesesDivisor!==1?'s':''} del calendario, no por los meses con archivos ya importados.`
+      : `ℹ ${valorActual} — promedio sobre los 12 meses del año.`;
+  }
+
+  // Acumular por empresa resuelta (misma canonicalización que el resto del
+  // panel: _resolverEmpresaTransferencia, no _transEmpresa, para no contar
+  // una transferencia dos veces si el matching difuso de dos empresas se
+  // solapara).
+  const acumPorEmpresa = {};
+  (DATA.transferencias || []).forEach(t => {
+    if (parseInt(t.año) !== valorActual) return;
+    const e = _resolverEmpresaTransferencia(t);
+    if (!e) return;
+    if (!acumPorEmpresa[e]) acumPorEmpresa[e] = { total: 0, meses: new Set() };
+    acumPorEmpresa[e].total += (t.importe || 0);
+    if (t.mes) acumPorEmpresa[e].meses.add(parseInt(t.mes));
+  });
+
+  const rows = Object.entries(acumPorEmpresa)
+    .map(([e, v]) => ({ e, total: v.total, mesesConDatos: v.meses.size, promedio: v.total / mesesDivisor }))
+    .filter(r => r.total > 0)
+    .sort((a,b) => b.promedio - a.promedio);
+
+  if (!rows.length) {
+    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${valorActual}.</td></tr>`;
+    if (document.getElementById('ch-trans-promedio')) mkChart('ch-trans-promedio', 'bar', { labels: [], datasets: [] });
+    return;
+  }
+
+  if (document.getElementById('ch-trans-promedio')) {
+    const top = rows.slice(0, 15);
+    mkChart('ch-trans-promedio', 'bar', {
+      labels: top.map(r => r.e),
+      datasets: [{ label: 'Promedio mensual', data: top.map(r => r.promedio / 1e6), backgroundColor: '#47e8ff', borderRadius: 4 }]
+    }, {
+      indexAxis: 'y',
+      plugins: { legend: { display:false },
+        tooltip: { callbacks: { label: ctx => ' $' + Math.round(ctx.raw*1e6).toLocaleString('es-AR') + ' / mes' } } },
+      scales: {
+        x: { ticks: { color:'var(--dim)', font:{size:9}, callback: v => '$'+v+'M' }, grid:{color:'rgba(255,255,255,.05)'} },
+        y: { ticks: { color:'var(--dim)', font:{size:9} }, grid:{display:false} }
+      }
+    });
+  }
+
+  tbl.innerHTML = `<thead><tr>
+    <th>Empresa</th><th class="r">Total ${valorActual}</th><th class="r">Meses considerados</th>
+    <th class="r">Meses con transferencias</th><th class="r">Promedio mensual</th>
+  </tr></thead><tbody>${rows.map(r => `<tr>
+    <td>${r.e}</td>
+    <td class="r">${fvFull(r.total)}</td>
+    <td class="r">${mesesDivisor}</td>
+    <td class="r">${r.mesesConDatos}</td>
+    <td class="r" style="font-weight:600;color:var(--acc)">${fvFull(r.promedio)}</td>
   </tr>`).join('')}</tbody>`;
 }
 
