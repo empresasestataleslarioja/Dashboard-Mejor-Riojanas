@@ -17773,6 +17773,9 @@ function buildEmpresa() {
   // KPIs de flujos de fondos vinculados a esta empresa
   renderFlujosEmpresa(emp);
 
+  // Transferencias recibidas: comparativo por año y promedio mensual
+  buildTransferenciasEmpresa(emp);
+
   // Evolución mensual — resetear vista a estándar al cambiar empresa
   window._erMensualVista = 'estandar';
   window._erRptAnio = null;
@@ -19941,6 +19944,101 @@ function renderFlujosEmpresa(emp) {
 
   html += '</tbody></table></div></div>';
   wrap.innerHTML = html;
+}
+
+// ── Transferencias recibidas por esta empresa: comparativo por año y
+// promedio mensual — mismo criterio de divisor que buildTransPromedioMensual
+// en el panel Transferencias (año cerrado ÷12, año en curso ÷meses de
+// calendario ya transcurridos), acá aplicado a los años de UNA sola empresa. ──
+function buildTransferenciasEmpresa(emp) {
+  let wrap = document.getElementById('emp-trans-wrap');
+  if (!wrap) {
+    const anchor = document.getElementById('emp-flujos-wrap') || document.getElementById('emp-er-wrap');
+    if (!anchor) return;
+    wrap = document.createElement('div');
+    wrap.id = 'emp-trans-wrap';
+    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+  }
+
+  const filas = _transEmpresa(emp);
+  if (!filas.length) { wrap.style.display = 'none'; return; }
+
+  // Agrupar por año
+  const porAnio = {};
+  filas.forEach(t => {
+    const y = parseInt(t.año);
+    if (!y || y < 2000 || y > 2100) return;
+    if (!porAnio[y]) porAnio[y] = { total: 0, meses: new Set() };
+    porAnio[y].total += (t.importe || 0);
+    if (t.mes) porAnio[y].meses.add(parseInt(t.mes));
+  });
+
+  const anios = Object.keys(porAnio).map(Number).sort((a,b) => a - b);
+  if (!anios.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  const hoy = new Date();
+  const anioActual = hoy.getFullYear();
+
+  const filasTabla = anios.map(y => {
+    const d = porAnio[y];
+    const esAnioActual = y === anioActual;
+    const mesesDivisor = esAnioActual ? (hoy.getMonth() + 1) : 12;
+    return { anio: y, total: d.total, mesesConDatos: d.meses.size, mesesDivisor,
+             promedio: d.total / mesesDivisor, esAnioActual };
+  });
+  // Variación interanual nominal (año vs. año inmediato anterior de la lista)
+  filasTabla.forEach((f, i) => {
+    f.varNom = (i > 0 && filasTabla[i-1].total > 0) ? (f.total - filasTabla[i-1].total) / filasTabla[i-1].total * 100 : null;
+  });
+
+  const fmtM = v => v == null ? '—' : (v < 0 ? '−' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR');
+  const hayAnioActual = filasTabla.some(f => f.esAnioActual);
+
+  const html = `<div class="card" style="margin-top:12px">
+    <div class="card-hd">
+      <span class="card-hd-title">Transferencias recibidas</span>
+      <span class="card-hd-unit">comparativo anual y promedio mensual · ${emp}</span>
+    </div>
+    <canvas id="ch-e-trans" style="max-height:200px"></canvas>
+    <div style="overflow-x:auto;margin-top:10px">
+    <table class="tbl" style="font-size:9.5px;width:100%">
+      <thead><tr>
+        <th>Año</th><th class="r">Total</th><th class="r">Var. interanual</th>
+        <th class="r">Meses considerados</th><th class="r">Meses con transferencias</th>
+        <th class="r">Promedio mensual</th>
+      </tr></thead><tbody>
+      ${filasTabla.map(f => {
+        const colVar = f.varNom == null ? 'var(--dim)' : f.varNom >= 0 ? 'var(--pos)' : 'var(--neg)';
+        const varTxt = f.varNom == null ? '—' : (f.varNom >= 0 ? '▲ +' : '▼ ') + Math.abs(f.varNom).toFixed(2) + '%';
+        return `<tr>
+          <td style="font-family:var(--mono);font-weight:600">${f.anio}${f.esAnioActual?' <span style="font-size:8px;color:var(--dim);font-weight:400">(en curso)</span>':''}</td>
+          <td class="r">${fmtM(f.total)}</td>
+          <td class="r" style="color:${colVar}">${varTxt}</td>
+          <td class="r">${f.mesesDivisor}</td>
+          <td class="r">${f.mesesConDatos}</td>
+          <td class="r" style="font-weight:600;color:var(--acc)">${fmtM(f.promedio)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>
+    ${hayAnioActual ? `<div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-top:8px;padding:6px 8px;background:rgba(232,255,71,.05);border:1px solid var(--y21);border-radius:3px">ℹ El año en curso divide el total por los meses de calendario ya transcurridos, no por los meses con archivos ya importados.</div>` : ''}
+  </div>`;
+
+  wrap.innerHTML = html;
+
+  mkChart('ch-e-trans', 'bar', {
+    labels: filasTabla.map(f => String(f.anio)),
+    datasets: [{ label: 'Total transferido', data: filasTabla.map(f => f.total / 1e6),
+      backgroundColor: filasTabla.map(f => f.esAnioActual ? '#94a3b8' : '#47e8ff'), borderRadius: 4 }]
+  }, {
+    plugins: { legend: { display:false },
+      tooltip: { callbacks: { label: ctx => ' $' + Math.round(ctx.raw*1e6).toLocaleString('es-AR') } } },
+    scales: {
+      y: { ticks: { color:'var(--dim)', font:{size:9}, callback: v => '$'+v+'M' }, grid:{color:'rgba(255,255,255,.05)'} },
+      x: { ticks: { color:'var(--dim)', font:{size:9} }, grid:{display:false} }
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
