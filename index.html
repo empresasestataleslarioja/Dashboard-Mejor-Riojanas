@@ -11676,9 +11676,7 @@ function _renderListaFlujos() {
         }
       }
 
-      const varPct = (necAct != null && necAnt != null && necAnt !== 0)
-        ? ((Math.abs(necAct) - Math.abs(necAnt)) / Math.abs(necAnt) * 100)
-        : null;
+      const varPct = _varNecesidad(necAct, necAnt);
       const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
 
       // Badge tipo — todo en una línea, sin <br>
@@ -12009,6 +12007,19 @@ function _flujoNecesidadSignada(f) {
   const totalIng = rubros.find(r=>r.tipo==='ingreso'&&r.esTotal&&r.actual!=null&&r.actual!==0);
   if (totalEgr) return (totalIng ? totalIng.actual : 0) - Math.abs(totalEgr.actual);
   return null;
+}
+
+// Variación de un valor "signado" donde más positivo siempre es mejor
+// (necesidad de fondos / resultado neto vía _flujoNecesidadSignada:
+// negativo = déficit o pérdida). Comparar solo magnitudes absolutas
+// ((|actual|-|anterior|)/|anterior|) es engañoso si el signo cambia entre
+// períodos: de superávit +100 a déficit -150 es un empeoramiento severo,
+// pero esa fórmula solo ve que 150 y 100 son parecidos y puede mostrarlo
+// como una mejora leve. Usar el valor con signo directamente da el
+// resultado correcto también cuando el signo cambia de un período a otro.
+function _varNecesidad(actual, anterior) {
+  if (actual == null || anterior == null || anterior === 0) return null;
+  return (anterior - actual) / Math.abs(anterior) * 100;
 }
 
 function _flujoNecesidad(f) {
@@ -13170,7 +13181,7 @@ function buildComparacionFlujos() {
   // KPIs — helpers robustos para cualquier estructura de flujo
   const necA = _flujoNecesidadSignada(fA); // signed: negativo = déficit
   const necB = _flujoNecesidadSignada(fB);
-  const varNom  = (necA!=null && necB && necB!==0) ? (Math.abs(necA) - Math.abs(necB)) / Math.abs(necB) * 100 : null;
+  const varNom  = _varNecesidad(necA, necB);
   // Fisher: var real = (1+varNom/100)/(1+ipc/100) - 1
   const varReal = (varNom!=null && ipc) ? ((1 + varNom/100) / (1 + ipc/100) - 1) * 100 : null;
 
@@ -13638,15 +13649,15 @@ function buildComparacionFlujos() {
     const _vr = (vn) => (vn!=null&&ipc) ? ((1+vn/100)/(1+ipc/100)-1)*100 : null;
     const _cv = (vn, pos) => vn==null?'var(--dim)': (pos?(vn>0?'var(--pos)':'var(--neg)'):(vn>0?'var(--neg)':'var(--pos)'));
     const nCols = 2 + (ipc?1:0) + 2 + (ipcProy?1:0);
-    const tfRow = (lbl, vA, vB, posIsGood, extra='') => {
-      const vn = _vn(vA, vB);
+    const tfRow = (lbl, vA, vB, extra='') => {
+      // SUBTOTAL/RESULTADO son "más positivo siempre es mejor" (superávit
+      // mejor que déficit) — _varNecesidad ya da el signo correcto aunque
+      // el período cambie de déficit a superávit o viceversa, a diferencia
+      // de comparar solo magnitudes absolutas.
+      const vn = _varNecesidad(vA, vB);
       const vr = _vr(vn);
-      // Para SUBTOTAL/RESULTADO: si el valor actual es negativo (déficit),
-      // aumento en absoluto (vn>0) = peor = rojo; disminución = mejor = verde.
-      // Si el valor actual es positivo (superávit), vn>0 = mejor = verde.
-      const _posEff = posIsGood === 'auto' ? (vA == null || vA >= 0) : posIsGood;
-      const cv = _cv(vn, _posEff);
-      const cr = _cv(vr, _posEff);
+      const cv = _cv(vn, false);
+      const cr = _cv(vr, false);
       const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
       return `<tr style="background:rgba(232,255,71,.05);border-top:2px solid var(--y21)">
         <td style="padding:7px 12px;font-size:9.5px;font-weight:700;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}${extra}</td>
@@ -13672,9 +13683,9 @@ function buildComparacionFlujos() {
       </tr>`;
     };
     return `<tfoot>
-      ${tfRow('SUBTOTAL INGRESOS − EGRESOS', subA, subB, 'auto')}
+      ${tfRow('SUBTOTAL INGRESOS − EGRESOS', subA, subB)}
       ${impRow('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)}
-      ${tfRow('RESULTADO NETO', resA, resB, 'auto')}
+      ${tfRow('RESULTADO NETO', resA, resB)}
     </tfoot>`;
   })();
 
@@ -14171,7 +14182,7 @@ function exportarFlujoExcel() {
       <tbody>${(()=>{
         const _vnE = (Math.abs(egrADet)&&Math.abs(egrBDet)) ? (Math.abs(egrADet)-Math.abs(egrBDet))/Math.abs(egrBDet)*100 : null;
         const _vnI = (ingA&&ingB) ? (Math.abs(ingA)-Math.abs(ingB))/Math.abs(ingB)*100 : null;
-        const _vnN = (_necASignado!=null&&_necBSignado) ? (Math.abs(_necASignado)-Math.abs(_necBSignado))/Math.abs(_necBSignado)*100 : null;
+        const _vnN = _varNecesidad(_necASignado, _necBSignado);
         const _row = (lbl, vA, vB, vn, posGood) => `<tr style="border-top:1px solid ${T.bd}">
           <td style="padding:6px 14px;font-family:monospace;font-size:9.5px;color:${T.text}">${lbl}</td>
           <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${T.text}">${C(vA)}</td>
@@ -14313,17 +14324,20 @@ function exportarFlujoExcel() {
         const resB = subB - impB;
         const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(Math.abs(a)-Math.abs(b))/Math.abs(b)*100:null;
         const _vr2 = (vn) => (vn!=null&&ipc)?((1+vn/100)/(1+ipc/100)-1)*100:null;
-        const pC = (v,posGood,vA) => { const eff = posGood==='auto'?(vA==null||vA>=0):posGood; return v==null?T.dim:(eff?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos)); };
-        const tfR = (lbl, vA, vB, posGood) => {
-          const vn=_vn2(vA,vB); const vr=_vr2(vn);
+        const pC = (v,posGood) => v==null?T.dim:(posGood?(v>0?T.pos:T.neg):(v>0?T.neg:T.pos));
+        // SUBTOTAL/RESULTADO: "más positivo siempre es mejor" — _varNecesidad
+        // da el signo correcto aunque el período cambie de déficit a
+        // superávit o viceversa (ver misma nota en la vista interactiva).
+        const tfR = (lbl, vA, vB) => {
+          const vn=_varNecesidad(vA,vB); const vr=_vr2(vn);
           const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
           return `<tr style="background:${T.acc}18;border-top:2px solid ${T.acc}">
             <td style="padding:8px 14px;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${lbl}</td>
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${C(vA)}</td>
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;color:${T.dim}">${C(vB)}</td>
             ${ipc?`<td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:9px;color:${T.dim}88">${vBEq?'≈'+C(vBEq):'—'}</td>`:''}
-            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,posGood,vA)}">${P(vn)}</td>
-            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,posGood,vA)}">${P(vr)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,false)}">${P(vn)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,false)}">${P(vr)}</td>
           </tr>`;
         };
         const impR = (lbl, vA, vB) => {
@@ -14337,9 +14351,9 @@ function exportarFlujoExcel() {
             <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${pC(_vr2(vn),false)}">${P(_vr2(vn))}</td>
           </tr>`;
         };
-        return tfR('SUBTOTAL INGRESOS − EGRESOS', subA, subB, 'auto')
+        return tfR('SUBTOTAL INGRESOS − EGRESOS', subA, subB)
              + impR('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)
-             + tfR('RESULTADO NETO', resA, resB, 'auto');
+             + tfR('RESULTADO NETO', resA, resB);
       })()}</tfoot>
     </table>
   </div>
@@ -14592,7 +14606,7 @@ async function generarInformeFlujo() {
     // con el valor sin signo esa etiqueta nunca aparecía en el Word.
     const necA = _flujoNecesidadSignada(fA);
     const necB = _flujoNecesidadSignada(fB);
-    const varNom  = (necA!=null&&necB&&necB!==0) ? (Math.abs(necA)-Math.abs(necB))/Math.abs(necB)*100 : null;
+    const varNom  = _varNecesidad(necA, necB);
     const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
     const ingA = _flujoIngTotal(fA);
     const ingB = _flujoIngTotal(fB);
