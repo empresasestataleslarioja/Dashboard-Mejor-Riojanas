@@ -276,13 +276,14 @@ group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya e
   const srcRenombrar   = extractFn(html, '_renombrarEmpresa');
   const srcFusionar    = extractFn(html, '_fusionarEmpresas');
   const srcConfirmar   = extractFn(html, '_confirmarRenombre');
+  const srcTombstone   = extractFn(html, '_tombstoneEmpresa');
   const factory = new Function(
-    'let rubros = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{}}; let _balances = {};\n' +
+    'let rubros = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},empresas_eliminadas:[]}; let _balances = {};\n' +
     'let confirmResult = true;\n' +
     'function confirm(msg){ return confirmResult; }\n' +
     'function saveRubros(){} function computeTotals(){} function saveDataToLocalCache(){}\n' +
     'function marcarPendienteGuardar(){} function populateSelects(){} function rebuildActive(){} function buildRubros(){}\n' +
-    srcRenombrar + '\n' + srcFusionar + '\n' + srcConfirmar + '\n' +
+    srcTombstone + '\n' + srcRenombrar + '\n' + srcFusionar + '\n' + srcConfirmar + '\n' +
     'function setState(r,d,b){ rubros=r; DATA=d; _balances=b; }\n' +
     'function getState(){ return { rubros, DATA, _balances }; }\n' +
     'function setConfirmResult(v){ confirmResult = v; }\n' +
@@ -1116,12 +1117,14 @@ group('tryParseERLibroMayorResumen — no se confunde con el formato con detalle
 group('autoridades — sigue el mismo criterio de migración que el resto de los módulos al renombrar/fusionar/eliminar una empresa', () => {
   function nuevoContexto() {
     const src = [
+      extractFn(html, '_tombstoneEmpresa'),
+      extractFn(html, '_purgarEmpresaDeData'),
       extractFn(html, '_renombrarEmpresa'),
       extractFn(html, '_fusionarEmpresas'),
       extractFn(html, '_eliminarEmpresa'),
     ].join('\n');
     const factory = new Function(
-      'let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[]};\n' +
+      'let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
       'let rubros = {};\nlet _balances = {};\n' +
       src + '\n' +
       'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, getDATA: () => DATA };'
@@ -1160,6 +1163,85 @@ group('autoridades — sigue el mismo criterio de migración que el resto de los
   const restantes = ctx3.getDATA().autoridades;
   assert(restantes.length === 1 && restantes[0].empresa === 'PEA',
     '_eliminarEmpresa borra solo los registros de autoridades de la empresa eliminada, no los de otras');
+});
+
+// ── Tumbas (DATA.empresas_eliminadas): bug real reportado por el usuario —
+//    "se sostienen empresas eliminadas y/o fusionadas... vuelve el
+//    problema en DBG y sheets" pese a repetir el borrado varias veces.
+//    Causa raíz: una pestaña vieja que todavía tiene la empresa cargada la
+//    vuelve a publicar en su próximo autosync (reemplazo total sin
+//    versionado). _eliminarEmpresa/_fusionarEmpresas/_renombrarEmpresa
+//    ahora registran una "tumba" que applyCloudData aplica en cada
+//    lectura, y que el bridge usa para filtrar cualquier sección del lado
+//    servidor — así, aunque la pestaña vieja la vuelva a mandar, no
+//    resucita. ─────────────────────────────────────────────────────────
+group('_tombstoneEmpresa / _purgarEmpresaDeData — evita que una empresa borrada/fusionada/renombrada resucite', () => {
+  function nuevoContexto() {
+    const src = [
+      extractFn(html, '_tombstoneEmpresa'),
+      extractFn(html, '_purgarEmpresaDeData'),
+      extractFn(html, '_renombrarEmpresa'),
+      extractFn(html, '_fusionarEmpresas'),
+      extractFn(html, '_eliminarEmpresa'),
+    ].join('\n');
+    const factory = new Function(
+      'let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
+      'let rubros = {};\nlet _balances = {};\n' +
+      src + '\n' +
+      'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, _purgarEmpresaDeData, getDATA: () => DATA };'
+    );
+    return factory();
+  }
+
+  // _eliminarEmpresa registra una tumba
+  const ctx1 = nuevoContexto();
+  ctx1.getDATA().fact = { 'LRT': { '2024': 1000 } };
+  ctx1._eliminarEmpresa('LRT');
+  assert(ctx1.getDATA().empresas_eliminadas.some(t => t.empresa === 'LRT'),
+    '_eliminarEmpresa registra una tumba para la empresa borrada');
+  assert(!ctx1.getDATA().fact['LRT'],
+    '_eliminarEmpresa sigue borrando los datos como antes');
+
+  // _fusionarEmpresas tumba el nombre de origen (from)
+  const ctx2 = nuevoContexto();
+  ctx2.getDATA().fact = { 'LRT': { '2024': 1000 }, 'LA RIOJA TELECOMUNICACIONES': { '2024': 500 } };
+  ctx2._fusionarEmpresas('LRT', 'LA RIOJA TELECOMUNICACIONES');
+  assert(ctx2.getDATA().empresas_eliminadas.some(t => t.empresa === 'LRT'),
+    '_fusionarEmpresas tumba el nombre de origen — protege contra que una pestaña vieja la vuelva a publicar como empresa aparte');
+  assert(!ctx2.getDATA().empresas_eliminadas.some(t => t.empresa === 'LA RIOJA TELECOMUNICACIONES'),
+    '_fusionarEmpresas NO tumba el nombre de destino');
+
+  // _renombrarEmpresa tumba el nombre de origen (from)
+  const ctx3 = nuevoContexto();
+  ctx3.getDATA().fact = { 'LRT': { '2024': 1000 } };
+  ctx3._renombrarEmpresa('LRT', 'LA RIOJA TELECOMUNICACIONES');
+  assert(ctx3.getDATA().empresas_eliminadas.some(t => t.empresa === 'LRT'),
+    '_renombrarEmpresa tumba el nombre de origen');
+
+  // No duplica la tumba si se elimina/fusiona/renombra dos veces la misma empresa
+  const ctx4 = nuevoContexto();
+  ctx4._eliminarEmpresa('LRT');
+  ctx4._eliminarEmpresa('LRT');
+  assert(ctx4.getDATA().empresas_eliminadas.filter(t => t.empresa === 'LRT').length === 1,
+    'no duplica la tumba si la misma empresa se elimina más de una vez');
+
+  // _purgarEmpresaDeData: la función que applyCloudData usa para limpiar una
+  // resucitación — debe borrar la empresa de TODOS los datasets, igual que
+  // hace _eliminarEmpresa internamente (son la misma lógica compartida).
+  const ctx5 = nuevoContexto();
+  ctx5.getDATA().fact = { 'LRT': { '2024': 1000 }, 'PEA': { '2024': 2000 } };
+  ctx5.getDATA().sit  = { 'LRT': { '2024': 100 } };
+  ctx5.getDATA().personal = [{ e: 'LRT', y: {} }, { e: 'PEA', y: {} }];
+  ctx5.getDATA().autoridades = [{ empresa: 'LRT', nombre: 'Juan' }, { empresa: 'PEA', nombre: 'Ana' }];
+  ctx5._purgarEmpresaDeData('LRT');
+  const d5 = ctx5.getDATA();
+  assert(!d5.fact['LRT'] && d5.fact['PEA'].hasOwnProperty('2024'),
+    '_purgarEmpresaDeData borra fact de la empresa resucitada, conserva las demás');
+  assert(!d5.sit['LRT'], '_purgarEmpresaDeData borra sit de la empresa resucitada');
+  assert(d5.personal.length === 1 && d5.personal[0].e === 'PEA',
+    '_purgarEmpresaDeData borra personal de la empresa resucitada');
+  assert(d5.autoridades.length === 1 && d5.autoridades[0].empresa === 'PEA',
+    '_purgarEmpresaDeData borra autoridades de la empresa resucitada');
 });
 
 // ── _parseFechaAutoridad: normaliza fechas para la importación de
