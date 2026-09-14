@@ -11420,17 +11420,22 @@ function _guardarFlujoData(data) {
   }
 
   // necesidad_fondos_ant: prioridad al valor explícito del Excel; si no hay,
-  // buscar el período cronológicamente anterior del mismo empresa+tipo
+  // buscar el período cronológicamente anterior del mismo empresa+tipo.
+  // OJO: usar _flujoNecesidadSignada(f), no f.necesidad_fondos — ese campo
+  // crudo se guarda siempre como magnitud positiva (ver PASO 5 más arriba,
+  // "necFondos = Math.abs(rawNec)"), así que tomarlo tal cual acá volvía a
+  // guardar el período anterior siempre en positivo aunque hubiera sido
+  // deficitario — la columna "Per. anterior" terminaba mostrando en verde
+  // superávit lo que en realidad era un déficit.
   let necAnt = necesidad_fondos_ant ?? null;
   if (necAnt == null) {
     const thisP  = _parsePeriodoFlujoStr(periodo);
     const thisAbs = thisP ? _absInicioPeriodo(thisP) : null;
     if (thisAbs != null) {
       const candidatos = Object.values(DATA.flujos)
-        .filter(f => f.empresa === empresa && f.tipo === tipo && f.clave !== clave
-                     && f.necesidad_fondos != null)
-        .map(f => ({ nec: f.necesidad_fondos, abs: _absInicioPeriodo(_parsePeriodoFlujoStr(f.periodo)) }))
-        .filter(x => x.abs != null && x.abs < thisAbs)
+        .filter(f => f.empresa === empresa && f.tipo === tipo && f.clave !== clave)
+        .map(f => ({ nec: _flujoNecesidadSignada(f), abs: _absInicioPeriodo(_parsePeriodoFlujoStr(f.periodo)) }))
+        .filter(x => x.abs != null && x.abs < thisAbs && x.nec != null)
         .sort((a, b) => b.abs - a.abs);  // más reciente primero
       if (candidatos.length) necAnt = candidatos[0].nec;
     }
@@ -12365,11 +12370,14 @@ function _recalcularPeriodosAnteriores() {
     const thisP   = _parsePeriodoFlujoStr(f.periodo);
     const thisAbs = thisP ? _absInicioPeriodo(thisP) : null;
     if (thisAbs == null) return;
+    // OJO: usar _flujoNecesidadSignada(g), no g.necesidad_fondos — ese campo
+    // crudo se guarda siempre como magnitud positiva (ver tryParseFlujoExcel,
+    // "necFondos = Math.abs(rawNec)"), tomarlo tal cual guardaba el período
+    // anterior siempre en positivo aunque hubiera sido deficitario.
     const candidatos = Object.values(DATA.flujos)
-      .filter(g => g.empresa === f.empresa && g.tipo === f.tipo && g.clave !== f.clave
-                   && g.necesidad_fondos != null)
-      .map(g => ({ nec: g.necesidad_fondos, abs: _absInicioPeriodo(_parsePeriodoFlujoStr(g.periodo)) }))
-      .filter(x => x.abs != null && x.abs < thisAbs)
+      .filter(g => g.empresa === f.empresa && g.tipo === f.tipo && g.clave !== f.clave)
+      .map(g => ({ nec: _flujoNecesidadSignada(g), abs: _absInicioPeriodo(_parsePeriodoFlujoStr(g.periodo)) }))
+      .filter(x => x.abs != null && x.abs < thisAbs && x.nec != null)
       .sort((a, b) => b.abs - a.abs);
     if (!candidatos.length) return;
     const nuevoAnt = candidatos[0].nec;
