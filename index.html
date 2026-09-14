@@ -11559,15 +11559,23 @@ function _renderListaFlujos() {
     if (col === 'empresa')          { va = a.empresa;               vb = b.empresa; }
     else if (col === 'periodo')     { va = _absInicioPeriodo(_parsePeriodoFlujoStr(a.periodo)) ?? 0;
                                       vb = _absInicioPeriodo(_parsePeriodoFlujoStr(b.periodo)) ?? 0; }
-    else if (col === 'necesidad')   { va = a.necesidad_fondos ?? 0; vb = b.necesidad_fondos ?? 0; }
     else if (col === 'var')         { va = (a.necesidad_fondos != null && a.necesidad_fondos_ant)
                                            ? (a.necesidad_fondos - a.necesidad_fondos_ant) / Math.abs(a.necesidad_fondos_ant) : null;
                                       vb = (b.necesidad_fondos != null && b.necesidad_fondos_ant)
                                            ? (b.necesidad_fondos - b.necesidad_fondos_ant) / Math.abs(b.necesidad_fondos_ant) : null;
                                       if (va == null) return 1; if (vb == null) return -1; }
     else                            { va = a.timestamp ?? 0;        vb = b.timestamp ?? 0; }
-    if (typeof va === 'string') return dir * va.localeCompare(vb);
-    return dir * ((va ?? 0) - (vb ?? 0));
+    let cmp = typeof va === 'string' ? va.localeCompare(vb) : (va ?? 0) - (vb ?? 0);
+    cmp *= dir;
+    if (cmp !== 0) return cmp;
+    // Empate en la columna elegida (típicamente varias filas de la misma
+    // empresa al ordenar por "Empresa"): siempre desempatar por período de
+    // más actual a más antiguo, para que la agrupación por empresa nunca
+    // quede con los períodos desordenados sin importar qué columna se
+    // haya elegido para ordenar.
+    const pa = _absInicioPeriodo(_parsePeriodoFlujoStr(a.periodo)) ?? 0;
+    const pb = _absInicioPeriodo(_parsePeriodoFlujoStr(b.periodo)) ?? 0;
+    return pb - pa;
   });
 
   if (!flujos.length) {
@@ -11637,7 +11645,7 @@ function _renderListaFlujos() {
       ${th('Período','periodo')}
       <th>Tipo</th>
       <th>Rubros</th>
-      ${th('Déficit / Necesidad actual','necesidad',';text-align:right')}
+      <th style="text-align:right">Déficit / Necesidad actual</th>
       <th style="text-align:right">Per. anterior</th>
       ${th('Var. nominal','var',';text-align:right')}
       <th>IPC %</th>
@@ -11988,12 +11996,21 @@ function _flujoNecesidadSignada(f) {
   if (!f) return null;
   const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null && r.actual !== 0
     && !/(SEMANAL|MENSUAL|DIARIA)/i.test(r.label||''));
+  // 'necesidad_fondos' ("Necesidad de Fondos Total") es por definición una
+  // magnitud de cuánto se necesita, no un resultado neto bidireccional como
+  // 'sup_def' — un valor positivo ahí SIEMPRE es déficit, sin importar si
+  // el flujo tiene ingresos cargados. Antes se aplicaba el mismo criterio
+  // "sin ingresos: positivo=déficit" que 'sup_def' (más abajo), así que un
+  // flujo CON ingresos reales pero con 'necesidad_fondos' guardado en
+  // positivo (la forma normal en que lo reporta el Excel) se mostraba como
+  // superávit en vez de déficit.
+  if (rNec) return rNec.actual > 0 ? -rNec.actual : rNec.actual;
+
   // Detectar si el flujo tiene ingresos reales (para corregir signo cuando no hay)
   const _rubros = f.rubros || [];
   const _hasIngresos = _rubros.some(r => r.tipo === 'ingreso' && (r.actual||0) > 0);
   const _signResult = v => (!_hasIngresos && v > 0) ? -v : v; // sin ingresos: resultado positivo = déficit
 
-  if (rNec) return _signResult(rNec.actual);
   const rDef = _rubros.find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
             ?? _rubros.find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
             ?? _rubros.find(r => r.tipo === 'resultado' && r.actual != null && r.actual !== 0);
