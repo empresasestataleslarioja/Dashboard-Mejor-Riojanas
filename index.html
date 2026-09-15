@@ -3903,6 +3903,19 @@ self.onmessage = async (e) => {
               style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
               font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
               cursor:pointer;outline:none"></select>
+            <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" id="chk-trans-prom-comparar" onchange="buildTransPromedioMensual()" style="cursor:pointer">
+              Comparar con otro año
+            </label>
+            <select id="sel-trans-prom-anio-comp" onchange="buildTransPromedioMensual()"
+              style="display:none;background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+              cursor:pointer;outline:none"></select>
+            <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Empresa:</label>
+            <select id="sel-trans-prom-empresa" onchange="buildTransPromedioMensual()"
+              style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+              cursor:pointer;outline:none;max-width:220px"></select>
           </div>
           <div id="trans-prom-nota" style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-bottom:8px;padding:6px 8px;background:rgba(232,255,71,.05);border:1px solid var(--y21);border-radius:3px"></div>
           <canvas id="ch-trans-promedio" style="max-height:320px"></canvas>
@@ -21911,9 +21924,12 @@ function buildTransSemanal() {
 // ── Promedio mensual de transferencias por empresa (año completo o en
 // curso) ────────────────────────────────────────────────────────────────
 function buildTransPromedioMensual() {
-  const sel  = document.getElementById('sel-trans-prom-anio');
-  const tbl  = document.getElementById('tbl-trans-promedio');
-  const nota = document.getElementById('trans-prom-nota');
+  const sel     = document.getElementById('sel-trans-prom-anio');
+  const chkComp = document.getElementById('chk-trans-prom-comparar');
+  const selComp = document.getElementById('sel-trans-prom-anio-comp');
+  const selEmp  = document.getElementById('sel-trans-prom-empresa');
+  const tbl     = document.getElementById('tbl-trans-promedio');
+  const nota    = document.getElementById('trans-prom-nota');
   if (!sel || !tbl) return;
 
   const añosConDatos = [...new Set(
@@ -21924,61 +21940,164 @@ function buildTransPromedioMensual() {
 
   if (!añosConDatos.length) {
     sel.innerHTML = '';
+    if (selComp) selComp.innerHTML = '';
+    if (selEmp) selEmp.innerHTML = '<option value="">Todas las empresas</option>';
     tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">No hay transferencias con año asignado.</td></tr>';
+    if (document.getElementById('ch-trans-promedio')) mkChart('ch-trans-promedio', 'bar', { labels: [], datasets: [] });
     return;
   }
 
   const valorActual = añosConDatos.includes(parseInt(sel.value)) ? parseInt(sel.value) : añosConDatos[0];
   sel.innerHTML = añosConDatos.map(y => `<option value="${y}" ${y===valorActual?'selected':''}>${y}</option>`).join('');
 
+  // Comparativo entre 2 años (a pedido: solo dos años a la vez, para no
+  // complicar la lectura). Se desactiva solo si hay un único año con datos.
+  if (chkComp) chkComp.disabled = añosConDatos.length <= 1;
+  const comparar = !!(chkComp && chkComp.checked) && añosConDatos.length > 1;
+  if (selComp) selComp.style.display = comparar ? '' : 'none';
+
+  let valorComp = null;
+  if (comparar && selComp) {
+    const opcionesComp = añosConDatos.filter(y => y !== valorActual);
+    const prevSel = parseInt(selComp.value);
+    valorComp = opcionesComp.includes(prevSel) ? prevSel : (opcionesComp.find(y => y < valorActual) ?? opcionesComp[0]);
+    selComp.innerHTML = opcionesComp.map(y => `<option value="${y}" ${y===valorComp?'selected':''}>${y}</option>`).join('');
+  }
+
+  // Filtro por empresa (pedido explícito: poder acotar el comparativo a una
+  // sola empresa en lugar de ver siempre el listado completo).
+  const añosRelevantes = comparar ? [valorActual, valorComp] : [valorActual];
+  const empresasSet = new Set();
+  (DATA.transferencias || []).forEach(t => {
+    if (!añosRelevantes.includes(parseInt(t.año))) return;
+    const e = _resolverEmpresaTransferencia(t);
+    if (e) empresasSet.add(e);
+  });
+  const empresasOrdenadas = [...empresasSet].sort((a,b) => a.localeCompare(b, 'es'));
+  if (selEmp) {
+    const prevEmp = selEmp.value;
+    const valorEmp = empresasOrdenadas.includes(prevEmp) ? prevEmp : '';
+    selEmp.innerHTML = `<option value="">Todas las empresas</option>` +
+      empresasOrdenadas.map(e => `<option value="${e}" ${e===valorEmp?'selected':''}>${e}</option>`).join('');
+  }
+  const empresaFiltro = selEmp ? selEmp.value : '';
+
   const hoy = new Date();
-  const esAnioActual = valorActual === hoy.getFullYear();
   // Año completo → promedio sobre 12 meses. Año en curso → sobre los meses
   // calendario ya transcurridos (no sobre los meses "con datos": si a un
   // mes todavía no se le cargó el archivo SIDIF, no corresponde bajar el
   // promedio de golpe, pero tampoco inventar que ya se giró algo).
-  const mesesDivisor = esAnioActual ? (hoy.getMonth() + 1) : 12;
+  const calcularAgregado = (anio) => {
+    const esAnioActual = anio === hoy.getFullYear();
+    const mesesDivisor = esAnioActual ? (hoy.getMonth() + 1) : 12;
+    const acumPorEmpresa = {};
+    (DATA.transferencias || []).forEach(t => {
+      if (parseInt(t.año) !== anio) return;
+      const e = _resolverEmpresaTransferencia(t);
+      if (!e) return;
+      if (empresaFiltro && e !== empresaFiltro) return;
+      if (!acumPorEmpresa[e]) acumPorEmpresa[e] = { total: 0, meses: new Set() };
+      acumPorEmpresa[e].total += (t.importe || 0);
+      if (t.mes) acumPorEmpresa[e].meses.add(parseInt(t.mes));
+    });
+    return { mesesDivisor, esAnioActual, acumPorEmpresa };
+  };
+
+  const agA = calcularAgregado(valorActual);
+  const agB = comparar ? calcularAgregado(valorComp) : null;
+
+  const anioMasNuevo = comparar ? Math.max(valorActual, valorComp) : null;
+  const anioMasViejo = comparar ? Math.min(valorActual, valorComp) : null;
+  const ipcAcum = comparar ? _ipcAcumEntrePeriodos(String(anioMasNuevo), String(anioMasViejo)) : null;
 
   if (nota) {
-    nota.textContent = esAnioActual
-      ? `ℹ ${valorActual} es el año en curso — el promedio divide el total por ${mesesDivisor} mes${mesesDivisor!==1?'es':''} transcurrido${mesesDivisor!==1?'s':''} del calendario, no por los meses con archivos ya importados.`
+    let txt = agA.esAnioActual
+      ? `ℹ ${valorActual} es el año en curso — el promedio divide el total por ${agA.mesesDivisor} mes${agA.mesesDivisor!==1?'es':''} transcurrido${agA.mesesDivisor!==1?'s':''} del calendario, no por los meses con archivos ya importados.`
       : `ℹ ${valorActual} — promedio sobre los 12 meses del año.`;
+    if (comparar) {
+      txt += ` Comparando contra ${valorComp}${agB.esAnioActual?' (año en curso, '+agB.mesesDivisor+' meses transcurridos)':''}.`;
+      txt += ipcAcum != null
+        ? ` Inflación acumulada ${anioMasViejo}→${anioMasNuevo} (IPC): ${ipcAcum.toFixed(2)}%, usada para la Var. real.`
+        : ' No hay datos de inflación suficientes para calcular el acumulado entre ambos años.';
+    }
+    if (empresaFiltro) txt += ` Filtro activo: ${empresaFiltro}.`;
+    nota.textContent = txt;
   }
 
-  // Acumular por empresa resuelta (misma canonicalización que el resto del
-  // panel: _resolverEmpresaTransferencia, no _transEmpresa, para no contar
-  // una transferencia dos veces si el matching difuso de dos empresas se
-  // solapara).
-  const acumPorEmpresa = {};
-  (DATA.transferencias || []).forEach(t => {
-    if (parseInt(t.año) !== valorActual) return;
-    const e = _resolverEmpresaTransferencia(t);
-    if (!e) return;
-    if (!acumPorEmpresa[e]) acumPorEmpresa[e] = { total: 0, meses: new Set() };
-    acumPorEmpresa[e].total += (t.importe || 0);
-    if (t.mes) acumPorEmpresa[e].meses.add(parseInt(t.mes));
-  });
+  if (!comparar) {
+    // ── Vista de un solo año (comportamiento original) ──
+    const rows = Object.entries(agA.acumPorEmpresa)
+      .map(([e, v]) => ({ e, total: v.total, mesesConDatos: v.meses.size, promedio: v.total / agA.mesesDivisor }))
+      .filter(r => r.total > 0)
+      .sort((a,b) => b.promedio - a.promedio);
 
-  const rows = Object.entries(acumPorEmpresa)
-    .map(([e, v]) => ({ e, total: v.total, mesesConDatos: v.meses.size, promedio: v.total / mesesDivisor }))
-    .filter(r => r.total > 0)
-    .sort((a,b) => b.promedio - a.promedio);
+    if (!rows.length) {
+      tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${valorActual}${empresaFiltro?' para '+empresaFiltro:''}.</td></tr>`;
+      if (document.getElementById('ch-trans-promedio')) mkChart('ch-trans-promedio', 'bar', { labels: [], datasets: [] });
+      return;
+    }
 
-  if (!rows.length) {
-    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${valorActual}.</td></tr>`;
+    if (document.getElementById('ch-trans-promedio')) {
+      const top = rows.slice(0, 15);
+      mkChart('ch-trans-promedio', 'bar', {
+        labels: top.map(r => r.e),
+        datasets: [{ label: 'Promedio mensual', data: top.map(r => r.promedio / 1e6), backgroundColor: '#47e8ff', borderRadius: 4 }]
+      }, {
+        indexAxis: 'y',
+        plugins: { legend: { display:false },
+          tooltip: { callbacks: { label: ctx => ' $' + Math.round(ctx.raw*1e6).toLocaleString('es-AR') + ' / mes' } } },
+        scales: {
+          x: { ticks: { color:'var(--dim)', font:{size:9}, callback: v => '$'+v+'M' }, grid:{color:'rgba(255,255,255,.05)'} },
+          y: { ticks: { color:'var(--dim)', font:{size:9} }, grid:{display:false} }
+        }
+      });
+    }
+
+    tbl.innerHTML = `<thead><tr>
+      <th>Empresa</th><th class="r">Total ${valorActual}</th><th class="r">Meses considerados</th>
+      <th class="r">Meses con transferencias</th><th class="r">Promedio mensual</th>
+    </tr></thead><tbody>${rows.map(r => `<tr>
+      <td>${r.e}</td>
+      <td class="r">${fvFull(r.total)}</td>
+      <td class="r">${agA.mesesDivisor}</td>
+      <td class="r">${r.mesesConDatos}</td>
+      <td class="r" style="font-weight:600;color:var(--acc)">${fvFull(r.promedio)}</td>
+    </tr>`).join('')}</tbody>`;
+    return;
+  }
+
+  // ── Vista comparativa entre 2 años ──
+  const empresasComp = new Set([...Object.keys(agA.acumPorEmpresa), ...Object.keys(agB.acumPorEmpresa)]);
+  const rowsComp = [...empresasComp].map(e => {
+    const vA = agA.acumPorEmpresa[e] || { total: 0, meses: new Set() };
+    const vB = agB.acumPorEmpresa[e] || { total: 0, meses: new Set() };
+    const promA = vA.total / agA.mesesDivisor;
+    const promB = vB.total / agB.mesesDivisor;
+    const varNominal = promB > 0 ? ((promA - promB) / Math.abs(promB)) * 100 : null;
+    const varReal = (promA > 0 && promB > 0) ? realGrowthPct(promA, valorActual, promB, valorComp) : null;
+    return { e, totalA: vA.total, totalB: vB.total, promA, promB, varNominal, varReal };
+  })
+    .filter(r => r.totalA > 0 || r.totalB > 0)
+    .sort((a,b) => b.promA - a.promA);
+
+  if (!rowsComp.length) {
+    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${valorActual} ni en ${valorComp}${empresaFiltro?' para '+empresaFiltro:''}.</td></tr>`;
     if (document.getElementById('ch-trans-promedio')) mkChart('ch-trans-promedio', 'bar', { labels: [], datasets: [] });
     return;
   }
 
   if (document.getElementById('ch-trans-promedio')) {
-    const top = rows.slice(0, 15);
+    const top = rowsComp.slice(0, 15);
     mkChart('ch-trans-promedio', 'bar', {
       labels: top.map(r => r.e),
-      datasets: [{ label: 'Promedio mensual', data: top.map(r => r.promedio / 1e6), backgroundColor: '#47e8ff', borderRadius: 4 }]
+      datasets: [
+        { label: `Promedio ${valorComp}`, data: top.map(r => r.promB / 1e6), backgroundColor: '#8a8f98', borderRadius: 4 },
+        { label: `Promedio ${valorActual}`, data: top.map(r => r.promA / 1e6), backgroundColor: '#47e8ff', borderRadius: 4 },
+      ]
     }, {
       indexAxis: 'y',
-      plugins: { legend: { display:false },
-        tooltip: { callbacks: { label: ctx => ' $' + Math.round(ctx.raw*1e6).toLocaleString('es-AR') + ' / mes' } } },
+      plugins: { legend: { display:true, labels:{ color:'var(--dim)', font:{size:8} } },
+        tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': $' + Math.round(ctx.raw*1e6).toLocaleString('es-AR') + ' / mes' } } },
       scales: {
         x: { ticks: { color:'var(--dim)', font:{size:9}, callback: v => '$'+v+'M' }, grid:{color:'rgba(255,255,255,.05)'} },
         y: { ticks: { color:'var(--dim)', font:{size:9} }, grid:{display:false} }
@@ -21987,15 +22106,19 @@ function buildTransPromedioMensual() {
   }
 
   tbl.innerHTML = `<thead><tr>
-    <th>Empresa</th><th class="r">Total ${valorActual}</th><th class="r">Meses considerados</th>
-    <th class="r">Meses con transferencias</th><th class="r">Promedio mensual</th>
-  </tr></thead><tbody>${rows.map(r => `<tr>
+    <th>Empresa</th>
+    <th class="r">Promedio ${valorComp}</th>
+    <th class="r">Promedio ${valorActual}</th>
+    <th class="r">Var. nominal</th>
+    <th class="r">Var. real (IPC)</th>
+  </tr></thead><tbody>${rowsComp.map(r => `<tr>
     <td>${r.e}</td>
-    <td class="r">${fvFull(r.total)}</td>
-    <td class="r">${mesesDivisor}</td>
-    <td class="r">${r.mesesConDatos}</td>
-    <td class="r" style="font-weight:600;color:var(--acc)">${fvFull(r.promedio)}</td>
-  </tr>`).join('')}</tbody>`;
+    <td class="r">${fvFull(r.promB)}</td>
+    <td class="r" style="font-weight:600;color:var(--acc)">${fvFull(r.promA)}</td>
+    <td class="r">${r.varNominal == null ? '—' : (r.varNominal>=0?'+':'')+r.varNominal.toFixed(1)+'%'}</td>
+    <td class="r">${r.varReal == null ? '—' : (r.varReal>=0?'+':'')+r.varReal.toFixed(1)+'%'}</td>
+  </tr>`).join('')}</tbody>
+  ${ipcAcum != null ? `<tfoot><tr><td colspan="5" style="text-align:right;color:var(--dim);font-size:8.5px;padding-top:6px">Inflación acumulada ${anioMasViejo}→${anioMasNuevo} (IPC): ${ipcAcum.toFixed(2)}% — usada para calcular la Var. real de cada empresa.</td></tr></tfoot>` : ''}`;
 }
 
 const BUILDERS = { resumen:buildResumen, facturacion:buildFacturacion, resultado:buildResultado, personal:buildPersonal, portafolio:buildPortafolio, inflacion:buildInflacion, empresa:buildEmpresa, comparar:buildComparar, rubros:buildRubros, transferencias:buildTransferencias, importar:()=>{}, sostenibilidad:buildSostenibilidad, heatmap:buildHeatmap, presupuesto:buildPresupuesto, balances:buildBalances, flujos:buildFlujos };
