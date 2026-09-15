@@ -8679,12 +8679,13 @@ function _rptTransferencias(autoPrint) {
 
   // Imágenes de cada gráfico
   var imgs = {
-    donut:   canvasPng('ch-trans-donut'),
-    saf:     canvasPng('ch-trans-saf'),
-    ben:     canvasPng('ch-trans-ben'),
-    mensual: canvasPng('ch-trans-mensual'),
-    cat:     canvasPng('ch-trans-cat'),
-    trend:   canvasPng('ch-trans-trend'),
+    donut:    canvasPng('ch-trans-donut'),
+    saf:      canvasPng('ch-trans-saf'),
+    ben:      canvasPng('ch-trans-ben'),
+    mensual:  canvasPng('ch-trans-mensual'),
+    cat:      canvasPng('ch-trans-cat'),
+    trend:    canvasPng('ch-trans-trend'),
+    promedio: canvasPng('ch-trans-promedio'),
   };
 
   // Subtítulos de KPIs
@@ -8718,6 +8719,24 @@ function _rptTransferencias(autoPrint) {
   }
   var legendaDonut = _capturarLeyenda('trans-donut-legend');
   var legendaSaf   = _capturarLeyenda('saf-totales-tabla');
+
+  // Tabla y nota de "Promedio mensual de transferencias por empresa" — se
+  // captura tal cual está en pantalla (incluye el comparativo entre 2 años
+  // y el filtro por empresa si el usuario los tiene activados).
+  var tablaPromedio = (function() {
+    var tbl = document.getElementById('tbl-trans-promedio');
+    if (!tbl || !tbl.innerHTML.trim()) return '';
+    return tbl.innerHTML
+      .replace(/var\(--acc\)/g, '#185fa5')
+      .replace(/var\(--dim\)/g, '#666')
+      .replace(/var\(--text\)/g, '#111')
+      .replace(/var\(--bd2?\)/g, '#ccc')
+      .replace(/var\(--[a-z0-9-]+\)/g, 'inherit');
+  })();
+  var notaPromedio = (function() {
+    var el = document.getElementById('trans-prom-nota');
+    return el ? el.textContent.trim() : '';
+  })();
 
   // CSS del reporte
   var css = _rptCSS() + '<style>'
@@ -8780,6 +8799,16 @@ function _rptTransferencias(autoPrint) {
   // Tendencia anual
   if (imgs.trend) {
     h.push('<div class="chart-card" id="sec_trend"><div class="chart-title">Tendencia anual de transferencias <span class="chart-unit">total por año — $ millones</span></div><img class="img-chart" src="'+imgs.trend+'"></div>');
+  }
+
+  // Promedio mensual de transferencias por empresa (incluye comparativo
+  // entre 2 años e inflación acumulada, si el usuario los activó en pantalla)
+  if (imgs.promedio || tablaPromedio) {
+    h.push('<div class="chart-card" id="sec_promedio"><div class="chart-title">Promedio mensual de transferencias por empresa</div>');
+    if (imgs.promedio) h.push('<img class="img-chart" src="'+imgs.promedio+'">');
+    if (notaPromedio)  h.push('<div style="font-size:7.5pt;color:#666;margin:8px 0;font-family:monospace">'+notaPromedio+'</div>');
+    if (tablaPromedio) h.push('<div class="tw"><table>'+tablaPromedio+'</table></div>');
+    h.push('</div>');
   }
 
   h.push(_rptFooter());
