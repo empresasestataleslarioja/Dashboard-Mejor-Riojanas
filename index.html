@@ -3854,6 +3854,18 @@ self.onmessage = async (e) => {
             <span class="card-hd-title">Mayor variación interanual por empresa</span>
             <span class="card-hd-unit" id="trans-var-lbl">transferencias recibidas</span>
           </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Comparar:</label>
+            <select id="sel-trans-var-desde" onchange="buildTransRankingVariacion()"
+              style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+              cursor:pointer;outline:none"></select>
+            <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">→</label>
+            <select id="sel-trans-var-hasta" onchange="buildTransRankingVariacion()"
+              style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+              cursor:pointer;outline:none"></select>
+          </div>
           <div style="overflow-x:auto"><table class="tbl" id="tbl-trans-var" style="font-size:9.5px"></table></div>
         </div>
 
@@ -21769,17 +21781,39 @@ function buildTransferencias() {
 // ── Ranking de mayor variación interanual de transferencias por empresa ──
 // Complementa la tendencia consolidada (que solo muestra el total del
 // portafolio por año) con el detalle de qué empresa concentra el mayor
-// cambio, positivo o negativo, entre los dos últimos años activos.
+// cambio, positivo o negativo, entre dos períodos elegidos por el usuario.
+// A diferencia del resto del panel (que respeta el filtro global de años
+// activos, ys()), acá se ofrecen TODOS los años con información cargada en
+// Transferencias, para poder comparar cualquier par de períodos histórico
+// aunque el filtro global esté acotado a menos años.
 function buildTransRankingVariacion() {
-  const tbl = document.getElementById('tbl-trans-var');
-  const lbl = document.getElementById('trans-var-lbl');
+  const tbl      = document.getElementById('tbl-trans-var');
+  const lbl      = document.getElementById('trans-var-lbl');
+  const selDesde = document.getElementById('sel-trans-var-desde');
+  const selHasta = document.getElementById('sel-trans-var-hasta');
   if (!tbl) return;
-  const years = ys().map(String);
-  if (years.length < 2) {
-    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Hace falta al menos 2 años activos para calcular variación interanual.</td></tr>';
+
+  const años = [...new Set(
+    (DATA.transferencias || [])
+      .map(t => parseInt(t.año))
+      .filter(y => y >= 2000 && y <= 2100)
+  )].sort((a,b) => a - b); // ascendente, para poblar los selects en orden cronológico
+
+  if (años.length < 2) {
+    if (selDesde) selDesde.innerHTML = '';
+    if (selHasta) selHasta.innerHTML = '';
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Hace falta al menos 2 años con transferencias cargadas para calcular variación interanual.</td></tr>';
     return;
   }
-  const lastY = years[years.length-1], prevY = years[years.length-2];
+
+  const prevYDefault = String(años[años.length-2]), lastYDefault = String(años[años.length-1]);
+  const prevYPrevio = selDesde && años.map(String).includes(selDesde.value) ? selDesde.value : prevYDefault;
+  const lastYPrevio = selHasta && años.map(String).includes(selHasta.value) ? selHasta.value : lastYDefault;
+  const prevY = prevYPrevio, lastY = lastYPrevio;
+
+  if (selDesde) selDesde.innerHTML = años.map(y => `<option value="${y}" ${String(y)===prevY?'selected':''}>${y}</option>`).join('');
+  if (selHasta) selHasta.innerHTML = años.map(y => `<option value="${y}" ${String(y)===lastY?'selected':''}>${y}</option>`).join('');
+
   if (lbl) lbl.textContent = `transferencias recibidas · ${prevY}→${lastY}`;
 
   const emps = [...new Set([
@@ -21798,7 +21832,7 @@ function buildTransRankingVariacion() {
     .slice(0, 15);
 
   if (!rows.length) {
-    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en los años activos.</td></tr>';
+    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${prevY} ni en ${lastY}.</td></tr>`;
     return;
   }
   tbl.innerHTML = `<thead><tr>
