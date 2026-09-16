@@ -21826,7 +21826,8 @@ function buildTransRankingVariacion() {
     const tLast = rowsEmp.filter(x=>String(x.año)===lastY).reduce((s,x)=>s+(x.importe||0),0);
     const tPrev = rowsEmp.filter(x=>String(x.año)===prevY).reduce((s,x)=>s+(x.importe||0),0);
     const varPct = tPrev>0 ? (tLast-tPrev)/tPrev*100 : (tLast>0 ? null : null);
-    return { e, tLast, tPrev, varPct, delta: tLast-tPrev };
+    const varReal = (tLast>0 && tPrev>0) ? realGrowthPct(tLast, parseInt(lastY), tPrev, parseInt(prevY)) : null;
+    return { e, tLast, tPrev, varPct, varReal, delta: tLast-tPrev };
   }).filter(r => r.tLast>0 || r.tPrev>0)
     .sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 15);
@@ -21835,21 +21836,32 @@ function buildTransRankingVariacion() {
     tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${prevY} ni en ${lastY}.</td></tr>`;
     return;
   }
+
+  // IPC acumulado entre los dos períodos elegidos — mismo criterio que el
+  // comparativo de "Promedio mensual de transferencias por empresa".
+  const anioMasNuevo = Math.max(parseInt(prevY), parseInt(lastY));
+  const anioMasViejo = Math.min(parseInt(prevY), parseInt(lastY));
+  const ipcAcum = _ipcAcumEntrePeriodos(String(anioMasNuevo), String(anioMasViejo));
+
   tbl.innerHTML = `<thead><tr>
     <th>Empresa</th><th class="r">${prevY}</th><th class="r">${lastY}</th>
-    <th class="r">Variación $</th><th class="r">Variación %</th>
+    <th class="r">Variación $</th><th class="r">Variación % (nominal)</th><th class="r">Variación % (real, IPC)</th>
   </tr></thead><tbody>${rows.map(r => {
     const col = r.delta>=0 ? 'var(--pos)' : 'var(--neg)';
     const varTxt = r.varPct==null ? (r.tLast>0?'nuevo':'—') :
       `${r.varPct>=0?'▲ +':'▼ '}${Math.abs(r.varPct).toFixed(2)}%`;
+    const colReal = r.varReal==null ? 'var(--dim)' : (r.varReal>=0 ? 'var(--pos)' : 'var(--neg)');
+    const varRealTxt = r.varReal==null ? (r.tLast>0&&!r.tPrev?'nuevo':'—') :
+      `${r.varReal>=0?'▲ +':'▼ '}${Math.abs(r.varReal).toFixed(2)}%`;
     return `<tr>
       <td>${r.e}</td>
       <td class="r">${r.tPrev>0?fvFull(r.tPrev):'—'}</td>
       <td class="r">${r.tLast>0?fvFull(r.tLast):'—'}</td>
       <td class="r" style="color:${col};font-weight:500">${r.delta>=0?'+':''}${fvFull(r.delta)}</td>
       <td class="r" style="color:${col}">${varTxt}</td>
+      <td class="r" style="color:${colReal}">${varRealTxt}</td>
     </tr>`;
-  }).join('')}</tbody>`;
+  }).join('')}</tbody>${ipcAcum != null ? `<tfoot><tr><td colspan="6" style="text-align:right;color:var(--dim);font-size:8.5px;padding-top:6px;font-family:var(--mono)">Inflación acumulada ${anioMasViejo}→${anioMasNuevo} (IPC): ${ipcAcum.toFixed(2)}% — usada para calcular la Variación % real de cada empresa.</td></tr></tfoot>` : ''}`;
 }
 
 // ── Cruce Transferencias (SIDIF) vs Presupuesto cargado ──────────────
