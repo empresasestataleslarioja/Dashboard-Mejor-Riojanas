@@ -1,0 +1,1127 @@
+<title>Portfolio Personal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#F8FAFC;--surf:#FFFFFF;--surf2:#F1F5F9;--surf3:#E8EFF7;--brd:#E2E8F0;--accent:#9A6C00;--accent-bg:#FDF3DC;--sant:#CC0000;--mp:#0088BB;--green:#16A34A;--red:#DC2626;--txt:#0F172A;--txt2:#475569;--muted:#94A3B8}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B0F14;--surf:#131820;--surf2:#1C2331;--surf3:#232E42;--brd:#252E3D;--accent:#D4A42A;--accent-bg:#2A200A;--sant:#FF4444;--mp:#00AEEF;--green:#22C55E;--red:#EF4444;--txt:#E2E8F0;--txt2:#94A3B8;--muted:#475569}}
+:root[data-theme="dark"]{--bg:#0B0F14;--surf:#131820;--surf2:#1C2331;--surf3:#232E42;--brd:#252E3D;--accent:#D4A42A;--accent-bg:#2A200A;--sant:#FF4444;--mp:#00AEEF;--green:#22C55E;--red:#EF4444;--txt:#E2E8F0;--txt2:#94A3B8;--muted:#475569}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:15px}
+body{background:var(--bg);color:var(--txt);font-family:'Plus Jakarta Sans',system-ui,sans-serif;min-height:100vh;line-height:1.5}
+.app{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:0 20px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:40}
+.topbar-logo{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--txt);flex-shrink:0}
+.topbar-logo span{color:var(--accent)}
+.topbar-total{margin-left:auto;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.topbar-amount{font-family:'DM Serif Display',serif;font-size:1.45rem;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:.71rem;font-weight:600;padding:2px 7px;border-radius:20px;font-variant-numeric:tabular-nums}
+.badge.up{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.badge.down{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.badge.flat{background:var(--surf2);color:var(--muted)}
+.topbar-actions{display:flex;gap:8px;flex-shrink:0}
+.btn-top{border:1px solid var(--brd);background:none;color:var(--txt2);border-radius:7px;padding:5px 11px;cursor:pointer;font-family:inherit;font-size:.76rem;font-weight:600;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.btn-top:hover{border-color:var(--accent);color:var(--accent)}
+.btn-top.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-top.primary:hover{opacity:.88}
+.body{display:flex;flex:1}
+/* Sidebar */
+.sidebar{width:280px;flex-shrink:0;border-right:1px solid var(--brd);background:var(--surf);display:flex;flex-direction:column;padding:11px;gap:8px;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
+.account-card{border:1px solid var(--brd);border-radius:10px;overflow:hidden}
+.account-card-header{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--brd)}
+.account-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.account-name{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt2)}
+.account-total{font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--txt);padding:7px 11px 1px;font-variant-numeric:tabular-nums}
+.sb-section-head{font-size:.61rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:4px 11px 2px;background:var(--surf2)}
+.account-rows{padding:3px 11px 8px;display:flex;flex-direction:column;gap:2px}
+.account-row{display:flex;justify-content:space-between;align-items:baseline;gap:4px}
+.account-row-label{font-size:.7rem;color:var(--txt2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.account-row-val{font-size:.7rem;color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
+.account-row-result{font-size:.62rem;font-variant-numeric:tabular-nums;flex-shrink:0}
+.result-pos{color:var(--green)}.result-neg{color:var(--red)}.result-neu{color:var(--muted)}
+.prices-status{font-size:.69rem;padding:5px 11px 7px;display:flex;align-items:center;gap:5px}
+.prices-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--muted)}
+.prices-dot.ok{background:var(--green)}
+.prices-dot.old{background:#D97706}
+.prices-dot.none{background:var(--muted)}
+.sidebar-date{font-size:.69rem;color:var(--muted);text-align:center}
+/* Main */
+.main{flex:1;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.tabs{display:flex;gap:2px;background:var(--surf2);border-radius:8px;padding:3px;width:fit-content;flex-wrap:wrap}
+.tab{padding:5px 13px;border-radius:6px;border:none;background:none;font-family:inherit;font-size:.77rem;font-weight:600;cursor:pointer;color:var(--txt2);transition:all .15s;white-space:nowrap}
+.tab.active{background:var(--surf);color:var(--txt);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.panel{display:none}.panel.active{display:flex;flex-direction:column;gap:14px}
+.chart-toggle{display:flex;gap:7px}
+.chart-btn{padding:4px 12px;border:1px solid var(--brd);border-radius:6px;background:none;font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;color:var(--txt2);transition:all .15s}
+.chart-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.chart-wrap{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:16px;min-height:250px}
+.chart-wrap canvas{max-height:230px}
+.chart-legend{display:flex;gap:12px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--txt2)}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:700px){.analysis-grid{grid-template-columns:1fr}}
+.stat-block{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:14px}
+.stat-block h3{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
+.dist-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--brd)}
+.dist-row:last-child{border-bottom:none}
+.dist-bar-wrap{flex:1;background:var(--surf2);border-radius:4px;height:5px;overflow:hidden}
+.dist-bar{height:100%;border-radius:4px;transition:width .4s ease}
+.dist-label{font-size:.71rem;color:var(--txt2);min-width:120px}
+.dist-pct{font-size:.71rem;font-weight:700;color:var(--txt);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+.pnl-table{width:100%;border-collapse:collapse}
+.pnl-table th{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:3px 6px 7px;text-align:right}
+.pnl-table th:first-child{text-align:left}
+.pnl-table td{font-size:.77rem;padding:5px 6px;border-top:1px solid var(--brd);color:var(--txt);font-variant-numeric:tabular-nums;text-align:right}
+.pnl-table td:first-child{text-align:left;color:var(--txt2)}
+.pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}.pnl-neu{color:var(--muted)}
+/* KPI tiles */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:700px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+.kpi-tile{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:3px}
+.kpi-label{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.kpi-value{font-family:'DM Serif Display',serif;font-size:1.25rem;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1.2}
+.kpi-sub{font-size:.71rem;font-variant-numeric:tabular-nums;font-weight:600}
+.kpi-pos{color:var(--green)}.kpi-neg{color:var(--red)}.kpi-neu{color:var(--muted)}
+/* Alert banner */
+.alert-banner{display:flex;align-items:center;gap:9px;background:color-mix(in srgb,#D97706 12%,transparent);border:1px solid color-mix(in srgb,#D97706 35%,transparent);border-radius:9px;padding:9px 13px;font-size:.78rem;color:#92400E}
+:root[data-theme="dark"] .alert-banner,:root:not([data-theme="light"]) .alert-banner{color:#FCD34D}
+.alert-banner-icon{font-size:1rem;flex-shrink:0}
+/* Liquidity */
+.liq-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--brd);gap:8px}
+.liq-row:last-child{border-bottom:none}
+.liq-label{font-size:.72rem;color:var(--txt2);flex:1}
+.liq-horizon{font-size:.63rem;font-weight:700;padding:1px 5px;border-radius:4px;text-transform:uppercase;flex-shrink:0}
+.liq-d0{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.liq-d1{background:color-mix(in srgb,#0EA5E9 15%,transparent);color:#0EA5E9}
+.liq-d3{background:color-mix(in srgb,#8B5CF6 15%,transparent);color:#8B5CF6}
+.liq-pf{background:color-mix(in srgb,#D97706 15%,transparent);color:#D97706}
+.liq-val{font-size:.72rem;font-weight:700;color:var(--txt);font-variant-numeric:tabular-nums;flex-shrink:0}
+/* Distribution group */
+.dist-group-head{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:8px 0 3px;display:flex;justify-content:space-between}
+.dist-group-head:not(:first-child){border-top:1px solid var(--brd);margin-top:4px}
+/* Topbar gain row */
+.topbar-gain{font-size:.72rem;color:var(--txt2);display:flex;align-items:center;gap:6px;flex-shrink:0}
+.market-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.market-toolbar h2{font-family:'DM Serif Display',serif;font-size:1.3rem;color:var(--txt)}
+.market-updated{font-size:.7rem;color:var(--muted);margin-left:auto}
+.btn-market{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:.77rem;font-weight:700;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.btn-market:hover{background:var(--accent);color:#fff}
+.btn-market:disabled,.btn-analyze:disabled{opacity:.5;cursor:not-allowed}
+.btn-analyze{background:var(--surf2);color:var(--txt2);border:1px solid var(--brd);border-radius:8px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:.77rem;font-weight:600;transition:all .15s;white-space:nowrap}
+.btn-analyze:hover{border-color:var(--accent);color:var(--accent)}
+.subtabs{display:flex;gap:0;border-bottom:1px solid var(--brd)}
+.subtab{padding:7px 14px;border:none;background:none;font-family:inherit;font-size:.77rem;font-weight:600;cursor:pointer;color:var(--txt2);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap}
+.subtab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.subpanel{display:none;padding-top:4px}.subpanel.active{display:block}
+.rank-table{width:100%;border-collapse:collapse;background:var(--surf);border:1px solid var(--brd);border-radius:10px;overflow:hidden}
+.rank-table th{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:7px 10px;background:var(--surf2);text-align:right}
+.rank-table th:first-child,.rank-table th:nth-child(2){text-align:left}
+.rank-table td{font-size:.78rem;padding:8px 10px;border-top:1px solid var(--brd);color:var(--txt);font-variant-numeric:tabular-nums;vertical-align:middle;text-align:right}
+.rank-table td:first-child,.rank-table td:nth-child(2){text-align:left}
+.rank-table tr:hover td{background:var(--surf2)}
+.fund-name{font-weight:700;font-size:.78rem;color:var(--txt)}
+.fund-type{font-size:.65rem;color:var(--muted)}
+.held-pill{display:inline-flex;align-items:center;font-size:.59rem;font-weight:700;padding:1px 5px;border-radius:8px;background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green);margin-left:5px;vertical-align:middle}
+.ret-pos{color:var(--green);font-weight:700}.ret-neg{color:var(--red);font-weight:700}.ret-neu{color:var(--muted)}
+.risk-badge{font-size:.61rem;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase}
+.risk-vlow{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
+.risk-low{background:color-mix(in srgb,#65A30D 12%,transparent);color:#65A30D}
+.risk-mid{background:color-mix(in srgb,#D97706 12%,transparent);color:#D97706}
+.risk-high{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
+.sim-controls{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:11px}
+.sim-controls h3{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.sim-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.sim-field{display:flex;flex-direction:column;gap:3px}
+.sim-field label{font-size:.74rem;font-weight:600;color:var(--txt2)}
+.sim-field input,.sim-field select{background:var(--surf2);border:1px solid var(--brd);color:var(--txt);border-radius:7px;padding:7px 9px;font-family:inherit;font-size:.875rem;font-variant-numeric:tabular-nums}
+.sim-field.wide{flex:1;min-width:150px}
+.btn-sim{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 18px;cursor:pointer;font-family:inherit;font-size:.8rem;font-weight:700;transition:opacity .15s;flex-shrink:0}
+.btn-sim:hover{opacity:.88}
+.sim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
+.sim-card{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:13px;position:relative}
+.sim-card.best{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.sim-card.mine{border-color:color-mix(in srgb,var(--accent) 50%,var(--brd))}
+.sim-fund{font-size:.71rem;font-weight:700;color:var(--txt);margin-bottom:2px}
+.sim-final{font-family:'DM Serif Display',serif;font-size:1.2rem;color:var(--txt);font-variant-numeric:tabular-nums}
+.sim-gain{font-size:.73rem;font-weight:700;margin-top:1px}
+.sim-gain.pos{color:var(--green)}.sim-gain.neg{color:var(--red)}
+.sim-tag{position:absolute;top:9px;right:9px;font-size:.58rem;font-weight:800;padding:2px 5px;border-radius:3px;text-transform:uppercase}
+.sim-tag.best{background:var(--green);color:#fff}
+.sim-tag.mine{background:var(--accent);color:#fff}
+.analyze-output{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:16px;min-height:130px;font-size:.86rem;line-height:1.75;color:var(--txt2);white-space:pre-wrap}
+.analyze-output.muted{color:var(--muted);font-style:italic}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--brd);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surf);border:1px solid var(--brd);border-radius:14px;width:100%;max-width:560px;max-height:95vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--brd);position:sticky;top:0;background:var(--surf);z-index:1}
+.modal-head h3{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--txt);flex:1}
+.modal-tabs{display:flex;gap:2px;background:var(--surf2);border-radius:7px;padding:2px}
+.modal-tab{padding:4px 12px;border-radius:5px;border:none;background:none;font-family:inherit;font-size:.74rem;font-weight:600;cursor:pointer;color:var(--txt2);transition:all .15s;white-space:nowrap}
+.modal-tab.active{background:var(--surf);color:var(--txt);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.2rem;line-height:1;flex-shrink:0}
+.modal-panel{display:none;padding:16px;flex-direction:column;gap:12px}
+.modal-panel.active{display:flex}
+.modal-section{display:flex;flex-direction:column;gap:7px}
+.modal-section-title{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding-bottom:4px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:6px}
+.modal-section-title .dot{display:inline-block;width:7px;height:7px;border-radius:50%}
+.modal-hint{font-size:.7rem;color:var(--muted);margin-top:-3px;line-height:1.5}
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:.74rem;font-weight:600;color:var(--txt2)}
+.field input,.field textarea{background:var(--surf2);border:1px solid var(--brd);color:var(--txt);border-radius:7px;padding:7px 9px;font-family:inherit;font-size:.875rem;font-variant-numeric:tabular-nums;width:100%;transition:border-color .15s}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--accent)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.fci-block{background:var(--surf2);border:1px solid var(--brd);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px}
+.fci-block-title{font-size:.71rem;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:6px}
+.fci-block-title .cur-badge{font-size:.6rem;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--surf3);color:var(--muted)}
+.fci-computed{font-size:.72rem;color:var(--txt2);margin-top:1px;display:flex;gap:12px;flex-wrap:wrap}
+.fci-computed span{display:flex;gap:4px;align-items:center}
+.fci-computed strong{font-variant-numeric:tabular-nums}
+.cedear-rows{display:flex;flex-direction:column;gap:5px}
+.cedear-row-hold{background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:8px;display:grid;grid-template-columns:80px 70px 1fr auto;gap:6px;align-items:center}
+.cedear-row-price{background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:8px;display:grid;grid-template-columns:80px 1fr 1fr;gap:6px;align-items:center}
+.cedear-row-hold input,.cedear-row-price input{padding:5px 7px;font-size:.8rem;background:var(--surf);border:1px solid var(--brd);border-radius:5px;color:var(--txt);font-family:inherit;font-variant-numeric:tabular-nums;width:100%}
+.cedear-row-hold input:focus,.cedear-row-price input:focus{outline:none;border-color:var(--accent)}
+.cedear-ticker-label{font-size:.78rem;font-weight:700;color:var(--txt)}
+.cedear-computed{font-size:.68rem;color:var(--txt2);margin-top:2px;grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}
+.btn-rm{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.95rem;padding:0 3px;line-height:1}
+.btn-rm:hover{color:var(--red)}
+.btn-add{background:none;border:1px dashed var(--brd);color:var(--txt2);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:.72rem;font-family:inherit;transition:all .15s;align-self:flex-start}
+.btn-add:hover{border-color:var(--accent);color:var(--accent)}
+.ai-fill-row{display:flex;align-items:center;gap:10px;background:var(--accent-bg);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:8px;padding:9px 12px}
+.ai-fill-row p{font-size:.76rem;color:var(--txt2);flex:1;line-height:1.4}
+.btn-ai{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:6px 13px;cursor:pointer;font-family:inherit;font-size:.75rem;font-weight:700;transition:opacity .15s;flex-shrink:0;display:flex;align-items:center;gap:5px}
+.btn-ai:hover{opacity:.88}
+.btn-ai:disabled{opacity:.5;cursor:not-allowed}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--brd);display:flex;gap:7px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surf)}
+.btn-cancel{background:none;border:1px solid var(--brd);color:var(--txt2);border-radius:7px;padding:7px 14px;cursor:pointer;font-family:inherit;font-size:.78rem;font-weight:600}
+.btn-cancel:hover{border-color:var(--txt2)}
+.btn-save{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-family:inherit;font-size:.78rem;font-weight:700;transition:opacity .15s}
+.btn-save:hover{opacity:.88}
+.btn-save:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:680px){.sidebar{width:100%;height:auto;position:static;border-right:none;border-bottom:1px solid var(--brd);padding:10px}.body{flex-direction:column}.topbar-total{display:none}.topbar-actions .btn-top span:not(.spinner){display:none}}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-logo">Portfolio <span>Personal</span></div>
+    <div class="topbar-total">
+      <div class="topbar-amount" id="hd-total">—</div>
+      <span style="font-size:.69rem;color:var(--muted)">diario</span><span class="badge flat" id="hd-day">—</span>
+      <span style="font-size:.69rem;color:var(--muted)">mensual</span><span class="badge flat" id="hd-month">—</span>
+    </div>
+    <div class="topbar-gain" id="hd-gain-row" hidden>
+      <span style="color:var(--muted)">Invertido</span><span id="hd-invested" style="font-weight:700;font-variant-numeric:tabular-nums">—</span>
+      <span style="color:var(--brd)">│</span>
+      <span style="color:var(--muted)">Ganancia</span><span id="hd-gain" style="font-weight:700;font-variant-numeric:tabular-nums">—</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-top primary" id="btn-open-prices">📈 <span>Actualizar cotizaciones</span></button>
+      <button class="btn-top" id="btn-open-holdings">✏️ <span>Mis tenencias</span></button>
+      <button class="btn-top" id="theme-btn">☽</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar">
+      <div class="account-card">
+        <div class="account-card-header"><div class="account-dot" style="background:var(--sant)"></div><div class="account-name">Santander</div></div>
+        <div class="account-total" id="sant-total">—</div>
+        <div class="account-rows">
+          <div class="account-row"><span class="account-row-label">Cta. corriente</span><span class="account-row-val" id="s-cc">—</span></div>
+          <div class="account-row"><span class="account-row-label">Caja de ahorro</span><span class="account-row-val" id="s-ca">—</span></div>
+          <div class="account-row"><span class="account-row-label">Plazo fijo</span><span class="account-row-val" id="s-pf">—</span></div>
+        </div>
+        <div class="sb-section-head">FCIs ARS</div>
+        <div class="account-rows" id="sb-fcis-ars"></div>
+        <div class="sb-section-head">FCI USD</div>
+        <div class="account-rows" id="sb-fci-usd"></div>
+        <div class="sb-section-head">CEDEARs</div>
+        <div class="account-rows" id="sb-cedears"></div>
+      </div>
+      <div class="account-card">
+        <div class="account-card-header"><div class="account-dot" style="background:var(--mp)"></div><div class="account-name">Mercado Pago</div></div>
+        <div class="account-total" id="mp-total">—</div>
+        <div class="account-rows">
+          <div class="account-row"><span class="account-row-label">Cuenta</span><span class="account-row-val" id="m-ct">—</span></div>
+          <div class="account-row"><span class="account-row-label">Mercado Fondo</span><span class="account-row-val" id="m-fd">—</span></div>
+          <div class="account-row"><span class="account-row-label">Criptomonedas</span><span class="account-row-val" id="m-cr">—</span></div>
+        </div>
+      </div>
+      <div class="prices-status"><div class="prices-dot none" id="prices-dot"></div><span id="prices-label" style="font-size:.69rem;color:var(--muted)">Sin cotizaciones</span></div>
+      <div class="sidebar-date" id="sb-date"></div>
+    </aside>
+
+    <main class="main">
+      <div class="tabs">
+        <button class="tab active" data-tab="evolucion">Evolución</button>
+        <button class="tab" data-tab="analisis">Análisis & P&L</button>
+        <button class="tab" data-tab="mercado">Mercado & Sugerencias</button>
+      </div>
+
+      <div class="panel active" id="tab-evolucion">
+        <div class="chart-toggle">
+          <button class="chart-btn active" id="btn-daily">Diario (30 días)</button>
+          <button class="chart-btn" id="btn-monthly">Mensual (12 meses)</button>
+        </div>
+        <div class="chart-wrap"><canvas id="main-chart"></canvas></div>
+        <div class="chart-legend" id="chart-legend"></div>
+      </div>
+
+      <div class="panel" id="tab-analisis">
+        <div id="concentration-alert" hidden></div>
+        <div class="kpi-row">
+          <div class="kpi-tile"><div class="kpi-label">Portfolio total</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub kpi-neu" id="kpi-total-sub"></div></div>
+          <div class="kpi-tile"><div class="kpi-label">Capital invertido</div><div class="kpi-value" id="kpi-invested">—</div><div class="kpi-sub kpi-neu">FCIs + CEDEARs</div></div>
+          <div class="kpi-tile"><div class="kpi-label">Ganancia neta</div><div class="kpi-value" id="kpi-gain">—</div><div class="kpi-sub kpi-neu" id="kpi-gain-sub"></div></div>
+          <div class="kpi-tile"><div class="kpi-label">Rendimiento total</div><div class="kpi-value" id="kpi-rend">—</div><div class="kpi-sub kpi-neu" id="kpi-rend-sub">sobre lo invertido</div></div>
+        </div>
+        <div class="analysis-grid">
+          <div class="stat-block">
+            <h3>Distribución por tipo de activo</h3>
+            <div id="dist-rows"><p style="font-size:.8rem;color:var(--muted)">Sin datos.</p></div>
+          </div>
+          <div class="stat-block">
+            <h3>Liquidez por horizonte de cobro</h3>
+            <div id="liq-rows"><p style="font-size:.8rem;color:var(--muted)">Sin datos.</p></div>
+          </div>
+        </div>
+        <div class="stat-block">
+          <h3>P&L por instrumento</h3>
+          <div id="pnl-content"><p style="font-size:.8rem;color:var(--muted)">Sin datos.</p></div>
+        </div>
+        <div class="stat-block">
+          <h3>Evolución mensual</h3>
+          <div style="overflow-x:auto">
+          <table class="pnl-table">
+            <thead><tr><th>Mes</th><th>Total</th><th>Santander</th><th>Mercado Pago</th><th>Var. mes</th><th>Var. 3m</th><th>IPC ref.</th><th>vs Inflación</th></tr></thead>
+            <tbody id="perf-body"></tbody>
+          </table>
+          </div>
+          <p style="font-size:.65rem;color:var(--muted);margin-top:8px">* IPC referencia: estimación mensual para Argentina. Var. real = rendimiento del portfolio menos inflación del período.</p>
+        </div>
+      </div>
+
+      <div class="panel" id="tab-mercado">
+        <div class="market-toolbar">
+          <h2>Mercado & Sugerencias</h2>
+          <button class="btn-market" id="btn-fetch-market">✦ Actualizar datos</button>
+          <button class="btn-analyze" id="btn-analyze">Analizar mi cartera</button>
+          <span class="market-updated" id="market-updated"></span>
+        </div>
+        <div class="subtabs">
+          <button class="subtab active" data-sub="ranking">Ranking FCIs</button>
+          <button class="subtab" data-sub="cedears">CEDEARs</button>
+          <button class="subtab" data-sub="simulador">Simulador</button>
+          <button class="subtab" data-sub="ia">Análisis IA</button>
+        </div>
+        <div class="subpanel active" id="sub-ranking"><p style="color:var(--muted);font-size:.84rem;padding:18px 0">Hacé clic en "Actualizar datos" para obtener rendimientos de mercado.</p></div>
+        <div class="subpanel" id="sub-cedears"><p style="color:var(--muted);font-size:.84rem;padding:18px 0">Hacé clic en "Actualizar datos" para ver análisis de CEDEARs.</p></div>
+        <div class="subpanel" id="sub-simulador">
+          <div class="sim-controls">
+            <h3>¿Cuánto tendría si hubiera invertido…?</h3>
+            <div class="sim-row">
+              <div class="sim-field wide"><label>Monto inicial (ARS)</label><input type="text" id="sim-amount" placeholder="1.000.000,00" class="fmt-ars" inputmode="decimal"></div>
+              <div class="sim-field wide"><label>Hace cuántos meses</label>
+                <select id="sim-months">
+                  <option value="1">1 mes</option><option value="3" selected>3 meses</option>
+                  <option value="6">6 meses</option><option value="12">12 meses</option><option value="24">24 meses</option>
+                </select>
+              </div>
+              <button class="btn-sim" id="btn-sim">Simular</button>
+            </div>
+          </div>
+          <div id="sim-results" style="margin-top:12px"></div>
+          <p style="font-size:.65rem;color:var(--muted);margin-top:10px;line-height:1.5">* Proyección basada en rendimientos mensuales estimados compuestos. No constituye garantía de rendimiento futuro. Los FCIs pueden tener comisiones, rescates con plazo y variaciones reales distintas a las proyectadas. La tasa mensual aplicada a horizontes largos puede sobreestimar el resultado real.</p>
+        </div>
+        <div class="subpanel" id="sub-ia">
+          <div class="analyze-output muted" id="analyze-out">Hacé clic en "Analizar mi cartera" para recibir recomendaciones personalizadas.</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Modal: Actualizar Cotizaciones -->
+<div class="modal-overlay" id="modal-prices">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Actualizar cotizaciones</h3>
+      <button class="modal-close" data-modal="modal-prices">×</button>
+    </div>
+    <div class="modal-panel active" id="mp-prices">
+      <div class="ai-fill-row">
+        <p>¿No tenés las cotizaciones a mano? La IA puede estimar los VCP y precios actuales para que los revisés y ajustés.</p>
+        <button class="btn-ai" id="btn-ai-prices"><span class="spinner" id="ai-spinner" hidden></span> ✦ Llenar con IA</button>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:var(--sant)"></span> Santander — Saldos de cuentas</div>
+        <div class="field-row">
+          <div class="field"><label>Cta. corriente (ARS)</label><input type="text" id="p-cc" placeholder="0,00" class="fmt-ars" inputmode="decimal"></div>
+          <div class="field"><label>Caja de ahorro (ARS)</label><input type="text" id="p-ca" placeholder="0,00" class="fmt-ars" inputmode="decimal"></div>
+        </div>
+        <div class="field"><label>Plazo fijo (ARS)</label><input type="text" id="p-pf" placeholder="0,00" class="fmt-ars" inputmode="decimal"></div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:#8B5CF6"></span> FCIs — VCP actual</div>
+        <div class="modal-hint">Ingresá el VCP (Valor de Cuotaparte) actual de cada fondo. Lo encontrás en Santander Online.</div>
+        <div id="vcp-blocks"></div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:#16A34A"></span> Superfondo Acc. Brasil — VCP USD + TC</div>
+        <div class="fci-block">
+          <div class="fci-block-title">Superfondo Acciones Brasil <span class="cur-badge">U$S</span></div>
+          <div class="field-row">
+            <div class="field"><label>VCP actual (USD)</label><input type="number" id="p-f5-vcp" placeholder="0" min="0" step="0.000001"></div>
+            <div class="field"><label>Tipo de cambio ARS/USD</label><input type="text" id="p-f5-tc" placeholder="1.200,00" class="fmt-ars" inputmode="decimal"></div>
+          </div>
+          <div class="fci-computed" id="p-f5-computed"><span style="color:var(--muted)">Ingresá VCP para ver monto estimado</span></div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:#0EA5E9"></span> CEDEARs — Precio actual</div>
+        <div class="modal-hint">Precio actual en ARS por cada papel.</div>
+        <div class="cedear-rows" id="price-cedear-rows"></div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:var(--mp)"></span> Mercado Pago</div>
+        <div class="field-row">
+          <div class="field"><label>Cuenta (ARS)</label><input type="text" id="p-mp-ct" placeholder="0,00" class="fmt-ars" inputmode="decimal"></div>
+          <div class="field"><label>Mercado Fondo (ARS)</label><input type="text" id="p-mp-fd" placeholder="0,00" class="fmt-ars" inputmode="decimal"></div>
+        </div>
+        <div class="field"><label>Criptomonedas (ARS equiv.)</label><input type="text" id="p-mp-cr" placeholder="0,00" class="fmt-ars" inputmode="decimal"></div>
+      </div>
+
+      <div class="field"><label>Notas (opcional)</label><textarea id="p-notes" rows="2" placeholder="Ej: actualizé después del cierre, renovación PF…" style="resize:vertical"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" data-modal="modal-prices">Cancelar</button>
+      <button class="btn-save" id="btn-save-prices">Guardar y registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Mis Tenencias -->
+<div class="modal-overlay" id="modal-holdings">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Mis tenencias</h3>
+      <button class="modal-close" data-modal="modal-holdings">×</button>
+    </div>
+    <div class="modal-panel active" id="mp-holdings">
+      <div class="modal-hint" style="background:var(--surf2);border-radius:8px;padding:10px 12px;font-size:.76rem;color:var(--txt2);line-height:1.5">
+        Actualizá solo cuando <strong>comprás o vendés</strong>. Las cuotapartes y nominales no cambian solos — lo que cambia es el precio.
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:#8B5CF6"></span> FCIs Santander en ARS</div>
+        <div class="modal-hint">Cuotapartes que tenés + VCP promedio de compra (precio promedio al que las adquiriste).</div>
+        <div id="hold-fci-ars-blocks"></div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:#16A34A"></span> Superfondo Acc. Brasil (USD)</div>
+        <div class="fci-block">
+          <div class="fci-block-title">Superfondo Acciones Brasil <span class="cur-badge">U$S</span></div>
+          <div class="field-row">
+            <div class="field"><label>Cuotapartes</label><input type="number" id="h-f5-cp" placeholder="0" min="0" step="0.0001"></div>
+            <div class="field"><label>VCP promedio (USD)</label><input type="number" id="h-f5-vcpp" placeholder="0" min="0" step="0.000001"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title"><span class="dot" style="background:#0EA5E9"></span> CEDEARs</div>
+        <div class="modal-hint">Ticker · Nominales que tenés · Precio promedio de compra (ARS)</div>
+        <div class="cedear-rows" id="hold-cedear-rows"></div>
+        <button class="btn-add" id="btn-add-cedear">+ Agregar CEDEAR</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" data-modal="modal-holdings">Cancelar</button>
+      <button class="btn-save" id="btn-save-holdings">Guardar tenencias</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const FCI_ARS = [
+  {id:'f1', name:'Superfondo Renta $'},
+  {id:'f2', name:'Superfondo Acciones'},
+  {id:'f3', name:'Superfondo Combinado'},
+  {id:'f4', name:'Supergestión'},
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = n => Number.isFinite(n)&&n!==0 ? new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2,maximumFractionDigits:2}).format(n) : '—';
+const fmtUSD = n => Number.isFinite(n) ? 'U$S '+new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n) : '—';
+const fmtShort = n=>{if(!Number.isFinite(n)||n===0)return'—';const a=Math.abs(n);if(a>=1e9)return'$'+(n/1e9).toFixed(2)+'B';if(a>=1e6)return'$'+(n/1e6).toFixed(2)+'M';if(a>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n.toLocaleString('es-AR',{minimumFractionDigits:2});};
+const fmtInput = n => (Number.isFinite(n)&&n!==0) ? new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n) : '';
+const parseRaw = str => { if(!str)return 0; return parseFloat(String(str).replace(/\./g,'').replace(',','.')) || 0; };
+const getVal = id => parseRaw($(id)?.value);
+const fmtDate = d => new Date(d+'T12:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'});
+const today = () => new Date().toISOString().slice(0,10);
+const monthKey = d => d.slice(0,7);
+const addDays = (d,n) => {const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10);};
+const pctBadge = (val,prev) => {if(!prev||prev===0)return{cls:'flat',text:'—'};const p=((val-prev)/Math.abs(prev))*100;return{cls:p>0?'up':p<0?'down':'flat',text:(p>=0?'+':'')+p.toFixed(1)+'%'};};
+const retClass = v => v==null?'ret-neu':v>0?'ret-pos':'ret-neg';
+const pnlClass = v => v>0?'pnl-pos':v<0?'pnl-neg':'pnl-neu';
+const riskClass = r => ({['Muy bajo']:'risk-vlow',Bajo:'risk-low',Moderado:'risk-mid',Alto:'risk-high'}[r]||'risk-mid');
+const fmtPct = (v,d=1) => v==null?'—':(v>=0?'+':'')+v.toFixed(d)+'%';
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+let theme = localStorage.getItem('pf-theme')||'system';
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',theme==='system'?'':theme);
+  if(theme==='system')document.documentElement.removeAttribute('data-theme');
+  $('theme-btn').textContent = theme==='system'?'☽':theme==='dark'?'☀':'⊙';
+}
+applyTheme();
+$('theme-btn').addEventListener('click',()=>{theme=theme==='system'?'dark':theme==='dark'?'light':'system';localStorage.setItem('pf-theme',theme);applyTheme();if(chartInst)renderChart();});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');$('tab-'+btn.dataset.tab).classList.add('active');
+}));
+document.querySelectorAll('.subtab').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.subtab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.subpanel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');$('sub-'+btn.dataset.sub).classList.add('active');
+}));
+let chartMode='daily';
+$('btn-daily').addEventListener('click',()=>{chartMode='daily';$('btn-daily').classList.add('active');$('btn-monthly').classList.remove('active');renderChart();});
+$('btn-monthly').addEventListener('click',()=>{chartMode='monthly';$('btn-monthly').classList.add('active');$('btn-daily').classList.remove('active');renderChart();});
+
+// ── ARS input auto-formatter ──────────────────────────────────────────────────
+function applyFmtToInput(inp){
+  inp.addEventListener('focus',()=>{
+    const raw=parseRaw(inp.value);
+    inp.value=raw?String(raw).replace('.',','):'';
+    inp.select();
+  });
+  inp.addEventListener('blur',()=>{
+    const raw=parseRaw(inp.value);
+    inp.value=raw?fmtInput(raw):'';
+  });
+}
+function setupFmtInputs(root=document){
+  root.querySelectorAll('.fmt-ars').forEach(applyFmtToInput);
+}
+setupFmtInputs();
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let snapshots=[], db=null, chartInst=null, sampleCap=null, marketData=null;
+// holdings: what the user owns (cuotapartes, nominales, precios compra)
+let holdings = { santander:{fcis:{},cedears:[]}, mp:{} };
+// latestPrices: VCPs + precios actuales + saldos (updated daily)
+let latestPrices = null;
+
+// ── Compute current snapshot from holdings + prices ───────────────────────────
+function computeSnapshot(h, p, date){
+  if(!h||!p) return null;
+  const fcis = {};
+  FCI_ARS.forEach(f=>{
+    const hf=h.santander?.fcis?.[f.id]||{};
+    const cp=hf.cuotapartes||0, vcpp=hf.vcpPromedio||0;
+    const vcp=p.fcis?.[f.id]?.vcp||0;
+    fcis[f.id]={cuotapartes:cp, vcp, vcpPromedio:vcpp, montoActual:cp*vcp, montoInvertido:cp*vcpp, resultado:cp*(vcp-vcpp)};
+  });
+  const hf5=h.santander?.fcis?.f5||{};
+  const cp5=hf5.cuotapartes||0, vcpp5=hf5.vcpPromedio||0;
+  const vcp5=p.fcis?.f5?.vcp||0, tc5=p.fcis?.f5?.tc||0;
+  fcis.f5={cuotapartes:cp5, vcp:vcp5, vcpPromedio:vcpp5, tc:tc5,
+    montoActualUSD:cp5*vcp5, montoInvertidoUSD:cp5*vcpp5, resultadoUSD:cp5*(vcp5-vcpp5),
+    montoActualARS:cp5*vcp5*tc5};
+  const cedears=(h.santander?.cedears||[]).map(c=>{
+    const pa=p.cedears?.[c.ticker]?.precioActual||0;
+    return{ticker:c.ticker,nominales:c.nominales,precioCompra:c.precioCompra,precioActual:pa,
+      montoActual:c.nominales*pa,montoInvertido:c.nominales*c.precioCompra,resultado:c.nominales*(pa-c.precioCompra)};
+  });
+  const fciTotal=FCI_ARS.reduce((a,f)=>a+(fcis[f.id].montoActual||0),0)+(fcis.f5.montoActualARS||0);
+  const cedearTotal=cedears.reduce((a,c)=>a+(c.montoActual||0),0);
+  const sant={cc:p.cc||0,ca:p.ca||0,pf:p.pf||0,fcis,cedears,fciTotal,cedearTotal};
+  sant.total=sant.cc+sant.ca+sant.pf+fciTotal+cedearTotal;
+  const mp={cuenta:p.mpCuenta||0,fondo:p.mpFondo||0,crypto:p.mpCrypto||0};
+  mp.total=mp.cuenta+mp.fondo+mp.crypto;
+  return{date,santander:sant,mp,total:sant.total+mp.total,notes:p.notes||'',pricesFetchedAt:p.fetchedAt};
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){renderHeader();renderSidebar();renderChart();renderAnalysis();}
+
+function getInvestmentSummary(s){
+  if(!s)return{invested:0,actual:0,gain:0,gainPct:0};
+  const fcis=s.santander?.fcis||{};
+  let invested=0,actual=0;
+  FCI_ARS.forEach(f=>{invested+=(fcis[f.id]?.montoInvertido||0);actual+=(fcis[f.id]?.montoActual||0);});
+  invested+=(fcis.f5?.montoInvertidoUSD||0)*(fcis.f5?.tc||0);
+  actual+=(fcis.f5?.montoActualARS||0);
+  (s.santander?.cedears||[]).forEach(c=>{invested+=(c.montoInvertido||0);actual+=(c.montoActual||0);});
+  const gain=actual-invested;
+  const gainPct=invested>0?gain/invested*100:0;
+  return{invested,actual,gain,gainPct};
+}
+
+function renderHeader(){
+  const latest=snapshots[0],prev=snapshots[1];
+  if(!latest){$('hd-total').textContent='Sin datos';return;}
+  $('hd-total').textContent=fmtShort(latest.total);
+  const day=pctBadge(latest.total,prev?.total);$('hd-day').textContent=day.text;$('hd-day').className='badge '+day.cls;
+  const m30=snapshots.find(s=>s.date<=addDays(today(),-28));
+  const mo=pctBadge(latest.total,m30?.total);$('hd-month').textContent=mo.text;$('hd-month').className='badge '+mo.cls;
+  const inv=getInvestmentSummary(latest);
+  if(inv.invested>0){
+    $('hd-gain-row').hidden=false;
+    $('hd-invested').textContent=fmtShort(inv.invested);
+    const gainEl=$('hd-gain');
+    gainEl.textContent=(inv.gain>=0?'+':'')+fmtShort(inv.gain)+' ('+fmtPct(inv.gainPct)+')';
+    gainEl.style.color=inv.gain>=0?'var(--green)':'var(--red)';
+  }
+}
+
+function resultRow(monto,resultado,invertido){
+  if(!monto)return'';
+  const cls=resultado>0?'result-pos':resultado<0?'result-neg':'result-neu';
+  const pctStr=invertido>0?' ('+fmtPct(resultado/invertido*100)+')':'';
+  return`<span class="account-row-result ${cls}">${resultado>=0?'+':''}${fmt(resultado)}${pctStr}</span>`;
+}
+
+function renderSidebar(){
+  const s=snapshots[0];
+  if(!s){
+    // show holdings with no prices
+    const noPrice='<span style="color:var(--muted);font-size:.67rem">sin precio</span>';
+    $('sb-fcis-ars').innerHTML=FCI_ARS.map(f=>{
+      const h=holdings.santander?.fcis?.[f.id];
+      if(!h?.cuotapartes)return'';
+      return`<div class="account-row"><span class="account-row-label">${f.name.replace('Superfondo ','S. ')}</span><span class="account-row-val">${noPrice}</span></div>`;
+    }).join('')||'<div class="account-row"><span class="account-row-label" style="font-style:italic;color:var(--muted);font-size:.68rem">Sin FCIs ARS</span></div>';
+    return;
+  }
+  $('sant-total').textContent=fmt(s.santander?.total);
+  $('s-cc').textContent=fmt(s.santander?.cc);
+  $('s-ca').textContent=fmt(s.santander?.ca);
+  $('s-pf').textContent=fmt(s.santander?.pf);
+  const fcis=s.santander?.fcis||{};
+  $('sb-fcis-ars').innerHTML=FCI_ARS.map(f=>{
+    const d=fcis[f.id]||{};
+    if(!d.montoActual)return'';
+    return`<div class="account-row"><span class="account-row-label">${f.name.replace('Superfondo ','S. ')}</span><span class="account-row-val">${fmt(d.montoActual)}</span>${resultRow(d.montoActual,d.resultado,d.montoInvertido)}</div>`;
+  }).join('')||'<div class="account-row"><span class="account-row-label" style="font-style:italic;color:var(--muted);font-size:.68rem">Sin FCIs ARS</span></div>';
+  const f5=fcis.f5||{};
+  $('sb-fci-usd').innerHTML=f5.montoActualUSD>0?`<div class="account-row"><span class="account-row-label">Acc. Brasil</span><span class="account-row-val">${fmtUSD(f5.montoActualUSD)}</span>${resultRow(f5.montoActualUSD,f5.resultadoUSD,f5.montoInvertidoUSD)}</div><div class="account-row"><span class="account-row-label" style="color:var(--muted);font-size:.67rem">≈ ARS</span><span class="account-row-val" style="font-size:.67rem;color:var(--muted)">${fmt(f5.montoActualARS)}</span></div>`:'<div class="account-row"><span class="account-row-label" style="font-style:italic;color:var(--muted);font-size:.68rem">Sin posición</span></div>';
+  $('sb-cedears').innerHTML=(s.santander?.cedears||[]).filter(c=>c.montoActual>0).map(c=>`<div class="account-row"><span class="account-row-label">${c.ticker}</span><span class="account-row-val">${fmt(c.montoActual)}</span>${resultRow(c.montoActual,c.resultado,c.montoInvertido)}</div>`).join('')||'<div class="account-row"><span class="account-row-label" style="font-style:italic;color:var(--muted);font-size:.68rem">Sin CEDEARs</span></div>';
+  $('mp-total').textContent=fmt(s.mp?.total);$('m-ct').textContent=fmt(s.mp?.cuenta);$('m-fd').textContent=fmt(s.mp?.fondo);$('m-cr').textContent=fmt(s.mp?.crypto);
+  $('sb-date').textContent='Actualizado '+fmtDate(s.date);
+  // prices freshness
+  const dot=$('prices-dot'),lbl=$('prices-label');
+  if(s.pricesFetchedAt){
+    const mins=Math.round((Date.now()-new Date(s.pricesFetchedAt))/60000);
+    dot.className='prices-dot ok';
+    lbl.textContent=`Cotizaciones: ${mins<2?'recién actualizadas':mins<60?`hace ${mins} min`:'hace más de 1h'}`;
+  }
+}
+
+function renderChart(){
+  const canvas=$('main-chart');if(!canvas)return;
+  if(chartInst){chartInst.destroy();chartInst=null;}
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark'||(!document.documentElement.hasAttribute('data-theme')&&window.matchMedia('(prefers-color-scheme:dark)').matches);
+  const gc=isDark?'rgba(255,255,255,.07)':'rgba(0,0,0,.06)',tc=isDark?'#94A3B8':'#64748B';
+  const opts={responsive:true,maintainAspectRatio:true,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(15,23,42,.92)',titleColor:'#E2E8F0',bodyColor:'#94A3B8',borderColor:'rgba(255,255,255,.1)',borderWidth:1,padding:10,callbacks:{label:c=>' '+fmt(c.parsed.y)}}},scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:10},maxTicksLimit:8}},y:{grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>fmtShort(v)}}}};
+  if(snapshots.length===0){
+    $('chart-legend').innerHTML='<span style="color:var(--muted);font-size:.78rem">Registrá tu primera cotización para ver el gráfico</span>';
+    return;
+  }
+  if(chartMode==='daily'){
+    const days=snapshots.slice(0,30).reverse();
+    chartInst=new Chart(canvas,{type:'line',data:{labels:days.map(d=>fmtDate(d.date)),datasets:[
+      {label:'Total',data:days.map(d=>d.total||0),borderColor:'#D4A42A',backgroundColor:'rgba(212,164,42,.12)',fill:true,tension:.35,pointRadius:3,borderWidth:2},
+      {label:'Santander',data:days.map(d=>d.santander?.total||0),borderColor:'#EC0000',fill:false,tension:.35,pointRadius:2,borderWidth:1.5,borderDash:[4,3]},
+      {label:'Mercado Pago',data:days.map(d=>d.mp?.total||0),borderColor:'#00AEEF',fill:false,tension:.35,pointRadius:2,borderWidth:1.5,borderDash:[4,3]},
+    ]},options:opts});
+    $('chart-legend').innerHTML='<div class="legend-item"><div class="legend-dot" style="background:#D4A42A"></div>Total</div><div class="legend-item"><div class="legend-dot" style="background:#EC0000"></div>Santander</div><div class="legend-item"><div class="legend-dot" style="background:#00AEEF"></div>Mercado Pago</div>';
+  }else{
+    const bm={};snapshots.forEach(s=>{const mk=monthKey(s.date);if(!bm[mk]||s.date>bm[mk].date)bm[mk]=s;});
+    const months=Object.keys(bm).sort().slice(-12);
+    chartInst=new Chart(canvas,{type:'bar',data:{labels:months.map(m=>{const[y,mo]=m.split('-');return new Date(+y,+mo-1,1).toLocaleDateString('es-AR',{month:'short',year:'2-digit'});}),datasets:[
+      {label:'Santander',data:months.map(m=>bm[m]?.santander?.total||0),backgroundColor:'rgba(236,0,0,.7)',borderRadius:4},
+      {label:'Mercado Pago',data:months.map(m=>bm[m]?.mp?.total||0),backgroundColor:'rgba(0,174,239,.7)',borderRadius:4},
+    ]},options:{...opts,scales:{x:{stacked:true,grid:{color:gc},ticks:{color:tc,font:{size:10}}},y:{stacked:true,grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>fmtShort(v)}}}}});
+    $('chart-legend').innerHTML='<div class="legend-item"><div class="legend-dot" style="background:#EC0000"></div>Santander</div><div class="legend-item"><div class="legend-dot" style="background:#00AEEF"></div>Mercado Pago</div>';
+  }
+}
+
+// IPC mensual de referencia Argentina (estimado). Clave: "YYYY-MM"
+const IPC_REF={'2026-09':3.5,'2026-08':3.8,'2026-07':4.0,'2026-06':3.5,'2026-05':3.2,'2026-04':3.0,'2026-03':3.5,'2026-02':2.8,'2026-01':3.0,'2025-12':2.5,'2025-11':2.4,'2025-10':3.0};
+function ipcRef(m){return IPC_REF[m]||3.5;}
+
+// Liquidity horizons: which FCI IDs are D+1 vs D+3
+const FCI_D1=['f1','f4']; // Renta $ and Supergestión → money market / renta fija CP
+const FCI_D3=['f2','f3','f5']; // Acciones, Combinado, Brasil
+
+function renderAnalysis(){
+  const s=snapshots[0];if(!s)return;
+  const total=s.total||1;
+  const fcis=s.santander?.fcis||{};
+
+  // ── KPI tiles ──────────────────────────────────────────────────────────────
+  const inv=getInvestmentSummary(s);
+  $('kpi-total').textContent=fmtShort(s.total);
+  $('kpi-invested').textContent=inv.invested>0?fmtShort(inv.invested):'—';
+  const gainEl=$('kpi-gain'),rendEl=$('kpi-rend');
+  if(inv.invested>0){
+    gainEl.textContent=(inv.gain>=0?'+':'')+fmtShort(inv.gain);
+    gainEl.className='kpi-value '+(inv.gain>=0?'kpi-pos':'kpi-neg');
+    $('kpi-gain-sub').textContent=(inv.gain>=0?'+':'')+fmtPct(inv.gainPct)+' sobre invertido';
+    $('kpi-gain-sub').className='kpi-sub '+(inv.gain>=0?'kpi-pos':'kpi-neg');
+    rendEl.textContent=fmtPct(inv.gainPct);
+    rendEl.className='kpi-value '+(inv.gainPct>=0?'kpi-pos':'kpi-neg');
+  }
+
+  // ── Concentration alert ────────────────────────────────────────────────────
+  const allInstruments=[
+    ...FCI_ARS.map(f=>({label:f.name,val:fcis[f.id]?.montoActual||0})),
+    {label:'Superfondo Acciones Brasil',val:fcis.f5?.montoActualARS||0},
+    ...(s.santander?.cedears||[]).map(c=>({label:c.ticker,val:c.montoActual||0})),
+  ].filter(x=>x.val>0);
+  const topInstr=allInstruments.reduce((a,b)=>b.val>a.val?b:a,{val:0,label:''});
+  const alertEl=$('concentration-alert');
+  if(topInstr.val/total>0.5){
+    const pct=(topInstr.val/total*100).toFixed(0);
+    alertEl.hidden=false;
+    alertEl.innerHTML=`<div class="alert-banner"><span class="alert-banner-icon">⚠</span><span><strong>Alta concentración:</strong> "${topInstr.label}" representa el ${pct}% del portfolio. Considerá diversificar para reducir el riesgo.</span></div>`;
+  }else{alertEl.hidden=true;}
+
+  // ── Distribution grouped ───────────────────────────────────────────────────
+  const groups=[
+    {label:'Liquidez inmediata',detail:'CC + CA',color:'#EC0000',val:(s.santander?.cc||0)+(s.santander?.ca||0)},
+    {label:'Plazo Fijo',detail:'Santander',color:'#AA0000',val:s.santander?.pf||0},
+    {label:'Renta Fija ARS',detail:'Renta $ + Supergestión',color:'#7C3AED',val:(fcis.f1?.montoActual||0)+(fcis.f4?.montoActual||0)},
+    {label:'Renta Variable ARS',detail:'Acciones + Combinado',color:'#2563EB',val:(fcis.f2?.montoActual||0)+(fcis.f3?.montoActual||0)},
+    {label:'Renta Variable USD',detail:'Acc. Brasil',color:'#16A34A',val:fcis.f5?.montoActualARS||0},
+    {label:'CEDEARs',detail:(s.santander?.cedears||[]).filter(c=>c.montoActual>0).map(c=>c.ticker).join(', ')||'—',color:'#0EA5E9',val:(s.santander?.cedears||[]).reduce((a,c)=>a+(c.montoActual||0),0)},
+    {label:'Mercado Pago',detail:'Cuenta + Fondo + Crypto',color:'#00AEEF',val:(s.mp?.total||0)},
+  ].filter(g=>g.val>0).sort((a,b)=>b.val-a.val);
+  $('dist-rows').innerHTML=groups.map(g=>{
+    const pct=(g.val/total*100).toFixed(1);
+    return`<div class="dist-row"><div class="dist-label" title="${g.detail}">${g.label}<br><span style="font-size:.62rem;color:var(--muted)">${g.detail}</span></div><div class="dist-bar-wrap"><div class="dist-bar" style="width:${pct}%;background:${g.color}"></div></div><div class="dist-pct">${pct}%</div></div>`;
+  }).join('')||'<p style="font-size:.8rem;color:var(--muted)">Sin posiciones.</p>';
+
+  // ── Liquidity breakdown ────────────────────────────────────────────────────
+  const liqD0=(s.santander?.cc||0)+(s.santander?.ca||0)+(s.mp?.cuenta||0)+(s.mp?.fondo||0);
+  const liqD1=FCI_D1.reduce((a,id)=>a+(fcis[id]?.montoActual||0),0);
+  const liqD3=FCI_D3.reduce((a,id)=>a+(id==='f5'?fcis.f5?.montoActualARS||0:fcis[id]?.montoActual||0),0);
+  const liqPF=s.santander?.pf||0;
+  const liqCE=(s.santander?.cedears||[]).reduce((a,c)=>a+(c.montoActual||0),0);
+  const liqRows=[
+    {label:'Disponible hoy (CC + CA + MP)',horizon:'D+0',cls:'liq-d0',val:liqD0},
+    {label:'FCIs money market / renta fija CP',horizon:'D+1',cls:'liq-d1',val:liqD1},
+    {label:'FCIs equity / mixtos / Brasil USD',horizon:'D+3',cls:'liq-d3',val:liqD3},
+    {label:'Plazo fijo (hasta vencimiento)',horizon:'PF',cls:'liq-pf',val:liqPF},
+    {label:'CEDEARs (bolsa argentina)',horizon:'D+2',cls:'liq-d1',val:liqCE},
+  ].filter(r=>r.val>0);
+  $('liq-rows').innerHTML=liqRows.map(r=>`<div class="liq-row"><span class="liq-label">${r.label}</span><span class="liq-horizon ${r.cls}">${r.horizon}</span><span class="liq-val">${fmt(r.val)}</span></div>`).join('')
+    +`<div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--brd);display:flex;justify-content:space-between;font-size:.71rem"><span style="color:var(--muted)">Total disponible en ≤ D+1</span><span style="font-weight:700;font-variant-numeric:tabular-nums">${fmt(liqD0+liqD1)}</span></div>`;
+
+  // ── P&L table with % ───────────────────────────────────────────────────────
+  const pnlItems=[
+    ...FCI_ARS.map(f=>{const d=fcis[f.id]||{};return d.montoActual?{label:f.name.replace('Superfondo ','S. '),monto:d.montoActual,inv:d.montoInvertido,res:d.resultado,pct:d.montoInvertido>0?d.resultado/d.montoInvertido*100:null,cur:'ARS'}:null;}).filter(Boolean),
+    fcis.f5?.montoActualUSD>0?{label:'Acc. Brasil (USD)',montoFmt:fmtUSD(fcis.f5.montoActualUSD),invFmt:fmtUSD(fcis.f5.montoInvertidoUSD),res:fcis.f5.resultadoUSD,resFmt:(fcis.f5.resultadoUSD>=0?'+':'')+fmtUSD(fcis.f5.resultadoUSD),pct:fcis.f5.montoInvertidoUSD>0?fcis.f5.resultadoUSD/fcis.f5.montoInvertidoUSD*100:null,cur:'USD'}:null,
+    ...(s.santander?.cedears||[]).filter(c=>c.montoActual>0).map(c=>({label:c.ticker,monto:c.montoActual,inv:c.montoInvertido,res:c.resultado,pct:c.montoInvertido>0?c.resultado/c.montoInvertido*100:null,cur:'ARS'})),
+  ].filter(Boolean);
+  $('pnl-content').innerHTML=pnlItems.length?
+    `<div style="overflow-x:auto"><table class="pnl-table"><thead><tr><th>Instrumento</th><th>Actual</th><th>Invertido</th><th>Resultado</th><th>Rend. %</th></tr></thead><tbody>${pnlItems.map(r=>{
+      const resFmt=r.resFmt||(r.res>=0?'+':'')+fmt(r.res);
+      const montoFmt=r.montoFmt||fmt(r.monto);
+      const invFmt=r.invFmt||fmt(r.inv);
+      const pctFmt=r.pct!=null?`<span class="${pnlClass(r.pct)}">${fmtPct(r.pct)}</span>`:'<span class="pnl-neu">—</span>';
+      return`<tr><td>${r.label}</td><td>${montoFmt}</td><td>${invFmt}</td><td class="${pnlClass(r.res)}">${resFmt}</td><td>${pctFmt}</td></tr>`;
+    }).join('')}</tbody></table></div>`
+    :'<p style="font-size:.8rem;color:var(--muted)">Sin datos de P&L.</p>';
+
+  // ── Monthly table expanded ─────────────────────────────────────────────────
+  const bm={};snapshots.forEach(s=>{const mk=monthKey(s.date);if(!bm[mk]||s.date>bm[mk].date)bm[mk]=s;});
+  const months=Object.keys(bm).sort().slice(-6).reverse();
+  $('perf-body').innerHTML=months.map((m,i)=>{
+    const cur=bm[m],prev=bm[months[i+1]],prev3=bm[months[i+3]];
+    const b1=prev?pctBadge(cur.total,prev.total):{cls:'flat',text:'—'};
+    const b3=prev3?pctBadge(cur.total,prev3.total):{cls:'flat',text:'—'};
+    const ipc=ipcRef(m);
+    const portfPct=prev?((cur.total-prev.total)/Math.abs(prev.total))*100:null;
+    const vsIpc=portfPct!=null?portfPct-ipc:null;
+    const vsIpcFmt=vsIpc!=null?`<span class="${vsIpc>=0?'pnl-pos':'pnl-neg'}">${vsIpc>=0?'+':''}${vsIpc.toFixed(1)}%</span>`:'—';
+    const[y,mo]=m.split('-');
+    return`<tr>
+      <td>${new Date(+y,+mo-1,1).toLocaleDateString('es-AR',{month:'short',year:'2-digit'})}</td>
+      <td>${fmtShort(cur.total)}</td>
+      <td>${fmtShort(cur.santander?.total)}</td>
+      <td>${fmtShort(cur.mp?.total)}</td>
+      <td><span class="badge ${b1.cls}">${b1.text}</span></td>
+      <td><span class="badge ${b3.cls}">${b3.text}</span></td>
+      <td style="color:var(--muted)">~${ipc.toFixed(1)}%</td>
+      <td>${vsIpcFmt}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Build holdings modal FCI blocks ──────────────────────────────────────────
+function buildHoldFciBlocks(){
+  $('hold-fci-ars-blocks').innerHTML=FCI_ARS.map(f=>`
+    <div class="fci-block" id="hfci-block-${f.id}">
+      <div class="fci-block-title">${f.name} <span class="cur-badge">ARS</span></div>
+      <div class="field-row">
+        <div class="field"><label>Cuotapartes</label><input type="number" id="h-${f.id}-cp" placeholder="0" min="0" step="0.0001"></div>
+        <div class="field"><label>VCP promedio de compra</label><input type="number" id="h-${f.id}-vcpp" placeholder="0" min="0" step="0.000001"></div>
+      </div>
+    </div>`).join('');
+}
+buildHoldFciBlocks();
+
+// ── Holdings CEDEAR rows ──────────────────────────────────────────────────────
+let holdCedears = [];
+function renderHoldCedearRows(){
+  const c=$('hold-cedear-rows');c.innerHTML='';
+  holdCedears.forEach((cd,i)=>{
+    const row=document.createElement('div');row.className='cedear-row-hold';
+    row.innerHTML=`
+      <input type="text" placeholder="Ticker" value="${cd.ticker||''}" maxlength="8" data-i="${i}" data-f="ticker" style="text-transform:uppercase;font-weight:700">
+      <input type="number" placeholder="Nominales" value="${cd.nominales||''}" min="0" step="1" data-i="${i}" data-f="nominales">
+      <input type="text" placeholder="Precio compra ARS" value="${cd.precioCompra?fmtInput(cd.precioCompra):''}" data-i="${i}" data-f="precioCompra" class="cedear-price" inputmode="decimal">
+      <button class="btn-rm" data-i="${i}">✕</button>`;
+    row.querySelectorAll('input').forEach(inp=>{
+      inp.addEventListener('input',e=>{
+        const idx=+e.target.dataset.i,f=e.target.dataset.f;
+        if(f==='ticker')holdCedears[idx][f]=e.target.value.toUpperCase();
+        else if(f==='nominales')holdCedears[idx][f]=+e.target.value||0;
+        else holdCedears[idx][f]=parseRaw(e.target.value);
+      });
+      if(inp.classList.contains('cedear-price')){
+        inp.addEventListener('focus',()=>{const raw=holdCedears[+inp.dataset.i][inp.dataset.f];inp.value=raw?String(raw).replace('.',','):'';inp.select();});
+        inp.addEventListener('blur',()=>{const raw=holdCedears[+inp.dataset.i][inp.dataset.f];inp.value=raw?fmtInput(raw):'';});
+      }
+    });
+    row.querySelector('.btn-rm').addEventListener('click',e=>{holdCedears.splice(+e.target.dataset.i,1);renderHoldCedearRows();});
+    c.appendChild(row);
+  });
+}
+$('btn-add-cedear').addEventListener('click',()=>{holdCedears.push({ticker:'',nominales:0,precioCompra:0});renderHoldCedearRows();});
+
+// ── Build prices modal VCP blocks ─────────────────────────────────────────────
+function buildVcpBlocks(){
+  $('vcp-blocks').innerHTML=FCI_ARS.map(f=>{
+    const h=holdings.santander?.fcis?.[f.id];
+    if(!h?.cuotapartes)return'';
+    return`<div class="fci-block" id="vcp-block-${f.id}">
+      <div class="fci-block-title">${f.name} <span class="cur-badge">ARS</span> <span style="font-size:.68rem;color:var(--muted);font-weight:400">${h.cuotapartes?.toLocaleString('es-AR')} cuotapartes</span></div>
+      <div class="field">
+        <label>VCP actual</label>
+        <input type="number" id="p-${f.id}-vcp" placeholder="0" min="0" step="0.000001">
+      </div>
+      <div class="fci-computed" id="p-${f.id}-computed"><span style="color:var(--muted)">Ingresá VCP para ver monto</span></div>
+    </div>`;
+  }).filter(Boolean).join('');
+  FCI_ARS.forEach(f=>{
+    const inp=$(`p-${f.id}-vcp`);if(!inp)return;
+    inp.addEventListener('input',()=>{
+      const h=holdings.santander?.fcis?.[f.id]||{};
+      const cp=h.cuotapartes||0,vcpp=h.vcpPromedio||0,vcp=+inp.value||0;
+      const monto=cp*vcp,res=cp*(vcp-vcpp);
+      $(`p-${f.id}-computed`).innerHTML=`<span>Monto estimado: <strong>${fmt(monto)}</strong></span><span>Resultado: <strong class="${pnlClass(res)}">${res>=0?'+':''}${fmt(res)}</strong></span>`;
+    });
+  });
+  ['p-f5-vcp','p-f5-tc'].forEach(id=>{const el=$(id);if(el)el.addEventListener('input',updateF5PriceComputed);});
+}
+function updateF5PriceComputed(){
+  const h5=holdings.santander?.fcis?.f5||{};
+  const cp=h5.cuotapartes||0,vcpp=h5.vcpPromedio||0;
+  const vcp=+$('p-f5-vcp')?.value||0,tc=getVal('p-f5-tc')||0;
+  const montoUSD=cp*vcp,resUSD=cp*(vcp-vcpp),montoARS=montoUSD*tc;
+  $('p-f5-computed').innerHTML=`<span>Monto: <strong>${fmtUSD(montoUSD)}</strong></span><span>≈ ARS: <strong>${fmt(montoARS)}</strong></span><span>Resultado: <strong class="${pnlClass(resUSD)}">${resUSD>=0?'+':''}${fmtUSD(resUSD)}</strong></span>`;
+}
+
+// ── CEDEARs in prices modal ───────────────────────────────────────────────────
+function buildPriceCedearRows(){
+  const c=$('price-cedear-rows');c.innerHTML='';
+  (holdings.santander?.cedears||[]).forEach(cd=>{
+    if(!cd.ticker)return;
+    const prevPrice=latestPrices?.cedears?.[cd.ticker]?.precioActual||0;
+    const row=document.createElement('div');row.className='cedear-row-price';
+    row.innerHTML=`
+      <div class="cedear-ticker-label">${cd.ticker}<br><span style="font-size:.64rem;color:var(--muted);font-weight:400">${cd.nominales} nom. × $${fmtInput(cd.precioCompra)||'?'} compra</span></div>
+      <div class="field"><label style="font-size:.7rem">Precio actual ARS</label><input type="text" id="price-cd-${cd.ticker}" placeholder="0,00" class="fmt-ars" inputmode="decimal" value="${prevPrice?fmtInput(prevPrice):''}"></div>
+      <div class="fci-computed" id="price-cd-${cd.ticker}-comp" style="align-self:flex-end;padding-bottom:2px"></div>`;
+    c.appendChild(row);
+    setupFmtInputs(row);
+    const inp=$(`price-cd-${cd.ticker}`);
+    function updateComp(){
+      const pa=getVal(`price-cd-${cd.ticker}`),nom=cd.nominales||0,pc=cd.precioCompra||0;
+      const monto=nom*pa,res=nom*(pa-pc);
+      if(!pa){$(`price-cd-${cd.ticker}-comp`).innerHTML='';return;}
+      $(`price-cd-${cd.ticker}-comp`).innerHTML=`<span>${fmt(monto)}</span><span class="${pnlClass(res)}">${res>=0?'+':''}${fmt(res)}</span>`;
+    }
+    inp.addEventListener('input',updateComp);inp.addEventListener('blur',updateComp);
+  });
+}
+
+// ── Modal open/close ──────────────────────────────────────────────────────────
+document.querySelectorAll('.modal-close,.btn-cancel').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const id=btn.dataset.modal;
+    if(id)$(id).classList.remove('open');
+    else document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'));
+  });
+});
+document.querySelectorAll('.modal-overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');}));
+
+$('btn-open-prices').addEventListener('click',openPricesModal);
+$('btn-open-holdings').addEventListener('click',openHoldingsModal);
+
+function openPricesModal(){
+  const p=latestPrices||{};
+  $('p-cc').value=fmtInput(p.cc||0);
+  $('p-ca').value=fmtInput(p.ca||0);
+  $('p-pf').value=fmtInput(p.pf||0);
+  $('p-mp-ct').value=fmtInput(p.mpCuenta||0);
+  $('p-mp-fd').value=fmtInput(p.mpFondo||0);
+  $('p-mp-cr').value=fmtInput(p.mpCrypto||0);
+  $('p-notes').value='';
+  buildVcpBlocks();
+  FCI_ARS.forEach(f=>{const inp=$(`p-${f.id}-vcp`);if(inp){inp.value=p.fcis?.[f.id]?.vcp||'';inp.dispatchEvent(new Event('input'));}});
+  $('p-f5-vcp').value=p.fcis?.f5?.vcp||'';
+  $('p-f5-tc').value=fmtInput(p.fcis?.f5?.tc||0);
+  updateF5PriceComputed();
+  buildPriceCedearRows();
+  $('modal-prices').classList.add('open');
+}
+
+function openHoldingsModal(){
+  const h=holdings.santander||{};
+  FCI_ARS.forEach(f=>{
+    const d=h.fcis?.[f.id]||{};
+    const cp=$(`h-${f.id}-cp`),vcpp=$(`h-${f.id}-vcpp`);
+    if(cp)cp.value=d.cuotapartes||'';
+    if(vcpp)vcpp.value=d.vcpPromedio||'';
+  });
+  const f5=h.fcis?.f5||{};
+  $('h-f5-cp').value=f5.cuotapartes||'';
+  $('h-f5-vcpp').value=f5.vcpPromedio||'';
+  holdCedears=(h.cedears||[]).map(c=>({...c}));
+  if(!holdCedears.length)holdCedears=[{ticker:'INTC',nominales:0,precioCompra:0},{ticker:'MSFT',nominales:0,precioCompra:0}];
+  renderHoldCedearRows();
+  $('modal-holdings').classList.add('open');
+}
+
+// ── Save holdings ─────────────────────────────────────────────────────────────
+$('btn-save-holdings').addEventListener('click',async()=>{
+  $('btn-save-holdings').disabled=true;$('btn-save-holdings').textContent='Guardando…';
+  const fcis={};
+  FCI_ARS.forEach(f=>{
+    const cp=+$(`h-${f.id}-cp`)?.value||0,vcpp=+$(`h-${f.id}-vcpp`)?.value||0;
+    fcis[f.id]={cuotapartes:cp,vcpPromedio:vcpp};
+  });
+  fcis.f5={cuotapartes:+$('h-f5-cp').value||0,vcpPromedio:+$('h-f5-vcpp').value||0};
+  const cedears=holdCedears.filter(c=>c.ticker&&(c.nominales>0||c.precioCompra>0)).map(c=>({ticker:c.ticker,nominales:+c.nominales||0,precioCompra:+c.precioCompra||0}));
+  holdings={santander:{fcis,cedears},mp:{}};
+  try{
+    if(db)await db.doc('config/holdings').set({...holdings,updatedAt:new Date().toISOString()});
+    else localStorage.setItem('pf-holdings',JSON.stringify(holdings));
+    buildVcpBlocks();buildPriceCedearRows();
+  }catch(e){alert('Error: '+(e.message||e));}
+  $('btn-save-holdings').disabled=false;$('btn-save-holdings').textContent='Guardar tenencias';
+  $('modal-holdings').classList.remove('open');
+  // recompute if prices exist
+  if(latestPrices){const snap=computeSnapshot(holdings,latestPrices,today());if(snap){const idx=snapshots.findIndex(s=>s.date===today());if(idx>=0)snapshots[idx]=snap;else snapshots.unshift(snap);render();}}
+});
+
+// ── Save prices (daily snapshot) ──────────────────────────────────────────────
+$('btn-save-prices').addEventListener('click',async()=>{
+  $('btn-save-prices').disabled=true;$('btn-save-prices').textContent='Guardando…';
+  const fcis={};
+  FCI_ARS.forEach(f=>{const inp=$(`p-${f.id}-vcp`);fcis[f.id]={vcp:inp?+inp.value||0:0};});
+  fcis.f5={vcp:+$('p-f5-vcp').value||0,tc:getVal('p-f5-tc')};
+  const cedears={};
+  (holdings.santander?.cedears||[]).forEach(cd=>{
+    cedears[cd.ticker]={precioActual:getVal(`price-cd-${cd.ticker}`)};
+  });
+  const prices={
+    cc:getVal('p-cc'),ca:getVal('p-ca'),pf:getVal('p-pf'),
+    mpCuenta:getVal('p-mp-ct'),mpFondo:getVal('p-mp-fd'),mpCrypto:getVal('p-mp-cr'),
+    fcis,cedears,notes:$('p-notes').value,fetchedAt:new Date().toISOString()
+  };
+  latestPrices=prices;
+  const snap=computeSnapshot(holdings,prices,today());
+  if(!snap){alert('Configurá primero tus tenencias.');$('btn-save-prices').disabled=false;$('btn-save-prices').textContent='Guardar y registrar';return;}
+  try{
+    if(db){
+      await db.doc('prices/current').set(prices);
+      await db.doc('snapshots/'+today()).set(snap);
+    }else{
+      localStorage.setItem('pf-prices',JSON.stringify(prices));
+      const local=JSON.parse(localStorage.getItem('pf-snapshots')||'[]');
+      const idx=local.findIndex(s=>s.date===today());
+      if(idx>=0)local[idx]=snap;else local.push(snap);
+      local.sort((a,b)=>b.date.localeCompare(a.date));
+      localStorage.setItem('pf-snapshots',JSON.stringify(local.slice(0,365)));
+      snapshots=local.slice(0,90);render();
+    }
+    $('modal-prices').classList.remove('open');
+  }catch(e){alert('Error: '+(e.message||e));}
+  $('btn-save-prices').disabled=false;$('btn-save-prices').textContent='Guardar y registrar';
+});
+
+// ── AI price fill ─────────────────────────────────────────────────────────────
+$('btn-ai-prices').addEventListener('click',async()=>{
+  if(!sampleCap){alert('Función IA no disponible.');return;}
+  const btn=$('btn-ai-prices'),sp=$('ai-spinner');
+  btn.disabled=true;sp.hidden=false;
+  const heldFcis=FCI_ARS.filter(f=>holdings.santander?.fcis?.[f.id]?.cuotapartes>0).map(f=>f.name);
+  const heldF5=holdings.santander?.fcis?.f5?.cuotapartes>0;
+  const heldCedears=(holdings.santander?.cedears||[]).filter(c=>c.ticker).map(c=>c.ticker);
+  const fciList=[...heldFcis,...(heldF5?['Superfondo Acciones Brasil']:[]),(heldFcis.length===0&&!heldF5)?'Superfondo Renta $':''].filter(Boolean);
+  const dateStr=today();
+  const prompt=`Fecha de hoy: ${dateStr}. Devolvé SOLO JSON válido con cotizaciones estimadas de Argentina:
+{"tc":tipo_de_cambio_ARS_por_USD,"fcis":{"f1":{"vcp":VCP_ARS},"f2":{"vcp":VCP_ARS},"f3":{"vcp":VCP_ARS},"f4":{"vcp":VCP_ARS},"f5":{"vcp":VCP_USD,"tc":TC_ARS_USD}},"cedears":{"INTC":{"precioActual":ARS},"MSFT":{"precioActual":ARS}${heldCedears.filter(t=>t!=='INTC'&&t!=='MSFT').map(t=>`,\\"${t}\\":{\\"precioActual\\":0}`).join('')}}}
+FCIs Santander Río a estimar: ${fciList.join(', ')}.
+Los VCP de FCIs ARS como Superfondo Renta $ están en el orden de miles de pesos (por cuotaparte), Superfondo Acciones y Combinado en decenas o cientos de miles. Superfondo Acciones Brasil en USD (centavos a pesos por cuotaparte). El tipo de cambio informal ARS/USD es del orden de 1000-1500 para ${dateStr.slice(0,7)}.
+Devolvé valores realistas y coherentes para Argentina en ${dateStr}.`;
+  try{
+    const data=await sampleCap.json(prompt,{modelTier:'default'});
+    // Fill VCP fields
+    FCI_ARS.forEach(f=>{const inp=$(`p-${f.id}-vcp`);if(inp&&data.fcis?.[f.id]?.vcp){inp.value=data.fcis[f.id].vcp;inp.dispatchEvent(new Event('input'));}});
+    if(data.fcis?.f5?.vcp)$('p-f5-vcp').value=data.fcis.f5.vcp;
+    const tc=data.fcis?.f5?.tc||data.tc||0;
+    if(tc){$('p-f5-tc').value=fmtInput(tc);updateF5PriceComputed();}
+    heldCedears.forEach(ticker=>{const inp=$(`price-cd-${ticker}`);if(inp&&data.cedears?.[ticker]?.precioActual){inp.value=fmtInput(data.cedears[ticker].precioActual);inp.dispatchEvent(new Event('blur'));}});
+  }catch(e){alert('Error al obtener datos IA: '+(e.message||e));}
+  btn.disabled=false;sp.hidden=true;
+});
+
+// ── Market data ───────────────────────────────────────────────────────────────
+$('btn-fetch-market').addEventListener('click',fetchMarketData);
+async function fetchMarketData(){
+  if(!sampleCap){$('sub-ranking').innerHTML='<p style="color:var(--muted);font-size:.84rem;padding:18px 0">Función no disponible.</p>';return;}
+  const btn=$('btn-fetch-market');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Consultando…';
+  const heldTickers=(holdings.santander?.cedears||[]).filter(c=>c.ticker).map(c=>c.ticker);
+  const prompt=`Devolvé SOLO JSON válido con datos de mercado argentino para ${today()}:
+{"fechaRef":"${today().slice(0,7)}","fcis":[{"nombre":"string","gestora":"string","tipo":"Money Market|Renta Fija|Renta Variable|Mixto|Dólar","riesgo":"Muy bajo|Bajo|Moderado|Alto","ret30d":number,"ret90d":number,"ret12m":number,"tna":number|null}],"cedears":[{"ticker":"string","empresa":"string","sector":"string","precioARS":number,"var30d":number,"var12m":number,"ratioConversion":number,"analisis":"string"}]}
+FCIs: incluir los 5 Superfondos Santander + 8 fondos más de Galicia, BBVA, Balanz, Allaria.
+CEDEARs: ${[...heldTickers,'INTC','MSFT','AAPL','NVDA','GOOGL','AMZN','TSLA','BRK/B','XOM','JPM'].filter((v,i,a)=>a.indexOf(v)===i).join(',')}.`;
+  try{
+    marketData=await sampleCap.json(prompt,{modelTier:'default'});
+    $('market-updated').textContent='Ref.: '+new Date().toLocaleString('es-AR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    renderRanking();renderCedears();renderSimulator();
+  }catch(e){$('sub-ranking').innerHTML=`<p style="color:var(--red);font-size:.84rem;padding:18px 0">Error: ${e.message||e}</p>`;}
+  btn.disabled=false;btn.innerHTML='✦ Actualizar datos';
+}
+
+function heldFciNames(){
+  const names=[];
+  FCI_ARS.forEach(f=>{if(holdings.santander?.fcis?.[f.id]?.cuotapartes>0)names.push(f.name.toLowerCase());});
+  if(holdings.santander?.fcis?.f5?.cuotapartes>0)names.push('brasil');
+  return names;
+}
+function isHeldFci(f){return heldFciNames().some(n=>f.nombre.toLowerCase().includes(n.split(' ').pop())||n.includes(f.nombre.toLowerCase().split(' ').pop()));}
+
+function renderRanking(){
+  if(!marketData?.fcis)return;
+  const sorted=[...marketData.fcis].sort((a,b)=>b.ret30d-a.ret30d);
+  $('sub-ranking').innerHTML=`<p style="font-size:.7rem;color:var(--muted);margin-bottom:8px">Rendimientos de referencia — ${marketData.fechaRef||today().slice(0,7)}. Los datos son estimaciones IA, no cotizaciones oficiales.</p><div style="overflow-x:auto"><table class="rank-table"><thead><tr><th>#</th><th>Fondo</th><th>Tipo</th><th>Riesgo</th><th>30 días</th><th>90 días</th><th>12 meses</th><th>TNA ref.</th></tr></thead><tbody>${sorted.map((f,i)=>`<tr><td style="color:var(--muted);font-size:.73rem">${i+1}</td><td><div class="fund-name">${f.nombre}${isHeldFci(f)?'<span class="held-pill">✓ tuyo</span>':''}</div><div class="fund-type">${f.gestora||''}</div></td><td style="font-size:.73rem;color:var(--txt2)">${f.tipo}</td><td><span class="risk-badge ${riskClass(f.riesgo)}">${f.riesgo}</span></td><td class="${retClass(f.ret30d)}">${fmtPct(f.ret30d)}</td><td class="${retClass(f.ret90d)}">${fmtPct(f.ret90d)}</td><td class="${retClass(f.ret12m)}">${fmtPct(f.ret12m)}</td><td style="color:var(--txt2);font-size:.76rem">${f.tna!=null?fmtPct(f.tna,1)+' TNA':'—'}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function renderCedears(){
+  if(!marketData?.cedears)return;
+  const heldMap=Object.fromEntries((holdings.santander?.cedears||[]).map(c=>[c.ticker,c]));
+  const heldPrices=latestPrices?.cedears||{};
+  $('sub-cedears').innerHTML=`<p style="font-size:.7rem;color:var(--muted);margin-bottom:8px">Precios de referencia ARS — estimaciones IA. Ref. ${marketData.fechaRef||today().slice(0,7)}.</p><div style="overflow-x:auto"><table class="rank-table"><thead><tr><th>Ticker</th><th>Empresa</th><th>Sector</th><th>Precio ARS</th><th>30 días</th><th>12 meses</th><th>Ratio</th><th>Tu tenencia</th><th>Tu resultado</th><th>Perspectiva</th></tr></thead><tbody>${[...marketData.cedears].sort((a,b)=>b.var30d-a.var30d).map(c=>{
+    const h=heldMap[c.ticker];
+    const pa=heldPrices[c.ticker]?.precioActual||0;
+    const tenencia=h&&pa?fmt(h.nominales*pa):'—';
+    const resultado=h&&pa?`<span class="${pnlClass(h.nominales*(pa-h.precioCompra))}">${h.nominales*(pa-h.precioCompra)>=0?'+':''}${fmt(h.nominales*(pa-h.precioCompra))}</span>`:'—';
+    return`<tr><td><strong>${c.ticker}</strong>${h?'<span class="held-pill">✓</span>':''}</td><td style="font-size:.76rem">${c.empresa}</td><td style="font-size:.71rem;color:var(--txt2)">${c.sector}</td><td>${c.precioARS?fmt(c.precioARS):'—'}</td><td class="${retClass(c.var30d)}">${fmtPct(c.var30d)}</td><td class="${retClass(c.var12m)}">${fmtPct(c.var12m)}</td><td style="font-size:.73rem;color:var(--muted)">${c.ratioConversion||'—'}</td><td style="font-size:.76rem">${tenencia}</td><td style="font-size:.76rem">${resultado}</td><td style="font-size:.7rem;color:var(--txt2);max-width:180px;white-space:normal">${c.analisis||''}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+$('btn-sim').addEventListener('click',renderSimulator);
+function renderSimulator(){
+  if(!marketData?.fcis){$('sim-results').innerHTML='<p style="color:var(--muted);font-size:.84rem">Primero actualizá los datos de mercado.</p>';return;}
+  const amount=parseRaw($('sim-amount').value)||1000000,months=+$('sim-months').value||3;
+  const results=[...marketData.fcis].map(f=>{const fin=amount*Math.pow(1+(f.ret30d/100),months);return{...f,fin,gain:fin-amount,held:isHeldFci(f)};}).sort((a,b)=>b.fin-a.fin);
+  const best=results[0];
+  $('sim-results').innerHTML=`<p style="font-size:.71rem;color:var(--muted);margin-bottom:10px">Si hubieras invertido <strong>${fmt(amount)}</strong> hace <strong>${months} mes${months>1?'es':''}</strong>:</p><div class="sim-grid">${results.map(r=>`<div class="sim-card ${r===best?'best':''} ${r.held&&r!==best?'mine':''}"><span class="sim-tag ${r===best?'best':r.held?'mine':''}" style="${(!r.held&&r!==best)?'display:none':''}">${r===best?'Mejor':r.held?'Tuyo':''}</span><div class="sim-fund">${r.nombre.replace('Superfondo ','S. ')}</div><div class="sim-final">${fmtShort(r.fin)}</div><div class="sim-gain ${r.gain>=0?'pos':'neg'}">${r.gain>=0?'+':''}${fmtShort(r.gain)}</div></div>`).join('')}</div>`;
+}
+
+// ── AI portfolio analysis ─────────────────────────────────────────────────────
+$('btn-analyze').addEventListener('click',async()=>{
+  if(!sampleCap){alert('Función IA no disponible.');return;}
+  const s=snapshots[0];if(!s){alert('Primero registrá una entrada.');return;}
+  document.querySelectorAll('.subtab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.subpanel').forEach(p=>p.classList.remove('active'));
+  document.querySelector('[data-sub="ia"]').classList.add('active');$('sub-ia').classList.add('active');
+  $('btn-analyze').disabled=true;
+  const out=$('analyze-out');out.classList.add('muted');out.textContent='Analizando…';
+  const fcis=s.santander?.fcis||{};
+  const fciLines=FCI_ARS.map(f=>fcis[f.id]?.montoActual>0?`  ${f.name}: ${fmt(fcis[f.id].montoActual)} (resultado ${fmt(fcis[f.id].resultado)}, VCP ${fcis[f.id].vcp?.toFixed(4)} vs prom. ${fcis[f.id].vcpPromedio?.toFixed(4)})`:'').filter(Boolean).join('\n');
+  const f5=fcis.f5||{};
+  const f5line=f5.montoActualUSD>0?`  Superfondo Acc. Brasil: ${fmtUSD(f5.montoActualUSD)} (≈ ${fmt(f5.montoActualARS)}, resultado ${fmtUSD(f5.resultadoUSD)})`:'';
+  const cedearLines=(s.santander?.cedears||[]).filter(c=>c.montoActual>0).map(c=>`  ${c.ticker}: ${c.nominales} nominales × $${fmtInput(c.precioActual)} = ${fmt(c.montoActual)} (compra ${fmt(c.montoInvertido)}, resultado ${fmt(c.resultado)})`).join('\n');
+  const marketCtx=marketData?`FCIs top 30d: ${(marketData.fcis||[]).sort((a,b)=>b.ret30d-a.ret30d).slice(0,3).map(f=>`${f.nombre} (${fmtPct(f.ret30d)})`).join(', ')}. CEDEARs top: ${(marketData.cedears||[]).sort((a,b)=>b.var30d-a.var30d).slice(0,3).map(c=>`${c.ticker} (${fmtPct(c.var30d)})`).join(', ')}.`:'Sin datos de mercado.';
+  const prompt=`Sos un asesor financiero argentino. Analizá este portfolio al ${s.date}:\n\nSANTANDER (${fmt(s.santander?.total)}):\n  CC: ${fmt(s.santander?.cc)} | CA: ${fmt(s.santander?.ca)} | PF: ${fmt(s.santander?.pf)}\n  FCIs:\n${fciLines||'  (ninguno)'}\n${f5line?'  '+f5line:''}\n  CEDEARs:\n${cedearLines||'  (ninguno)'}\n\nMERCADO PAGO (${fmt(s.mp?.total)}):\n  Cuenta: ${fmt(s.mp?.cuenta)} | Fondo: ${fmt(s.mp?.fondo)} | Crypto: ${fmt(s.mp?.crypto)}\n\nTOTAL: ${fmt(s.total)}\nDatos de mercado: ${marketCtx}\n\nRespondé en español:\n1. DIAGNÓSTICO: distribución, rendimiento por instrumento\n2. OPORTUNIDADES: qué incorporar o aumentar\n3. ACCIONES CONCRETAS: 3 pasos con montos sugeridos\n4. RIESGOS: macro argentina relevantes\n\nMáx. 500 palabras.`;
+  try{await sampleCap(prompt,{onText:({text})=>{out.textContent=text;out.classList.remove('muted');},modelTier:'default'});}
+  catch(e){if(e?.code!=='cancelled')out.textContent='Error: '+(e?.message||e);}
+  $('btn-analyze').disabled=false;
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init(){
+  // 1. Load sample capability
+  try{const s=await claude.use('sample');if(s)sampleCap=s;}catch(e){console.warn('sample',e);}
+
+  // 2. Try DB
+  try{
+    const d=await claude.use('db');
+    if(d){
+      db=d;
+      let holdingsLoaded=false,pricesLoaded=false,snapsLoaded=false;
+      function tryRender(){if(holdingsLoaded&&pricesLoaded&&snapsLoaded)render();}
+
+      d.doc('config/holdings').onSnapshot(snap=>{
+        if(snap.exists){holdings=snap.data();buildHoldFciBlocks();}
+        holdingsLoaded=true;tryRender();
+      },e=>console.warn('holdings',e));
+
+      d.doc('prices/current').onSnapshot(snap=>{
+        if(snap.exists)latestPrices=snap.data();
+        pricesLoaded=true;tryRender();
+      },e=>console.warn('prices',e));
+
+      d.collection('snapshots').orderBy('date','desc').limit(90).onSnapshot(snap=>{
+        snapshots=snap.docs.filter(x=>x.exists).map(x=>x.data());
+        snapsLoaded=true;tryRender();
+      },e=>console.warn('snapshots',e));
+
+      return;
+    }
+  }catch(e){console.warn('db',e);}
+
+  // 3. Fallback: localStorage
+  try{holdings=JSON.parse(localStorage.getItem('pf-holdings')||'{}');}catch(e){}
+  try{latestPrices=JSON.parse(localStorage.getItem('pf-prices'));}catch(e){}
+  try{snapshots=JSON.parse(localStorage.getItem('pf-snapshots')||'[]').slice(0,90);}catch(e){snapshots=[];}
+  buildHoldFciBlocks();
+  render();
+}
+init();
+</script>
