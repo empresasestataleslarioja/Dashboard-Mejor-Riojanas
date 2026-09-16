@@ -3941,6 +3941,14 @@ self.onmessage = async (e) => {
             <span id="trans-tabla-toggle" style="font-size:10px;color:var(--dim)">▼ mostrar</span>
           </div>
           <div id="trans-tabla-wrap" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap" onclick="event.stopPropagation()">
+              <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Año a desplegar:</label>
+              <select id="sel-trans-detalle-anio" onchange="renderTransTabla(_transTablaPreFiltrada())"
+                style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
+                font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
+                cursor:pointer;outline:none"></select>
+              <span style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">ℹ Para no listar todos los años de una — elegí "Todos" si igual lo necesitás.</span>
+            </div>
             <div class="tbl-wrap">
             <table class="tbl" id="tbl-trans" style="font-size:9.5px;width:100%"></table>
           </div>
@@ -20494,13 +20502,45 @@ function limpiarFiltrosTrans() {
 }
 
 // ── Toggle tabla detalle ─────────────────────────────────────────
+// ── Selector de año propio del Detalle de transferencias ─────────────
+// Independiente del filtro global (_transFiltros.año, que afecta también
+// gráficos y KPIs): acá el objetivo es que al abrir "Detalle de
+// transferencias" no se listen de entrada todas las transferencias de
+// todos los años cargados (podían ser miles de filas), sino un año por
+// vez — por defecto, el más reciente con datos. "Todos" sigue disponible
+// para quien lo necesite.
+function _poblarSelTransDetalleAnio() {
+  const sel = document.getElementById('sel-trans-detalle-anio');
+  if (!sel) return;
+  const años = [...new Set(
+    (DATA.transferencias || [])
+      .map(t => parseInt(t.año))
+      .filter(y => y >= 2000 && y <= 2100)
+  )].sort((a,b) => b - a); // más reciente primero
+  const valorPrevio = sel.value;
+  const valorDefault = años.length ? String(años[0]) : 'todos';
+  const valor = (valorPrevio === 'todos' || años.map(String).includes(valorPrevio)) ? valorPrevio : valorDefault;
+  sel.innerHTML = años.map(y => `<option value="${y}" ${String(y)===valor?'selected':''}>${y}</option>`).join('')
+    + `<option value="todos" ${valor==='todos'?'selected':''}>Todos los años</option>`;
+}
+
+// Combina el filtro global del panel (transFiltered) con el año elegido
+// específicamente para esta tabla.
+function _transTablaPreFiltrada() {
+  _poblarSelTransDetalleAnio();
+  const sel = document.getElementById('sel-trans-detalle-anio');
+  const rows = transFiltered();
+  if (!sel || sel.value === 'todos') return rows;
+  return rows.filter(t => String(t.año) === sel.value);
+}
+
 function toggleTransTabla() {
   const w = document.getElementById('trans-tabla-wrap');
   const t = document.getElementById('trans-tabla-toggle');
   const hidden = w.style.display === 'none';
   w.style.display = hidden ? '' : 'none';
   t.textContent = hidden ? '▲ ocultar' : '▼ mostrar';
-  if (hidden) renderTransTabla(transFiltered());
+  if (hidden) renderTransTabla(_transTablaPreFiltrada());
 }
 
 function renderTransTabla(rows) {
@@ -21774,7 +21814,7 @@ function buildTransferencias() {
 
   // Mantener tabla abierta si ya estaba visible
   if (document.getElementById('trans-tabla-wrap')?.style.display !== 'none') {
-    renderTransTabla(rows);
+    renderTransTabla(_transTablaPreFiltrada());
   }
 }
 
@@ -34469,12 +34509,12 @@ function editarCeldaTrans(span, idx, campo) {
         saveDataToLocalCache();
         marcarPendienteGuardar();
       }
-      renderTransTabla(transFiltered());
+      renderTransTabla(_transTablaPreFiltrada());
     };
     sel.addEventListener('change', commit);
     sel.addEventListener('blur', commit);
     sel.addEventListener('keydown', e => {
-      if (e.key === 'Escape') renderTransTabla(transFiltered());
+      if (e.key === 'Escape') renderTransTabla(_transTablaPreFiltrada());
     });
 
   } else if (campo === 'año') {
@@ -34497,12 +34537,12 @@ function editarCeldaTrans(span, idx, campo) {
         marcarPendienteGuardar();
         populateTransSelects();
       }
-      renderTransTabla(transFiltered());
+      renderTransTabla(_transTablaPreFiltrada());
     };
     inp.addEventListener('blur', commit);
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') inp.blur();
-      if (e.key === 'Escape') renderTransTabla(transFiltered());
+      if (e.key === 'Escape') renderTransTabla(_transTablaPreFiltrada());
     });
 
   } else if (campo === 'observacion') {
@@ -34523,12 +34563,12 @@ function editarCeldaTrans(span, idx, campo) {
       t.observacion = v;
       saveDataToLocalCache();
       marcarPendienteGuardar();
-      renderTransTabla(transFiltered());
+      renderTransTabla(_transTablaPreFiltrada());
     };
     ta.addEventListener('blur', commit);
     ta.addEventListener('keydown', e => {
       if (e.key === 'Enter') ta.blur();
-      if (e.key === 'Escape') renderTransTabla(transFiltered());
+      if (e.key === 'Escape') renderTransTabla(_transTablaPreFiltrada());
     });
   }
 }
