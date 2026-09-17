@@ -27018,10 +27018,13 @@ function _aplicarERColumnas() {
 // más confiable que adivinar por texto libre, porque el propio archivo ya
 // dice "Compras", "Ingresos > Operativos/Otros Ingresos" y "Egresos >
 // Operativos/Financieros/Otros Egresos". Dentro de Egresos > Operativos,
-// el Rubro (Producción/Comercialización/Administración) decide costo vs.
-// gastoCom vs. gastoAdm — Producción se trata como costo (mano de obra y
-// gastos directos de producir lo que se vende, igual criterio que
-// Compras), no como gasto administrativo.
+// el Rubro (Producción/Comercialización/Administración) decide gastoCom
+// vs. gastoAdm. Compras y Producción NO se separan como "costo": empresas
+// como Agroandina no costean sino al cierre de ejercicio, así que
+// desdoblar un costo de ventas acá sería un criterio artificial que no
+// existe en la contabilidad real de la empresa ni en el ER ya cargado de
+// otros períodos — Compras se trata como parte de los mismos "Egresos de
+// Producción" (gastoAdm), no como costo aparte.
 // Todas las filas "Total X" (a cualquier nivel) se ignoran: son sumas del
 // detalle que ya se está contando aparte, y usarlas también duplicaría
 // los importes — salvo "Total general", que se usa como checksum: si la
@@ -27040,7 +27043,7 @@ function tryParseERPivotContable(wb, fname) {
   const esTotal = s => /^TOTAL(\s+|$)/i.test(String(s||'').trim());
 
   const LBL_CONCEPTO = {
-    ventas: 'Ventas', otrosIngresos: 'Otros Ingresos', costo: 'Costo de Ventas',
+    ventas: 'Ventas', otrosIngresos: 'Otros Ingresos',
     gastoAdm: 'Gastos de Administración', gastoCom: 'Gastos de Comercialización',
     resFinanciero: 'Resultado Financiero', otrosGastos: 'Otros Egresos',
     resEjercicio: 'Resultado del Ejercicio',
@@ -27100,7 +27103,9 @@ function tryParseERPivotContable(wb, fname) {
       const r = String(rubro||'').toUpperCase().trim();
       if (r === 'COMERCIALIZACION' || r === 'COMERCIALIZACIÓN') return 'gastoCom';
       if (r === 'ADMINISTRACION' || r === 'ADMINISTRACIÓN') return 'gastoAdm';
-      if (r === 'PRODUCCION' || r === 'PRODUCCIÓN') return 'costo';
+      // Producción NO es costo de ventas en este perfil de empresa (ver
+      // nota arriba) — es "Egresos de Producción", un gasto operativo más.
+      if (r === 'PRODUCCION' || r === 'PRODUCCIÓN') return 'gastoAdm';
       const t = String(detalle || rubro || '').toUpperCase();
       if (/PUBLICIDAD|COMERCIALIZAC|FLETE|VIATICO|MOVILIDAD/.test(t)) return 'gastoCom';
       return 'gastoAdm';
@@ -27148,7 +27153,9 @@ function tryParseERPivotContable(wb, fname) {
       let cpt = null;
       const estadoU = curEstado.toUpperCase();
       const tipoU = curTipo.toUpperCase();
-      if (estadoU === 'COMPRAS') cpt = 'costo';
+      // Compras se agrupa con gastoAdm (Egresos de Producción), no como
+      // costo de ventas aparte — ver nota al principio de la función.
+      if (estadoU === 'COMPRAS') cpt = 'gastoAdm';
       else if (estadoU === 'INGRESOS') cpt = tipoU.includes('OTRO') ? 'otrosIngresos' : 'ventas';
       else if (estadoU === 'EGRESOS') {
         if (tipoU.includes('FINANC')) cpt = 'resFinanciero';

@@ -1184,7 +1184,12 @@ group('tryParseERLibroMayorResumen — no se confunde con el formato con detalle
 //    palabra clave del detalle, y descarta filas "Total X" salvo "Total
 //    general" (que se usa como checksum). 46023/46054 son los seriales de
 //    Excel reales para el 01/01/2026 y 01/02/2026 (verificados contra el
-//    archivo real del usuario). ──────────────────────────────────────
+//    archivo real del usuario). Compras y Egresos>Operativos>Producción
+//    se agrupan como gastoAdm ("Egresos de Producción"), no como "costo"
+//    aparte — aclaración del usuario: empresas de este perfil (Agroandina
+//    y otras) no costean sino al cierre de ejercicio, y separar un costo
+//    de ventas acá sería un criterio artificial e inconsistente con el ER
+//    ya cargado de otros períodos para la misma empresa. ──────────────
 group('tryParseERPivotContable — tabla dinámica Estado/Tipo/Rubro/Detalle (caso real Agroandina)', () => {
   const ENE = 46023, FEB = 46054;
   const rows = [
@@ -1219,10 +1224,10 @@ group('tryParseERPivotContable — tabla dinámica Estado/Tipo/Rubro/Detalle (ca
     assert(f('ventas')?.valores[1] === 950 && f('ventas')?.valores[2] === 1040,
       'Ventas Brutas + Descuentos Otorgados (Ingresos>Operativos) se suman en un solo renglón "ventas", neto de descuentos');
     assert(f('otrosIngresos')?.valores[1] === 20, 'Ingresos>Otros Ingresos clasifica como otrosIngresos');
-    assert(f('costo')?.valores[1] === -400 && f('costo')?.valores[2] === -430,
-      'Compras (-300) + Egresos>Operativos>Producción (-100) se suman juntos como costo — Producción se trata como costo, no como gasto admin');
+    assert(f('costo') === undefined, 'no genera ningún renglón "costo" — empresas de este perfil no costean sino al cierre de ejercicio');
     assert(f('gastoCom')?.valores[1] === -40, 'Egresos>Operativos>Comercialización clasifica como gastoCom por el Rubro, no por palabra clave');
-    assert(f('gastoAdm')?.valores[1] === -60, 'Egresos>Operativos>Administración clasifica como gastoAdm por el Rubro');
+    assert(f('gastoAdm')?.valores[1] === -460 && f('gastoAdm')?.valores[2] === -495,
+      'Compras (-300) + Egresos>Operativos>Producción (-100) + Administración (-60) se suman juntos como gastoAdm — Compras y Producción son "Egresos de Producción", no costo de ventas aparte');
     assert(f('resFinanciero')?.valores[1] === -10, 'Egresos>Financieros clasifica como resFinanciero');
     assert(f('otrosGastos')?.valores[1] === -5, 'Egresos>Otros Egresos clasifica como otrosGastos');
     assert(f('resEjercicio')?.valores[1] === 455 && f('resEjercicio')?.valores[2] === 507,
