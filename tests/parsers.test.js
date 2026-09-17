@@ -206,6 +206,16 @@ group('_matchEmpresaPortafolio', () => {
     'reconoce la empresa pese al sufijo societario ("SAPEM") ausente del portafolio');
   assert(_matchEmpresaPortafolio('UNA EMPRESA QUE NO EXISTE', candidatas) === '',
     'no inventa una coincidencia para un nombre fuera del portafolio');
+
+  // Bug real: transferencias de "SOCIEDAD ANÓNIMA UNIPERSONAL DE
+  // TRANSPORTE S.A.U." no se contaban salvo una — el Excel SIDIF trae el
+  // beneficiario truncado y sin tildes ("SOCIEDAD ANONIMA UNIPERSONAL"),
+  // que es literalmente prefijo del nombre de portafolio salvo por el
+  // acento en "ANÓNIMA", y el substring exacto (sin normalizar acentos)
+  // no lo detectaba.
+  const candidatasSAU = ['SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U.'];
+  assert(_matchEmpresaPortafolio('SOCIEDAD ANONIMA UNIPERSONAL', candidatasSAU) === 'SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U.',
+    'reconoce el beneficiario truncado y sin tildes del SIDIF como la empresa del portafolio con tilde ("SOCIEDAD ANÓNIMA...")');
 });
 
 // ── _beneficiarioCanonico: pedido real del usuario — un cambio de forma
@@ -235,6 +245,43 @@ group('_beneficiarioCanonico — agrupa transferencias por empresa del portafoli
     'funciona igual para cualquier empresa del portafolio, no solo el caso de ejemplo');
   assert(_beneficiarioCanonico('Municipalidad de Chilecito') === 'Municipalidad de Chilecito',
     'un beneficiario que no es una empresa del portafolio (un tercero real) se deja tal cual, sin inventar una empresa');
+});
+
+// ── _transEmpresa: bug real reportado por el usuario — no impactaban
+//    registros de transferencias de "SOCIEDAD ANÓNIMA UNIPERSONAL DE
+//    TRANSPORTE S.A.U." en ningún panel por-empresa (Informe Ejecutivo,
+//    Promedio mensual, rankings) salvo una transferencia de mayo 2026.
+//    El Excel SIDIF trae el beneficiario truncado y sin tilde
+//    ("SOCIEDAD ANONIMA UNIPERSONAL"); es prefijo literal del nombre de
+//    portafolio salvo por el acento en "ANÓNIMA", y _transEmpresa
+//    normalizaba mayúsculas/puntuación pero no acentos, así que la
+//    coincidencia parcial fallaba para todas las filas menos la única que
+//    coincidía con el nombre completo. ─────────────────────────────────
+group('_transEmpresa — encuentra transferencias con beneficiario truncado/sin tildes del SIDIF', () => {
+  const src = extractFn(html, '_transEmpresa');
+  const { _transEmpresa, setDATA } = new Function(
+    'let DATA = {};\n' + src + '\n' +
+    'function setDATA(d){ DATA = d; }\n' +
+    'return { _transEmpresa, setDATA };'
+  )();
+
+  const EMPRESA = 'SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U.';
+  setDATA({
+    transferencias: [
+      { beneficiario: 'SOCIEDAD ANONIMA UNIPERSONAL', año: 2023, mes: 3, importe: 1000 },
+      { beneficiario: 'SOCIEDAD ANONIMA UNIPERSONAL', año: 2024, mes: 7, importe: 2000 },
+      { beneficiario: EMPRESA, año: 2026, mes: 5, importe: 3000 },
+      { beneficiario: 'OTRA EMPRESA CUALQUIERA', año: 2024, mes: 1, importe: 999 },
+    ],
+  });
+
+  const rows = _transEmpresa(EMPRESA);
+  assert(rows.length === 3,
+    'cuenta las 3 transferencias de la empresa (2 con beneficiario truncado/sin tilde + 1 con el nombre completo), no solo la de mayo 2026');
+  assert(rows.reduce((s, r) => s + r.importe, 0) === 6000,
+    'el total suma las 3, no solo la que coincidía letra por letra');
+  assert(!rows.some(r => r.beneficiario === 'OTRA EMPRESA CUALQUIERA'),
+    'no arrastra transferencias de una empresa genuinamente distinta');
 });
 
 // ── _mismoNombreEmpresa: usada por la alerta "Datos faltantes" (¿esta

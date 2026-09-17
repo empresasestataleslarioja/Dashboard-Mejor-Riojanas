@@ -9132,8 +9132,15 @@ function getRubro(emp) { return rubros[emp] || 'Sin rubro'; }
 // Busca por t.empresa (asignado), t.beneficiario (nombre exacto),
 // o coincidencia parcial normalizada del beneficiario con el nombre de empresa
 function _transEmpresa(e) {
-  // Normalizar: mayúsculas, sin puntuación extra
-  const norm = s => (s||'').toUpperCase().replace(/[.,\-_]/g,' ').replace(/\s+/g,' ').trim();
+  // Normalizar: mayúsculas, sin acentos ni puntuación extra. El mismo
+  // beneficiario puede llegar con o sin tildes según el archivo/sistema de
+  // origen (ej. SIDIF sin acentos vs. nombre de portafolio con acentos) —
+  // sin quitarlos, la coincidencia parcial de abajo no detecta que uno es
+  // prefijo/substring del otro y esas transferencias quedan sin contar
+  // para la empresa (caso real: "SOCIEDAD ANONIMA UNIPERSONAL" del Excel
+  // vs "SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U." del portafolio).
+  const norm = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[.,\-_]/g,' ').replace(/\s+/g,' ').trim();
   const eN = norm(e);
   return (DATA.transferencias||[]).filter(t => {
     if (t.empresa && norm(t.empresa) === eN) return true;
@@ -12045,9 +12052,19 @@ function _matchEmpresaPortafolio(nombreEmpresa, candidatas) {
   if (!nombreEmpresa) return '';
   const n = nombreEmpresa.toUpperCase().trim();
   const todas = candidatas || Object.keys(rubros || {});
-  return todas.find(e => e.toUpperCase() === n)
-      || todas.find(e => n.includes(e.toUpperCase()) || e.toUpperCase().includes(n))
-      || '';
+  const directo = todas.find(e => e.toUpperCase() === n)
+      || todas.find(e => n.includes(e.toUpperCase()) || e.toUpperCase().includes(n));
+  if (directo) return directo;
+  // Tolerante a acentos/puntuación: el mismo caso ya resuelto para
+  // autoridades (CERÁMICA vs CERAMICA) también pasa acá — un archivo
+  // SIDIF sin tildes ("SOCIEDAD ANONIMA UNIPERSONAL") no matcheaba contra
+  // el nombre de portafolio con tilde ("SOCIEDAD ANÓNIMA UNIPERSONAL DE
+  // TRANSPORTE S.A.U.") aunque uno fuera literalmente prefijo del otro.
+  const normA = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const nA = normA(nombreEmpresa);
+  if (!nA) return '';
+  return todas.find(e => { const eA = normA(e); return eA && (nA.includes(eA) || eA.includes(nA)); }) || '';
 }
 
 
