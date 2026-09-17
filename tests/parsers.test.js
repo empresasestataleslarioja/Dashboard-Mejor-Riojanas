@@ -50,6 +50,7 @@ const {
   tryParseERMatricial,
   tryParseERLibroMayor,
   tryParseERLibroMayorResumen,
+  tryParseERPivotContable,
   _mismoNombreEmpresa,
   _parseFechaAutoridad,
   _matchEmpresaAutoridad,
@@ -62,6 +63,7 @@ const {
   'tryParseERMatricial',
   'tryParseERLibroMayor',
   'tryParseERLibroMayorResumen',
+  'tryParseERPivotContable',
   '_mismoNombreEmpresa',
   '_parseFechaAutoridad',
   '_matchEmpresaAutoridad',
@@ -1173,6 +1175,78 @@ group('tryParseERLibroMayorResumen — no se confunde con el formato con detalle
   ];
   assert(!tryParseERLibroMayorResumen(wbFromSheets({ 'Pag.1': rows }), 'x.xlsx'),
     'no reconoce el formato con columna "Cuenta" (detalle de cuentas) — queda exclusivo de tryParseERLibroMayor');
+});
+
+// ── tryParseERPivotContable: exportación de tabla dinámica contable con
+//    columnas Estado | Tipo | Rubro | Detalle (meses como fecha de Excel,
+//    columna "Total general") — caso real: Agroandina, ERP Ene-Jun 2026.
+//    Clasifica por posición jerárquica (Estado/Tipo/Rubro), no por
+//    palabra clave del detalle, y descarta filas "Total X" salvo "Total
+//    general" (que se usa como checksum). 46023/46054 son los seriales de
+//    Excel reales para el 01/01/2026 y 01/02/2026 (verificados contra el
+//    archivo real del usuario). ──────────────────────────────────────
+group('tryParseERPivotContable — tabla dinámica Estado/Tipo/Rubro/Detalle (caso real Agroandina)', () => {
+  const ENE = 46023, FEB = 46054;
+  const rows = [
+    ['Estado','Tipo','Rubro','Detalle', ENE, FEB, 'Total general'],
+    ['Ingresos','Operativos','Ventas Brutas','', 1000, 1100],
+    ['','','Descuentos Otorgados','', -50, -60],
+    ['','Total Operativos','','', 950, 1040],
+    ['','Otros Ingresos','Otros Ingresos','Otros Ingresos', 20, 25],
+    ['','Total Otros Ingresos','','', 20, 25],
+    ['Total Ingresos','','','', 970, 1065],
+    ['Compras','Compras','Compras','Materia Prima', -300, -320],
+    ['','Total Compras','','', -300, -320],
+    ['Total Compras','','','', -300, -320],
+    ['Egresos','Operativos','Produccion','Alquileres', -100, -110],
+    ['','','Comercializacion','Publicidad', -40, -45],
+    ['','','Administracion','Sueldos', -60, -65],
+    ['','Total Operativos','','', -200, -220],
+    ['','Financieros','Financieros','Intereses Bancarios', -10, -12],
+    ['','Total Financieros','','', -10, -12],
+    ['','Otros Egresos','Otros Egresos','Otros Egresos', -5, -6],
+    ['','Total Otros Egresos','','', -5, -6],
+    ['Total Egresos','','','', -215, -238],
+    ['Total general','','','', 455, 507],
+  ];
+  const wb = wbFromSheets({ ER1: rows });
+  const r = tryParseERPivotContable(wb, 'ERP_Ene_a_Feb_2026_Empresa_de_Prueba.xlsx');
+  assert(!!r, 'reconoce el formato por el encabezado distintivo Estado|Tipo|Rubro|Detalle');
+  if (r) {
+    assert(r.anio === '2026', 'toma el año de las columnas de mes (fecha de Excel), no solo del nombre de archivo');
+    assert(r.mesesCount === 2, 'detecta los 2 meses presentes');
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[1] === 950 && f('ventas')?.valores[2] === 1040,
+      'Ventas Brutas + Descuentos Otorgados (Ingresos>Operativos) se suman en un solo renglón "ventas", neto de descuentos');
+    assert(f('otrosIngresos')?.valores[1] === 20, 'Ingresos>Otros Ingresos clasifica como otrosIngresos');
+    assert(f('costo')?.valores[1] === -400 && f('costo')?.valores[2] === -430,
+      'Compras (-300) + Egresos>Operativos>Producción (-100) se suman juntos como costo — Producción se trata como costo, no como gasto admin');
+    assert(f('gastoCom')?.valores[1] === -40, 'Egresos>Operativos>Comercialización clasifica como gastoCom por el Rubro, no por palabra clave');
+    assert(f('gastoAdm')?.valores[1] === -60, 'Egresos>Operativos>Administración clasifica como gastoAdm por el Rubro');
+    assert(f('resFinanciero')?.valores[1] === -10, 'Egresos>Financieros clasifica como resFinanciero');
+    assert(f('otrosGastos')?.valores[1] === -5, 'Egresos>Otros Egresos clasifica como otrosGastos');
+    assert(f('resEjercicio')?.valores[1] === 455 && f('resEjercicio')?.valores[2] === 507,
+      '"Total general" se toma tal cual como Resultado del Ejercicio, sin invertir signo (este formato ya usa convención de presentación)');
+    assert(/PRUEBA/.test(r.empresa), 'sugiere una empresa a partir del nombre de archivo (el usuario la confirma en el preview)');
+  }
+
+  assert(!tryParseERPivotContable(wbFromSheets({ RESUMEN: [['CONCEPTO','ENERO','FEBRERO']] }), 'x.xlsx'),
+    'no reconoce una hoja sin el encabezado exacto Estado|Tipo|Rubro|Detalle (evita falsos positivos)');
+});
+
+group('tryParseERPivotContable — rechaza si la clasificación no reconcilia contra "Total general"', () => {
+  const rows = [
+    ['Estado','Tipo','Rubro','Detalle', 46023, 'Total general'],
+    ['Ingresos','Operativos','Ventas Brutas','', 1000],
+    ['','Total Operativos','','', 1000],
+    ['Total Ingresos','','','', 1000],
+    ['Egresos','Operativos','Administracion','Sueldos', -100],
+    ['','Total Operativos','','', -100],
+    ['Total Egresos','','','', -100],
+    ['Total general','','','', 999999], // no coincide con 1000 - 100 = 900
+  ];
+  assert(!tryParseERPivotContable(wbFromSheets({ ER1: rows }), 'x.xlsx'),
+    'no importa el archivo si la suma de los conceptos clasificados no coincide con "Total general" — evita clasificar mal en silencio');
 });
 
 // ── _renombrarEmpresa / _fusionarEmpresas / _eliminarEmpresa: autoridades

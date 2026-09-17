@@ -27010,6 +27010,192 @@ function _aplicarERColumnas() {
   try { rebuildActive(); } catch(e) {}
 }
 
+// ── Parser de ER en formato "pivot jerárquico" (tabla dinámica contable
+// exportada con columnas Estado | Tipo | Rubro | Detalle, meses como fecha
+// de Excel y una columna "Total general") — caso real: Agroandina, ERP
+// Ene-Jun 2026. Cada fila de detalle (sin prefijo "Total ") se clasifica
+// según su posición jerárquica, no por palabra clave del rubro: es mucho
+// más confiable que adivinar por texto libre, porque el propio archivo ya
+// dice "Compras", "Ingresos > Operativos/Otros Ingresos" y "Egresos >
+// Operativos/Financieros/Otros Egresos". Dentro de Egresos > Operativos,
+// el Rubro (Producción/Comercialización/Administración) decide costo vs.
+// gastoCom vs. gastoAdm — Producción se trata como costo (mano de obra y
+// gastos directos de producir lo que se vende, igual criterio que
+// Compras), no como gasto administrativo.
+// Todas las filas "Total X" (a cualquier nivel) se ignoran: son sumas del
+// detalle que ya se está contando aparte, y usarlas también duplicaría
+// los importes — salvo "Total general", que se usa como checksum: si la
+// suma de los conceptos clasificados no coincide con ese total por mes,
+// se descarta el archivo entero en vez de importar una clasificación
+// potencialmente errónea.
+function tryParseERPivotContable(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+  const esTotal = s => /^TOTAL(\s+|$)/i.test(String(s||'').trim());
+
+  const LBL_CONCEPTO = {
+    ventas: 'Ventas', otrosIngresos: 'Otros Ingresos', costo: 'Costo de Ventas',
+    gastoAdm: 'Gastos de Administración', gastoCom: 'Gastos de Comercialización',
+    resFinanciero: 'Resultado Financiero', otrosGastos: 'Otros Egresos',
+    resEjercicio: 'Resultado del Ejercicio',
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 5) continue;
+
+    // Encabezado distintivo: Estado | Tipo | Rubro | Detalle en las
+    // primeras 4 columnas de alguna de las primeras filas.
+    let filaHdr = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const c0 = String(rows[i][0]||'').trim().toUpperCase();
+      const c1 = String(rows[i][1]||'').trim().toUpperCase();
+      const c2 = String(rows[i][2]||'').trim().toUpperCase();
+      const c3 = String(rows[i][3]||'').trim().toUpperCase();
+      if (c0==='ESTADO' && c1==='TIPO' && c2==='RUBRO' && c3==='DETALLE') { filaHdr = i; break; }
+    }
+    if (filaHdr < 0) continue;
+
+    // Columnas de mes: fecha de Excel a partir de la columna 4.
+    const hdrRow = rows[filaHdr];
+    const colMeses = []; // [{col, anio, mes}]
+    for (let c = 4; c < hdrRow.length; c++) {
+      const v = hdrRow[c];
+      const lbl = String(v||'').trim().toUpperCase();
+      if (lbl === 'TOTAL GENERAL') continue;
+      if (typeof v === 'number' && v > 20000 && v < 90000) {
+        const d = XLSX.SSF.parse_date_code(v);
+        if (d && d.y >= 2000 && d.y <= 2100) colMeses.push({ col:c, anio:d.y, mes:d.m });
+      }
+    }
+    if (colMeses.length < 1) continue;
+
+    // Año: el más frecuente entre las columnas de mes detectadas (por si
+    // el archivo cruzara diciembre-enero de dos años distintos).
+    const anioCount = {};
+    colMeses.forEach(({anio}) => { anioCount[anio] = (anioCount[anio]||0)+1; });
+    const anio = Object.entries(anioCount).sort((a,b)=>b[1]-a[1])[0][0];
+
+    // Empresa: sugerida desde el nombre del archivo — el usuario la
+    // confirma/corrige en el preview, igual que el resto de los parsers ER.
+    let empresa = fname.replace(/\.xlsx?$/i,'')
+      .replace(/[_\-]+/g,' ')
+      .replace(/\b(ERP?|ESTADO\s+DE\s+RESULTADOS?|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC|A|AL|DE|\d{4})\b/gi,'')
+      .replace(/\s+/g,' ').trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    // Egresos > Operativos: el Rubro (departamento) decide el destino.
+    // Si viniera un departamento no esperado, se cae a clasificar por
+    // palabra clave del detalle, igual criterio que el resto de los
+    // parsers ER.
+    const _clasifEgresoOperativo = (rubro, detalle) => {
+      const r = String(rubro||'').toUpperCase().trim();
+      if (r === 'COMERCIALIZACION' || r === 'COMERCIALIZACIÓN') return 'gastoCom';
+      if (r === 'ADMINISTRACION' || r === 'ADMINISTRACIÓN') return 'gastoAdm';
+      if (r === 'PRODUCCION' || r === 'PRODUCCIÓN') return 'costo';
+      const t = String(detalle || rubro || '').toUpperCase();
+      if (/PUBLICIDAD|COMERCIALIZAC|FLETE|VIATICO|MOVILIDAD/.test(t)) return 'gastoCom';
+      return 'gastoAdm';
+    };
+
+    // Recorrer filas de detalle, arrastrando el contexto jerárquico
+    // (Estado/Tipo/Rubro) para las filas donde esas columnas vienen en
+    // blanco — heredan el último grupo con etiqueta explícita, como en
+    // cualquier exportación de tabla dinámica con celdas combinadas.
+    let curEstado = '', curTipo = '', curRubro = '';
+    const acum = {}; // conceptoStd -> { mes: total }
+    const totalGeneralPorMes = {};
+    let filaTotalGeneralVista = false;
+
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const c0 = String(row[0]||'').trim();
+      const c1 = String(row[1]||'').trim();
+      const c2 = String(row[2]||'').trim();
+      const c3 = String(row[3]||'').trim();
+      if (!c0 && !c1 && !c2 && !c3) continue; // fila vacía separadora
+
+      if (/^TOTAL\s+GENERAL$/i.test(c0)) {
+        filaTotalGeneralVista = true;
+        colMeses.forEach(({col, mes}) => {
+          const v = _num(row[col]);
+          if (v != null) totalGeneralPorMes[mes] = (totalGeneralPorMes[mes]||0) + v;
+        });
+        continue;
+      }
+
+      // Actualizar contexto jerárquico (solo con etiquetas genuinas, nunca
+      // con el texto de una fila "Total X" — si no, el grupo quedaría
+      // "Total Operativos" en vez del rubro real).
+      if (c0 && !esTotal(c0)) curEstado = c0;
+      if (c1 && !esTotal(c1)) curTipo = c1;
+      if (c2 && !esTotal(c2)) curRubro = c2;
+
+      // Fila agregada ("Total X" a cualquier nivel): ya está sumada en el
+      // detalle de arriba/abajo, usarla también duplicaría los importes.
+      if (esTotal(c0) || esTotal(c1) || esTotal(c2) || esTotal(c3)) continue;
+
+      // Fila de detalle genuina: clasificar por posición jerárquica, no
+      // por el texto puntual del rubro/detalle (mucho más confiable).
+      let cpt = null;
+      const estadoU = curEstado.toUpperCase();
+      const tipoU = curTipo.toUpperCase();
+      if (estadoU === 'COMPRAS') cpt = 'costo';
+      else if (estadoU === 'INGRESOS') cpt = tipoU.includes('OTRO') ? 'otrosIngresos' : 'ventas';
+      else if (estadoU === 'EGRESOS') {
+        if (tipoU.includes('FINANC')) cpt = 'resFinanciero';
+        else if (tipoU.includes('OTRO')) cpt = 'otrosGastos';
+        else cpt = _clasifEgresoOperativo(curRubro, c3);
+      }
+      if (!cpt) continue;
+
+      if (!acum[cpt]) acum[cpt] = {};
+      colMeses.forEach(({col, mes}) => {
+        const v = _num(row[col]);
+        if (v != null && v !== 0) acum[cpt][mes] = (acum[cpt][mes] || 0) + v;
+      });
+    }
+
+    // Exigir que haya llegado hasta "Total general" y que se haya podido
+    // clasificar más de un concepto — evita falsos positivos contra otra
+    // planilla que solo casualmente comparta el encabezado de 4 columnas.
+    if (!filaTotalGeneralVista) continue;
+    if (Object.keys(acum).length < 2) continue;
+
+    // Validar contra "Total general": si la suma de los conceptos
+    // clasificados no coincide con el total del propio archivo para
+    // algún mes, es más seguro no importar nada a adivinar mal la
+    // jerarquía — se prueba con el siguiente parser en vez de éste.
+    const mesesConDatos = [...new Set(colMeses.map(c => c.mes))];
+    const cuadra = mesesConDatos.every(mes => {
+      const sumaPropia = Object.values(acum).reduce((s, v) => s + (v[mes] || 0), 0);
+      const totalArchivo = totalGeneralPorMes[mes] || 0;
+      return Math.abs(sumaPropia - totalArchivo) <= Math.max(2, Math.abs(totalArchivo) * 1e-6);
+    });
+    if (!cuadra) continue;
+
+    // resEjercicio: el resultado neto del período tal como lo reporta el
+    // propio archivo en "Total general", ya validado arriba contra la
+    // suma de los conceptos clasificados.
+    acum.resEjercicio = totalGeneralPorMes;
+
+    const filas = Object.entries(acum)
+      .filter(([, valores]) => Object.keys(valores).length > 0)
+      .map(([conceptoStd, valores]) => ({ lbl: LBL_CONCEPTO[conceptoStd] || conceptoStd, conceptoStd, valores }));
+
+    return { empresa, anio, filas, hoja: sn, mesesCount: colMeses.length };
+  }
+  return null;
+}
+
 function tryParseERMatricial(wb, fname) {
   // Buscar hoja RESUMEN
   const nombreHoja = wb.SheetNames.find(n => n.toUpperCase().trim() === 'RESUMEN');
@@ -27523,6 +27709,16 @@ function handleImportWorkbook(wb, fname) {
   if (erLibroMayorResumenResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erLibroMayorResumenResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER "pivot jerárquico" (Estado|Tipo|Rubro|Detalle,
+  // exportación de tabla dinámica contable — caso real: Agroandina) ──
+  const erPivotResult = tryParseERPivotContable(wb, fname);
+  console.log('[LR] tryParseERPivotContable:', erPivotResult ? erPivotResult.empresa+' '+erPivotResult.filas.length+' conceptos' : 'null');
+  if (erPivotResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erPivotResult, fname);
     return;
   }
 
