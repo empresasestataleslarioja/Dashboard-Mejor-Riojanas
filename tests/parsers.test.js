@@ -1239,6 +1239,35 @@ group('tryParseERPivotContable — tabla dinámica Estado/Tipo/Rubro/Detalle (ca
     'no reconoce una hoja sin el encabezado exacto Estado|Tipo|Rubro|Detalle (evita falsos positivos)');
 });
 
+// ── Bug real reportado por el usuario: subiendo el archivo real de
+//    Agroandina por el importador del panel (handleImport → XLSX.read con
+//    cellDates:true), tryParseERPivotContable no lo reconocía y caía al
+//    mapeador genérico de columnas — aunque el mismo archivo sí se
+//    reconocía en un test que leía el workbook SIN cellDates. Causa: con
+//    cellDates:true las celdas de mes llegan como objeto Date de JS, no
+//    como serial numérico crudo, y la detección de columnas de mes solo
+//    miraba `typeof v === 'number'`. ───────────────────────────────────
+group('tryParseERPivotContable — reconoce columnas de mes como objeto Date (cellDates:true, el importador real del panel)', () => {
+  const rows = [
+    ['Estado','Tipo','Rubro','Detalle', new Date(2026,0,1), new Date(2026,1,1), 'Total general'],
+    ['Ingresos','Operativos','Ventas Brutas','', 1000, 1100],
+    ['','Total Operativos','','', 1000, 1100],
+    ['Total Ingresos','','','', 1000, 1100],
+    ['Egresos','Operativos','Administracion','Sueldos', -100, -110],
+    ['','Total Operativos','','', -100, -110],
+    ['Total Egresos','','','', -100, -110],
+    ['Total general','','','', 900, 990],
+  ];
+  const r = tryParseERPivotContable(wbFromSheets({ ER1: rows }), 'ERP_Agroandina.xlsx');
+  assert(!!r, 'reconoce el formato aunque los encabezados de mes sean objetos Date en vez de seriales numéricos');
+  if (r) {
+    assert(r.anio === '2026', 'toma el año correcto de un encabezado Date (getFullYear, no el serial)');
+    assert(r.mesesCount === 2, 'detecta los 2 meses aunque vengan como Date');
+    const fV = r.filas.find(f => f.conceptoStd === 'ventas');
+    assert(fV?.valores[1] === 1000 && fV?.valores[2] === 1100, 'los valores de cada mes quedan bajo la clave de mes correcta (1=enero, 2=febrero)');
+  }
+});
+
 group('tryParseERPivotContable — rechaza si la clasificación no reconcilia contra "Total general"', () => {
   const rows = [
     ['Estado','Tipo','Rubro','Detalle', 46023, 'Total general'],

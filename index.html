@@ -27071,17 +27071,24 @@ function tryParseERPivotContable(wb, fname) {
     }
     if (filaHdr < 0) continue;
 
-    // Columnas de mes: fecha de Excel a partir de la columna 4.
+    // Columnas de mes: fecha de Excel a partir de la columna 4. Según cómo
+    // se haya leído el workbook (cellDates:true o no — el importador real
+    // del panel Importar usa cellDates:true, así que la celda puede llegar
+    // como objeto Date de JS en vez de serial numérico crudo).
     const hdrRow = rows[filaHdr];
     const colMeses = []; // [{col, anio, mes}]
     for (let c = 4; c < hdrRow.length; c++) {
       const v = hdrRow[c];
       const lbl = String(v||'').trim().toUpperCase();
       if (lbl === 'TOTAL GENERAL') continue;
-      if (typeof v === 'number' && v > 20000 && v < 90000) {
+      let ymd = null;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        ymd = { y: v.getFullYear(), m: v.getMonth() + 1 };
+      } else if (typeof v === 'number' && v > 20000 && v < 90000) {
         const d = XLSX.SSF.parse_date_code(v);
-        if (d && d.y >= 2000 && d.y <= 2100) colMeses.push({ col:c, anio:d.y, mes:d.m });
+        if (d) ymd = { y: d.y, m: d.m };
       }
+      if (ymd && ymd.y >= 2000 && ymd.y <= 2100) colMeses.push({ col:c, anio:ymd.y, mes:ymd.m });
     }
     if (colMeses.length < 1) continue;
 
