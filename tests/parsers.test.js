@@ -207,15 +207,32 @@ group('_matchEmpresaPortafolio', () => {
   assert(_matchEmpresaPortafolio('UNA EMPRESA QUE NO EXISTE', candidatas) === '',
     'no inventa una coincidencia para un nombre fuera del portafolio');
 
-  // Bug real: transferencias de "SOCIEDAD ANÓNIMA UNIPERSONAL DE
-  // TRANSPORTE S.A.U." no se contaban salvo una — el Excel SIDIF trae el
-  // beneficiario truncado y sin tildes ("SOCIEDAD ANONIMA UNIPERSONAL"),
-  // que es literalmente prefijo del nombre de portafolio salvo por el
-  // acento en "ANÓNIMA", y el substring exacto (sin normalizar acentos)
-  // no lo detectaba.
-  const candidatasSAU = ['SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U.'];
-  assert(_matchEmpresaPortafolio('SOCIEDAD ANONIMA UNIPERSONAL', candidatasSAU) === 'SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U.',
-    'reconoce el beneficiario truncado y sin tildes del SIDIF como la empresa del portafolio con tilde ("SOCIEDAD ANÓNIMA...")');
+  // Tolerancia a acentos: un beneficiario sin tilde debe reconocer una
+  // empresa de portafolio cuyo nombre sí lleva tilde, cuando uno es
+  // literalmente substring del otro salvo por esa tilde.
+  assert(_matchEmpresaPortafolio('CERAMICA RIOJANA', ['CERÁMICA RIOJANA']) === 'CERÁMICA RIOJANA',
+    'tolera diferencia de acento cuando el resto del texto es substring literal');
+
+  // Bug real reportado por el usuario, vía el diagnóstico "Beneficiarios
+  // sin empresa asignada" de Transferencias: varias razones sociales del
+  // Excel SIDIF no comparten NINGÚN substring útil con el nombre corto
+  // del portafolio (no es un tema de sufijo/acento) — necesitan el alias
+  // explícito de ALIAS_LEGAL_EMPRESA (dentro de _matchEmpresaPortafolio).
+  const portafolioReal = ['RIOJA BUS', 'AGROANDINA', 'VIVERO DEL OESTE RIOJANO', 'EMSE', 'ERSA'];
+  assert(_matchEmpresaPortafolio('SOCIEDAD ANONIMA UNIPERSONAL', portafolioReal) === 'RIOJA BUS',
+    'la forma corta y truncada del SIDIF resuelve a RIOJA BUS');
+  assert(_matchEmpresaPortafolio('SOCIEDAD ANONIMA UNIPERSONAL DE TRANSPORTE S.A.U.', portafolioReal) === 'RIOJA BUS',
+    'la razón social completa también resuelve a RIOJA BUS');
+  assert(_matchEmpresaPortafolio('Agro Andina S.A.U', portafolioReal) === 'AGROANDINA',
+    '"Agro Andina S.A.U" (con espacio, portafolio sin espacio) resuelve a AGROANDINA');
+  assert(_matchEmpresaPortafolio('Agro Andina S.A', portafolioReal) === 'AGROANDINA',
+    '"Agro Andina S.A" también resuelve a AGROANDINA');
+  assert(_matchEmpresaPortafolio('Vivero Del Oeste Riojano Sapem', portafolioReal) === 'VIVERO DEL OESTE RIOJANO',
+    '"Vivero Del Oeste Riojano Sapem" resuelve a VIVERO DEL OESTE RIOJANO');
+  assert(_matchEmpresaPortafolio('Energia Y Minerales Soc Estado', portafolioReal) === 'EMSE',
+    '"Energia Y Minerales Soc Estado" resuelve a EMSE');
+  assert(_matchEmpresaPortafolio('ENERGIA RIOJANA SA', portafolioReal) === 'ERSA',
+    '"ENERGIA RIOJANA SA" resuelve a ERSA');
 });
 
 // ── _beneficiarioCanonico: pedido real del usuario — un cambio de forma
@@ -250,27 +267,30 @@ group('_beneficiarioCanonico — agrupa transferencias por empresa del portafoli
 // ── _transEmpresa: bug real reportado por el usuario — no impactaban
 //    registros de transferencias de "SOCIEDAD ANÓNIMA UNIPERSONAL DE
 //    TRANSPORTE S.A.U." en ningún panel por-empresa (Informe Ejecutivo,
-//    Promedio mensual, rankings) salvo una transferencia de mayo 2026.
-//    El Excel SIDIF trae el beneficiario truncado y sin tilde
-//    ("SOCIEDAD ANONIMA UNIPERSONAL"); es prefijo literal del nombre de
-//    portafolio salvo por el acento en "ANÓNIMA", y _transEmpresa
-//    normalizaba mayúsculas/puntuación pero no acentos, así que la
-//    coincidencia parcial fallaba para todas las filas menos la única que
-//    coincidía con el nombre completo. ─────────────────────────────────
-group('_transEmpresa — encuentra transferencias con beneficiario truncado/sin tildes del SIDIF', () => {
+//    Promedio mensual, rankings) salvo una transferencia de mayo 2026. El
+//    usuario aclaró que esas transferencias corresponden en realidad a
+//    RIOJA BUS — la razón social del Excel SIDIF no comparte NINGÚN
+//    substring útil con el nombre corto del portafolio (no es un tema de
+//    acento/sufijo), así que _transEmpresa necesita el alias de
+//    ALIAS_LEGAL_EMPRESA (vía _matchEmpresaPortafolio) para resolverlo,
+//    no alcanza con la coincidencia parcial por substring. ─────────────
+group('_transEmpresa — encuentra transferencias con razón social distinta vía alias (ALIAS_LEGAL_EMPRESA)', () => {
   const src = extractFn(html, '_transEmpresa');
-  const { _transEmpresa, setDATA } = new Function(
-    'let DATA = {};\n' + src + '\n' +
+  const srcMatch = extractFn(html, '_matchEmpresaPortafolio');
+  const { _transEmpresa, setDATA, setRubros } = new Function(
+    'let DATA = {}; let rubros = {};\n' + srcMatch + '\n' + src + '\n' +
     'function setDATA(d){ DATA = d; }\n' +
-    'return { _transEmpresa, setDATA };'
+    'function setRubros(r){ rubros = r; }\n' +
+    'return { _transEmpresa, setDATA, setRubros };'
   )();
+  setRubros({ 'RIOJA BUS': 'Servicios' });
 
-  const EMPRESA = 'SOCIEDAD ANÓNIMA UNIPERSONAL DE TRANSPORTE S.A.U.';
+  const EMPRESA = 'RIOJA BUS';
   setDATA({
     transferencias: [
       { beneficiario: 'SOCIEDAD ANONIMA UNIPERSONAL', año: 2023, mes: 3, importe: 1000 },
       { beneficiario: 'SOCIEDAD ANONIMA UNIPERSONAL', año: 2024, mes: 7, importe: 2000 },
-      { beneficiario: EMPRESA, año: 2026, mes: 5, importe: 3000 },
+      { beneficiario: 'SOCIEDAD ANONIMA UNIPERSONAL DE TRANSPORTE S.A.U.', año: 2026, mes: 5, importe: 3000 },
       { beneficiario: 'OTRA EMPRESA CUALQUIERA', año: 2024, mes: 1, importe: 999 },
     ],
   });
