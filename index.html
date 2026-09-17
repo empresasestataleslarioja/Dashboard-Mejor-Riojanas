@@ -3955,6 +3955,30 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
+        <!-- Diagnóstico: beneficiarios que NO se pudieron asociar a ninguna
+             empresa del portafolio — la mayoría son terceros genuinos
+             (municipios, personas, organismos), pero también es donde
+             aparece una empresa del portafolio mal cargada/abreviada en el
+             Excel SIDIF (ej.: el caso real de "SOCIEDAD ANONIMA
+             UNIPERSONAL" sin el resto de la razón social ni tilde, que no
+             matcheaba con la empresa del portafolio hasta que se corrigió
+             la normalización de acentos). -->
+        <div class="rowfull card" style="margin-top:12px;overflow-x:auto">
+          <div class="card-hd" style="cursor:pointer" onclick="toggleTransBeneficiariosSinEmpresa()">
+            <span class="card-hd-title">🔍 Beneficiarios sin empresa asignada</span>
+            <span id="trans-sinemp-toggle" style="font-size:10px;color:var(--dim)">▼ mostrar</span>
+          </div>
+          <div id="trans-sinemp-wrap" style="display:none">
+            <div style="font-size:9px;color:var(--dim);font-family:var(--mono);margin-bottom:8px;padding:6px 8px;background:rgba(232,255,71,.05);border:1px solid var(--y21);border-radius:3px">
+              ℹ Beneficiarios del Excel SIDIF que no coinciden con ninguna empresa del portafolio (ni exacto ni parcial/tolerante a acentos).
+              La mayoría son terceros reales — municipios, personas, otros organismos. Revisá los de mayor monto: si alguno es en
+              realidad una empresa del portafolio con la razón social abreviada/mal cargada, esas transferencias no se están sumando
+              a esa empresa en ningún panel (Informe Ejecutivo, Promedio mensual, rankings).
+            </div>
+            <div style="overflow-x:auto"><table class="tbl" id="tbl-trans-sinemp" style="font-size:9.5px"></table></div>
+          </div>
+        </div>
+
         <!-- Conciliación: lo girado por el Estado (SIDIF) vs lo declarado como
              aporte/asistencia financiera del Estado en ER o Flujos de la empresa —
              debajo del Detalle y minimizada por defecto -->
@@ -20558,6 +20582,55 @@ function toggleTransTabla() {
   w.style.display = hidden ? '' : 'none';
   t.textContent = hidden ? '▲ ocultar' : '▼ mostrar';
   if (hidden) renderTransTabla(_transTablaPreFiltrada());
+}
+
+// ── Diagnóstico: beneficiarios de Transferencias que no se pudieron
+// asociar a ninguna empresa del portafolio (ver _resolverEmpresaTransferencia).
+// Agrupa por el texto crudo del beneficiario (sin normalizar, porque acá
+// interesa detectar justamente variantes de escritura sueltas) y ordena
+// por monto para que las candidatas a revisar aparezcan primero.
+function toggleTransBeneficiariosSinEmpresa() {
+  const w = document.getElementById('trans-sinemp-wrap');
+  const t = document.getElementById('trans-sinemp-toggle');
+  const hidden = w.style.display === 'none';
+  w.style.display = hidden ? '' : 'none';
+  t.textContent = hidden ? '▲ ocultar' : '▼ mostrar';
+  if (hidden) buildTransBeneficiariosSinEmpresa();
+}
+
+function buildTransBeneficiariosSinEmpresa() {
+  const tbl = document.getElementById('tbl-trans-sinemp');
+  if (!tbl) return;
+  const portafolio = new Set(Object.keys(rubros || {}));
+
+  const acum = {};
+  (DATA.transferencias || []).forEach(t => {
+    const resuelto = _resolverEmpresaTransferencia(t);
+    if (!resuelto || portafolio.has(resuelto)) return; // asociado a una empresa del portafolio — nada que revisar
+    const key = t.beneficiario || '(sin beneficiario)';
+    if (!acum[key]) acum[key] = { total: 0, cant: 0, años: new Set() };
+    acum[key].total += (t.importe || 0);
+    acum[key].cant++;
+    if (t.año) acum[key].años.add(t.año);
+  });
+
+  const rows = Object.entries(acum)
+    .map(([ben, v]) => ({ ben, ...v }))
+    .sort((a,b) => b.total - a.total);
+
+  if (!rows.length) {
+    tbl.innerHTML = '<tr><td style="padding:14px;color:var(--dim);text-align:center">Todos los beneficiarios con transferencias están asociados a alguna empresa del portafolio o son terceros ya revisados.</td></tr>';
+    return;
+  }
+
+  tbl.innerHTML = `<thead><tr>
+    <th>Beneficiario (texto tal cual en el Excel)</th><th class="r">Pagos</th><th class="r">Años</th><th class="r">Total</th>
+  </tr></thead><tbody>${rows.map(r => `<tr>
+    <td>${r.ben}</td>
+    <td class="r">${r.cant}</td>
+    <td class="r">${[...r.años].sort().join(', ') || '—'}</td>
+    <td class="r" style="font-weight:600">${fvFull(r.total)}</td>
+  </tr>`).join('')}</tbody>`;
 }
 
 function renderTransTabla(rows) {
