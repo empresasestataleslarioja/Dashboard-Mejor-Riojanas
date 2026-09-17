@@ -21605,9 +21605,13 @@ function _alertaTransCoberturaUpdate() {
     ? `<strong>Meses sin ningún registro:</strong> ${mesesFaltantes.join(', ')}`
     : '';
 
-  // Meses mensuales (informativo en verde)
+  // Meses mensuales (informativo en verde) — el mes en curso no cuenta
+  // como "completo" aunque ya tenga registros cargados: todavía le faltan
+  // días por transcurrir y puede llegar más SIDIF de ese mismo mes. Mismo
+  // criterio que "Semanal completo" un poco más abajo.
   const mesesMensualNom = [...mesMensual]
-    .filter(m => m <= (mesLimite + 1)).sort((a,b) => a-b).map(m => MESES_NOM[m-1]);
+    .filter(m => m <= (mesLimite + 1) && !(anioRef === anioActual && m === mesLimite + 1))
+    .sort((a,b) => a-b).map(m => MESES_NOM[m-1]);
   const mesesMensualLabel = mesesMensualNom.length
     ? `<span style="color:#86efac"><strong>Mes completo:</strong> ${mesesMensualNom.join(', ')}</span>`
     : '';
