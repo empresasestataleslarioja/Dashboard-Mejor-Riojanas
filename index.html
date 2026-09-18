@@ -19473,7 +19473,7 @@ function buildEvolucionMensual(emp) {
     <select id="er-rpt-anio" onchange="window._erRptAnio=this.value||null;buildEvolucionMensual('${empJS}')"
       style="font-size:10px;padding:3px 6px;background:var(--s2,#1a1f2e);border:1px solid var(--bd);border-radius:4px;color:var(--text)">
       <option value="">Todos</option>
-      ${anios.map(a=>`<option value="${a}" ${window._erRptAnio===a?'selected':''}>${a}</option>`).join('')}
+      ${todosAnios.map(a=>`<option value="${a}" ${window._erRptAnio===a?'selected':''}>${a}</option>`).join('')}
     </select>
     ${anioFiltro && erM[anioFiltro] && Array.isArray(erM[anioFiltro].filas) && erM[anioFiltro].filas.length ? `
     <button onclick="_erMensualEliminarAnio('${empJS}','${anioFiltro}')"
