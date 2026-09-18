@@ -27642,6 +27642,132 @@ function tryParseERAnexoMensual(wb, fname) {
   return null;
 }
 
+// ── Parser de ER "Sumas y Saldos" jerárquico anual (exportación contable
+// completa del libro mayor — Activo/Pasivo/Patrimonio/Estado de Resultados
+// — con columna de nivel "N" y una columna "Sumas historicos" — caso real:
+// EDELAR, Requerimiento_UCEP_EDELAR_12-2024.xlsx). A diferencia de los
+// demás parsers ER, este archivo es un balance de sumas y saldos a una
+// fecha de corte (no trae columnas de mes): el total de cada rubro YA
+// viene acumulado a esa fecha, así que el ER resultante es anual, no
+// mensual — se carga bajo el mes 12 (diciembre), que es exactamente lo
+// que representa un corte "al 12/2024": el acumulado del año completo.
+// Solo se lee la PRIMERA pestaña del libro (las demás son detalle de
+// otras secciones del balance, no el estado de resultados armado).
+function tryParseERSumasYSaldosAnual(wb, fname) {
+  const LBL = {
+    ventas: 'Ventas', costo: 'Costo de Ventas', gastoAdm: 'Gastos de Administración',
+    gastoCom: 'Gastos de Comercialización', otrosIngresos: 'Otros Ingresos',
+    otrosGastos: 'Otros Egresos', resFinanciero: 'Resultado Financiero',
+    impuesto: 'Impuesto a las Ganancias', resEjercicio: 'Resultado del Ejercicio',
+  };
+
+  // Clasifica por el rótulo de la cuenta de nivel 2 (rubro), bajo el nodo
+  // "ESTADO DE RESULTADOS" — un puñado fijo de rubros de este plan de
+  // cuentas, cubre tanto los que caen bajo "6-" (ingresos) como "7-"
+  // (egresos/otros resultados) sin depender del prefijo numérico, que
+  // puede variar de una carga a otra más que el rótulo en sí.
+  const _clasif = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim();
+    if (/VENTAS\s+NETAS/.test(t)) return 'ventas';
+    if (/COSTO\s+DE\s+EXPLOTACI/.test(t)) return 'costo';
+    if (/GASTOS?\s+DE\s+ADMINISTRAC/.test(t)) return 'gastoAdm';
+    if (/GASTOS?\s+DE\s+COMERCIALIZAC/.test(t)) return 'gastoCom';
+    if (/RESULTADOS?\s+FINANCIER/.test(t)) return 'resFinanciero';
+    if (/IMPUESTO\s+A\s+LAS?\s+GANANCIAS/.test(t)) return 'impuesto';
+    if (/OTROS\s+INGRESOS\s+OPERATIV/.test(t)) return 'otrosIngresos';
+    if (/OTROS\s+INGRESOS\s+Y\s+EGRESOS/.test(t)) return 'otrosIngresos';
+    if (/OTRAS?\s+GANANCIAS?.*PERDIDAS?\s+NETAS?/.test(t)) return 'otrosIngresos';
+    if (/RESULTADO\s+INVERSION/.test(t)) return 'otrosIngresos';
+    if (/RESULTADO.*DESVALORIZACION/.test(t)) return 'otrosGastos';
+    if (/^OTROS\s+GASTOS$/.test(t)) return 'otrosGastos';
+    if (/RESULTADOS?\s+EXTRAORDINARIOS?/.test(t)) return 'otrosGastos';
+    return null;
+  };
+
+  // Solo la primera pestaña: las demás son detalle de otras secciones del
+  // balance (Activo/Pasivo/ventas y cobranzas/gastos), no el estado de
+  // resultados jerárquico completo.
+  const sn = wb.SheetNames[0];
+  const ws = sn ? wb.Sheets[sn] : null;
+  if (!ws) return null;
+  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+  if (rows.length < 20) return null;
+
+  // Encabezado distintivo: columnas "N" / "Cuenta" / "Descripción" +
+  // una columna "Sumas historicos" (el valor SIN ajuste por inflación —
+  // "Sumas axi" es la versión ajustada, se descarta, mismo criterio ya
+  // usado para el otro ER de EDELAR).
+  let filaHdrN = -1, colValor = -1;
+  for (let i = 0; i < 10; i++) {
+    const row = rows[i] || [];
+    const c0 = String(row[0] || '').trim().toUpperCase();
+    const c1 = String(row[1] || '').trim().toUpperCase();
+    const c2 = String(row[2] || '').trim().toUpperCase();
+    if (c0 === 'N' && c1 === 'CUENTA' && c2.startsWith('DESCRIP')) filaHdrN = i;
+    const idx = row.findIndex(c => String(c || '').trim().toUpperCase() === 'SUMAS HISTORICOS');
+    if (idx >= 0) colValor = idx;
+  }
+  if (filaHdrN < 0 || colValor < 0) return null;
+
+  // Ubicar el nodo raíz "ESTADO DE RESULTADOS" (nivel N=1) — es la fila
+  // autoritativa de checksum, y el siguiente nivel 1 marca dónde termina
+  // esa sección (empieza la que sigue, ej. "PARTICIPACION MINORITARIA").
+  let startRow = -1;
+  for (let i = filaHdrN + 1; i < rows.length; i++) {
+    if (rows[i][0] === 1 && /ESTADO\s+DE\s+RESULTADOS/i.test(String(rows[i][1] || ''))) { startRow = i; break; }
+  }
+  if (startRow < 0) return null;
+  let endRow = rows.length;
+  for (let i = startRow + 1; i < rows.length; i++) {
+    if (rows[i][0] === 1) { endRow = i; break; }
+  }
+
+  // Filas de nivel 2 (rubro): cada una YA trae el total acumulado de sus
+  // cuentas de detalle (niveles 3/4/5) — no hace falta bajar a sumarlas.
+  // Convención de saldo contable (débito positivo): Ventas y otros
+  // ingresos quedan en negativo y Costos/Gastos en positivo — inversa a
+  // la convención de presentación del dashboard — se invierte el signo.
+  const acum = {};
+  for (let i = startRow + 1; i < endRow; i++) {
+    const row = rows[i];
+    if (row[0] !== 2) continue;
+    const lbl = String(row[1] || '').replace(/^06_/, '').trim();
+    const cpt = _clasif(lbl);
+    if (!cpt) continue;
+    const v = row[colValor];
+    if (typeof v !== 'number' || v === 0) continue;
+    acum[cpt] = (acum[cpt] || 0) + (-v);
+  }
+  if (Object.keys(acum).length < 2) return null;
+
+  // Validar contra el propio total del nodo "ESTADO DE RESULTADOS": si la
+  // suma de los rubros clasificados no coincide, es más seguro no
+  // importar nada a adivinar mal la clasificación.
+  const totalRaw = rows[startRow][colValor];
+  if (typeof totalRaw !== 'number') return null;
+  const checksum = -totalRaw;
+  const suma = Object.values(acum).reduce((s, v) => s + v, 0);
+  if (Math.abs(suma - checksum) > Math.max(2, Math.abs(checksum) * 1e-6)) return null;
+
+  // Año: del nombre de archivo (ej. "12-2024" → 2024). Empresa: sugerida
+  // desde el nombre del archivo, el usuario la confirma en el preview.
+  const mAnio = fname.match(/(20\d{2})/);
+  if (!mAnio) return null;
+  const anio = mAnio[1];
+  let empresa = fname.replace(/\.xlsx?$/i, '')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/\b(REQUERIMIENTO|UCEP|\d{1,2}\s+\d{4}|\d{4})\b/gi, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+  if (!empresa) empresa = 'SIN NOMBRE';
+
+  const filas = Object.entries(acum).map(([conceptoStd, v]) => ({
+    lbl: LBL[conceptoStd] || conceptoStd, conceptoStd, valores: { 12: v },
+  }));
+  filas.push({ lbl: LBL.resEjercicio, conceptoStd: 'resEjercicio', valores: { 12: checksum } });
+
+  return { empresa, anio, filas, hoja: sn, mesesCount: 1 };
+}
+
 function tryParseERMatricial(wb, fname) {
   // Buscar hoja RESUMEN
   const nombreHoja = wb.SheetNames.find(n => n.toUpperCase().trim() === 'RESUMEN');
@@ -28188,6 +28314,17 @@ function handleImportWorkbook(wb, fname) {
   if (erAnexoResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erAnexoResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER "Sumas y Saldos" jerárquico anual (balance
+  // contable completo con columna de nivel "N" y "Sumas historicos" — un
+  // corte a una fecha, no mensual — caso real: EDELAR, Requerimiento UCEP)──
+  const erSySResult = tryParseERSumasYSaldosAnual(wb, fname);
+  console.log('[LR] tryParseERSumasYSaldosAnual:', erSySResult ? erSySResult.empresa+' '+erSySResult.filas.length+' conceptos' : 'null');
+  if (erSySResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erSySResult, fname);
     return;
   }
 

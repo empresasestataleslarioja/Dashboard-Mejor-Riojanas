@@ -53,6 +53,7 @@ const {
   tryParseERPivotContable,
   tryParseERIngresosEgresosFlat,
   tryParseERAnexoMensual,
+  tryParseERSumasYSaldosAnual,
   _mismoNombreEmpresa,
   _parseFechaAutoridad,
   _matchEmpresaAutoridad,
@@ -67,6 +68,7 @@ const {
   'tryParseERLibroMayorResumen',
   'tryParseERPivotContable',
   'tryParseERIngresosEgresosFlat',
+  'tryParseERSumasYSaldosAnual',
   'tryParseERAnexoMensual',
   '_mismoNombreEmpresa',
   '_parseFechaAutoridad',
@@ -1494,6 +1496,94 @@ group('tryParseERAnexoMensual — rechaza si la clasificación no reconcilia con
   ];
   assert(!tryParseERAnexoMensual(wbFromSheets({ 'ER2024': rows }), 'x.xlsx'),
     'no importa el archivo si la suma de los conceptos clasificados no coincide con "Rtdo. neto" — evita clasificar mal en silencio');
+});
+
+// ── tryParseERSumasYSaldosAnual: balance de sumas y saldos jerárquico
+//    completo (Activo/Pasivo/Patrimonio/Estado de Resultados), con columna
+//    de nivel "N" y una columna "Sumas historicos" — un corte a una fecha
+//    (ej. "al 12/2024"), no mensual — caso real: EDELAR, Requerimiento
+//    UCEP. Convención de saldo contable (débito positivo): ventas en
+//    negativo, costos/gastos en positivo — se invierte el signo. Cada fila
+//    de nivel 2 ya trae el acumulado de sus cuentas de detalle, así que no
+//    hace falta bajar a sumar hojas — y como el archivo es un corte único,
+//    el resultado se carga bajo el mes 12 (diciembre = acumulado anual). ──
+group('tryParseERSumasYSaldosAnual — balance jerárquico con columna "N" + "Sumas historicos" (caso real EDELAR)', () => {
+  const hdr = ['N', 'Cuenta', 'Descripción', 'Sumas historicos'];
+  const relleno = ['', '', '', ''];
+  const rows = [
+    ['GPU - Codigo de Consulta'], relleno,
+    hdr,
+    [0, '06_BPUB', 'BALANCE', 0],
+    [1, '06_1-00000 ACTIVO', '1-00000 ACTIVO', 0],
+    [2, '06_1-00000 ACTIVO CORRIENTE', '', 0],
+    [1, '06_6-00000 ESTADO DE RESULTADOS', '6-00000 ESTADO DE RESULTADOS', -390],
+    [2, '06_6-01000 VENTAS NETAS', '6-01000 VENTAS NETAS', -1000],
+    [3, '06_6-01100 ENERGÍA', '', -1000],
+    [2, '06_7-01000 COSTO DE EXPLOTACIÓN', '7-01000 COSTO DE EXPLOTACIÓN', 400],
+    [2, '06_7-10100 GASTOS DE ADMINISTRACIÓN', '7-10100 GASTOS DE ADMINISTRACIÓN', 100],
+    [2, '06_7-20200 GASTOS DE COMERCIALIZACIÓN', '7-20200 GASTOS DE COMERCIALIZACIÓN', 80],
+    [2, '06_7-30000 RESULTADOS FINANCIEROS Y POR TENENCIA', '7-30000 RESULTADOS FINANCIEROS', 50],
+    [2, '06_7-50000 IMPUESTO A LAS GANANCIAS PROVISION CORR', '7-50000 IMPUESTO A LAS GANANCIAS', -20],
+    [1, '06_8-01000 PARTICIPACION MINORITARIA', '8-01000 PARTICIPACION MINORITA', 0],
+    relleno, relleno, relleno, relleno, relleno,
+  ];
+  const wb = wbFromSheets({ SyS0320: rows });
+  const r = tryParseERSumasYSaldosAnual(wb, 'Requerimiento_UCEP_EDELAR_12-2024.xlsx');
+  assert(!!r, 'reconoce el formato por las columnas N/Cuenta/Descripción + "Sumas historicos"');
+  if (r) {
+    assert(r.anio === '2024', 'toma el año del nombre de archivo ("12-2024" → 2024)');
+    assert(r.mesesCount === 1, 'es un corte a una fecha, no mensual — un solo período cargado');
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[12] === 1000, 'VENTAS NETAS (-1000, crédito) se invierte a +1000 (convención del dashboard)');
+    assert(f('costo')?.valores[12] === -400, 'COSTO DE EXPLOTACIÓN (400, débito) se invierte a -400');
+    assert(f('gastoAdm')?.valores[12] === -100, 'GASTOS DE ADMINISTRACIÓN se invierte a -100');
+    assert(f('gastoCom')?.valores[12] === -80, 'GASTOS DE COMERCIALIZACIÓN se invierte a -80');
+    assert(f('resFinanciero')?.valores[12] === -50, 'RESULTADOS FINANCIEROS se invierte a -50');
+    assert(f('impuesto')?.valores[12] === 20, 'IMPUESTO A LAS GANANCIAS (-20, crédito) se invierte a +20');
+    assert(f('resEjercicio')?.valores[12] === 390,
+      '"ESTADO DE RESULTADOS" (nivel N=1, -390) se toma invertido (+390) como Resultado del Ejercicio, y reconcilia contra la suma de los rubros');
+    assert(/EDELAR/.test(r.empresa), 'sugiere la empresa a partir del nombre de archivo (el usuario la confirma en el preview)');
+    assert(r.hoja === 'SyS0320', 'usa la primera pestaña del libro');
+  }
+});
+
+group('tryParseERSumasYSaldosAnual — solo lee la primera pestaña, ignora una segunda con datos válidos', () => {
+  const hdr = ['N', 'Cuenta', 'Descripción', 'Sumas historicos'];
+  const relleno = ['', '', '', ''];
+  const rowsValidos = [
+    ['x'], relleno, hdr,
+    [1, '06_6-00000 ESTADO DE RESULTADOS', '', -390],
+    [2, '06_6-01000 VENTAS NETAS', '', -1000],
+    [2, '06_7-01000 COSTO DE EXPLOTACIÓN', '', 400],
+    [2, '06_7-10100 GASTOS DE ADMINISTRACIÓN', '', 100],
+    [2, '06_7-20200 GASTOS DE COMERCIALIZACIÓN', '', 80],
+    [2, '06_7-30000 RESULTADOS FINANCIEROS', '', 50],
+    [2, '06_7-50000 IMPUESTO A LAS GANANCIAS', '', -20],
+    [1, '06_8-01000 PARTICIPACION MINORITARIA', '', 0],
+    relleno, relleno, relleno, relleno, relleno, relleno,
+  ];
+  const rowsNoRelevantes = [['Otra cosa, no es un balance']];
+  // Los datos válidos están en la SEGUNDA pestaña — el parser tiene que
+  // ignorarlos porque solo lee la primera.
+  const wb = wbFromSheets({ 'Hoja1': rowsNoRelevantes, 'SyS0320': rowsValidos });
+  assert(!tryParseERSumasYSaldosAnual(wb, 'x.xlsx'),
+    'no reconoce el archivo si el balance de sumas y saldos está en una pestaña que no es la primera');
+});
+
+group('tryParseERSumasYSaldosAnual — rechaza si la clasificación no reconcilia contra "ESTADO DE RESULTADOS"', () => {
+  const hdr = ['N', 'Cuenta', 'Descripción', 'Sumas historicos'];
+  const relleno = ['', '', '', ''];
+  const rows = [
+    ['x'], relleno, hdr,
+    [1, '06_6-00000 ESTADO DE RESULTADOS', '', -999999], // no coincide con -1000+400+100=-500
+    [2, '06_6-01000 VENTAS NETAS', '', -1000],
+    [2, '06_7-01000 COSTO DE EXPLOTACIÓN', '', 400],
+    [2, '06_7-10100 GASTOS DE ADMINISTRACIÓN', '', 100],
+    [1, '06_8-01000 PARTICIPACION MINORITARIA', '', 0],
+    relleno, relleno, relleno, relleno, relleno, relleno, relleno,
+  ];
+  assert(!tryParseERSumasYSaldosAnual(wbFromSheets({ SyS0320: rows }), 'x.xlsx'),
+    'no importa el archivo si la suma de los rubros no coincide con el total de "ESTADO DE RESULTADOS" — evita clasificar mal en silencio');
 });
 
 // ── _renombrarEmpresa / _fusionarEmpresas / _eliminarEmpresa: autoridades
