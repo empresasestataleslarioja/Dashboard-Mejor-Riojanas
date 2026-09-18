@@ -18111,6 +18111,30 @@ function _erMensualAgregarFila(emp, anio) {
   buildEvolucionMensual(emp);
 }
 
+// Eliminar por completo el ER mensual cargado de una empresa/año (p. ej.
+// una carga por error). Vacía filas/conceptos en vez de borrar la clave
+// empresa+año del objeto — el bridge actualiza er_mensual por upsert
+// indexado a empresa|año (ver upsertErMensual en el bridge), así que la
+// clave tiene que seguir presente en el próximo publish para que la fila
+// vieja en Sheets se sobrescriba; si se borrara la clave entera, el
+// payload simplemente no mencionaría esa empresa/año y la fila errónea
+// quedaría intacta en Sheets hasta que otra carga la pisara.
+function _erMensualEliminarAnio(emp, anio) {
+  const erData = DATA.er_mensual?.[emp]?.[anio];
+  if (!erData) return;
+  if (!confirm(`¿Eliminar el ER mensual de ${emp} · ${anio}?\n\nSe borra el detalle mensual cargado para ese año. Acordate de tocar Guardar después para publicarlo en Sheets.`)) return;
+  erData.filas = [];
+  erData.conceptos = {};
+  // fact_mensual/res_mensual de ese año quedaron derivados de este ER —
+  // si no se limpian acá, sobrevive facturación/resultado mensual
+  // "fantasma" de la carga borrada en otros módulos que leen esas series.
+  if (DATA.fact_mensual?.[emp]) delete DATA.fact_mensual[emp][anio];
+  if (DATA.res_mensual?.[emp]) delete DATA.res_mensual[emp][anio];
+  _erMensualSync(emp, anio);
+  buildEvolucionMensual(emp);
+  setCtrlMsg(`🗑 ER de ${emp} · ${anio} eliminado — falta tocar Guardar para publicarlo en Sheets.`);
+}
+
 // Quitar una fila/concepto
 function _erMensualQuitarFila(emp, anio, filaIdx) {
   const erData = DATA.er_mensual?.[emp]?.[anio];
@@ -19436,6 +19460,11 @@ function buildEvolucionMensual(emp) {
       <option value="">Todos</option>
       ${anios.map(a=>`<option value="${a}" ${window._erRptAnio===a?'selected':''}>${a}</option>`).join('')}
     </select>
+    ${anioFiltro && erM[anioFiltro] && Array.isArray(erM[anioFiltro].filas) && erM[anioFiltro].filas.length ? `
+    <button onclick="_erMensualEliminarAnio('${empJS}','${anioFiltro}')"
+      style="padding:5px 10px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--neg);
+      background:transparent;color:var(--neg)"
+      title="Borra el detalle mensual de ER cargado para ${anioFiltro} (por ejemplo, un archivo importado por error)">🗑 Eliminar ER ${anioFiltro}</button>` : ''}
     <div style="flex:1"></div>
     <button onclick="_erMensualToggleEdit('${empJS}')"
       style="padding:5px 12px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid ${edit?'var(--pos)':'var(--bd)'};
