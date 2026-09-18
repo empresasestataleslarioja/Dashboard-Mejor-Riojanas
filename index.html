@@ -37616,6 +37616,44 @@ function applyCloudData(cloud, opts) {
   if (Array.isArray(cloud.lr_readonly)) {
     try { localStorage.setItem('lr_readonly_v1', JSON.stringify(cloud.lr_readonly)); } catch(e) {}
   }
+
+  // ── Tumbas de empresas eliminadas/fusionadas/renombradas ────────────
+  // Se leen y aplican ANTES que cualquier otra sección. El bridge ya
+  // protege las escrituras futuras en Sheets contra una fila resucitada
+  // (filtrarEliminadas del lado del servidor), pero eso no alcanza para
+  // OTRO dispositivo que ya tenía la empresa vieja cargada: fact/sit/
+  // personal se reconstruyen enteros desde Sheets más abajo (así que ahí
+  // se autocorrigen solos), pero rubros/notas/presupuesto/balances/
+  // autoridades se MERGEAN en vez de reemplazarse completos — sin
+  // aplicar la tumba acá, esa empresa vieja queda para siempre en la
+  // caché local de cualquier otro dispositivo (ej.: reaparece suelta en
+  // "Asignación de empresas por rubro" aunque en Sheets ya esté
+  // correctamente fusionada o borrada — bug real reportado por el
+  // usuario, notado recién en otra sesión/dispositivo más tarde).
+  if (Array.isArray(cloud.empresas_eliminadas) && cloud.empresas_eliminadas.length) {
+    DATA.empresas_eliminadas = DATA.empresas_eliminadas || [];
+    const conocidas = new Set(DATA.empresas_eliminadas.map(t => t.empresa));
+    cloud.empresas_eliminadas.forEach(t => {
+      if (!t.empresa || conocidas.has(t.empresa)) return;
+      conocidas.add(t.empresa);
+      DATA.empresas_eliminadas.push({ empresa: t.empresa, fecha: t.fecha || '' });
+      try { _purgarEmpresaDeData(t.empresa); } catch(e) {}
+    });
+  }
+
+  // ── Beneficiarios de Transferencias excluidos permanentemente ───────
+  // Mismo motivo que arriba: si se excluyó un beneficiario desde otro
+  // dispositivo, este necesita conocer la exclusión para no seguir
+  // mostrando esas transferencias desde su propia caché local.
+  if (Array.isArray(cloud.beneficiarios_excluidos) && cloud.beneficiarios_excluidos.length) {
+    DATA.beneficiarios_excluidos = DATA.beneficiarios_excluidos || [];
+    cloud.beneficiarios_excluidos.forEach(b => {
+      const nombre = typeof b === 'string' ? b : (b.beneficiario || '');
+      if (nombre && !_beneficiarioExcluido(nombre)) DATA.beneficiarios_excluidos.push(nombre);
+    });
+    try { _purgarBeneficiariosExcluidos(); } catch(e) {}
+  }
+
   // fact: rows con columnas: empresa, 2020, 2021, 2022, 2023, 2024, 2025, 2026
   if ((!_solo || _solo === 'fact') && cloud.fact && cloud.fact.length) {
     DATA.fact = {};
