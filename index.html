@@ -27473,6 +27473,162 @@ function tryParseERIngresosEgresosFlat(wb, fname) {
   return null;
 }
 
+// ── Parser de ER "Anexo mensual" (planilla contable formal con columna de
+// referencia a Anexo — ING/Costo/Adm/Com/OIO/Financ/Ganan — y meses como
+// columnas de fecha, con una fila de subtotal por cada nivel del estado de
+// resultados — caso real: EDELAR, Est_Rtdo_EDELAR_2025.xlsx). La columna
+// Anexo es una señal de clasificación mucho más confiable que la palabra
+// clave del rótulo: se usa como criterio principal, con un puñado de
+// rótulos sin Anexo (RECPAM, Impuesto diferido, Resultado neto) resueltos
+// por palabra clave. Los archivos de este formato suelen traer una
+// segunda pestaña "axi" con el mismo ER pero reexpresado por inflación
+// (RT6) — se descarta explícitamente esa pestaña, tal como pidió el
+// usuario para EDELAR: la pestaña sin ajustar es la que corresponde
+// cargar acá.
+function tryParseERAnexoMensual(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+
+  const LBL = {
+    ventas: 'Ventas', costo: 'Costo de Ventas', gastoAdm: 'Gastos de Administración',
+    gastoCom: 'Gastos de Comercialización', otrosIngresos: 'Otros Ingresos',
+    resFinanciero: 'Resultado Financiero', impuesto: 'Impuesto a las Ganancias',
+    resEjercicio: 'Resultado del Ejercicio',
+  };
+
+  // Subtotales/memos de la planilla (Resultado Bruto, Resultado Operativo,
+  // Amortizaciones/EBITDA — informativos, no incrementales sobre el resto
+  // de las filas ya clasificadas —, Resultado financiero neto, Rtdo. antes
+  // del impuesto) quedan sin Anexo y sin match de palabra clave → se
+  // descartan solos (conceptoStd null), el propio dashboard los vuelve a
+  // derivar de las filas primarias.
+  const _clasifPorAnexo = (anexo, lbl) => {
+    const a = String(anexo || '').trim().toUpperCase();
+    const t = String(lbl || '').trim().toUpperCase();
+    if (a === 'ING')    return 'ventas';
+    if (a === 'COSTO')  return 'costo';
+    if (a === 'ADM')    return 'gastoAdm';
+    if (a === 'COM')    return 'gastoCom';
+    if (a === 'OIO')    return 'otrosIngresos';
+    if (a === 'FINANC') return 'resFinanciero';
+    if (a === 'GANAN')  return 'impuesto';
+    if (/IMPUESTO\s+DIFERIDO/.test(t)) return 'impuesto';
+    if (/RESULTADO\s+NETO|RTDO\.?\s+NETO/.test(t)) return 'resEjercicio';
+    // RECPAM (resultado por exposición a la inflación) queda deliberadamente
+    // sin clasificar: en esta pestaña (sin ajustar) el propio archivo lo dejó
+    // afuera de "Resultado financiero neto" y de "Rtdo. antes del impuesto"
+    // — verificado por reconciliación contra las dos filas — así que sumarlo
+    // acá pisaría el checksum contra el resultado neto autoritativo. Es un
+    // memo de conciliación con la pestaña "axi" ajustada, no una partida del
+    // resultado nominal de este estado.
+    return null;
+  };
+
+  for (const sn of wb.SheetNames) {
+    // Pestaña "axi" (ajuste por inflación, RT6) — se descarta siempre:
+    // el mismo estado reexpresado, no corresponde tomarlo acá.
+    if (/\baxi\b|ajuste.*inflac|inflac.*ajuste/i.test(sn)) continue;
+
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 10) continue;
+
+    // Fila de encabezado: la celda "Anexo" seguida de columnas de fecha
+    // (Date u serial de Excel) hasta la columna "TOTAL".
+    let filaHdr = -1, colAnexo = -1, colMeses = [];
+    for (let i = 0; i < Math.min(15, rows.length); i++) {
+      const row = rows[i];
+      const idx = row.findIndex(c => String(c || '').trim().toUpperCase() === 'ANEXO');
+      if (idx < 0) continue;
+      const cols = [];
+      for (let c = idx + 1; c < row.length; c++) {
+        const v = row[c];
+        let ymd = null;
+        if (v instanceof Date && !isNaN(v.getTime())) ymd = { y: v.getFullYear(), m: v.getMonth() + 1 };
+        else if (typeof v === 'number' && v > 20000 && v < 90000) {
+          const d = XLSX.SSF.parse_date_code(v);
+          if (d) ymd = { y: d.y, m: d.m };
+        }
+        if (ymd && ymd.y >= 2000 && ymd.y <= 2100) cols.push({ col: c, anio: ymd.y, mes: ymd.m });
+        else if (cols.length) break; // corta al llegar a la columna "TOTAL"
+      }
+      if (cols.length >= 1) { filaHdr = i; colAnexo = idx; colMeses = cols; break; }
+    }
+    if (filaHdr < 0) continue;
+    const colLbl = colAnexo - 1;
+    if (colLbl < 0) continue;
+
+    // Año: el más frecuente entre las columnas de mes detectadas — estos
+    // archivos suelen traer diciembre del año anterior como referencia
+    // comparativa, que queda afuera (no es del año que se está cargando).
+    const anioCount = {};
+    colMeses.forEach(({ anio }) => { anioCount[anio] = (anioCount[anio] || 0) + 1; });
+    const anio = Object.entries(anioCount).sort((a, b) => b[1] - a[1])[0][0];
+    const colMesesAnio = colMeses.filter(c => String(c.anio) === anio);
+
+    const acum = {}; // conceptoStd -> { mes: total }
+    let filaResEjercicio = null;
+
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const lbl = String(row[colLbl] || '').trim();
+      if (!lbl) continue;
+      const cpt = _clasifPorAnexo(row[colAnexo], lbl);
+      if (!cpt) continue;
+
+      const valores = {};
+      colMesesAnio.forEach(({ col, mes }) => {
+        const v = _num(row[col]);
+        if (v != null && v !== 0) valores[mes] = v;
+      });
+      if (Object.keys(valores).length === 0) continue;
+
+      if (cpt === 'resEjercicio') { filaResEjercicio = valores; continue; }
+      if (!acum[cpt]) acum[cpt] = {};
+      Object.entries(valores).forEach(([m, v]) => { acum[cpt][m] = (acum[cpt][m] || 0) + v; });
+    }
+
+    if (Object.keys(acum).length < 2 || !filaResEjercicio) continue;
+
+    // Validar contra la fila autoritativa de resultado neto (Anexo no
+    // aplica ahí, se detecta por rótulo): si la suma de los conceptos
+    // clasificados no coincide, es más seguro no importar nada a adivinar
+    // mal la clasificación — se prueba con el siguiente parser en vez de
+    // éste.
+    const mesesConDatos = [...new Set(colMesesAnio.map(c => c.mes))];
+    const cuadra = mesesConDatos.every(mes => {
+      const suma = Object.values(acum).reduce((s, v) => s + (v[mes] || 0), 0);
+      const total = filaResEjercicio[mes] || 0;
+      return Math.abs(suma - total) <= Math.max(2, Math.abs(total) * 1e-6);
+    });
+    if (!cuadra) continue;
+
+    acum.resEjercicio = filaResEjercicio;
+
+    // Empresa: sugerida desde el nombre del archivo — el usuario la
+    // confirma/corrige en el preview, igual que el resto de los parsers ER.
+    let empresa = fname.replace(/\.xlsx?$/i, '')
+      .replace(/[_\-]+/g, ' ')
+      .replace(/\b(EST|ESTADO|RTDO|RESULTADOS?|DE|\d{4})\b/gi, '')
+      .replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    const filas = Object.entries(acum)
+      .filter(([, valores]) => Object.keys(valores).length > 0)
+      .map(([conceptoStd, valores]) => ({ lbl: LBL[conceptoStd] || conceptoStd, conceptoStd, valores }));
+
+    return { empresa, anio, filas, hoja: sn, mesesCount: colMesesAnio.length };
+  }
+  return null;
+}
+
 function tryParseERMatricial(wb, fname) {
   // Buscar hoja RESUMEN
   const nombreHoja = wb.SheetNames.find(n => n.toUpperCase().trim() === 'RESUMEN');
@@ -28007,6 +28163,18 @@ function handleImportWorkbook(wb, fname) {
   if (erFlatResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erFlatResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER "Anexo mensual" (planilla contable formal con
+  // columna Anexo — ING/Costo/Adm/Com/OIO/Financ/Ganan — y meses como
+  // fecha; descarta la pestaña "axi" de ajuste por inflación — caso real:
+  // EDELAR) ──
+  const erAnexoResult = tryParseERAnexoMensual(wb, fname);
+  console.log('[LR] tryParseERAnexoMensual:', erAnexoResult ? erAnexoResult.empresa+' '+erAnexoResult.filas.length+' conceptos' : 'null');
+  if (erAnexoResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erAnexoResult, fname);
     return;
   }
 

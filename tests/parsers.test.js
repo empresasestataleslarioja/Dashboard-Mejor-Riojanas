@@ -52,6 +52,7 @@ const {
   tryParseERLibroMayorResumen,
   tryParseERPivotContable,
   tryParseERIngresosEgresosFlat,
+  tryParseERAnexoMensual,
   _mismoNombreEmpresa,
   _parseFechaAutoridad,
   _matchEmpresaAutoridad,
@@ -66,6 +67,7 @@ const {
   'tryParseERLibroMayorResumen',
   'tryParseERPivotContable',
   'tryParseERIngresosEgresosFlat',
+  'tryParseERAnexoMensual',
   '_mismoNombreEmpresa',
   '_parseFechaAutoridad',
   '_matchEmpresaAutoridad',
@@ -1360,6 +1362,91 @@ group('tryParseERIngresosEgresosFlat — rechaza si el detalle no reconcilia con
   ];
   assert(!tryParseERIngresosEgresosFlat(wbFromSheets({ Hoja1: rows }), 'x.xlsx'),
     'no importa el archivo si el detalle de ingresos no coincide con su subtotal declarado — evita clasificar mal en silencio');
+});
+
+// ── tryParseERAnexoMensual: planilla contable formal con columna "Anexo"
+//    (ING/Costo/Adm/Com/OIO/Financ/Ganan) y meses como fecha de Excel —
+//    caso real: EDELAR, Est_Rtdo_EDELAR_2025.xlsx. Clasifica por el código
+//    de Anexo (más confiable que palabra clave) y usa la fila "Rtdo. neto"
+//    (sin Anexo) como checksum autoritativo. El archivo real trae además
+//    una fila "recpam" (resultado por exposición a la inflación) que el
+//    propio archivo deja afuera de esa fila de resultado neto — verificado
+//    por reconciliación contra el archivo real — así que el parser la
+//    descarta a propósito en vez de sumarla como resultado financiero. ────
+group('tryParseERAnexoMensual — columna Anexo + checksum contra "Rtdo. neto" (caso real EDELAR)', () => {
+  const rows = [
+    ['', '', 'Anexo', new Date(2023,11,1), new Date(2024,0,1), new Date(2024,1,1)],
+    ['', 'Ingresos por ventas', 'ING', 50, 1000, 1100],
+    ['', 'Costo de explotación', 'Costo', -20, -300, -320],
+    ['', 'Gastos de distribución', 'Costo', -5, -50, -55],
+    ['', 'Gastos de administración', 'Adm', -10, -100, -110],
+    ['', 'Gastos de comercialización', 'Com', -8, -60, -65],
+    ['', 'Otros ingresos operativos', 'OIO', 1, 10, 12],
+    ['', 'recpam', '', 999, 999, 999],
+    ['', 'Ingresos Financieros', 'Financ', 2, 20, 22],
+    ['', 'Gastos Financieros', 'Financ', -3, -15, -18],
+    ['', 'Impuesto a las ganancias', 'Ganan', -1, -5, -6],
+    ['', 'Rtdo. neto  por operaciones continuas', '', 6, 500, 560],
+  ];
+  const r = tryParseERAnexoMensual(wbFromSheets({ 'ER2024': rows }), 'Est_Rtdo_EDELAR_2024.xlsx');
+  assert(!!r, 'reconoce el formato por la columna "Anexo" + columnas de fecha');
+  if (r) {
+    assert(r.anio === '2024', 'toma el año mayoritario entre las columnas de mes (descarta el diciembre del año anterior)');
+    assert(r.mesesCount === 2, 'detecta solo los 2 meses del año que corresponde, no el de referencia del año anterior');
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[1] === 1000 && f('ventas')?.valores[2] === 1100, 'Anexo ING clasifica como ventas');
+    assert(f('costo')?.valores[1] === -350 && f('costo')?.valores[2] === -375,
+      'Costo de explotación (-300) + Gastos de distribución (-50), ambos Anexo Costo, se suman en un solo renglón "costo"');
+    assert(f('gastoAdm')?.valores[1] === -100, 'Anexo Adm clasifica como gastoAdm');
+    assert(f('gastoCom')?.valores[1] === -60, 'Anexo Com clasifica como gastoCom');
+    assert(f('otrosIngresos')?.valores[1] === 10, 'Anexo OIO clasifica como otrosIngresos');
+    assert(f('resFinanciero')?.valores[1] === 5, 'Ingresos Financieros (20) + Gastos Financieros (-15), ambos Anexo Financ, se suman en resFinanciero');
+    assert(f('impuesto')?.valores[1] === -5, 'Anexo Ganan clasifica como impuesto');
+    assert(f('resEjercicio')?.valores[1] === 500 && f('resEjercicio')?.valores[2] === 560,
+      '"Rtdo. neto" (sin Anexo) se toma tal cual como Resultado del Ejercicio');
+    assert(f('resFinanciero')?.valores[1] === 5,
+      'recpam NO se suma a resFinanciero — el propio archivo lo deja afuera de "Rtdo. neto" (ver comentario del parser)');
+    assert(/EDELAR/.test(r.empresa), 'sugiere la empresa a partir del nombre de archivo (el usuario la confirma en el preview)');
+  }
+});
+
+group('tryParseERAnexoMensual — descarta la pestaña "axi" (ajuste por inflación) aunque venga primero en el libro', () => {
+  const filaHdr = ['', '', 'Anexo', new Date(2024,0,1)];
+  const relleno = ['', '', '', ''];
+  const rowsAxi = [filaHdr,
+    ['', 'Ingresos por ventas', 'ING', 9999],
+    ['', 'Rtdo. neto  por operaciones continuas', '', 9999],
+    relleno, relleno, relleno, relleno, relleno, relleno, relleno,
+  ];
+  const rowsOk = [filaHdr,
+    ['', 'Ingresos por ventas', 'ING', 1000],
+    ['', 'Gastos de administración', 'Adm', -100],
+    ['', 'Rtdo. neto  por operaciones continuas', '', 900],
+    relleno, relleno, relleno, relleno, relleno, relleno,
+  ];
+  // "axi" va primero en el libro a propósito — el descarte tiene que ser
+  // por nombre de pestaña, no por quedarse con la primera que matchee.
+  const wb = wbFromSheets({ 'ER2024 axi': rowsAxi, 'ER2024': rowsOk });
+  const r = tryParseERAnexoMensual(wb, 'Est_Rtdo_Empresa_2024.xlsx');
+  assert(!!r, 'reconoce el archivo igual, tomando la pestaña sin ajustar');
+  if (r) {
+    assert(r.hoja === 'ER2024', 'usa la pestaña "ER2024", no la "ER2024 axi"');
+    const fV = r.filas.find(f => f.conceptoStd === 'ventas');
+    assert(fV?.valores[1] === 1000, 'los valores vienen de la pestaña sin ajustar (1000), no de la "axi" (9999)');
+  }
+});
+
+group('tryParseERAnexoMensual — rechaza si la clasificación no reconcilia contra "Rtdo. neto"', () => {
+  const relleno = ['', '', '', ''];
+  const rows = [
+    ['', '', 'Anexo', new Date(2024,0,1)],
+    ['', 'Ingresos por ventas', 'ING', 1000],
+    ['', 'Gastos de administración', 'Adm', -100],
+    ['', 'Rtdo. neto  por operaciones continuas', '', 999999], // no coincide con 1000-100=900
+    relleno, relleno, relleno, relleno, relleno, relleno,
+  ];
+  assert(!tryParseERAnexoMensual(wbFromSheets({ 'ER2024': rows }), 'x.xlsx'),
+    'no importa el archivo si la suma de los conceptos clasificados no coincide con "Rtdo. neto" — evita clasificar mal en silencio');
 });
 
 // ── _renombrarEmpresa / _fusionarEmpresas / _eliminarEmpresa: autoridades
