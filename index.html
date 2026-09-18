@@ -27214,6 +27214,179 @@ function tryParseERPivotContable(wb, fname) {
   return null;
 }
 
+// ── Parser de ER "flat Ingresos/Egresos mensual" (reporte tipo "Reporte de
+// Utilidades" — una sola hoja por año, título "ESTADO DE RESULTADOS
+// MENSUALES <año>", encabezado de meses como fechas de Excel, una fila
+// marcadora "EGRESOS" que separa el bloque de ingresos (arriba) del de
+// egresos (abajo), subtotales "... NETOS DE IVA" y una fila final
+// "SALDO OPERATIVO MENSUAL" — caso real: LRT). A diferencia del formato
+// pivot jerárquico (Estado|Tipo|Rubro|Detalle), acá no hay columnas de
+// jerarquía: cada fila de detalle es una única cuenta suelta bajo
+// INGRESOS o EGRESOS, sin más agrupación que esas dos secciones — se
+// clasifica por palabra clave del propio rótulo, igual criterio que
+// tryParseERColumnasMeses.
+function tryParseERIngresosEgresosFlat(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+
+  // Egresos sin columna de rubro propia: se clasifican por palabra clave
+  // del rótulo (mismo criterio que tryParseERColumnasMeses) y, a falta de
+  // coincidencia específica de comercialización/financiero, caen en el
+  // cajón general gastoAdm — igual convención adoptada para Agroandina
+  // (no desdoblar "costo" en estos ER provisorios simplificados).
+  const _clasifEgresoLinea = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
+    if (/PUBLICIDAD|PROPAGANDA|COMERCIALIZAC|MERCADOTECNIA/.test(t)) return 'gastoCom';
+    if (/VIATICO|MOVILIDAD|FLETE|ACARREO|ENCOMIENDA|^CORREO|,\s*FLETES/.test(t)) return 'gastoCom';
+    if (/FINANCIER|INTERES/.test(t)) return 'resFinanciero';
+    return 'gastoAdm';
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 10) continue;
+
+    // Título distintivo en alguna de las primeras filas — evita falsos
+    // positivos contra cualquier otro formato "flat" de este dashboard.
+    const tituloOk = rows.slice(0, 4).some(r => /ESTADO\s+DE\s+RESULTADOS\s+MENSUAL/i.test(String(r[0]||'')));
+    if (!tituloOk) continue;
+
+    // Fila de encabezado de meses: primera fila (entre las primeras 10)
+    // con al menos 1 celda de fecha (Date u serial de Excel) en cualquier
+    // columna — el título distintivo, la fila marcadora "EGRESOS" y la
+    // reconciliación contra los subtotales ya bastan para evitar falsos
+    // positivos, así que no hace falta exigir muchos meses (un ER
+    // provisorio puede traer un solo mes cargado).
+    let filaHdr = -1, colMeses = [];
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const cols = [];
+      for (let c = 0; c < rows[i].length; c++) {
+        const v = rows[i][c];
+        let ymd = null;
+        if (v instanceof Date && !isNaN(v.getTime())) ymd = { y: v.getFullYear(), m: v.getMonth()+1 };
+        else if (typeof v === 'number' && v > 20000 && v < 90000) {
+          const d = XLSX.SSF.parse_date_code(v);
+          if (d) ymd = { y: d.y, m: d.m };
+        }
+        if (ymd && ymd.y >= 2000 && ymd.y <= 2100) cols.push({ col:c, anio:ymd.y, mes:ymd.m });
+      }
+      if (cols.length >= 1) { filaHdr = i; colMeses = cols; break; }
+    }
+    if (filaHdr < 0) continue;
+
+    const anioCount = {};
+    colMeses.forEach(({anio}) => { anioCount[anio] = (anioCount[anio]||0)+1; });
+    const anio = Object.entries(anioCount).sort((a,b)=>b[1]-a[1])[0][0];
+
+    // Fila marcadora "EGRESOS": separa el bloque de ingresos (arriba) del
+    // de egresos (abajo).
+    let filaEgresos = -1;
+    for (let i = filaHdr+1; i < rows.length; i++) {
+      if (/^EGRESOS?\b/i.test(String(rows[i][0]||'').trim())) { filaEgresos = i; break; }
+    }
+    if (filaEgresos < 0) continue;
+
+    const esSubtotalIngreso = s => /NETOS?\s+DE\s+IVA/i.test(s) || /^INGRESOS?\b/i.test(s);
+    const esSubtotalEgreso  = s => /NETOS?\s+DE\s+IVA/i.test(s) || /^EGRESOS?\b/i.test(s);
+    const esResultadoFinal  = s => /^SALDO|^RESULTADO/i.test(s);
+
+    const ventas = {}, egresos = {};
+    const ingresoSubtotal = {}, egresoSubtotal = {}, resultadoFinal = {};
+    let vioIngresoSubtotal = false, vioEgresoSubtotal = false, vioResultado = false;
+
+    for (let i = filaHdr+1; i < filaEgresos; i++) {
+      const lbl = String(rows[i][0]||'').trim();
+      if (!lbl) continue;
+      if (esSubtotalIngreso(lbl)) {
+        vioIngresoSubtotal = true;
+        colMeses.forEach(({col,mes}) => { const v=_num(rows[i][col]); if (v!=null) ingresoSubtotal[mes]=(ingresoSubtotal[mes]||0)+v; });
+        continue;
+      }
+      colMeses.forEach(({col,mes}) => { const v=_num(rows[i][col]); if (v!=null && v!==0) ventas[mes]=(ventas[mes]||0)+v; });
+    }
+
+    for (let i = filaEgresos+1; i < rows.length; i++) {
+      const lbl = String(rows[i][0]||'').trim();
+      if (!lbl) continue;
+      if (esResultadoFinal(lbl)) {
+        vioResultado = true;
+        colMeses.forEach(({col,mes}) => { const v=_num(rows[i][col]); if (v!=null) resultadoFinal[mes]=v; });
+        continue;
+      }
+      if (esSubtotalEgreso(lbl)) {
+        vioEgresoSubtotal = true;
+        colMeses.forEach(({col,mes}) => { const v=_num(rows[i][col]); if (v!=null) egresoSubtotal[mes]=(egresoSubtotal[mes]||0)+v; });
+        continue;
+      }
+      const cpt = _clasifEgresoLinea(lbl);
+      if (!egresos[cpt]) egresos[cpt] = {};
+      colMeses.forEach(({col,mes}) => { const v=_num(rows[i][col]); if (v!=null && v!==0) egresos[cpt][mes]=(egresos[cpt][mes]||0)+v; });
+    }
+
+    // Exigir ambos subtotales — evita falsos positivos contra otra
+    // planilla que solo casualmente traiga una fila "EGRESOS".
+    if (!vioIngresoSubtotal || !vioEgresoSubtotal) continue;
+
+    // Validar cada bloque contra su propio subtotal declarado: si la suma
+    // del detalle no coincide, es más seguro no importar nada a adivinar
+    // mal la clasificación — se prueba con el siguiente parser en vez de
+    // éste.
+    const mesesConDatos = [...new Set(colMeses.map(c=>c.mes))];
+    const cuadraIngreso = mesesConDatos.every(mes => {
+      const suma = ventas[mes] || 0, total = ingresoSubtotal[mes] || 0;
+      return Math.abs(suma - total) <= Math.max(2, Math.abs(total)*1e-6);
+    });
+    if (!cuadraIngreso) continue;
+
+    const cuadraEgreso = mesesConDatos.every(mes => {
+      const suma = Object.values(egresos).reduce((s,v)=>s+(v[mes]||0),0);
+      const total = egresoSubtotal[mes] || 0;
+      return Math.abs(suma - total) <= Math.max(2, Math.abs(total)*1e-6);
+    });
+    if (!cuadraEgreso) continue;
+
+    if (vioResultado) {
+      const cuadraResultado = mesesConDatos.every(mes => {
+        if (resultadoFinal[mes] == null) return true;
+        const calc = (ingresoSubtotal[mes]||0) - (egresoSubtotal[mes]||0);
+        return Math.abs(calc - resultadoFinal[mes]) <= Math.max(2, Math.abs(resultadoFinal[mes])*1e-6);
+      });
+      if (!cuadraResultado) continue;
+    }
+
+    // Empresa: sugerida desde el nombre del archivo — el usuario la
+    // confirma/corrige en el preview, igual que el resto de los parsers ER.
+    let empresa = fname.replace(/\.xlsx?$/i,'')
+      .replace(/[_\-]+/g,' ')
+      .replace(/\b(ERP?|PROVISORIO|ESTADO\s+DE\s+RESULTADOS?|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC|A|AL|DE|\d{4})\b/gi,'')
+      .replace(/\s+/g,' ').trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    const LBL = { ventas:'Ventas', gastoAdm:'Gastos de Administración', gastoCom:'Gastos de Comercialización', resFinanciero:'Resultado Financiero' };
+    const filas = [];
+    if (Object.keys(ventas).length) filas.push({ lbl: LBL.ventas, conceptoStd:'ventas', valores: ventas });
+    // Convención de presentación del dashboard (ventas positivo, gastos
+    // negativo) — el archivo trae los egresos en magnitud positiva.
+    Object.entries(egresos).forEach(([cpt, valores]) => {
+      const negado = {};
+      Object.entries(valores).forEach(([m,v]) => { negado[m] = -Math.abs(v); });
+      filas.push({ lbl: LBL[cpt] || cpt, conceptoStd: cpt, valores: negado });
+    });
+    if (filas.length < 2) continue;
+
+    return { empresa, anio, filas, hoja: sn, mesesCount: colMeses.length };
+  }
+  return null;
+}
+
 function tryParseERMatricial(wb, fname) {
   // Buscar hoja RESUMEN
   const nombreHoja = wb.SheetNames.find(n => n.toUpperCase().trim() === 'RESUMEN');
@@ -27737,6 +27910,17 @@ function handleImportWorkbook(wb, fname) {
   if (erPivotResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erPivotResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER "flat Ingresos/Egresos mensual" ("Reporte de
+  // Utilidades", fila marcadora EGRESOS, subtotales "... NETOS DE IVA" —
+  // caso real: LRT) ──
+  const erFlatResult = tryParseERIngresosEgresosFlat(wb, fname);
+  console.log('[LR] tryParseERIngresosEgresosFlat:', erFlatResult ? erFlatResult.empresa+' '+erFlatResult.filas.length+' conceptos' : 'null');
+  if (erFlatResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erFlatResult, fname);
     return;
   }
 

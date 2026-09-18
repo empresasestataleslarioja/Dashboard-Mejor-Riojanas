@@ -51,6 +51,7 @@ const {
   tryParseERLibroMayor,
   tryParseERLibroMayorResumen,
   tryParseERPivotContable,
+  tryParseERIngresosEgresosFlat,
   _mismoNombreEmpresa,
   _parseFechaAutoridad,
   _matchEmpresaAutoridad,
@@ -64,6 +65,7 @@ const {
   'tryParseERLibroMayor',
   'tryParseERLibroMayorResumen',
   'tryParseERPivotContable',
+  'tryParseERIngresosEgresosFlat',
   '_mismoNombreEmpresa',
   '_parseFechaAutoridad',
   '_matchEmpresaAutoridad',
@@ -1281,6 +1283,83 @@ group('tryParseERPivotContable — rechaza si la clasificación no reconcilia co
   ];
   assert(!tryParseERPivotContable(wbFromSheets({ ER1: rows }), 'x.xlsx'),
     'no importa el archivo si la suma de los conceptos clasificados no coincide con "Total general" — evita clasificar mal en silencio');
+});
+
+// ── tryParseERIngresosEgresosFlat: "Reporte de Utilidades" — una sola
+//    hoja, título "ESTADO DE RESULTADOS MENSUALES <año>", meses como fecha
+//    de Excel, sin columnas de jerarquía (a diferencia del pivot
+//    contable): un bloque de ingresos, una fila marcadora "EGRESOS" y un
+//    bloque de egresos plano, con subtotales "... NETOS DE IVA" y un
+//    "SALDO OPERATIVO MENSUAL" final — caso real: LRT, ER Provisorio 2024.
+//    El archivo trae los egresos en magnitud positiva (sin signo) — el
+//    parser los pasa a negativo para respetar la convención de
+//    presentación del dashboard (ventas positivo, gastos negativo). ──────
+group('tryParseERIngresosEgresosFlat — "Reporte de Utilidades" con fila marcadora EGRESOS (caso real LRT)', () => {
+  const rows = [
+    ['REPORTE DE UTILIDADES','','',''],
+    ['ESTADO DE RESULTADOS MENSUALES 2024 (EN PESOS NETOS DE IVA)','','',''],
+    ['','','',''],
+    ['', new Date(2024,0,1), new Date(2024,1,1)],
+    ['SERVICIOS', 900, 850],
+    ['OBRAS', 100, 50],
+    ['INGRESOS NETOS DE IVA', 1000, 900],
+    ['','',''],
+    ['EGRESOS','',''],
+    ['','',''],
+    ['ALQUILERES', 60, 65],
+    ['SUELDOS', 300, 310],
+    ['PUBLICIDAD Y PROPAGANDA', 40, 35],
+    ['VIATICOS, ALOJAMIENTO Y MOVILIDAD PERSONAL', 20, 18],
+    ['EGRESOS NETOS DE IVA', 420, 428],
+    ['','',''],
+    ['SALDO OPERATIVO MENSUAL', 580, 472],
+  ];
+  const wb = wbFromSheets({ 'año 2024': rows });
+  const r = tryParseERIngresosEgresosFlat(wb, 'ER_Provisorio_LRT_2024.xlsx');
+  assert(!!r, 'reconoce el formato por el título distintivo + fila marcadora EGRESOS');
+  if (r) {
+    assert(r.anio === '2024', 'toma el año de las columnas de mes (objeto Date)');
+    assert(r.mesesCount === 2, 'detecta los 2 meses presentes');
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[1] === 1000 && f('ventas')?.valores[2] === 900,
+      'SERVICIOS + OBRAS se suman en un solo renglón "ventas" (coincide con INGRESOS NETOS DE IVA)');
+    assert(f('gastoCom')?.valores[1] === -60, 'PUBLICIDAD (-40) + VIATICOS (-20) clasifican como gastoCom, en negativo');
+    assert(f('gastoAdm')?.valores[1] === -360, 'ALQUILERES (-60) + SUELDOS (-300) clasifican como gastoAdm (cajón general), en negativo');
+    assert(f('costo') === undefined, 'no genera ningún renglón "costo" aparte — mismo criterio de ER simplificado ya adoptado para este tipo de archivo');
+    const totalMes1 = (f('ventas').valores[1]||0) + (f('gastoAdm').valores[1]||0) + (f('gastoCom').valores[1]||0);
+    assert(totalMes1 === 580, 'ventas + gastoAdm + gastoCom (ya en negativo) reconstruye el SALDO OPERATIVO MENSUAL declarado');
+    assert(/LRT/.test(r.empresa), 'sugiere la empresa a partir del nombre de archivo (el usuario la confirma en el preview)');
+  }
+});
+
+group('tryParseERIngresosEgresosFlat — no reconoce un archivo sin el título "ESTADO DE RESULTADOS MENSUALES" (evita falsos positivos)', () => {
+  const rows = [
+    ['CONCEPTO','',''],
+    ['', new Date(2024,0,1), new Date(2024,1,1)],
+    ['SERVICIOS', 900, 850],
+    ['INGRESOS NETOS DE IVA', 900, 850],
+    ['EGRESOS','',''],
+    ['ALQUILERES', 60, 65],
+    ['EGRESOS NETOS DE IVA', 60, 65],
+    ['SALDO OPERATIVO MENSUAL', 840, 785],
+  ];
+  assert(!tryParseERIngresosEgresosFlat(wbFromSheets({ Hoja1: rows }), 'x.xlsx'),
+    'sin el título distintivo en las primeras filas, no se reconoce (podría ser cualquier otra planilla con una fila "EGRESOS")');
+});
+
+group('tryParseERIngresosEgresosFlat — rechaza si el detalle no reconcilia contra el subtotal declarado', () => {
+  const rows = [
+    ['ESTADO DE RESULTADOS MENSUALES 2024 (EN PESOS NETOS DE IVA)','',''],
+    ['', new Date(2024,0,1), new Date(2024,1,1)],
+    ['SERVICIOS', 900, 850],
+    ['INGRESOS NETOS DE IVA', 999999, 850], // no coincide con 900
+    ['EGRESOS','',''],
+    ['ALQUILERES', 60, 65],
+    ['EGRESOS NETOS DE IVA', 60, 65],
+    ['SALDO OPERATIVO MENSUAL', 840, 785],
+  ];
+  assert(!tryParseERIngresosEgresosFlat(wbFromSheets({ Hoja1: rows }), 'x.xlsx'),
+    'no importa el archivo si el detalle de ingresos no coincide con su subtotal declarado — evita clasificar mal en silencio');
 });
 
 // ── _renombrarEmpresa / _fusionarEmpresas / _eliminarEmpresa: autoridades
