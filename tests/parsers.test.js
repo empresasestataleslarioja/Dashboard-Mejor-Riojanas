@@ -1410,6 +1410,53 @@ group('tryParseERAnexoMensual — columna Anexo + checksum contra "Rtdo. neto" (
   }
 });
 
+// ── Bug real reportado por el usuario: el ER de EDELAR aclara "Expresado
+//    en miles" en el título, y el parser lo pasó por alto — los importes
+//    quedaban 1000 veces por debajo del resto del dashboard (que siempre
+//    trabaja en pesos). Se detecta la aclaración en las filas de título
+//    (antes del encabezado de meses) y se escala x1000, sin pedirle al
+//    usuario que edite el Excel. ─────────────────────────────────────────
+group('tryParseERAnexoMensual — "Expresado en miles" escala los importes x1000', () => {
+  const relleno = [''];
+  const rows = [
+    ['REPORTE DE UTILIDADES'],
+    ['ESTADO DE RESULTADOS'],
+    ['Expresado en miles'],
+    ['', '', 'Anexo', new Date(2024,0,1), new Date(2024,1,1)],
+    ['', 'Ingresos por ventas', 'ING', 1000, 1100],
+    ['', 'Gastos de administración', 'Adm', -100, -110],
+    ['', 'Rtdo. neto  por operaciones continuas', '', 900, 990],
+    relleno, relleno, relleno,
+  ];
+  const r = tryParseERAnexoMensual(wbFromSheets({ 'ER2024': rows }), 'Est_Rtdo_EDELAR_2024.xlsx');
+  assert(!!r, 'reconoce el formato igual con la aclaración de escala en el título');
+  if (r) {
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[1] === 1000000, 'Ventas de enero (1000 miles) se escala a 1.000.000 de pesos');
+    assert(f('gastoAdm')?.valores[1] === -100000, 'Gastos de Administración de enero se escala igual, negativo');
+    assert(f('resEjercicio')?.valores[1] === 900000, 'Rtdo. neto de enero también se escala — el checksum reconcilia en la misma unidad');
+  }
+});
+
+group('tryParseERAnexoMensual — sin la aclaración de escala, los importes quedan tal cual vienen en el archivo', () => {
+  const relleno = [''];
+  const rows = [
+    ['REPORTE DE UTILIDADES'],
+    ['ESTADO DE RESULTADOS'],
+    ['', '', 'Anexo', new Date(2024,0,1), new Date(2024,1,1)],
+    ['', 'Ingresos por ventas', 'ING', 1000, 1100],
+    ['', 'Gastos de administración', 'Adm', -100, -110],
+    ['', 'Rtdo. neto  por operaciones continuas', '', 900, 990],
+    relleno, relleno, relleno, relleno,
+  ];
+  const r = tryParseERAnexoMensual(wbFromSheets({ 'ER2024': rows }), 'Est_Rtdo_Empresa_2024.xlsx');
+  assert(!!r, 'reconoce el formato sin la aclaración de escala');
+  if (r) {
+    const fV = r.filas.find(f => f.conceptoStd === 'ventas');
+    assert(fV?.valores[1] === 1000, 'sin "Expresado en miles" no se escala nada — el importe queda tal cual está en el archivo');
+  }
+});
+
 group('tryParseERAnexoMensual — descarta la pestaña "axi" (ajuste por inflación) aunque venga primero en el libro', () => {
   const filaHdr = ['', '', 'Anexo', new Date(2024,0,1)];
   const relleno = ['', '', '', ''];
