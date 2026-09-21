@@ -17134,17 +17134,9 @@ function guardarPersonalManual() {
     }
   });
 
-  // Si todos los campos están vacíos Y la empresa ya existía → preguntar si borrar
-  // Si es nueva empresa y no hay datos → avisar
-  const yaExiste = DATA.personal.some(function(d) {
-    return d.e.toLowerCase() === empresa.toLowerCase();
-  });
-  if (!algunoIngresado && !yaExiste) {
-    if (msg) { msg.textContent = '⚠ Ingresá al menos un valor de empleados.'; msg.style.color = '#ff8c47'; }
-    return;
-  }
-
-  // Recopilar detalle mensual si el toggle está activo
+  // Recopilar detalle mensual si el toggle está activo — ANTES de validar
+  // "¿se ingresó algo?", porque una carga puede venir solo por acá (sin
+  // tocar el total anual arriba) y todavía debe contar como dato ingresado.
   const tieneDetalleMes = document.getElementById('pers-manual-detalle-mes')?.checked;
   const mData = {};
   if (tieneDetalleMes) {
@@ -17167,6 +17159,17 @@ function guardarPersonalManual() {
         }
       }
     });
+  }
+
+  // Si todos los campos están vacíos (total anual Y detalle mensual) Y la
+  // empresa ya existía → preguntar si borrar. Si es nueva empresa y no hay
+  // datos → avisar.
+  const yaExiste = DATA.personal.some(function(d) {
+    return d.e.toLowerCase() === empresa.toLowerCase();
+  });
+  if (!algunoIngresado && !yaExiste) {
+    if (msg) { msg.textContent = '⚠ Ingresá al menos un valor de empleados.'; msg.style.color = '#ff8c47'; }
+    return;
   }
 
   // Guardar o actualizar (reusar existing_prev del cálculo de años)
