@@ -22122,8 +22122,7 @@ function buildTransRankingVariacion() {
     const varReal = (tLast>0 && tPrev>0) ? realGrowthPct(tLast, parseInt(lastY), tPrev, parseInt(prevY)) : null;
     return { e, tLast, tPrev, varPct, varReal, delta: tLast-tPrev };
   }).filter(r => r.tLast>0 || r.tPrev>0)
-    .sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 15);
+    .sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   if (!rows.length) {
     tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">Sin transferencias en ${prevY} ni en ${lastY}.</td></tr>`;
