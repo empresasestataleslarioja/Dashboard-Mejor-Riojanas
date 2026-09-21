@@ -3846,6 +3846,7 @@ self.onmessage = async (e) => {
             <span class="card-hd-unit">total por año — $ millones</span>
           </div>
           <canvas id="ch-trans-trend" style="max-height:180px"></canvas>
+          <div style="overflow-x:auto;margin-top:10px"><table class="tbl" id="tbl-trans-trend" style="font-size:9.5px;width:100%"></table></div>
         </div>
 
         <!-- Ranking de mayor variación interanual por empresa -->
@@ -8801,6 +8802,21 @@ function _rptTransferencias(autoPrint) {
     return el ? el.textContent.trim() : '';
   })();
 
+  // Tabla de "Tendencia anual de transferencias" (total del portafolio) —
+  // misma captura tal cual está en pantalla, con Var. interanual y Var. real.
+  var tablaTrend = (function() {
+    var tbl = document.getElementById('tbl-trans-trend');
+    if (!tbl || !tbl.innerHTML.trim()) return '';
+    return tbl.innerHTML
+      .replace(/var\(--acc\)/g, '#185fa5')
+      .replace(/var\(--dim\)/g, '#666')
+      .replace(/var\(--text\)/g, '#111')
+      .replace(/var\(--pos\)/g, '#0f6e56')
+      .replace(/var\(--neg\)/g, '#c0392b')
+      .replace(/var\(--bd2?\)/g, '#ccc')
+      .replace(/var\(--[a-z0-9-]+\)/g, 'inherit');
+  })();
+
   // CSS del reporte
   var css = _rptCSS() + '<style>'
     + '.img-chart{width:100%;display:block;border-radius:4px}'
@@ -8859,9 +8875,12 @@ function _rptTransferencias(autoPrint) {
     h.push('<div class="chart-card" id="sec_cat"><div class="chart-title">Desglose por categoría <span class="chart-unit">$ millones</span></div><img class="img-chart" src="'+imgs.cat+'"></div>');
   }
 
-  // Tendencia anual
-  if (imgs.trend) {
-    h.push('<div class="chart-card" id="sec_trend"><div class="chart-title">Tendencia anual de transferencias <span class="chart-unit">total por año — $ millones</span></div><img class="img-chart" src="'+imgs.trend+'"></div>');
+  // Tendencia anual (con tabla Año/Total/Var. interanual/Var. real del portafolio)
+  if (imgs.trend || tablaTrend) {
+    h.push('<div class="chart-card" id="sec_trend"><div class="chart-title">Tendencia anual de transferencias <span class="chart-unit">total por año — $ millones</span></div>');
+    if (imgs.trend) h.push('<img class="img-chart" src="'+imgs.trend+'">');
+    if (tablaTrend) h.push('<div class="tw" style="margin-top:8px"><table>'+tablaTrend+'</table></div>');
+    h.push('</div>');
   }
 
   // Promedio mensual de transferencias por empresa (incluye comparativo
@@ -36788,12 +36807,15 @@ function buildTransTendencia() {
   const canvas = document.getElementById('ch-trans-trend');
   if (!canvas || !DATA.transferencias?.length) return;
 
-  // Acumular total por año (nominal)
+  // Acumular total por año (nominal) — y meses con transferencias
+  // (portafolio completo, no una sola empresa) para el promedio mensual.
   const totalPorAño = {};
+  const mesesPorAño = {};
   DATA.transferencias.forEach(t => {
     const y = parseInt(t.año);
     if (y >= 2000 && y <= 2100) {
       totalPorAño[y] = (totalPorAño[y] || 0) + (parseFloat(t.importe) || 0);
+      if (t.mes) { if (!mesesPorAño[y]) mesesPorAño[y] = new Set(); mesesPorAño[y].add(parseInt(t.mes)); }
     }
   });
 
@@ -36890,6 +36912,51 @@ function buildTransTendencia() {
       } : {})
     }
   });
+
+  // ── Tabla: mismo formato que "Transferencias recibidas" por empresa
+  // (Evolución empresa), pero con el total del portafolio completo. ──
+  const tbl = document.getElementById('tbl-trans-trend');
+  if (tbl) {
+    const hoy = new Date();
+    const anioActual = hoy.getFullYear();
+    const fmtM = v => v == null ? '—' : (v < 0 ? '−' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR');
+    const filasTabla = años.map((y, i) => {
+      const esAnioActual = y === anioActual;
+      const mesesDivisor = esAnioActual ? (hoy.getMonth() + 1) : 12;
+      return {
+        anio: y, total: totalPorAño[y], esAnioActual, mesesDivisor,
+        mesesConDatos: mesesPorAño[y] ? mesesPorAño[y].size : 0,
+        promedio: totalPorAño[y] / mesesDivisor,
+        varNom: varNom[i], varReal: varReal[i],
+      };
+    });
+    const hayAnioActual = filasTabla.some(f => f.esAnioActual);
+    tbl.innerHTML = `<thead><tr>
+        <th>Año</th><th class="r">Total</th><th class="r">Var. interanual</th><th class="r">Var. real</th>
+        <th class="r">Meses considerados</th><th class="r">Meses con transferencias</th>
+        <th class="r">Promedio mensual</th>
+      </tr></thead><tbody>
+      ${filasTabla.map(f => {
+        const colVar = f.varNom == null ? 'var(--dim)' : f.varNom >= 0 ? 'var(--pos)' : 'var(--neg)';
+        const varTxt = f.varNom == null ? '—' : (f.varNom >= 0 ? '▲ +' : '▼ ') + Math.abs(f.varNom).toFixed(2) + '%';
+        const colVarR = f.varReal == null ? 'var(--dim)' : f.varReal >= 0 ? 'var(--pos)' : 'var(--neg)';
+        const varRTxt = f.varReal == null ? '—' : (f.varReal >= 0 ? '▲ +' : '▼ ') + Math.abs(f.varReal).toFixed(2) + '%';
+        return `<tr>
+          <td style="font-family:var(--mono);font-weight:600">${f.anio}${f.esAnioActual?' <span style="font-size:8px;color:var(--dim);font-weight:400">(en curso)</span>':''}</td>
+          <td class="r">${fmtM(f.total)}</td>
+          <td class="r" style="color:${colVar}">${varTxt}</td>
+          <td class="r" style="color:${colVarR}">${varRTxt}</td>
+          <td class="r">${f.mesesDivisor}</td>
+          <td class="r">${f.mesesConDatos}</td>
+          <td class="r" style="font-weight:600;color:var(--acc)">${fmtM(f.promedio)}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>`
+      + `<tfoot><tr><td colspan="7" style="text-align:right;color:var(--dim);font-size:8.5px;padding-top:6px;font-family:var(--mono)">`
+      + `Total portafolio completo — todas las empresas con transferencias cargadas.`
+      + (hayAnioActual ? ' El año en curso divide el total por los meses de calendario ya transcurridos, no por los meses con archivos ya importados.' : '')
+      + `</td></tr></tfoot>`;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
