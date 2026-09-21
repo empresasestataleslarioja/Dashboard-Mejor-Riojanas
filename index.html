@@ -2704,15 +2704,24 @@ self.onmessage = async (e) => {
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
           <div style="display:flex;flex-direction:column;gap:3px">
             <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Empresa</label>
-            <div style="position:relative">
-              <input id="pers-manual-emp" type="text" placeholder="Nombre de empresa…"
-                list="pers-manual-emp-list"
-                style="padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
+            <div style="display:flex;gap:4px">
+              <select id="pers-manual-emp-sel"
+                onchange="_persManualElegirEmpresa(this.value)"
+                style="padding:4px 6px;background:var(--s2);border:1px solid var(--bd2);
                 color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
-                outline:none;width:200px"
-                oninput="_persManualAutocargar(this.value)"
-                onchange="_persManualAutocargar(this.value)">
-              <datalist id="pers-manual-emp-list"></datalist>
+                outline:none;width:150px;cursor:pointer">
+                <option value="">— elegir / nueva —</option>
+              </select>
+              <div style="position:relative">
+                <input id="pers-manual-emp" type="text" placeholder="Nombre de empresa…"
+                  list="pers-manual-emp-list"
+                  style="padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
+                  color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
+                  outline:none;width:150px"
+                  oninput="_persManualAutocargar(this.value)"
+                  onchange="_persManualAutocargar(this.value)">
+                <datalist id="pers-manual-emp-list"></datalist>
+              </div>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:3px">
@@ -16869,15 +16878,19 @@ function toggleCargaManualPersonal() {
 }
 
 function _persManualInicializar() {
-  // Poblar datalist con empresas existentes
+  // Poblar datalist y el <select> de navegación con empresas existentes
+  const todas = [...new Set([
+    ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
+    ...Object.keys(DATA.fact || {}),
+    ...DATA.personal.map(d => d.e)
+  ])].sort((a, b) => a.localeCompare(b, 'es'));
   const dl = document.getElementById('pers-manual-emp-list');
-  if (dl) {
-    const todas = [...new Set([
-      ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
-      ...Object.keys(DATA.fact || {}),
-      ...DATA.personal.map(d => d.e)
-    ])].sort();
-    dl.innerHTML = todas.map(e => '<option value="' + e + '">').join('');
+  if (dl) dl.innerHTML = todas.map(e => '<option value="' + e + '">').join('');
+  const sel = document.getElementById('pers-manual-emp-sel');
+  if (sel) {
+    sel.innerHTML = '<option value="">— elegir / nueva —</option>' +
+      todas.map(e => '<option value="' + e.replace(/"/g,'&quot;') + '">' + e +
+        (DATA.personal.some(d => d.e === e) ? '' : ' (sin datos)') + '</option>').join('');
   }
   // Generar inputs por año
   const pYrs = ys().map(String);
@@ -16894,8 +16907,38 @@ function _persManualInicializar() {
   }).join('');
 }
 
+// ── Elegir empresa desde el <select> de navegación — permite recorrer el
+// listado empresa a empresa (flechas del teclado) en vez de depender solo
+// de tipear en el datalist. Sincroniza el input de texto y precarga sus datos.
+function _persManualElegirEmpresa(nombre) {
+  const empInput = document.getElementById('pers-manual-emp');
+  if (!nombre) {
+    // "— elegir / nueva —": limpiar todo para arrancar una carga nueva
+    if (empInput) empInput.value = '';
+    _persManualAutocargar('');
+    const pYrs = ys().map(String);
+    const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
+    años.forEach(function(y) { const inp = document.getElementById('pers-m-' + y); if (inp) inp.value = ''; });
+    _persMesesBorrador = {};
+    _persMesAnioRenderizado = null;
+    const chk = document.getElementById('pers-manual-detalle-mes');
+    if (chk && chk.checked) {
+      chk.checked = false;
+      const wrap = document.getElementById('pers-manual-meses-wrap');
+      if (wrap) wrap.style.display = 'none';
+    }
+    return;
+  }
+  if (empInput) empInput.value = nombre;
+  _persManualAutocargar(nombre);
+}
+
 function _persManualAutocargar(empresa) {
-  if (!empresa || empresa.length < 2) return;
+  const sel = document.getElementById('pers-manual-emp-sel');
+  if (!empresa || empresa.length < 2) {
+    if (sel && !empresa) sel.value = '';
+    return;
+  }
 
   // Nueva empresa → descartar el borrador de meses de la carga anterior
   _persMesesBorrador = {};
@@ -16906,6 +16949,10 @@ function _persManualAutocargar(empresa) {
   let pd = DATA.personal.find(function(d) { return d.e.toLowerCase() === empL; });
   if (!pd) pd = DATA.personal.find(function(d) { return d.e.toLowerCase().startsWith(empL); });
   if (!pd) pd = DATA.personal.find(function(d) { return d.e.toLowerCase().includes(empL); });
+
+  // Sincronizar el <select> con lo encontrado (o vaciarlo si es una empresa
+  // nueva tipeada a mano, que no está en el listado).
+  if (sel) sel.value = pd ? pd.e : (sel.querySelector('option[value="' + CSS.escape(empresa) + '"]') ? empresa : '');
 
   const pYrs = ys().map(String);
   const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
@@ -17223,6 +17270,11 @@ function guardarPersonalManual() {
 function limpiarPersonalManual() {
   const empInput = document.getElementById('pers-manual-emp');
   if (empInput) empInput.value = '';
+  const sel = document.getElementById('pers-manual-emp-sel');
+  if (sel) sel.value = '';
+  // Repoblar datalist/select — por si se acaba de guardar una empresa nueva,
+  // así ya aparece disponible para elegir en la próxima carga.
+  _persManualInicializar();
   const pYrs = ys().map(String);
   const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
   años.forEach(function(y) {
