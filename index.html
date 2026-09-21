@@ -38906,6 +38906,25 @@ function buildCloudPayload() {
   });
 
   // personal
+  // El bridge de Apps Script (escribirHoja) arma los headers de la hoja a
+  // partir de Object.keys() de la PRIMERA fila del array nada más. Antes,
+  // las columnas YYYY_MM solo se agregaban a la fila de una empresa cuando
+  // ESA empresa tenía detalle mensual cargado — si la primera empresa del
+  // array no lo tenía pero una posterior sí, esas columnas quedaban fuera
+  // del header y se perdían en silencio al escribir en Sheets (la empresa
+  // volvía con el total en 0 al recargar). Para evitar depender del orden,
+  // se precalcula qué año-mes usa AL MENOS una empresa y todas las filas
+  // llevan esas mismas columnas (vacías si esa empresa puntual no aplica).
+  const mesesUsadosPorAño = {};
+  (DATA.personal || []).forEach(d => {
+    years.forEach(y => {
+      const yStr = String(y);
+      if (d.m && d.m[yStr]) {
+        const alguno = d.m[yStr].some(v => v != null);
+        if (alguno) mesesUsadosPorAño[yStr] = true;
+      }
+    });
+  });
   const persRows = (DATA.personal || []).map(d => {
     const row = { empresa: d.e };
     years.forEach(y => {
@@ -38913,13 +38932,17 @@ function buildCloudPayload() {
       const hasMeses = d.m && d.m[yStr] && d.m[yStr].some(v => v != null);
       if (hasMeses) {
         // Tiene meses: escribir columnas YYYY_MM, NO el total (se recalcula al leer)
-        row[yStr] = ''; // dejar vacío para indicar que el dato viene de meses
+        row[yStr] = '';
         d.m[yStr].forEach((v, i) => {
           row[yStr + '_' + String(i + 1).padStart(2, '0')] = v != null ? v : '';
         });
       } else {
-        // Solo tiene total anual: escribir la columna del año
         row[yStr] = _persGetTotal(d, yStr) || 0;
+        // Otra empresa sí usa detalle mensual este año: agregar las mismas
+        // columnas YYYY_MM vacías acá para que el header las incluya.
+        if (mesesUsadosPorAño[yStr]) {
+          for (let m = 1; m <= 12; m++) row[yStr + '_' + String(m).padStart(2, '0')] = '';
+        }
       }
     });
     return row;

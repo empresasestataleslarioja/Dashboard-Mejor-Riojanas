@@ -290,7 +290,14 @@ function escribirHoja(ss, nombre, rows) {
   if (!hoja) hoja = ss.insertSheet(nombre);
   hoja.clearContents();
   if (!rows || rows.length === 0) return;
-  const headers = Object.keys(rows[0]);
+  // Headers = UNIÓN de las claves de TODAS las filas, no solo la primera.
+  // Antes se tomaba Object.keys(rows[0]) nada más — si una fila más abajo
+  // en el array (p.ej. una empresa con detalle mensual de personal) tenía
+  // columnas que la primera fila no tenía, esas columnas quedaban fuera
+  // del header y esa fila perdía esos datos en silencio al escribir.
+  const headersSet = new Set();
+  rows.forEach(r => Object.keys(r).forEach(k => headersSet.add(k)));
+  const headers = Array.from(headersSet);
   const matrix  = [
     headers,
     ...rows.map(r => headers.map(h => {
