@@ -54,6 +54,7 @@ const {
   tryParseERIngresosEgresosFlat,
   tryParseERAnexoMensual,
   tryParseERSumasYSaldosAnual,
+  tryParseERAnualMultihoja,
   _mismoNombreEmpresa,
   _parseFechaAutoridad,
   _matchEmpresaAutoridad,
@@ -70,6 +71,7 @@ const {
   'tryParseERIngresosEgresosFlat',
   'tryParseERSumasYSaldosAnual',
   'tryParseERAnexoMensual',
+  'tryParseERAnualMultihoja',
   '_mismoNombreEmpresa',
   '_parseFechaAutoridad',
   '_matchEmpresaAutoridad',
@@ -1584,6 +1586,91 @@ group('tryParseERSumasYSaldosAnual — rechaza si la clasificación no reconcili
   ];
   assert(!tryParseERSumasYSaldosAnual(wbFromSheets({ SyS0320: rows }), 'x.xlsx'),
     'no importa el archivo si la suma de los rubros no coincide con el total de "ESTADO DE RESULTADOS" — evita clasificar mal en silencio');
+});
+
+// ── tryParseERAnualMultihoja: ER anual armado en varias pestañas, cada
+//    una en su propio formato — caso real: Agroandina, ERP 2025 (4
+//    pestañas: filas con rótulo + fecha para Ene-Jul, pivot Estado/Tipo/
+//    Rubro/Detalle con una sola columna "Importe" para Ago/Set — el mes
+//    sale del nombre de la pestaña —, y el mismo pivot con columnas de
+//    fecha para Oct-Dic). Cada pestaña reconcilia contra su propio total
+//    antes de aportar datos, y los meses de todas se fusionan en un solo
+//    ER anual — acá se prueba con una pestaña de cada sub-formato. ───────
+group('tryParseERAnualMultihoja — fusiona pestañas en distintos formatos (caso real Agroandina)', () => {
+  const relleno = ['', '', '', ''];
+  const rowsFlat = [
+    ['', '', new Date(2025,0,1), new Date(2025,1,1)],
+    ['VENTAS NETAS', '', 1000, 1100],
+    ['GASTOS DE PRODUCCION', '', 300, 320],
+    ['COMPRAS', '', 200, 210],
+    ['TOTAL DE GASTOS DE VENTAS', '', 50, 55],
+    ['TOTAL DE GASTOS DE ADMINISTRATIVOS', '', 80, 85],
+    ['TOTAL DE GASTOS FINANCIEROS', '', 20, 22],
+    ['UTILIDAD', '', 350, 408],
+    relleno,
+  ];
+  const rowsPivot = [
+    ['Estado', 'Tipo', 'Rubro', 'Detalle', 'Importe'],
+    ['Ingresos', 'Operativos', 'Ventas Brutas', '', 500],
+    ['', 'Total Operativos', '', '', 500],
+    ['Total Ingresos', '', '', '', 500],
+    ['Compras', 'Compras', 'Compras', 'Materia Prima', 150],
+    ['Total Compras', '', '', '', 150],
+    ['Egresos', 'Operativos', 'Produccion', 'Alquileres', 40],
+    ['', '', 'Comercializacion', 'Publicidad', 20],
+    ['', '', 'Administracion', 'Sueldos', 30],
+    ['', 'Total Operativos', '', '', 90],
+    ['', 'Financieros', 'Financieros', 'Intereses', 10],
+    ['', 'Total Financieros', '', '', 10],
+    ['Total Egresos', '', '', '', 100],
+    ['', '', '', 'Resultado', 250],
+  ];
+  const wb = wbFromSheets({ 'Ene a Feb-25': rowsFlat, 'Mar25': rowsPivot });
+  const r = tryParseERAnualMultihoja(wb, 'ERP_2025_Prueba.xlsx');
+  assert(!!r, 'reconoce el archivo combinando ambas pestañas');
+  if (r) {
+    assert(r.anio === '2025', 'toma el año de las columnas de fecha detectadas');
+    assert(r.mesesCount === 3, 'fusiona los 2 meses de la pestaña plana + el mes de la pestaña pivot (derivado del nombre "Mar25") = 3 meses');
+    assert(/2 pestañas/.test(r.hoja), 'reporta cuántas pestañas reconoció y combinó');
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[1] === 1000 && f('ventas')?.valores[2] === 1100 && f('ventas')?.valores[3] === 500,
+      'ventas trae los 2 meses de la pestaña plana (Ene, Feb) más el mes de la pivot (Mar)');
+    assert(f('gastoAdm')?.valores[1] === -580, 'pestaña plana: GASTOS DE PRODUCCION (-300) + COMPRAS (-200) + TOTAL DE GASTOS DE ADMINISTRATIVOS (-80) se suman en gastoAdm de enero');
+    assert(f('gastoAdm')?.valores[3] === -220, 'pestaña pivot: Compras (-150) + Producción (-40) + Administración (-30) se suman en gastoAdm de marzo, mismo criterio que Agroandina en otras cargas');
+    assert(f('gastoCom')?.valores[3] === -20, 'pestaña pivot: Comercialización clasifica como gastoCom');
+    assert(f('resEjercicio')?.valores[1] === 350 && f('resEjercicio')?.valores[3] === 250,
+      'Resultado del Ejercicio combinado coincide con "UTILIDAD" (pestaña plana) y "Resultado" (pestaña pivot) de cada una');
+    assert(/PRUEBA/.test(r.empresa), 'sugiere la empresa a partir del nombre de archivo (el usuario la confirma en el preview)');
+  }
+});
+
+group('tryParseERAnualMultihoja — una pestaña que no reconcilia no aporta datos, pero no rompe la lectura de las demás', () => {
+  const relleno = ['', '', '', ''];
+  const rowsFlatMal = [
+    ['', '', new Date(2025,0,1)],
+    ['VENTAS NETAS', '', 1000],
+    ['TOTAL DE GASTOS DE ADMINISTRATIVOS', '', 80],
+    ['UTILIDAD', '', 999999], // no coincide con 1000-80=920
+    relleno, relleno,
+  ];
+  const rowsPivotOk = [
+    ['Estado', 'Tipo', 'Rubro', 'Detalle', 'Importe'],
+    ['Ingresos', 'Operativos', 'Ventas Brutas', '', 500],
+    ['Total Ingresos', '', '', '', 500],
+    ['Egresos', 'Operativos', 'Administracion', 'Sueldos', 100],
+    ['', 'Total Operativos', '', '', 100],
+    ['Total Egresos', '', '', '', 100],
+    ['', '', '', 'Resultado', 400],
+  ];
+  const wb = wbFromSheets({ 'Ene-25': rowsFlatMal, 'Feb25': rowsPivotOk });
+  const r = tryParseERAnualMultihoja(wb, 'x.xlsx');
+  assert(!!r, 'igual reconoce el archivo por la pestaña que sí reconcilia');
+  if (r) {
+    assert(r.mesesCount === 1, 'la pestaña de enero no reconcilia y no aporta ningún mes — solo queda el de la pestaña pivot');
+    const f = cpt => r.filas.find(x => x.conceptoStd === cpt);
+    assert(f('ventas')?.valores[1] == null, 'enero no aparece en ningún concepto (su pestaña se descartó entera)');
+    assert(f('ventas')?.valores[2] === 500, 'febrero sí se cargó normalmente desde la pestaña pivot');
+  }
 });
 
 // ── _renombrarEmpresa / _fusionarEmpresas / _eliminarEmpresa: autoridades

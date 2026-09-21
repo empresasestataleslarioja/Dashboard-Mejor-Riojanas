@@ -27768,6 +27768,268 @@ function tryParseERSumasYSaldosAnual(wb, fname) {
   return { empresa, anio, filas, hoja: sn, mesesCount: 1 };
 }
 
+// ── Parser de ER anual armado en VARIAS pestañas, una por tramo de meses,
+// cada una en su propio formato — caso real: Agroandina, ERP 2025 (4
+// pestañas: "Ene a Jul-25" en formato de filas con rótulo + columnas de
+// fecha, "Ago25"/"Set25" en formato pivot Estado/Tipo/Rubro/Detalle con
+// una sola columna "Importe" — el mes sale del nombre de la pestaña, no
+// hay columna de fecha —, y "Oct a dic25" en el mismo pivot pero con 3
+// columnas de fecha). A diferencia de todos los demás parsers ER, este
+// recorre TODAS las pestañas del libro (no se queda con la primera que
+// matchea) y fusiona los meses que cada una aporta — cada pestaña se
+// valida y reconcilia de forma independiente antes de aportar sus datos,
+// así que una pestaña con un formato no reconocido simplemente no suma
+// nada, no rompe la carga de las demás.
+function tryParseERAnualMultihoja(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim()) {
+      const n = parseFloat(v.replace(/\s/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+  const esTotal = s => /^TOTAL(\s+|$)/i.test(String(s||'').trim());
+  const CONCEPTOS_GASTO = new Set(['gastoAdm','gastoCom','resFinanciero','otrosGastos']);
+
+  const MESES_ABR = { ENE:1, FEB:2, MAR:3, ABR:4, MAY:5, JUN:6, JUL:7, AGO:8, SET:9, SEP:9, OCT:10, NOV:11, DIC:12 };
+  // Deriva mes/año de un nombre de pestaña tipo "Ago25"/"Set25" — se usa
+  // solo cuando la propia hoja no trae columnas de fecha (una sola
+  // columna "Importe", el mes sale del título de la pestaña).
+  const _mesDeNombreHoja = (sn) => {
+    const m = String(sn || '').trim().match(/^([A-Za-z]{3})\.?\s*(\d{2,4})$/);
+    if (!m) return null;
+    const mes = MESES_ABR[m[1].toUpperCase()];
+    if (!mes) return null;
+    let anio = parseInt(m[2]);
+    if (anio < 100) anio += 2000;
+    return { mes, anio };
+  };
+
+  // ── Sub-formato 1: filas con rótulo en col A + columnas de fecha
+  // (ej. "Ene a Jul-25") — Compras/Gastos de Producción se agrupan como
+  // gastoAdm ("Egresos de Producción"), mismo criterio ya adoptado para
+  // Agroandina en otras cargas: no desdoblar "costo" aparte.
+  const _extraerHojaFlat = (rows) => {
+    let filaHdr = -1, colMeses = [];
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const cols = [];
+      for (let c = 0; c < rows[i].length; c++) {
+        const v = rows[i][c];
+        let ymd = null;
+        if (v instanceof Date && !isNaN(v.getTime())) ymd = { y: v.getFullYear(), m: v.getMonth() + 1 };
+        else if (typeof v === 'number' && v > 20000 && v < 90000) {
+          const d = XLSX.SSF.parse_date_code(v); if (d) ymd = { y: d.y, m: d.m };
+        }
+        if (ymd) cols.push({ col:c, anio:ymd.y, mes:ymd.m });
+      }
+      if (cols.length >= 1) { filaHdr = i; colMeses = cols; break; }
+    }
+    if (filaHdr < 0) return null;
+
+    // Anclas distintivas: evita falsos positivos contra cualquier otra
+    // planilla que solo casualmente traiga columnas de fecha en col A.
+    const textoTitulos = rows.slice(0, 60).map(r => String(r[0] || '')).join('|').toUpperCase();
+    if (!/VENTAS NETAS/.test(textoTitulos) || !/^UTILIDAD$/m.test(textoTitulos.replace(/\|/g, '\n'))) return null;
+
+    const _clasif = (lbl) => {
+      const t = String(lbl || '').toUpperCase().trim();
+      if (t === 'VENTAS NETAS') return 'ventas';
+      if (t === 'GASTOS DE PRODUCCION' || t === 'COMPRAS') return 'gastoAdm';
+      if (t === 'TOTAL DE GASTOS DE VENTAS') return 'gastoCom';
+      if (t === 'TOTAL DE GASTOS DE ADMINISTRATIVOS') return 'gastoAdm';
+      if (t === 'TOTAL DE GASTOS FINANCIEROS') return 'resFinanciero';
+      return null;
+    };
+
+    const acum = {};
+    let filaFinal = null;
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const lbl = String(rows[i][0] || '').trim();
+      if (!lbl) continue;
+      // "ANEXO ..." es un apéndice informativo (desglose de costo laboral
+      // ya incluido arriba) — cortar la lectura acá evita duplicar Sueldos.
+      if (/^ANEXO\b/i.test(lbl)) break;
+      if (/^UTILIDAD$/i.test(lbl)) {
+        filaFinal = {};
+        colMeses.forEach(({ col, mes }) => { const v = _num(rows[i][col]); if (v != null) filaFinal[mes] = v; });
+        continue;
+      }
+      const cpt = _clasif(lbl);
+      if (!cpt) continue;
+      const negar = CONCEPTOS_GASTO.has(cpt);
+      if (!acum[cpt]) acum[cpt] = {};
+      colMeses.forEach(({ col, mes }) => {
+        const v = _num(rows[i][col]);
+        if (v != null && v !== 0) acum[cpt][mes] = (acum[cpt][mes] || 0) + (negar ? -v : v);
+      });
+    }
+    if (!filaFinal || Object.keys(acum).length < 2) return null;
+
+    const meses = [...new Set(colMeses.map(c => c.mes))];
+    const cuadra = meses.every(mes => {
+      const suma = Object.values(acum).reduce((s, v) => s + (v[mes] || 0), 0);
+      const ref = filaFinal[mes];
+      if (ref == null) return true;
+      return Math.abs(suma - ref) <= Math.max(2, Math.abs(ref) * 1e-6);
+    });
+    if (!cuadra) return null;
+    return { acum, colMeses };
+  };
+
+  // ── Sub-formato 2: pivot Estado?/Tipo/Rubro/Detalle (la columna Estado
+  // es opcional — alguna pestaña la omite y arranca directo en Tipo), con
+  // columnas de fecha o una única columna "Importe" (el mes sale del
+  // nombre de la pestaña). Mismo criterio de clasificación que
+  // tryParseERPivotContable (Compras/Producción → gastoAdm).
+  const _extraerHojaPivot = (rows, sheetName) => {
+    let filaHdr = -1, colRubro = -1, colDetalle = -1, colTipo = -1, colEstado = -1;
+    for (let i = 0; i < Math.min(10, rows.length); i++) {
+      const row = rows[i];
+      const idx = row.findIndex(c => String(c || '').trim().toUpperCase() === 'RUBRO');
+      if (idx < 1) continue;
+      if (String(row[idx + 1] || '').trim().toUpperCase() !== 'DETALLE') continue;
+      filaHdr = i; colRubro = idx; colDetalle = idx + 1; colTipo = idx - 1;
+      if (idx - 2 >= 0 && String(row[idx - 2] || '').trim().toUpperCase() === 'ESTADO') colEstado = idx - 2;
+      break;
+    }
+    if (filaHdr < 0) return null;
+    const hdrRow = rows[filaHdr];
+
+    let colMeses = [];
+    for (let c = colDetalle + 1; c < hdrRow.length; c++) {
+      const v = hdrRow[c];
+      let ymd = null;
+      if (v instanceof Date && !isNaN(v.getTime())) ymd = { y: v.getFullYear(), m: v.getMonth() + 1 };
+      else if (typeof v === 'number' && v > 20000 && v < 90000) {
+        const d = XLSX.SSF.parse_date_code(v); if (d) ymd = { y: d.y, m: d.m };
+      }
+      if (ymd) colMeses.push({ col: c, anio: ymd.y, mes: ymd.m });
+    }
+    if (colMeses.length === 0) {
+      const idxImporte = hdrRow.findIndex(c => String(c || '').trim().toUpperCase() === 'IMPORTE');
+      if (idxImporte >= 0) {
+        const md = _mesDeNombreHoja(sheetName);
+        if (md) colMeses = [{ col: idxImporte, anio: md.anio, mes: md.mes }];
+      }
+    }
+    if (colMeses.length === 0) return null;
+
+    const _clasif = (tipo, rubro) => {
+      const t = String(tipo || '').toUpperCase().trim();
+      const r = String(rubro || '').toUpperCase().trim();
+      if (t === 'COMPRAS' || r === 'COMPRAS') return 'gastoAdm';
+      if (r === 'PRODUCCION' || r === 'PRODUCCIÓN') return 'gastoAdm';
+      if (r === 'COMERCIALIZACION' || r === 'COMERCIALIZACIÓN') return 'gastoCom';
+      if (r === 'ADMINISTRACION' || r === 'ADMINISTRACIÓN') return 'gastoAdm';
+      if (t === 'FINANCIEROS' || r === 'FINANCIEROS') return 'resFinanciero';
+      if (r === 'VENTAS BRUTAS' || r === 'DESCUENTOS OTORGADOS' || r === 'RECUPERO DE GASTOS Y SERVICIOS') return 'ventas';
+      if (t === 'OTROS INGRESOS' || r === 'OTROS INGRESOS' || r === 'ALQUILERES') return 'otrosIngresos';
+      return null;
+    };
+
+    let curTipo = '', curRubro = '';
+    const acum = {};
+    let filaFinal = null;
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const row = rows[i];
+      const cEstado = colEstado >= 0 ? String(row[colEstado] || '').trim() : '';
+      const cTipo = String(row[colTipo] || '').trim();
+      const cRubro = String(row[colRubro] || '').trim();
+      const cDetalle = String(row[colDetalle] || '').trim();
+      if (!cEstado && !cTipo && !cRubro && !cDetalle) continue;
+
+      // Fila final: "Total general" (Estado) o "Resultado" suelto en Detalle
+      if (esTotal(cEstado) && /GENERAL/i.test(cEstado)) {
+        filaFinal = {};
+        colMeses.forEach(({ col, mes }) => { const v = _num(row[col]); if (v != null) filaFinal[mes] = v; });
+        continue;
+      }
+      if (/^RESULTADO$/i.test(cDetalle) && !cEstado && !cTipo && !cRubro) {
+        filaFinal = {};
+        colMeses.forEach(({ col, mes }) => { const v = _num(row[col]); if (v != null) filaFinal[mes] = v; });
+        continue;
+      }
+
+      if (cTipo && !esTotal(cTipo)) curTipo = cTipo;
+      if (cRubro && !esTotal(cRubro)) curRubro = cRubro;
+      if (esTotal(cEstado) || esTotal(cTipo) || esTotal(cRubro) || esTotal(cDetalle)) continue;
+
+      const cpt = _clasif(curTipo, curRubro);
+      if (!cpt) continue;
+      const negar = CONCEPTOS_GASTO.has(cpt);
+      if (!acum[cpt]) acum[cpt] = {};
+      colMeses.forEach(({ col, mes }) => {
+        const v = _num(row[col]);
+        if (v != null && v !== 0) acum[cpt][mes] = (acum[cpt][mes] || 0) + (negar ? -v : v);
+      });
+    }
+    if (!filaFinal || Object.keys(acum).length < 2) return null;
+
+    const meses = [...new Set(colMeses.map(c => c.mes))];
+    const cuadra = meses.every(mes => {
+      const suma = Object.values(acum).reduce((s, v) => s + (v[mes] || 0), 0);
+      const ref = filaFinal[mes];
+      if (ref == null) return true;
+      return Math.abs(suma - ref) <= Math.max(2, Math.abs(ref) * 1e-6);
+    });
+    if (!cuadra) return null;
+    return { acum, colMeses };
+  };
+
+  // Recorrer TODAS las pestañas — cada una aporta los meses que trae, sin
+  // pisar los de las demás (rangos de meses disjuntos entre pestañas).
+  const acumTotal = {};
+  const anioCount = {};
+  let hojasReconocidas = 0;
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+    if (rows.length < 5) continue;
+    const resultado = _extraerHojaFlat(rows) || _extraerHojaPivot(rows, sn);
+    if (!resultado) continue;
+    hojasReconocidas++;
+    resultado.colMeses.forEach(({ anio }) => { anioCount[anio] = (anioCount[anio] || 0) + 1; });
+    Object.entries(resultado.acum).forEach(([cpt, valores]) => {
+      if (!acumTotal[cpt]) acumTotal[cpt] = {};
+      Object.entries(valores).forEach(([mes, v]) => {
+        acumTotal[cpt][mes] = (acumTotal[cpt][mes] || 0) + v;
+      });
+    });
+  }
+  if (hojasReconocidas === 0) return null;
+
+  const anio = Object.entries(anioCount).sort((a, b) => b[1] - a[1])[0][0];
+  const mesesConDatos = [...new Set(Object.values(acumTotal).flatMap(v => Object.keys(v).map(Number)))];
+
+  const LBL = {
+    ventas: 'Ventas', gastoAdm: 'Gastos de Administración', gastoCom: 'Gastos de Comercialización',
+    resFinanciero: 'Resultado Financiero', otrosIngresos: 'Otros Ingresos', resEjercicio: 'Resultado del Ejercicio',
+  };
+  const filas = Object.entries(acumTotal)
+    .filter(([, valores]) => Object.keys(valores).length > 0)
+    .map(([conceptoStd, valores]) => ({ lbl: LBL[conceptoStd] || conceptoStd, conceptoStd, valores }));
+
+  // Resultado del Ejercicio combinado: la suma de los conceptos primarios
+  // ya fusionados de todas las pestañas — cada pestaña reconcilió su
+  // propio tramo antes de aportar datos, así que esta suma final es
+  // consistente por construcción, no hace falta un checksum aparte.
+  const resEjercicio = {};
+  mesesConDatos.forEach(mes => {
+    resEjercicio[mes] = Object.values(acumTotal).reduce((s, v) => s + (v[mes] || 0), 0);
+  });
+  filas.push({ lbl: LBL.resEjercicio, conceptoStd: 'resEjercicio', valores: resEjercicio });
+
+  let empresa = fname.replace(/\.xlsx?$/i, '')
+    .replace(/[_\-]+/g, ' ')
+    .replace(/\b(ERP?|ESTADO\s+DE\s+RESULTADOS?|ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|SET|OCT|NOV|DIC|A|AL|DE|\d{4})\b/gi, '')
+    .replace(/\s+/g, ' ').trim().toUpperCase();
+  if (!empresa) empresa = 'SIN NOMBRE';
+
+  return { empresa, anio, filas, hoja: `${hojasReconocidas} pestañas combinadas`, mesesCount: mesesConDatos.length };
+}
+
 function tryParseERMatricial(wb, fname) {
   // Buscar hoja RESUMEN
   const nombreHoja = wb.SheetNames.find(n => n.toUpperCase().trim() === 'RESUMEN');
@@ -28325,6 +28587,17 @@ function handleImportWorkbook(wb, fname) {
   if (erSySResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erSySResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER anual armado en varias pestañas, una por
+  // tramo de meses, cada una en su propio formato — caso real: Agroandina
+  // ERP 2025 (4 pestañas, 3 formatos distintos) ──
+  const erMultihojaResult = tryParseERAnualMultihoja(wb, fname);
+  console.log('[LR] tryParseERAnualMultihoja:', erMultihojaResult ? erMultihojaResult.empresa+' '+erMultihojaResult.filas.length+' conceptos, '+erMultihojaResult.hoja : 'null');
+  if (erMultihojaResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erMultihojaResult, fname);
     return;
   }
 
