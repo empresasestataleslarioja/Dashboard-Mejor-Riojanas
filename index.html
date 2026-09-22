@@ -22838,6 +22838,12 @@ function showPanel(id, btn) {
   currentPanel = id;
   BUILDERS[id]?.();
   saveStateToHash();
+  // Regla general: al elegir un módulo, mostrarlo siempre desde arriba —
+  // sin esto, el scroll quedaba donde había quedado en el panel anterior
+  // (p.ej. abajo del todo), así que el módulo nuevo podía abrir mostrando
+  // su mitad o su pie en vez del encabezado/KPIs.
+  document.querySelector('.scroll-area')?.scrollTo(0, 0);
+  window.scrollTo(0, 0);
 }
 
 function rebuildActive() {
