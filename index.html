@@ -15775,6 +15775,42 @@ function _repararResultadoOperativoLibroMayor() {
   return reparados;
 }
 
+// ── Reparación automática: Facturación (DATA.fact) en N/D pese a tener
+// Ventas Netas cargadas en el ER Provisorio mensual. Pasa cuando el ER se
+// cargó por una vía que no llegó a derivar Facturación — la tarjeta queda
+// en "N/D" aunque el dato ya exista en el ER Provisorio de esa misma
+// empresa/año. Solo COMPLETA huecos: si DATA.fact[emp][yr] ya tiene un
+// valor (cualquiera sea), nunca se pisa — evita reemplazar una cifra ya
+// cargada/reconciliada por otra vía con la del ER sin que el usuario lo
+// decida. Corre en cada login/sync (idempotente y barata), igual que
+// _repararResultadoOperativoLibroMayor.
+function _repararFacturacionDesdeERMensual() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const actual = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[Number(yr)];
+      if (actual != null) return; // ya tiene un valor cargado — no se toca
+      const fVentas = data.filas.find(f => f.conceptoStd === 'ventas');
+      if (!fVentas) return;
+      const totV = Object.values(fVentas.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+      if (totV === 0) return;
+      if (!DATA.fact[emp]) DATA.fact[emp] = {};
+      DATA.fact[emp][yr] = totV;
+      huboCambios = true;
+      reparados.push({ emp, yr, valor: totV });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] Facturación completada desde ER Provisorio para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(); } catch(e) {}
+  }
+  return reparados;
+}
+
 // ── Control cruzado: el ER Provisorio (que muestran Resultado Operativo →
 // Desglose ER y Evolución Empresa → ER Provisorio, ambos vía
 // _erDesdeMonthly) puede diferir de la Facturación/Resultado Operativo
@@ -15782,7 +15818,13 @@ function _repararResultadoOperativoLibroMayor() {
 // cuando el detalle mensual se extrajo por anclas del excel original y
 // validó contra el RESUMEN dentro de una tolerancia, no de forma exacta.
 // Antes esa diferencia quedaba invisible salvo que alguien comparara los
-// dos módulos a mano; esto la detecta y la expone.
+// dos módulos a mano; esto la detecta y la expone. También marca el caso
+// "oficial ausente" (Facturación/Resultado en N/D con el ER ya cargado) —
+// antes cmp() lo saltaba en silencio por el chequeo `b == null`, que es
+// justo el caso más importante de marcar, no menos: es el que
+// _repararFacturacionDesdeERMensual()/_repararResultadoOperativoLibroMayor()
+// corrigen automáticamente en el próximo sync, pero mientras tanto (o si
+// alguna variante nueva se les escapa) esto lo sigue mostrando.
 function _crossCheckEREmpresaAnio(emp, yr) {
   const er = (typeof _erDesdeMonthly === 'function') ? _erDesdeMonthly(emp) : null;
   const yS = String(yr);
@@ -15792,8 +15834,9 @@ function _crossCheckEREmpresaAnio(emp, yr) {
   const sit  = DATA.sit?.[emp]?.[yr]  ?? DATA.sit?.[emp]?.[yS];
   const diffs = [];
   const cmp = (label, a, b) => {
-    if (a == null || b == null || a === b) return;
-    if (a === 0 && b === 0) return;
+    if (a == null || a === 0) return; // el ER no aporta esa partida — nada que comparar
+    if (b == null) { diffs.push({ label, erProvisorio: a, oficial: null, diffPct: null }); return; }
+    if (a === b) return;
     const base = Math.max(Math.abs(a), Math.abs(b), 1);
     if (Math.abs(a - b) > 1000 && Math.abs(a - b) / base > 0.005) {
       diffs.push({ label, erProvisorio: a, oficial: b, diffPct: (a - b) / base * 100 });
@@ -15811,7 +15854,9 @@ function _crossCheckBadgeHtml(emp, yr) {
   if (!diffs) return '';
   const fmtMonto = v => '$' + Math.round(Math.abs(v)).toLocaleString('es-AR') + (v < 0 ? ' (neg.)' : '');
   const detalle = diffs.map(d =>
-    `${d.label}: ER Provisorio ${fmtMonto(d.erProvisorio)} vs. oficial ${fmtMonto(d.oficial)} (${d.diffPct >= 0 ? '+' : ''}${d.diffPct.toFixed(1)}%)`
+    d.oficial == null
+      ? `${d.label}: ER Provisorio ${fmtMonto(d.erProvisorio)} vs. oficial sin cargar (N/D)`
+      : `${d.label}: ER Provisorio ${fmtMonto(d.erProvisorio)} vs. oficial ${fmtMonto(d.oficial)} (${d.diffPct >= 0 ? '+' : ''}${d.diffPct.toFixed(1)}%)`
   ).join(' · ');
   return ` <span title="${detalle.replace(/"/g, '&quot;')}" style="font-size:8.5px;color:#ffb347;border:1px solid #ffb34755;border-radius:3px;padding:1px 6px;cursor:help;white-space:nowrap">⚠ difiere de Facturación/Resultado — ${diffs.length} campo${diffs.length > 1 ? 's' : ''}</span>`;
 }
@@ -39122,6 +39167,7 @@ function applyCloudData(cloud, opts) {
   }
 
   try { _repararResultadoOperativoLibroMayor(); } catch(e) {}
+  try { _repararFacturacionDesdeERMensual(); } catch(e) {}
 }
 
 // ── Convertir DATA → formato flat para el Sheet ──────────────────
