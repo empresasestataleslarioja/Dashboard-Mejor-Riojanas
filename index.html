@@ -2712,8 +2712,8 @@ self.onmessage = async (e) => {
                 outline:none;width:150px;cursor:pointer">
                 <option value="">— elegir / nueva —</option>
               </select>
-              <div style="position:relative">
-                <input id="pers-manual-emp" type="text" placeholder="Nombre de empresa…"
+              <div id="pers-manual-emp-wrap" style="position:relative">
+                <input id="pers-manual-emp" type="text" placeholder="…o tipeá una empresa nueva"
                   list="pers-manual-emp-list"
                   style="padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
                   color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
@@ -16912,9 +16912,12 @@ function _persManualInicializar() {
 // de tipear en el datalist. Sincroniza el input de texto y precarga sus datos.
 function _persManualElegirEmpresa(nombre) {
   const empInput = document.getElementById('pers-manual-emp');
+  const empWrap  = document.getElementById('pers-manual-emp-wrap');
   if (!nombre) {
-    // "— elegir / nueva —": limpiar todo para arrancar una carga nueva
-    if (empInput) empInput.value = '';
+    // "— elegir / nueva —": mostrar el input de texto (única forma de
+    // tipear una empresa nueva) y limpiar todo para arrancar una carga nueva
+    if (empWrap) empWrap.style.display = '';
+    if (empInput) { empInput.value = ''; empInput.focus(); }
     _persManualAutocargar('');
     const pYrs = ys().map(String);
     const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
@@ -16929,7 +16932,11 @@ function _persManualElegirEmpresa(nombre) {
     }
     return;
   }
+  // Empresa existente elegida por el desplegable: ocultar el input de texto
+  // (ya no aporta nada, repetía el mismo nombre que el select) pero
+  // mantenerlo con el valor cargado — guardarPersonalManual() lo sigue leyendo.
   if (empInput) empInput.value = nombre;
+  if (empWrap) empWrap.style.display = 'none';
   _persManualAutocargar(nombre);
 }
 
@@ -17272,6 +17279,8 @@ function limpiarPersonalManual() {
   if (empInput) empInput.value = '';
   const sel = document.getElementById('pers-manual-emp-sel');
   if (sel) sel.value = '';
+  const empWrap = document.getElementById('pers-manual-emp-wrap');
+  if (empWrap) empWrap.style.display = ''; // volver a mostrar el input de texto
   // Repoblar datalist/select — por si se acaba de guardar una empresa nueva,
   // así ya aparece disponible para elegir en la próxima carga.
   _persManualInicializar();
