@@ -38479,12 +38479,18 @@ function applyCloudData(cloud, opts) {
           if (vm != null && !isNaN(vm)) tieneMeses = true;
         }
         if (tieneMeses) mObj[yStr] = meses;
-        // Total anual: usar columna del año si tiene valor, o calcular promedio de meses
+        // Total anual: la columna del año ya viene siempre completa desde
+        // buildCloudPayload (incluso con detalle mensual cargado). El
+        // fallback de acá es solo defensivo — filas viejas publicadas antes
+        // de este fix, o una edición manual directa en Sheets que la dejó
+        // vacía — y usa el ÚLTIMO mes cargado (dotación vigente), el mismo
+        // criterio que ya usa guardarPersonalManual(), no un promedio.
         let v = parseInt(row[yStr]);
-        if (isNaN(v) || v === 0 || row[yStr] === '') {
+        if (isNaN(v) || row[yStr] === '') {
           if (tieneMeses) {
-            const filled = meses.filter(x => x != null);
-            v = filled.length ? Math.round(filled.reduce((s,x)=>s+x,0) / filled.length) : 0;
+            let ultimoMes = null;
+            for (let i = 11; i >= 0; i--) { if (meses[i] != null) { ultimoMes = meses[i]; break; } }
+            v = ultimoMes != null ? ultimoMes : 0;
           } else { v = 0; }
         }
         yObj[yStr] = v;
@@ -39023,24 +39029,30 @@ function buildCloudPayload() {
       }
     });
   });
+  // La columna anual SIEMPRE lleva el total real (nunca en blanco), aunque
+  // haya detalle mensual cargado — antes se dejaba vacía a propósito
+  // ("se recalcula al leer"), pero eso hacía que el total se recompusiera
+  // con una fórmula DISTINTA a la que usó quien lo cargó (promedio de los
+  // meses en vez del último mes cargado, que es el criterio real: dotación
+  // vigente, no una suma). Resultado: el número podía cambiar solo por
+  // publicar y volver a bajar de Sheets. d.y[yStr] ya tiene el valor
+  // correcto guardado en el momento de la carga (_persGetTotal lo lee tal
+  // cual), así que alcanza con escribirlo siempre — el detalle mensual
+  // queda igual en las columnas YYYY_MM, ahora solo como referencia/auditoría.
   const persRows = (DATA.personal || []).map(d => {
     const row = { empresa: d.e };
     years.forEach(y => {
       const yStr = String(y);
       const hasMeses = d.m && d.m[yStr] && d.m[yStr].some(v => v != null);
+      row[yStr] = _persGetTotal(d, yStr) || 0;
       if (hasMeses) {
-        // Tiene meses: escribir columnas YYYY_MM, NO el total (se recalcula al leer)
-        row[yStr] = '';
         d.m[yStr].forEach((v, i) => {
           row[yStr + '_' + String(i + 1).padStart(2, '0')] = v != null ? v : '';
         });
-      } else {
-        row[yStr] = _persGetTotal(d, yStr) || 0;
+      } else if (mesesUsadosPorAño[yStr]) {
         // Otra empresa sí usa detalle mensual este año: agregar las mismas
         // columnas YYYY_MM vacías acá para que el header las incluya.
-        if (mesesUsadosPorAño[yStr]) {
-          for (let m = 1; m <= 12; m++) row[yStr + '_' + String(m).padStart(2, '0')] = '';
-        }
+        for (let m = 1; m <= 12; m++) row[yStr + '_' + String(m).padStart(2, '0')] = '';
       }
     });
     return row;
