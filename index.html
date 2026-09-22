@@ -6207,11 +6207,19 @@ const RUBROS_DEFAULT = {
 };
 // Estado mutable — se carga desde localStorage si existe
 var rubros = {}; // var evita Temporal Dead Zone en referencias tempranas
+// Empresas marcadas como inactivas (dejaron de operar / de reportarse) —
+// puramente informativo: no excluye a la empresa de facturación, resultado,
+// personal ni ningún otro módulo, solo se refleja en Rubros comerciales.
+var empresasInactivas = {};
 function loadRubros() {
   try {
     const saved = localStorage.getItem('lr_rubros_v4');
     rubros = saved ? JSON.parse(saved) : Object.assign({}, RUBROS_DEFAULT);
   } catch(e) { rubros = Object.assign({}, RUBROS_DEFAULT); }
+  try {
+    const savedInact = localStorage.getItem('lr_empresas_inactivas_v1');
+    empresasInactivas = savedInact ? JSON.parse(savedInact) : {};
+  } catch(e) { empresasInactivas = {}; }
   // Cargar lista de rubros personalizada si existe
   try {
     const savedList = localStorage.getItem('lr_rubro_list_v4');
@@ -6231,12 +6239,13 @@ function loadRubros() {
 }
 function saveRubros() {
   try {
-    // Guardar rubros + lista personalizada de rubros
+    // Guardar rubros + lista personalizada de rubros + estado activa/inactiva
     localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros));
     localStorage.setItem('lr_rubro_list_v4', JSON.stringify({
       list:   RUBRO_LIST,
       colors: RUBRO_COLORS,
     }));
+    localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas));
     const st = document.getElementById('rub-save-status');
     if (st) { st.textContent = '✓ Guardado'; st.style.color = 'var(--pos)';
       setTimeout(() => { st.textContent = ''; }, 2500); }
@@ -9875,17 +9884,27 @@ function buildRubros() {
   // Poblar el select de rubro del formulario de nueva empresa
   _poblarSelectRubroNueva();
 
-  // KPIs por rubro
+  // KPIs por rubro — primera tarjeta: total de empresas vigentes del
+  // portafolio (excluye las marcadas como inactivas en el editor de abajo).
   const kpiEl = document.getElementById('rub-kpis');
-  kpiEl.innerHTML = RUBRO_LIST.map(r => {
-    const emps = allEmps.filter(e => getRubro(e) === r);
+  const totVigentes  = allEmps.filter(e => !empresasInactivas[e]).length;
+  const totInactivas = allEmps.length - totVigentes;
+  const kpiVigentes = `<div class="rub-kpi" style="--rub-col:var(--acc)">
+    <div class="rub-kpi-accent" style="background:var(--acc)"></div>
+    <div class="rub-kpi-label" style="color:var(--acc)">Empresas vigentes</div>
+    <div class="rub-kpi-value">${totVigentes} <span style="font-size:12px;color:var(--dim)">/ ${allEmps.length}</span></div>
+    <div class="rub-kpi-sub">${totInactivas > 0 ? totInactivas + ' inactiva' + (totInactivas!==1?'s':'') : 'ninguna inactiva'}</div>
+  </div>`;
+  kpiEl.innerHTML = kpiVigentes + RUBRO_LIST.map(r => {
+    const emps    = allEmps.filter(e => getRubro(e) === r);
+    const vig     = emps.filter(e => !empresasInactivas[e]).length;
     const fact = emps.reduce((s,e) => s + (DATA.fact[e]?.[lastY]||0), 0);
     const res  = emps.reduce((s,e) => s + (DATA.sit[e]?.[lastY]||0), 0);
     const col  = RUBRO_COLORS[r];
     return `<div class="rub-kpi" style="--rub-col:${col}" onclick="filterRubroPanel('${r}')">
       <div class="rub-kpi-accent" style="background:${col}"></div>
       <div class="rub-kpi-label" style="color:${col}">${r}</div>
-      <div class="rub-kpi-value">${emps.length} empresas</div>
+      <div class="rub-kpi-value">${vig < emps.length ? vig + ' vig.' : emps.length + ' empresas'}${vig < emps.length ? ` <span style="font-size:11px;color:var(--dim)">/ ${emps.length}</span>` : ''}</div>
       <div class="rub-kpi-sub">Fact ${lastY}: ${fv(fact)}</div>
       <div class="rub-kpi-sub" style="color:${res>=0?'var(--pos)':'var(--neg)'}">Res: ${fv(res)}</div>
     </div>`;
@@ -10029,18 +10048,31 @@ function buildRubros() {
   }
 
   // Editor de asignaciones — con rename + agregar empresa + agregar rubro
+  // + marcar activa/inactiva (ordenadas primero las vigentes)
   const editor = document.getElementById('rub-editor');
-  editor.innerHTML = allEmps.map(emp => {
+  const allEmpsOrdenadas = [...allEmps].sort((a,b) => {
+    const ia = !!empresasInactivas[a], ib = !!empresasInactivas[b];
+    if (ia !== ib) return ia ? 1 : -1;
+    return a.localeCompare(b, 'es');
+  });
+  editor.innerHTML = allEmpsOrdenadas.map(emp => {
     const r    = getRubro(emp);
     const opts = [...RUBRO_LIST,'Sin rubro'].map(ro =>
       `<option value="${ro}"${ro===r?' selected':''}>${ro}</option>`).join('');
     const empId = emp.replace(/[^a-zA-Z0-9]/g,'_');
-    return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}">
+    const inactiva = !!empresasInactivas[emp];
+    return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
       <span class="rb ${RUBRO_CSS[r]}" style="flex-shrink:0">${r.slice(0,3)}</span>
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
         ondblclick="_iniciarRenombre('${emp}')"
-        style="cursor:text" title="Doble click para renombrar">${emp}</span>
+        style="cursor:text;${inactiva?'text-decoration:line-through':''}" title="Doble click para renombrar">${emp}</span>
       <select class="rub-sel" onchange="setRubro('${emp}',this.value,this)">${opts}</select>
+      <button onclick="toggleEmpresaInactiva('${emp}')"
+        style="padding:2px 6px;background:${inactiva?'rgba(255,71,102,.12)':'none'};
+        border:1px solid ${inactiva?'var(--neg)':'var(--bd2)'};
+        color:${inactiva?'var(--neg)':'var(--dim)'};font-family:var(--mono);font-size:8px;
+        border-radius:2px;cursor:pointer;white-space:nowrap"
+        title="${inactiva?'Marcar como vigente de nuevo':'Marcar empresa como inactiva'}">${inactiva?'○ Inactiva':'● Vigente'}</button>
       <button onclick="_iniciarRenombre('${emp}')"
         style="padding:2px 6px;background:none;border:1px solid var(--bd2);
         color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
@@ -10197,6 +10229,16 @@ function setRubro(emp, val, selEl) {
   badge.textContent = (val||'Sin rubro').slice(0,3);
   // autosave
   saveRubros();
+}
+
+// ── Marcar/desmarcar empresa como inactiva — puramente informativo dentro
+// de este módulo (no excluye a la empresa de ningún otro cálculo del
+// dashboard). Refresca solo el panel de Rubros, autosave igual que setRubro.
+function toggleEmpresaInactiva(emp) {
+  if (empresasInactivas[emp]) delete empresasInactivas[emp];
+  else empresasInactivas[emp] = true;
+  saveRubros();
+  buildRubros();
 }
 
 function filterRubroPanel(r) {
@@ -38810,6 +38852,16 @@ function applyCloudData(cloud, opts) {
       });
     }
     try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
+
+    // Estado activa/inactiva — mismo criterio "local prevalece, completar lo
+    // ausente" que el rubro: si esta pestaña ya tiene un estado registrado
+    // para la empresa (activa o inactiva) no se pisa con lo de Sheets.
+    cloud.rubros.forEach(r => {
+      if (r.empresa && r.activo === 'NO' && empresasInactivas[r.empresa] === undefined) {
+        empresasInactivas[r.empresa] = true;
+      }
+    });
+    try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
   }
 
   // Restaurar lista de rubros personalizados
@@ -39261,9 +39313,16 @@ function buildCloudPayload() {
       }))),
     }));
 
-  // Rubros: hoja con asignaciones empresa→rubro + lista de rubros personalizados
-  const rubrosRows = Object.entries(rubros || {}).map(([emp, rub]) => ({
-    empresa: emp, rubro: rub || 'Sin rubro'
+  // Rubros: hoja con asignaciones empresa→rubro + estado activa/inactiva +
+  // lista de rubros personalizados. La unión con empresasInactivas cubre
+  // también las empresas "Sin rubro" (no tienen entrada en `rubros`) que
+  // se hayan marcado como inactivas, para que ese estado no se pierda.
+  const rubrosEmpresas = [...new Set([
+    ...Object.keys(rubros || {}),
+    ...Object.keys(empresasInactivas || {}),
+  ])];
+  const rubrosRows = rubrosEmpresas.map(emp => ({
+    empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo: empresasInactivas[emp] ? 'NO' : 'SI'
   }));
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
   const rubroListaRows = (typeof RUBRO_LIST !== 'undefined' ? RUBRO_LIST : []).map((r, i) => ({
