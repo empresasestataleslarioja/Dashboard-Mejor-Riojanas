@@ -2612,6 +2612,18 @@ self.onmessage = async (e) => {
           <div id="fact-sit-ranking" style="overflow-y:auto;max-height:220px;font-size:10px"></div>
         </div>
       </div>
+      <!-- Listado total de empresas — respeta el filtro "Ver empresa" de
+           arriba (individual = 1 fila + total; consolidado = todas + total),
+           con un año por columna. -->
+      <div class="rowfull card" style="margin-top:12px">
+        <div class="card-hd">
+          <span class="card-hd-title">Listado de Empresas — Facturación por Año</span>
+          <span class="card-hd-unit" id="fact-listado-nota"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="tbl" id="tbl-fact-listado" style="font-size:9.5px;width:100%"></table>
+        </div>
+      </div>
     </div>
 
     <!-- ══ RESULTADO ═════════════════════════════════════ -->
@@ -15455,6 +15467,56 @@ function buildFacturacion() {
         }).join('');
       }
     }
+  }
+
+  buildFacturacionListado(selEmp, years);
+}
+
+// ── Listado total de empresas — Facturación por año, con filtro individual
+// (reutiliza el mismo select "Ver empresa" del panel) y fila de total
+// consolidado siempre visible para comparar contra el portafolio completo.
+function buildFacturacionListado(selEmp, years) {
+  const wrap = document.getElementById('tbl-fact-listado');
+  if (!wrap) return;
+  const tf = DATA.totals_fact || {};
+  const lastY = years[years.length - 1];
+
+  // Universo completo del portafolio (igual criterio que Empresas y rubros/
+  // Estado del Portafolio): incluye empresas sin facturación cargada todavía,
+  // para que "listado total" sea realmente total, no solo las que ya tienen dato.
+  const _rub = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const allEmps = [...new Set([
+    ...Object.keys(_rub), ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+  ])].sort((a, b) => a.localeCompare(b, 'es'));
+
+  const fmtCel = v => (v == null || v === 0) ? '<span style="color:var(--dim)">N/D</span>' : fv(v);
+
+  const filasEmps = selEmp ? allEmps.filter(e => e === selEmp) : allEmps;
+  const filasHtml = filasEmps.map(e => {
+    const f = DATA.fact[e] || {};
+    const esSel = e === selEmp;
+    return `<tr${esSel ? ' style="background:rgba(71,232,255,.1);font-weight:600"' : ''}>
+      <td>${e}</td>
+      ${years.map(y => `<td class="r">${fmtCel(f[y])}</td>`).join('')}
+    </tr>`;
+  }).join('');
+
+  const totalHtml = `<tr style="border-top:2px solid var(--bd);font-weight:700;background:var(--s2)">
+    <td>TOTAL PORTAFOLIO${selEmp ? ' — todas las empresas' : ''}</td>
+    ${years.map(y => `<td class="r">${fmtCel(tf[y])}</td>`).join('')}
+  </tr>`;
+
+  wrap.innerHTML = `<thead><tr>
+      <th style="text-align:left">Empresa</th>${years.map(y => `<th class="r">${y}</th>`).join('')}
+    </tr></thead>
+    <tbody>${filasHtml}${totalHtml}</tbody>`;
+
+  const noteEl = document.getElementById('fact-listado-nota');
+  if (noteEl) {
+    const conDatos = allEmps.filter(e => (DATA.fact[e]?.[lastY] || 0) > 0).length;
+    noteEl.textContent = selEmp
+      ? `${selEmp} — elegí "Consolidado (todas)" arriba para ver el listado completo`
+      : `${allEmps.length} empresas del portafolio · ${conDatos} con facturación cargada en ${lastY}`;
   }
 }
 
