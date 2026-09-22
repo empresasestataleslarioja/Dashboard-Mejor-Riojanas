@@ -19341,8 +19341,21 @@ function _informeEjecutivoRender(emp) {
 }
 
 // ── INFORME: ESTADO DE PRESENTACIÓN DE ER PROVISORIO ────────────────────────
+// Rediseño (4 cambios sobre la versión anterior, acordados con el usuario a
+// partir de una vista previa):
+//  1. El año en curso ya no cuenta contra la tasa de cumplimiento (antes un
+//     año recién empezado hundía el % global de forma engañosa).
+//  2. Empresas vigentes (no marcadas inactivas en Empresas y rubros) sin un
+//     solo ER cargado en ningún año ahora se listan en un cuadro de alerta —
+//     antes eran simplemente invisibles para el reporte.
+//  3. La tabla de detalle pasa de una fila por empresa×año (podían ser
+//     decenas) a una fila por empresa, con los años en línea como chips de
+//     estado — mucho más fácil de escanear.
+//  4. Cada empresa muestra una flecha de tendencia comparando los últimos
+//     dos años cerrados.
 function informeEstadoERProvisorio(empFiltro) {
   const hoy = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
+  const anioActual = new Date().getFullYear();
 
   // Recolectar todas las empresas con ER mensual cargado
   const erM = DATA.er_mensual || {};
@@ -19354,6 +19367,9 @@ function informeEstadoERProvisorio(empFiltro) {
   const todosAnios = [...new Set(
     allEmps.flatMap(e => Object.keys(erM[e] || {}))
   )].sort();
+  const aniosCerrados = todosAnios.filter(yr => parseInt(yr) < anioActual);
+  const yrCerradoUlt  = aniosCerrados[aniosCerrados.length - 1];
+  const yrCerradoAnt  = aniosCerrados[aniosCerrados.length - 2];
 
   const fv2 = v => v == null ? '—' : (v < 0 ? '−' : '') + Math.abs(Math.round(v)).toLocaleString('es-AR');
 
@@ -19396,26 +19412,45 @@ function informeEstadoERProvisorio(empFiltro) {
   });
   const empsConDatos = Object.keys(porEmp).sort();
 
-  const estadoChip = (r) => {
-    if (!r) return '<span style="color:#ccc;font-size:8pt">—</span>';
-    const cfg = {
-      completo: { bg:'#1a7a4a', txt:'✓ Completo',  sub: `12 meses` },
-      parcial:  { bg:'#b7770d', txt:'△ Parcial',   sub: `${r.meses} meses` },
-      inicio:   { bg:'#c0392b', txt:'⚠ Inicio',    sub: `${r.meses} mes${r.meses>1?'es':''}` },
-    };
-    const c = cfg[r.estado] || cfg.inicio;
-    return `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:2px">
-      <span style="background:${c.bg};color:#fff;padding:2px 7px;border-radius:3px;font-size:7.5pt;font-weight:600;white-space:nowrap">${c.txt}</span>
-      <span style="font-size:6.5pt;color:#888">${c.sub}</span>
-    </div>`;
-  };
+  // Cambio 2: empresas VIGENTES del portafolio (Empresas y rubros) que no
+  // tienen ni un solo mes de ER cargado en ningún año — antes invisibles.
+  const _rubGlob  = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const _inactGlob = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
+  const portafolioTodas = [...new Set([
+    ...Object.keys(_rubGlob), ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+  ])];
+  const empresasSinER = empFiltro ? [] : portafolioTodas
+    .filter(e => !_inactGlob[e] && !empsConDatos.includes(e))
+    .sort((a,b) => a.localeCompare(b, 'es'));
 
-  // Resumen global
-  const totalCeldas = rows.length;
-  const completos   = rows.filter(r => r.estado === 'completo').length;
-  const parciales   = rows.filter(r => r.estado === 'parcial').length;
-  const inicios     = rows.filter(r => r.estado === 'inicio').length;
-  const pctCumpl    = totalCeldas > 0 ? (completos / totalCeldas * 100).toFixed(0) : 0;
+  // Cambio 1: cumplimiento calculado SOLO sobre años cerrados
+  const rowsCerrados = rows.filter(r => aniosCerrados.includes(r.yr));
+  const totalCeldas  = rowsCerrados.length;
+  const completos    = rowsCerrados.filter(r => r.estado === 'completo').length;
+  const parciales    = rowsCerrados.filter(r => r.estado === 'parcial').length;
+  const inicios      = rowsCerrados.filter(r => r.estado === 'inicio').length;
+  const pctCumpl      = totalCeldas > 0 ? (completos / totalCeldas * 100).toFixed(0) : 0;
+
+  // Cambios 3 y 4: una entrada por empresa con línea de tiempo + tendencia
+  const nivel = r => !r ? 0 : r.estado === 'completo' ? 3 : r.estado === 'parcial' ? 2 : 1;
+  const empresasTimeline = empsConDatos.map(emp => {
+    const anios = {};
+    todosAnios.forEach(yr => { const r = porEmp[emp][yr]; anios[yr] = r ? { estado: r.estado, meses: r.meses } : null; });
+    const nCerr = aniosCerrados.length;
+    const completosCerr = aniosCerrados.filter(yr => porEmp[emp][yr]?.estado === 'completo').length;
+    const rate = nCerr > 0 ? completosCerr / nCerr : 0;
+    let trend = null;
+    if (yrCerradoAnt && yrCerradoUlt) {
+      const lp = nivel(porEmp[emp][yrCerradoAnt]), ll = nivel(porEmp[emp][yrCerradoUlt]);
+      trend = ll > lp ? 'up' : ll < lp ? 'down' : 'flat';
+    }
+    let resUlt = null;
+    for (let i = aniosCerrados.length - 1; i >= 0; i--) {
+      const r = porEmp[emp][aniosCerrados[i]];
+      if (r && r.resultado != null) { resUlt = { yr: aniosCerrados[i], v: r.resultado }; break; }
+    }
+    return { emp, rate, completosCerr, nCerr, trend, anios, resUlt };
+  });
 
   const css2 = `
     *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -19428,52 +19463,91 @@ function informeEstadoERProvisorio(empFiltro) {
     .rk { border-radius:5px; padding:10px 14px; }
     .rk-v { font-size:18pt; font-weight:700; line-height:1; }
     .rk-l { font-size:7pt; text-transform:uppercase; letter-spacing:.06em; margin-top:3px; }
+    .rk-sub { font-size:6.5pt; color:#999; margin-top:4px; }
+    .sub2 { font-size:7.5pt; color:#999; margin:-8px 0 6px; }
     h2.sec { font-size:10pt; color:#6d3a9c; border-bottom:2px solid #6d3a9c; padding-bottom:3px; margin:22px 0 8px; text-transform:uppercase; letter-spacing:.06em; }
     table.t { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:12px; }
     table.t th { background:#6d3a9c; color:#fff; padding:5px 8px; text-align:left; font-size:7.5pt; text-transform:uppercase; letter-spacing:.04em; }
     table.t th.r { text-align:center; }
     table.t td { padding:5px 8px; border-bottom:1px solid #eee; vertical-align:middle; }
     table.t tr:nth-child(even) td { background:#f9f5ff; }
-    .emp-row td { font-weight:700; background:#f0eaff !important; font-size:8pt; color:#6d3a9c; }
+    .alert-box { background:#fdecea; border:1px solid #f3c9c4; border-left:4px solid #c0392b; border-radius:5px; padding:12px 16px; margin:14px 0; }
+    .alert-box h2 { font-size:9.5pt; color:#c0392b; margin:0 0 4px; text-transform:none; letter-spacing:0; border:none; padding:0; }
+    .alert-box p { font-size:7.5pt; color:#888; margin:0 0 8px; }
+    .chip-pill { background:#fff; border:1px solid #f3c9c4; color:#c0392b; padding:3px 10px; border-radius:20px; font-size:8pt; font-weight:600; display:inline-block; margin:0 5px 5px 0; }
+    .tl-legend { font-size:7pt; color:#888; margin-bottom:6px; }
+    .tl-legend span { display:inline-flex; align-items:center; gap:3px; margin-right:10px; }
+    .tl-sw { width:9px; height:9px; border-radius:2px; display:inline-block; }
+    .sortbtn { background:#6d3a9c; color:#fff; border:none; padding:4px 10px; border-radius:3px; font-size:7.5pt; cursor:pointer; font-family:inherit; }
     .ft { margin-top:24px; font-size:7pt; color:#aaa; border-top:1px solid #eee; padding-top:6px; }
     @media print {
-      .portada, table.t th { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .portada, table.t th, .alert-box { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .sortbtn { display:none; }
     }
   `;
 
-  // Tabla principal: empresa × año
-  let tablaHtml = '';
-  if (empsConDatos.length) {
-    tablaHtml = `<h2 class="sec">Estado por Empresa y Año</h2>
-    <table class="t">
-      <thead><tr>
-        <th>Empresa</th><th class="r">Año</th><th class="r">Estado</th><th class="r">Meses c/datos</th>
-        <th class="r">Ventas / Ingresos</th><th class="r">Resultado</th><th class="r">Margen</th>
-      </tr></thead>
-      <tbody>`;
-    empsConDatos.forEach(emp => {
-      const aniosEmp = todosAnios.filter(yr => porEmp[emp]?.[yr]);
-      aniosEmp.forEach((yr, idx) => {
-        const r = porEmp[emp][yr];
-        const colRes = r.resultado != null ? (r.resultado >= 0 ? '#1a7a4a' : '#c0392b') : '#888';
-        const colMrg = r.margen   != null ? (r.margen   >= 0 ? '#1a7a4a' : '#c0392b') : '#888';
-        tablaHtml += `<tr>
-          <td>${idx === 0 ? `<strong>${emp}</strong>` : ''}</td>
-          <td style="text-align:center;font-weight:600">${yr}</td>
-          <td style="text-align:center">${estadoChip(r)}</td>
-          <td style="text-align:center">${r.meses}</td>
-          <td style="text-align:right">${fv2(r.ventas)}</td>
-          <td style="text-align:right;color:${colRes};font-weight:600">${fv2(r.resultado)}</td>
-          <td style="text-align:right;color:${colMrg}">${r.margen != null ? r.margen.toFixed(2)+'%' : '—'}</td>
-        </tr>`;
-      });
-    });
-    tablaHtml += `</tbody></table>`;
-  } else {
-    tablaHtml = `<p style="color:#888;padding:16px 0">No hay datos de ER Provisorio cargados${empFiltro ? ' para ' + empFiltro : ''}.</p>`;
+  // Cuadro de alerta: empresas vigentes sin ER cargado (cambio 2)
+  let alertHtml = '';
+  if (empresasSinER.length) {
+    alertHtml = `<div class="alert-box">
+      <h2>⚠ ${empresasSinER.length} empresa${empresasSinER.length !== 1 ? 's' : ''} vigente${empresasSinER.length !== 1 ? 's' : ''} sin ningún ER cargado</h2>
+      <p>Empresas activas del portafolio (Empresas y rubros) sin un solo mes de ER Provisorio cargado${todosAnios.length ? ' en ' + todosAnios[0] + '–' + todosAnios[todosAnios.length - 1] : ''}.</p>
+      ${empresasSinER.map(e => `<span class="chip-pill">${e}</span>`).join('')}
+    </div>`;
   }
 
-  // Tabla resumen por año (cobertura)
+  // Chip de estado para una celda-año dentro de la línea de tiempo
+  const dotBadge = (yr, cell) => {
+    const esCurso = parseInt(yr) >= anioActual;
+    if (esCurso) {
+      const lbl = cell ? cell.meses + 'm' : '·';
+      const title = cell ? `${yr} · ${cell.meses} mes${cell.meses > 1 ? 'es' : ''} (en curso)` : `${yr} · sin datos aún (en curso)`;
+      return `<span title="${title}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:20px;border:1.5px dashed #6d3a9c;color:#6d3a9c;border-radius:4px;font-size:6.5pt;font-weight:700">${lbl}</span>`;
+    }
+    if (!cell) return `<span title="${yr} · sin datos" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:20px;border:1px dashed #ccc;color:#ccc;border-radius:4px;font-size:6.5pt">—</span>`;
+    const cfg = { completo: { bg:'#1a7a4a', lbl:'✓' }, parcial: { bg:'#b7770d', lbl:cell.meses+'m' }, inicio: { bg:'#c0392b', lbl:cell.meses+'m' } };
+    const c = cfg[cell.estado] || cfg.inicio;
+    const title = cell.estado === 'completo' ? `${yr} · Completo (12 meses)` : cell.estado === 'parcial' ? `${yr} · Parcial (${cell.meses} meses)` : `${yr} · Inicio (${cell.meses} mes${cell.meses > 1 ? 'es' : ''})`;
+    return `<span title="${title}" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:20px;background:${c.bg};color:#fff;border-radius:4px;font-size:6.5pt;font-weight:700">${c.lbl}</span>`;
+  };
+  const trendArrow = t => t === 'up' ? '<span style="color:#1a7a4a;font-weight:700">▲</span>' : t === 'down' ? '<span style="color:#c0392b;font-weight:700">▼</span>' : t === 'flat' ? '<span style="color:#aaa">–</span>' : '<span style="color:#ccc">—</span>';
+  const filaEmpresa = et => `<tr>
+      <td><strong>${et.emp}</strong><br><span style="font-size:6.5pt;color:#888;font-weight:400">${et.nCerr ? et.completosCerr + '/' + et.nCerr + ' años completos · ' + Math.round(et.rate * 100) + '%' : 'sin años cerrados aún'}</span></td>
+      ${todosAnios.map(yr => `<td style="text-align:center">${dotBadge(yr, et.anios[yr])}</td>`).join('')}
+      <td style="text-align:center">${trendArrow(et.trend)}</td>
+      <td style="text-align:right;font-weight:600;color:${et.resUlt ? (et.resUlt.v >= 0 ? '#1a7a4a' : '#c0392b') : '#888'}">${et.resUlt ? fv2(et.resUlt.v) + ` <span style="font-size:6.5pt;color:#aaa;font-weight:400">(${et.resUlt.yr})</span>` : '—'}</td>
+    </tr>`;
+
+  // Tabla principal: una fila por empresa (cambios 3 y 4)
+  let tablaTimelineHtml = '';
+  if (empresasTimeline.length) {
+    const worst = [...empresasTimeline].sort((a, b) => a.rate - b.rate || a.emp.localeCompare(b.emp, 'es'));
+    const alpha = [...empresasTimeline].sort((a, b) => a.emp.localeCompare(b.emp, 'es'));
+    const theadYears = todosAnios.map(yr => `<th class="r">${yr}</th>`).join('');
+    tablaTimelineHtml = `<div style="display:flex;align-items:center;justify-content:space-between;margin:22px 0 6px">
+        <h2 class="sec" style="margin:0;border:none;padding:0">Estado por Empresa</h2>
+        <button class="sortbtn" onclick="var w=document.getElementById('tl-worst'),a=document.getElementById('tl-alpha'),b=this;if(w.style.display!=='none'){w.style.display='none';a.style.display='';b.textContent='↕ ver por cumplimiento';}else{w.style.display='';a.style.display='none';b.textContent='↕ ver alfabético';}">↕ ver alfabético</button>
+      </div>
+      <div class="tl-legend">
+        <span><span class="tl-sw" style="background:#1a7a4a"></span>Completo</span>
+        <span><span class="tl-sw" style="background:#b7770d"></span>Parcial</span>
+        <span><span class="tl-sw" style="background:#c0392b"></span>Inicio</span>
+        <span><span class="tl-sw" style="border:1px dashed #ccc"></span>Sin datos</span>
+        <span><span class="tl-sw" style="border:1.5px dashed #6d3a9c"></span>En curso</span>
+      </div>
+      <table class="t" id="tl-worst">
+        <thead><tr><th>Empresa</th>${theadYears}<th class="r">Tend.</th><th class="r">Resultado (último cerrado)</th></tr></thead>
+        <tbody>${worst.map(filaEmpresa).join('')}</tbody>
+      </table>
+      <table class="t" id="tl-alpha" style="display:none">
+        <thead><tr><th>Empresa</th>${theadYears}<th class="r">Tend.</th><th class="r">Resultado (último cerrado)</th></tr></thead>
+        <tbody>${alpha.map(filaEmpresa).join('')}</tbody>
+      </table>`;
+  } else {
+    tablaTimelineHtml = `<p style="color:#888;padding:16px 0">No hay datos de ER Provisorio cargados${empFiltro ? ' para ' + empFiltro : ''}.</p>`;
+  }
+
+  // Tabla resumen por año (cobertura) — el año en curso no se pondera (cambio 1)
   let tablaAnualHtml = '';
   if (todosAnios.length && empsConDatos.length) {
     tablaAnualHtml = `<h2 class="sec">Cobertura por Año</h2>
@@ -19486,18 +19560,19 @@ function informeEstadoERProvisorio(empFiltro) {
     todosAnios.forEach(yr => {
       const rowsYr = rows.filter(r => r.yr === yr);
       if (!rowsYr.length) return;
+      const esCurso = parseInt(yr) >= anioActual;
       const nComp = rowsYr.filter(r=>r.estado==='completo').length;
       const nParc = rowsYr.filter(r=>r.estado==='parcial').length;
       const nInic = rowsYr.filter(r=>r.estado==='inicio').length;
       const pct   = (nComp / rowsYr.length * 100).toFixed(0);
       const col   = pct >= 80 ? '#1a7a4a' : pct >= 50 ? '#b7770d' : '#c0392b';
-      tablaAnualHtml += `<tr>
-        <td><strong>${yr}</strong></td>
+      tablaAnualHtml += `<tr${esCurso ? ' style="background:#f4f1fb"' : ''}>
+        <td><strong>${yr}</strong>${esCurso ? ' <span style="font-size:6.5pt;color:#6d3a9c;font-weight:700">EN CURSO</span>' : ''}</td>
         <td style="text-align:center">${rowsYr.length}</td>
         <td style="text-align:center;color:#1a7a4a;font-weight:600">${nComp}</td>
         <td style="text-align:center;color:#b7770d">${nParc}</td>
         <td style="text-align:center;color:#c0392b">${nInic}</td>
-        <td style="text-align:center;color:${col};font-weight:700">${pct}%</td>
+        <td style="text-align:center;${esCurso ? 'color:#6d3a9c;font-size:7.5pt;font-weight:700' : 'color:'+col+';font-weight:700'}">${esCurso ? 'No se pondera' : pct+'%'}</td>
       </tr>`;
     });
     tablaAnualHtml += `</tbody></table>`;
@@ -19522,6 +19597,7 @@ function informeEstadoERProvisorio(empFiltro) {
     </div>
   </div>
   <div class="body">
+    ${alertHtml}
     <div class="resumen">
       <div class="rk" style="background:#e8f5e9">
         <div class="rk-v" style="color:#1a7a4a">${completos}</div>
@@ -19540,8 +19616,9 @@ function informeEstadoERProvisorio(empFiltro) {
         <div class="rk-l" style="color:#6d3a9c">Tasa de cumplimiento</div>
       </div>
     </div>
+    <div class="sub2">Cumplimiento calculado sobre años cerrados${aniosCerrados.length ? ' (' + aniosCerrados[0] + '–' + aniosCerrados[aniosCerrados.length-1] + ')' : ''}${todosAnios.length > aniosCerrados.length ? ' — ' + todosAnios.slice(aniosCerrados.length).join(', ') + ' en curso, no se pondera' : ''}.</div>
     ${tablaAnualHtml}
-    ${tablaHtml}
+    ${tablaTimelineHtml}
     <div class="ft">Dashboard Gerencial · Mejor Riojanas · ${hoy} · ER Provisorio: datos de facturación y resultado mensual acumulado cargados por empresa &nbsp;·&nbsp; SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</div>
   </div>
   </body></html>`;
