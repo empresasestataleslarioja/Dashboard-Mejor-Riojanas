@@ -1938,7 +1938,7 @@ self.onmessage = async (e) => {
       <span class="nav-dot"></span>📋 <strong>Historial de cargas</strong>
     </button>
     <button class="nav-item" onclick="showPanel('rubros',this)">
-      <span class="nav-dot"></span>🏷 <strong>Rubros comerciales</strong>
+      <span class="nav-dot"></span>🏷 <strong>Empresas y rubros</strong>
     </button>
 
     <button class="nav-item" onclick="showPanel('sostenibilidad',this)">
@@ -6209,7 +6209,7 @@ const RUBROS_DEFAULT = {
 var rubros = {}; // var evita Temporal Dead Zone en referencias tempranas
 // Empresas marcadas como inactivas (dejaron de operar / de reportarse) —
 // puramente informativo: no excluye a la empresa de facturación, resultado,
-// personal ni ningún otro módulo, solo se refleja en Rubros comerciales.
+// personal ni ningún otro módulo, solo se refleja en Empresas y rubros.
 var empresasInactivas = {};
 function loadRubros() {
   try {
@@ -12210,7 +12210,7 @@ function _matchEmpresaFlujo(nombreEmpresa) {
 }
 
 // Igual criterio de coincidencia que _matchEmpresaFlujo, pero acotado al
-// portafolio oficial (Rubros Comerciales) — usado por los preview de import
+// portafolio oficial (Empresas y Rubros) — usado por los preview de import
 // de ER (Ventas/Gastos, columnas de meses, matricial) para que el desplegable
 // de empresa nunca ofrezca algo fuera de ese portafolio. Único lugar donde
 // vive esta heurística; antes estaba copiada igual en los tres previews.
@@ -20595,7 +20595,7 @@ const TITLES = {
   inflacion:      'Inflación <em>INDEC</em>',
   empresa:        'Análisis por <em>Empresa</em>',
   comparar:       'Comparar <em>Empresas</em>',
-  rubros:         'Rubros <em>Comerciales</em>',
+  rubros:         'Empresas y <em>Rubros</em>',
   importar:       'Importar <em>Datos</em>',
   portafolio:     'Portafolio <em>Consolidado</em>',
   sostenibilidad: 'Sostenibilidad <em>Fiscal</em>',
@@ -23444,7 +23444,7 @@ async function exportPDF() {
 
     function addFooter() {
       const pages = doc.internal.getNumberOfPages();
-      const panelNames = {resumen:'Resumen Consolidado',facturacion:'Facturación',resultado:'Resultado Operativo',personal:'Personal',portafolio:'Portafolio',inflacion:'Inflación',empresa:'Por Empresa',comparar:'Comparar Empresas',rubros:'Rubros Comerciales',transferencias:'Transferencias'};
+      const panelNames = {resumen:'Resumen Consolidado',facturacion:'Facturación',resultado:'Resultado Operativo',personal:'Personal',portafolio:'Portafolio',inflacion:'Inflación',empresa:'Por Empresa',comparar:'Comparar Empresas',rubros:'Empresas y Rubros',transferencias:'Transferencias'};
       for (let p=1; p<=pages; p++) {
         doc.setPage(p);
         fill(C.s1); doc.rect(0,H-7,W,7,'F');
@@ -26465,7 +26465,7 @@ function _mostrarPreviewVentasGastos(result, fname) {
 
   // Empresa: el nombre del archivo es solo una sugerencia (puede traer "ACUMULADO",
   // "AL 06" u otro sufijo mal recortado) — nunca se guarda sin que el usuario la
-  // confirme. Solo se ofrecen empresas dadas de alta en Rubros Comerciales (el
+  // confirme. Solo se ofrecen empresas dadas de alta en Empresas y Rubros (el
   // portafolio oficial): no se agregan opciones "nuevas" sacadas del archivo.
   const _todasEmp = Object.keys(rubros || {}).sort();
   const _empMatch = _matchEmpresaPortafolio(result.empresa, _todasEmp);
@@ -26481,7 +26481,7 @@ function _mostrarPreviewVentasGastos(result, fname) {
         : 'Se cargará como ER mensual (Ventas → facturación, Ventas − Gastos → resultado operativo).'}
     </div>
     <div style="margin-bottom:8px">
-      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga (portafolio de Rubros Comerciales)
+      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga (portafolio de Empresas y Rubros)
         ${!_empMatch ? '<span style="color:var(--y21)">— no se encontró coincidencia automática, seleccioná manualmente</span>' : ''}
       </label>
       <select id="vg-empresa" onchange="_vgActualizarAvisoExistente()" style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid ${!_empMatch?'var(--y21)':'var(--bd)'};border-radius:5px;color:var(--text);font-size:11px">${_empOpts}</select>
@@ -27152,7 +27152,7 @@ function _mostrarPreviewERColumnas(result, fname) {
       Año ${result.anio} · ${result.filas.length} conceptos · ${meses.length} meses
     </div>
     <div style="margin-bottom:8px">
-      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga (portafolio de Rubros Comerciales)
+      <label style="font-size:9px;color:var(--dim);display:block;margin-bottom:3px">Empresa a la que se vincula esta carga (portafolio de Empresas y Rubros)
         ${!_empMatch ? '<span style="color:var(--y21)">— no se encontró coincidencia automática, seleccioná manualmente</span>' : ''}
       </label>
       <select id="er-col-emp-inp" onchange="_erColActualizarAvisoExistente()" style="width:100%;padding:7px 10px;background:var(--s2);border:1px solid ${!_empMatch?'var(--y21)':'var(--bd)'};border-radius:5px;color:var(--text);font-size:11px">${_empOpts}</select>
@@ -28444,7 +28444,7 @@ function _mostrarPreviewERMatricial(result, fname) {
   const hoy = new Date().getFullYear();
   // Empresa: el nombre lo trae el encabezado del Excel tal cual (a veces con
   // sufijos como "SAPEM" que no coinciden con la clave del portafolio) — nunca
-  // se guarda sin confirmar. Solo se ofrecen empresas de Rubros Comerciales.
+  // se guarda sin confirmar. Solo se ofrecen empresas de Empresas y Rubros.
   const _todasEmp = Object.keys(rubros || {}).sort();
   const filas = result.empresas.map((e, i) => {
     const m = _matchEmpresaPortafolio(e.empresa, _todasEmp);
@@ -28470,7 +28470,7 @@ function _mostrarPreviewERMatricial(result, fname) {
       <div style="font-size:10px;color:var(--dim);margin-bottom:12px">
         ${result.empresas.length} empresas · Se actualizará Facturación (Ventas Netas) y Resultado (Resultado Operativo).
         ${(result.mensuales&&result.mensuales.length)?'<br>📅 '+result.mensuales.length+' empresas con detalle MENSUAL detectado: '+result.mensuales.map(m=>m.empresa).join(', '):''}
-        <br>Confirmá la empresa (portafolio de Rubros Comerciales) y el año de cada fila antes de aplicar.
+        <br>Confirmá la empresa (portafolio de Empresas y Rubros) y el año de cada fila antes de aplicar.
       </div>
       <div style="overflow-x:auto;max-height:400px;overflow-y:auto"><table style="width:100%;border-collapse:collapse">
         <thead><tr style="position:sticky;top:0;background:var(--s1)">
@@ -29090,7 +29090,7 @@ function applyImport() {
       </div>
       <div style="font-size:9px;color:var(--dim);line-height:1.6">
         Estas empresas fueron dadas de alta automáticamente en el dashboard.<br>
-        Si el nombre no es correcto, podés editarlo en <strong>⚙ Rubros comerciales</strong>
+        Si el nombre no es correcto, podés editarlo en <strong>⚙ Empresas y rubros</strong>
         o corregirlo en el archivo Excel antes de reimportar.
       </div>
     </div>`;
@@ -35749,7 +35749,7 @@ function runSearch(q) {
   // Paneles
   const panelMap = {resumen:'Resumen consolidado',facturacion:'Facturación',resultado:'Resultado operativo',
     personal:'Personal',portafolio:'Portafolio',inflacion:'Inflación INDEC',
-    empresa:'Evolución empresa',comparar:'Comparar empresas',rubros:'Rubros comerciales',
+    empresa:'Evolución empresa',comparar:'Comparar empresas',rubros:'Empresas y rubros',
     transferencias:'Transferencias',sostenibilidad:'Sostenibilidad fiscal',
     heatmap:'Mapa de calor',presupuesto:'Presupuesto vs real'};
   Object.entries(panelMap).forEach(([id,name])=>{
