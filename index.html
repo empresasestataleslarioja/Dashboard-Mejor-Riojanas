@@ -2704,24 +2704,29 @@ self.onmessage = async (e) => {
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
           <div style="display:flex;flex-direction:column;gap:3px">
             <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Empresa</label>
-            <div style="display:flex;gap:4px">
+            <div style="display:flex;gap:4px;align-items:center">
               <select id="pers-manual-emp-sel"
                 onchange="_persManualElegirEmpresa(this.value)"
                 style="padding:4px 6px;background:var(--s2);border:1px solid var(--bd2);
                 color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
-                outline:none;width:150px;cursor:pointer">
-                <option value="">— elegir / nueva —</option>
+                outline:none;width:206px;cursor:pointer">
+                <option value="">— elegir empresa —</option>
+                <option value="__nueva__">+ nueva empresa…</option>
               </select>
-              <div id="pers-manual-emp-wrap" style="position:relative">
-                <input id="pers-manual-emp" type="text" placeholder="…o tipeá una empresa nueva"
+              <div id="pers-manual-emp-wrap" style="position:relative;display:none">
+                <input id="pers-manual-emp" type="text" placeholder="Nombre de empresa nueva…"
                   list="pers-manual-emp-list"
                   style="padding:4px 8px;background:var(--s2);border:1px solid var(--bd2);
                   color:var(--text);font-family:var(--mono);font-size:9.5px;border-radius:3px;
-                  outline:none;width:150px"
+                  outline:none;width:170px"
                   oninput="_persManualAutocargar(this.value)"
                   onchange="_persManualAutocargar(this.value)">
                 <datalist id="pers-manual-emp-list"></datalist>
               </div>
+              <button type="button" id="pers-manual-emp-volver" onclick="_persManualVolverASelect()"
+                title="Volver al listado de empresas"
+                style="display:none;padding:4px 7px;background:var(--s2);border:1px solid var(--bd2);
+                color:var(--dim);font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer">↺</button>
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:3px">
@@ -16888,7 +16893,8 @@ function _persManualInicializar() {
   if (dl) dl.innerHTML = todas.map(e => '<option value="' + e + '">').join('');
   const sel = document.getElementById('pers-manual-emp-sel');
   if (sel) {
-    sel.innerHTML = '<option value="">— elegir / nueva —</option>' +
+    sel.innerHTML = '<option value="">— elegir empresa —</option>' +
+      '<option value="__nueva__">+ nueva empresa…</option>' +
       todas.map(e => '<option value="' + e.replace(/"/g,'&quot;') + '">' + e +
         (DATA.personal.some(d => d.e === e) ? '' : ' (sin datos)') + '</option>').join('');
   }
@@ -16907,37 +16913,63 @@ function _persManualInicializar() {
   }).join('');
 }
 
-// ── Elegir empresa desde el <select> de navegación — permite recorrer el
-// listado empresa a empresa (flechas del teclado) en vez de depender solo
-// de tipear en el datalist. Sincroniza el input de texto y precarga sus datos.
+// ── Elegir empresa: un solo campo visible por vez. Por defecto se ve el
+// <select> (permite recorrer el listado empresa a empresa con el teclado);
+// eligiendo "+ nueva empresa…" se reemplaza por el input de texto (para
+// escribir un nombre que no está en el listado), con un botón ↺ para
+// volver al select. Nunca se muestran las dos cajas juntas.
+function _persManualLimpiarCampos() {
+  const pYrs = ys().map(String);
+  const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
+  años.forEach(function(y) { const inp = document.getElementById('pers-m-' + y); if (inp) inp.value = ''; });
+  _persMesesBorrador = {};
+  _persMesAnioRenderizado = null;
+  const chk = document.getElementById('pers-manual-detalle-mes');
+  if (chk && chk.checked) {
+    chk.checked = false;
+    const wrap = document.getElementById('pers-manual-meses-wrap');
+    if (wrap) wrap.style.display = 'none';
+  }
+}
+
 function _persManualElegirEmpresa(nombre) {
   const empInput = document.getElementById('pers-manual-emp');
   const empWrap  = document.getElementById('pers-manual-emp-wrap');
-  if (!nombre) {
-    // "— elegir / nueva —": mostrar el input de texto (única forma de
-    // tipear una empresa nueva) y limpiar todo para arrancar una carga nueva
+  const sel      = document.getElementById('pers-manual-emp-sel');
+  const volverBtn = document.getElementById('pers-manual-emp-volver');
+
+  if (nombre === '__nueva__') {
+    // Modo "tipear nueva empresa": ocultar el select, mostrar solo el input.
+    if (sel) sel.style.display = 'none';
     if (empWrap) empWrap.style.display = '';
+    if (volverBtn) volverBtn.style.display = '';
     if (empInput) { empInput.value = ''; empInput.focus(); }
-    _persManualAutocargar('');
-    const pYrs = ys().map(String);
-    const años = pYrs.length ? pYrs : ['2020','2021','2022','2023','2024','2025','2026'];
-    años.forEach(function(y) { const inp = document.getElementById('pers-m-' + y); if (inp) inp.value = ''; });
-    _persMesesBorrador = {};
-    _persMesAnioRenderizado = null;
-    const chk = document.getElementById('pers-manual-detalle-mes');
-    if (chk && chk.checked) {
-      chk.checked = false;
-      const wrap = document.getElementById('pers-manual-meses-wrap');
-      if (wrap) wrap.style.display = 'none';
-    }
+    _persManualLimpiarCampos();
     return;
   }
-  // Empresa existente elegida por el desplegable: ocultar el input de texto
-  // (ya no aporta nada, repetía el mismo nombre que el select) pero
-  // mantenerlo con el valor cargado — guardarPersonalManual() lo sigue leyendo.
+  if (!nombre) {
+    // "— elegir empresa —": limpiar todo, el select sigue siendo el único visible
+    if (empInput) empInput.value = '';
+    _persManualLimpiarCampos();
+    return;
+  }
+  // Empresa existente elegida por el desplegable: mantener solo el select
+  // visible (el input de texto sigue oculto) y precargar sus datos.
   if (empInput) empInput.value = nombre;
-  if (empWrap) empWrap.style.display = 'none';
   _persManualAutocargar(nombre);
+}
+
+// Volver del modo "nueva empresa" (input de texto) al <select> de navegación.
+function _persManualVolverASelect() {
+  const empInput  = document.getElementById('pers-manual-emp');
+  const empWrap   = document.getElementById('pers-manual-emp-wrap');
+  const sel       = document.getElementById('pers-manual-emp-sel');
+  const volverBtn = document.getElementById('pers-manual-emp-volver');
+  if (empInput) empInput.value = '';
+  if (empWrap) empWrap.style.display = 'none';
+  if (volverBtn) volverBtn.style.display = 'none';
+  if (sel) { sel.style.display = ''; sel.value = ''; }
+  _persManualLimpiarCampos();
 }
 
 function _persManualAutocargar(empresa) {
@@ -17278,9 +17310,11 @@ function limpiarPersonalManual() {
   const empInput = document.getElementById('pers-manual-emp');
   if (empInput) empInput.value = '';
   const sel = document.getElementById('pers-manual-emp-sel');
-  if (sel) sel.value = '';
+  if (sel) { sel.value = ''; sel.style.display = ''; }
   const empWrap = document.getElementById('pers-manual-emp-wrap');
-  if (empWrap) empWrap.style.display = ''; // volver a mostrar el input de texto
+  if (empWrap) empWrap.style.display = 'none'; // volver al estado por defecto: solo el select visible
+  const volverBtn = document.getElementById('pers-manual-emp-volver');
+  if (volverBtn) volverBtn.style.display = 'none';
   // Repoblar datalist/select — por si se acaba de guardar una empresa nueva,
   // así ya aparece disponible para elegir en la próxima carga.
   _persManualInicializar();
