@@ -17405,10 +17405,14 @@ function importarNomina(file) {
               }
               if (alguno) {
                 mData[y] = meses;
-                // Si no hay total anual, calcular como promedio
+                // Si no hay total anual explícito: usar el ÚLTIMO mes
+                // cargado (dotación vigente), no un promedio — mismo
+                // criterio que guardarPersonalManual() y que la lectura
+                // desde Sheets en syncFromCloud().
                 if (!yData[y]) {
-                  const filled = meses.filter(v => v != null);
-                  if (filled.length) yData[y] = Math.round(filled.reduce((s,v)=>s+v,0)/filled.length);
+                  let ultimoMes = null;
+                  for (let i = 11; i >= 0; i--) { if (meses[i] != null) { ultimoMes = meses[i]; break; } }
+                  if (ultimoMes != null) yData[y] = ultimoMes;
                 }
               }
             });
