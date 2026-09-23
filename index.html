@@ -7106,6 +7106,8 @@ function _rptEmpresasRubros() {
   const lastY = ys().map(String).slice(-1)[0];
   const _rub = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
   const _inact = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
+  const _inst  = (typeof DATA !== 'undefined' && DATA.institucional) ? DATA.institucional : {};
+  const fmtFechaCorta = iso => { const [y,m,d] = (iso||'').split('-'); return (y&&m&&d) ? `${d}/${m}/${y}` : ''; };
   const allEmps = [...new Set([
     ...Object.keys(_rub), ...Object.keys(DATA.fact||{}), ...Object.keys(DATA.sit||{}),
     ...(DATA.personal||[]).map(d=>d.e),
@@ -7135,16 +7137,24 @@ function _rptEmpresasRubros() {
     const filas = emps.map(e => {
       const inact = !!_inact[e];
       const fechaInact = typeof _inact[e] === 'string' ? _inact[e] : '';
-      const fechaCorta = fechaInact ? (([y,m,d]) => `${d}/${m}/${y}`)(fechaInact.split('-')) : '';
+      const fechaCorta = fechaInact ? fmtFechaCorta(fechaInact) : '';
       const fact = DATA.fact?.[e]?.[lastY];
+      const inst = _inst[e] || {};
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
+        <td>${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
+        <td>${inst.decreto || '—'}</td>
         <td style="text-align:right">${fmt(fact)}</td>
       </tr>`;
     }).join('');
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;font-size:8.5pt">
-        <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Empresa</th><th style="text-align:right">Facturación ${lastY||''}</th></tr></thead>
+        <thead><tr style="background:#f0f4ff">
+          <th style="text-align:left;padding:5px 8px">Empresa</th>
+          <th style="text-align:left">Constitución</th>
+          <th style="text-align:left">Decreto de creación</th>
+          <th style="text-align:right">Facturación ${lastY||''}</th>
+        </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
   }).join('');
@@ -7384,8 +7394,18 @@ function _rptERMensual() {
   }).join('');
 
   const subt = emp + (anioFiltro ? ' \u00b7 Ejercicio '+anioFiltro : '');
+  const inst = DATA.institucional?.[emp] || {};
+  const fmtFechaInst = iso => { const [y,m,d] = (iso||'').split('-'); return (y&&m&&d) ? `${d}/${m}/${y}` : ''; };
+  const instLine = (inst.fechaConstitucion || inst.decreto)
+    ? `<div style="font-size:8.5pt;color:#555;margin:-8px 0 12px">`
+      + (inst.fechaConstitucion ? `Constituci\u00f3n: ${fmtFechaInst(inst.fechaConstitucion)}` : '')
+      + (inst.fechaConstitucion && inst.decreto ? ' &middot; ' : '')
+      + (inst.decreto ? `Decreto de creaci\u00f3n: ${inst.decreto}` : '')
+      + `</div>`
+    : '';
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Estado de Resultados', subt)
+    + instLine
     + bloques
     + _rptFooter()
     + '</div></body></html>';
@@ -9269,6 +9289,7 @@ function gestionRenombrar() {
   document.getElementById('gest-rename-to').value = '';
   _poblarGestionSelects();
   computeTotals();
+  try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
   try { marcarPendienteGuardar(); } catch(e) {}
   rebuildActive();
@@ -9290,6 +9311,7 @@ function gestionRenombrarRapido(emp) {
   computeTotals();
   rebuildActive();
   populateSelects();
+  try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
   try { marcarPendienteGuardar(); } catch(e) {}
 }
@@ -9305,6 +9327,7 @@ function gestionFusionar() {
   if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ "${from}" fusionada en "${to}" y eliminada del portafolio. Publicá a Sheets para guardar.`; }
   _poblarGestionSelects();
   computeTotals();
+  try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
   try { marcarPendienteGuardar(); } catch(e) {}
   rebuildActive();
@@ -9334,6 +9357,7 @@ function _purgarEmpresaDeData(emp) {
   if (DATA.institucional?.[emp]) delete DATA.institucional[emp];
   if (DATA.presupuesto?.[emp]) delete DATA.presupuesto[emp];
   if (typeof rubros !== 'undefined' && rubros?.[emp]) delete rubros[emp];
+  if (typeof empresasInactivas !== 'undefined' && empresasInactivas?.[emp]) delete empresasInactivas[emp];
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
     if (DATA[k] && DATA[k][emp]) delete DATA[k][emp];
   });
@@ -9403,6 +9427,11 @@ function _renombrarEmpresa(from, to) {
   if (DATA.presupuesto?.[from]) { DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
   // rubros
   if (rubros?.[from]) { rubros[to] = rubros[from]; delete rubros[from]; }
+  // estado activa/inactiva (y su fecha)
+  if (typeof empresasInactivas !== 'undefined' && empresasInactivas?.[from] !== undefined) {
+    empresasInactivas[to] = empresasInactivas[from];
+    delete empresasInactivas[from];
+  }
   // balances
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
@@ -9456,6 +9485,10 @@ function _fusionarEmpresas(from, to) {
   if (DATA.institucional?.[from]) { if (!DATA.institucional[to]) DATA.institucional[to] = DATA.institucional[from]; delete DATA.institucional[from]; }
   if (DATA.presupuesto?.[from]) { if (!DATA.presupuesto[to]) DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
   if (rubros?.[from])   { if (!rubros[to]) rubros[to] = rubros[from]; delete rubros[from]; }
+  if (typeof empresasInactivas !== 'undefined' && empresasInactivas?.[from] !== undefined) {
+    if (empresasInactivas[to] === undefined) empresasInactivas[to] = empresasInactivas[from];
+    delete empresasInactivas[from];
+  }
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
     if (b.vinculada === from) b.vinculada = to;
@@ -9485,6 +9518,7 @@ function gestionEliminar() {
   if (!confirm('¿Eliminar "'+emp+'" y TODOS sus datos (facturación, resultado, personal, balances, mensuales)?\n\nEsta acción no se puede deshacer. Recordá publicar a Sheets para que el borrado quede guardado.')) return;
   _eliminarEmpresa(emp);
   try { computeTotals(); } catch(e) {}
+  try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
   try { marcarPendienteGuardar(); } catch(e) {}
   _poblarGestionSelects();
@@ -18645,7 +18679,7 @@ function _informeEjecutivoRender(emp) {
     </tr>`;
 
   // ── Sección A: KPI de portada ─────────────────────────────────────────────────
-  const yearsConDatos = years.filter(y => fact[y] || sit[y] != null);
+  const yearsConDatos = years.filter(y => fact[y] || (sit[y] != null && sit[y] !== 0));
   const lastY  = yearsConDatos[yearsConDatos.length - 1];
   const lastF  = lastY ? fact[lastY]          : null;
   const lastS  = lastY ? sit[lastY]           : null;
@@ -20475,12 +20509,39 @@ function exportBaseCompleta() {
       XLSX.utils.book_append_sheet(wb, wsTrans, 'transferencias');
     }
 
+    // ── Pestaña: empresas (rubro, estado vigente/inactiva, datos institucionales) ──
+    const _inactExp = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
+    const _rubExp   = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+    const _instExp  = DATA.institucional || {};
+    const empresasUniverso = [...new Set([
+      ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+      ...Object.keys(_rubExp), ...Object.keys(_inactExp),
+    ])].sort((a,b)=>a.localeCompare(b,'es'));
+    const empresasRows = empresasUniverso.map(emp => {
+      const inactVal = _inactExp[emp];
+      const inst = _instExp[emp] || {};
+      return {
+        empresa: emp,
+        rubro: _rubExp[emp] || 'Sin rubro',
+        estado: inactVal ? 'Inactiva' : 'Vigente',
+        fecha_inactiva: typeof inactVal === 'string' ? inactVal : '',
+        fecha_constitucion: inst.fechaConstitucion || '',
+        decreto_creacion: inst.decreto || '',
+      };
+    });
+    if (empresasRows.length) {
+      const wsEmpresas = XLSX.utils.json_to_sheet(empresasRows);
+      XLSX.utils.book_append_sheet(wb, wsEmpresas, 'empresas');
+    }
+
     // ── Pestaña: meta ────────────────────────────────────────────
     const metaRows = [
       { clave: 'exportado_el',     valor: nowAR() },
       { clave: 'empresas_fact',    valor: Object.keys(DATA.fact || {}).length },
       { clave: 'empresas_result',  valor: Object.keys(DATA.sit  || {}).length },
       { clave: 'empresas_pers',    valor: (DATA.personal || []).length },
+      { clave: 'empresas_inactivas', valor: Object.keys(_inactExp).length },
+      { clave: 'empresas_con_datos_institucionales', valor: Object.keys(_instExp).length },
       { clave: 'transferencias',   valor: (DATA.transferencias || []).length },
       { clave: 'años',             valor: years.join(', ') },
     ];
@@ -20515,19 +20576,24 @@ function exportPortafolioCSV() {
     const t  = _transEmpresa(e).filter(x=>String(x.año)===String(lastY)).reduce((s,x)=>s+(x.importe||0),0);
     const margen = f && r != null ? (r/f*100).toFixed(2) : '';
     const dep    = f > 0 && t > 0 ? (t/f*100).toFixed(2) : '';
-    return [e, getRuboLabel(e), f||'', r!=null?r:'', margen, p||'', t||'', dep];
-  }).filter(r=>r[2]||r[3]||r[5]||r[6]);
-  rows.sort((a,b)=>(b[2]||0)-(a[2]||0));
+    const inactVal = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas[e] : null;
+    const estado = inactVal ? 'Inactiva' + (typeof inactVal === 'string' ? ' desde ' + inactVal : '') : 'Vigente';
+    return [e, getRuboLabel(e), estado, f||'', r!=null?r:'', margen, p||'', t||'', dep];
+  }).filter(r=>r[3]||r[4]||r[6]||r[7]);
+  rows.sort((a,b)=>(b[3]||0)-(a[3]||0));
 
-  const header = ['Empresa','Rubro','Facturación','Resultado Operativo','Margen %','Personal','Transferencias','Dependencia %'];
+  const header = ['Empresa','Rubro','Estado','Facturación','Resultado Operativo','Margen %','Personal','Transferencias','Dependencia %'];
   const csv    = [header, ...rows].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
   const blob   = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
   const url    = URL.createObjectURL(blob);
   const a      = document.createElement('a');
   a.href = url; a.download = 'portafolio_'+lastY+'.csv';
   a.click(); URL.revokeObjectURL(url);
-  document.getElementById('exp-status').innerHTML = '<span style="color:#1a9e68">✓ portafolio_'+lastY+'.csv</span>';
-  setTimeout(()=>{ document.getElementById('exp-status').innerHTML=''; }, 4000);
+  const status = document.getElementById('exp-status');
+  if (status) {
+    status.innerHTML = '<span style="color:#1a9e68">✓ portafolio_'+lastY+'.csv</span>';
+    setTimeout(()=>{ status.innerHTML=''; }, 4000);
+  }
 }
 
 const TITLES = {
@@ -22998,7 +23064,12 @@ function computeGaps() {
       const v = DATA.fact[emp]?.[y];
       return v == null || v === 0;
     });
-    const missingSit  = years.filter(y => DATA.sit[emp]?.[y] == null);
+    // Resultado Operativo faltante: mismo criterio que Facturación arriba —
+    // 0 también se trata como "sin dato" (celda vacía en Sheets sincroniza como 0).
+    const missingSit  = years.filter(y => {
+      const v = DATA.sit[emp]?.[y];
+      return v == null || v === 0;
+    });
     const persEntry   = (DATA.personal||[]).find(d => d.e === emp);
     // Personal faltante: null, 0 o año ausente = sin dato
     const missingPers = years.filter(y => {
@@ -23658,6 +23729,7 @@ async function exportPDF() {
 function sum(obj, years) { return years.reduce((s,y)=>s+(obj[y]||0),0); }
 function setStatus(msg, color) {
   const el = document.getElementById('exp-status');
+  if (!el) return;
   el.textContent = msg; el.style.color = color;
   setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 4000);
 }
@@ -28468,7 +28540,14 @@ function _aplicarERMatricial() {
       faltantes.map(e => e.periodoTxt || '(sin dato original)').join(', ') + ').');
     return;
   }
-  const yaExisten = filasResueltas.filter(e => DATA.fact[e.empresa]?.[String(e.anio)] != null || DATA.sit[e.empresa]?.[String(e.anio)] != null);
+  // 0 se trata igual que "sin dato" (celda vacía en Sheets sincroniza como 0)
+  // — mismo criterio que el resto del dashboard, para no pedir confirmación
+  // de sobrescritura sobre un hueco que en realidad no tiene nada cargado.
+  const yaExisten = filasResueltas.filter(e => {
+    const f = DATA.fact[e.empresa]?.[String(e.anio)];
+    const s = DATA.sit[e.empresa]?.[String(e.anio)];
+    return (f != null && f !== 0) || (s != null && s !== 0);
+  });
   if (yaExisten.length > 0) {
     const ok = confirm('Ya hay datos cargados para: ' +
       yaExisten.map(e => `${e.empresa} · ${e.anio}`).join(', ') +
@@ -35723,7 +35802,8 @@ function runSearch(q) {
     personal:'Personal',portafolio:'Portafolio',inflacion:'Inflación INDEC',
     empresa:'Evolución empresa',comparar:'Comparar empresas',rubros:'Empresas y rubros',
     transferencias:'Transferencias',sostenibilidad:'Sostenibilidad fiscal',
-    heatmap:'Mapa de calor',presupuesto:'Presupuesto vs real'};
+    heatmap:'Mapa de calor',presupuesto:'Presupuesto vs real',
+    balances:'Análisis de balances',flujos:'Flujos de Fondos'};
   Object.entries(panelMap).forEach(([id,name])=>{
     if (!low || name.toLowerCase().includes(low))
       results.push({type:'panel',id,name,sub:'Ir al panel'});
@@ -37246,7 +37326,7 @@ function buildCompletitudPanel() {
     const yr = String(y);
     return [
       (DATA.fact[e]?.[yr]||0) > 0,
-      DATA.sit[e]?.[yr] != null,
+      DATA.sit[e]?.[yr] != null && DATA.sit[e][yr] !== 0,
       (DATA.personal||[]).some(d=>d.e===e && (d.y[yr]||0)>0),
       _transEmpresa(e).some(t=>String(t.año)===yr),
     ];
