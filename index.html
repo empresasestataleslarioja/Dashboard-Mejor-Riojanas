@@ -38673,20 +38673,6 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // datos institucionales (fecha de constitución, decreto de creación) —
-  // mismo criterio de merge: local prevalece, se completa lo ausente
-  if (cloud.institucional && cloud.institucional.length) {
-    DATA.institucional = DATA.institucional || {};
-    cloud.institucional.forEach(r => {
-      if (!r.empresa || (!r.fecha_constitucion && !r.decreto)) return;
-      const actual = DATA.institucional[r.empresa] || {};
-      DATA.institucional[r.empresa] = {
-        fechaConstitucion: actual.fechaConstitucion || r.fecha_constitucion || '',
-        decreto:           actual.decreto           || r.decreto           || '',
-      };
-    });
-  }
-
   // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
   if ((!_solo || _solo === 'balances') && Array.isArray(cloud.balances)) {
     if (true) {
@@ -38948,6 +38934,19 @@ function applyCloudData(cloud, opts) {
       }
     });
     try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
+
+    // Datos institucionales (fecha de constitución, decreto de creación) —
+    // viven en la misma pestaña "rubros" que el resto del maestro de
+    // empresas. Mismo criterio: local prevalece, se completa lo ausente.
+    DATA.institucional = DATA.institucional || {};
+    cloud.rubros.forEach(r => {
+      if (!r.empresa || (!r.fecha_constitucion && !r.decreto)) return;
+      const actual = DATA.institucional[r.empresa] || {};
+      DATA.institucional[r.empresa] = {
+        fechaConstitucion: actual.fechaConstitucion || r.fecha_constitucion || '',
+        decreto:           actual.decreto           || r.decreto           || '',
+      };
+    });
   }
 
   // Restaurar lista de rubros personalizados
@@ -39225,11 +39224,6 @@ function buildCloudPayload() {
     .filter(([,v]) => v && v.trim())
     .map(([emp, nota]) => ({ empresa: emp, nota }));
 
-  // datos institucionales: array de { empresa, fecha_constitucion, decreto }
-  const institucionalRows = Object.entries(DATA.institucional || {})
-    .filter(([,v]) => v && (v.fechaConstitucion || v.decreto))
-    .map(([emp, v]) => ({ empresa: emp, fecha_constitucion: v.fechaConstitucion || '', decreto: v.decreto || '' }));
-
   // presupuesto
   const presRows = Object.entries(DATA.presupuesto || {}).flatMap(([emp, años]) =>
     Object.entries(años).map(([año, val]) => ({ empresa: emp, año, presupuesto: val }))
@@ -39406,17 +39400,25 @@ function buildCloudPayload() {
     }));
 
   // Rubros: hoja con asignaciones empresa→rubro + estado activa/inactiva +
-  // lista de rubros personalizados. La unión con empresasInactivas cubre
-  // también las empresas "Sin rubro" (no tienen entrada en `rubros`) que
-  // se hayan marcado como inactivas, para que ese estado no se pierda.
+  // datos institucionales (fecha de constitución, decreto de creación) —
+  // todo el maestro de empresas vive en esta misma pestaña. La unión con
+  // empresasInactivas/DATA.institucional cubre también las empresas
+  // "Sin rubro" (no tienen entrada en `rubros`) que tengan alguno de esos
+  // datos cargado, para que no se pierdan.
   const rubrosEmpresas = [...new Set([
     ...Object.keys(rubros || {}),
     ...Object.keys(empresasInactivas || {}),
+    ...Object.keys(DATA.institucional || {}),
   ])];
-  const rubrosRows = rubrosEmpresas.map(emp => ({
-    empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo: empresasInactivas[emp] ? 'NO' : 'SI',
-    fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : ''
-  }));
+  const rubrosRows = rubrosEmpresas.map(emp => {
+    const inst = DATA.institucional?.[emp] || {};
+    return {
+      empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo: empresasInactivas[emp] ? 'NO' : 'SI',
+      fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '',
+      fecha_constitucion: inst.fechaConstitucion || '',
+      decreto: inst.decreto || '',
+    };
+  });
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
   const rubroListaRows = (typeof RUBRO_LIST !== 'undefined' ? RUBRO_LIST : []).map((r, i) => ({
     orden: i, nombre: r, color: (typeof RUBRO_COLORS !== 'undefined' ? RUBRO_COLORS[r] : '') || ''
@@ -39518,7 +39520,7 @@ function buildCloudPayload() {
   }));
 
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
-           notas: notasRows, institucional: institucionalRows, presupuesto: presRows, balances: balRows,
+           notas: notasRows, presupuesto: presRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
            flujos: flujosRows, flujos_config: flujosConfigRows,
            mensual: mensualRows, er_mensual: erMensualRows,
