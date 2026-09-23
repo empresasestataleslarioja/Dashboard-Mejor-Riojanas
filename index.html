@@ -15493,10 +15493,14 @@ function _repararResultadoOperativoLibroMayor() {
 // cargó por una vía que no llegó a derivar Facturación — la tarjeta queda
 // en "N/D" aunque el dato ya exista en el ER Provisorio de esa misma
 // empresa/año. Solo COMPLETA huecos: si DATA.fact[emp][yr] ya tiene un
-// valor (cualquiera sea), nunca se pisa — evita reemplazar una cifra ya
-// cargada/reconciliada por otra vía con la del ER sin que el usuario lo
-// decida. Corre en cada login/sync (idempotente y barata), igual que
-// _repararResultadoOperativoLibroMayor.
+// valor no nulo Y DISTINTO DE CERO, nunca se pisa — evita reemplazar una
+// cifra ya cargada/reconciliada por otra vía con la del ER sin que el
+// usuario lo decida. Un 0 explícito SÍ se completa: la tarjeta de
+// Facturación (y Evolución Empresa) muestran 0 igual que null como "N/D"
+// (ver `f>0?fv(f):'N/D'`), así que un 0 es indistinguible en pantalla de
+// un hueco sin cargar — dejarlo intacto perpetuaba exactamente el caso que
+// esta función existe para resolver. Corre en cada login/sync (idempotente
+// y barata), igual que _repararResultadoOperativoLibroMayor.
 function _repararFacturacionDesdeERMensual() {
   if (!DATA.er_mensual) return [];
   let huboCambios = false;
@@ -15506,7 +15510,7 @@ function _repararFacturacionDesdeERMensual() {
     Object.entries(porAnio).forEach(([yr, data]) => {
       if (!data || !Array.isArray(data.filas)) return;
       const actual = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[Number(yr)];
-      if (actual != null) return; // ya tiene un valor cargado — no se toca
+      if (actual != null && actual !== 0) return; // ya tiene un valor real cargado — no se toca
       const fVentas = data.filas.find(f => f.conceptoStd === 'ventas');
       if (!fVentas) return;
       const totV = Object.values(fVentas.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -15548,7 +15552,9 @@ function _crossCheckEREmpresaAnio(emp, yr) {
   const diffs = [];
   const cmp = (label, a, b) => {
     if (a == null || a === 0) return; // el ER no aporta esa partida — nada que comparar
-    if (b == null) { diffs.push({ label, erProvisorio: a, oficial: null, diffPct: null }); return; }
+    // b===0 se trata igual que null: la pantalla muestra ambos como "N/D"
+    // (ver f>0?fv(f):'N/D'), así que un 0 oficial es el mismo caso a marcar.
+    if (b == null || b === 0) { diffs.push({ label, erProvisorio: a, oficial: null, diffPct: null }); return; }
     if (a === b) return;
     const base = Math.max(Math.abs(a), Math.abs(b), 1);
     if (Math.abs(a - b) > 1000 && Math.abs(a - b) / base > 0.005) {
