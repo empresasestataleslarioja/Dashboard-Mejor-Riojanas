@@ -7090,9 +7090,11 @@ function _rptEmpresasRubros() {
     const emps = porRubro[rb].slice().sort((a,b)=>a.localeCompare(b,'es'));
     const filas = emps.map(e => {
       const inact = !!_inact[e];
+      const fechaInact = typeof _inact[e] === 'string' ? _inact[e] : '';
+      const fechaCorta = fechaInact ? (([y,m,d]) => `${d}/${m}/${y}`)(fechaInact.split('-')) : '';
       const fact = DATA.fact?.[e]?.[lastY];
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:3px 8px">${e}${inact?' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px">INACTIVA</span>':''}</td>
+        <td style="padding:3px 8px">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
         <td style="text-align:right">${fmt(fact)}</td>
       </tr>`;
     }).join('');
@@ -9635,24 +9637,28 @@ function buildRubros() {
     if (ia !== ib) return ia ? 1 : -1;
     return a.localeCompare(b, 'es');
   });
+  const abrevRubro = ro => (ro||'Sin rubro').slice(0,3).toUpperCase();
   editor.innerHTML = allEmpsOrdenadas.map(emp => {
     const r    = getRubro(emp);
     const opts = [...RUBRO_LIST,'Sin rubro'].map(ro =>
-      `<option value="${ro}"${ro===r?' selected':''}>${ro}</option>`).join('');
+      `<option value="${ro}" style="color:${RUBRO_COLORS[ro]||RUBRO_COLORS['Sin rubro']}"${ro===r?' selected':''}>${abrevRubro(ro)}</option>`).join('');
     const empId = emp.replace(/[^a-zA-Z0-9]/g,'_');
-    const inactiva = !!empresasInactivas[emp];
+    const inactiva  = !!empresasInactivas[emp];
+    const fechaInact = typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '';
+    const fechaCorta = fechaInact ? (([y,m,d]) => `${d}/${m}/${y}`)(fechaInact.split('-')) : '';
+    const selColor = RUBRO_COLORS[r] || RUBRO_COLORS['Sin rubro'];
     return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
-      <span class="rb ${RUBRO_CSS[r]}" style="flex-shrink:0">${r.slice(0,3)}</span>
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
         ondblclick="_iniciarRenombre('${emp}')"
         style="cursor:text;${inactiva?'text-decoration:line-through':''}" title="Doble click para renombrar">${emp}</span>
-      <select class="rub-sel" onchange="setRubro('${emp}',this.value,this)">${opts}</select>
-      <button onclick="toggleEmpresaInactiva('${emp}')"
+      ${fechaCorta ? `<span style="flex-shrink:0;font-size:8px;color:var(--dim)" title="Inactiva desde ${fechaCorta}">◷ ${fechaCorta}</span>` : ''}
+      <select class="rub-sel" style="color:${selColor};border-color:${selColor}" onchange="setRubro('${emp}',this.value,this)" title="${r}">${opts}</select>
+      <button id="rubbtn-${empId}" onclick="toggleEmpresaInactiva('${emp}')"
         style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${inactiva?'rgba(255,71,102,.12)':'none'};
         border:1px solid ${inactiva?'var(--neg)':'var(--bd2)'};
         color:${inactiva?'var(--neg)':'var(--dim)'};font-family:var(--mono);font-size:10px;
         border-radius:2px;cursor:pointer"
-        title="${inactiva?'Inactiva — click para marcar como vigente de nuevo':'Vigente — click para marcar como inactiva'}">${inactiva?'○':'●'}</button>
+        title="${inactiva?('Inactiva'+(fechaCorta?' desde '+fechaCorta:'')+' — click para marcar como vigente de nuevo'):'Vigente — click para marcar como inactiva e indicar la fecha'}">${inactiva?'○':'●'}</button>
       <button onclick="_iniciarRenombre('${emp}')"
         style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:none;border:1px solid var(--bd2);
         color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
@@ -9802,11 +9808,11 @@ function agregarRubroNuevo() {
 function setRubro(emp, val, selEl) {
   rubros[emp] = val === 'Sin rubro' ? undefined : val;
   if (!val || val === 'Sin rubro') delete rubros[emp];
-  // update badge in row
-  const row = selEl.closest('.rub-row');
-  const badge = row.querySelector('.rb');
-  badge.className = `rb ${RUBRO_CSS[val]||RUBRO_CSS['Sin rubro']}`;
-  badge.textContent = (val||'Sin rubro').slice(0,3);
+  // reflejar el color del rubro elegido en el propio select
+  const col = RUBRO_COLORS[val] || RUBRO_COLORS['Sin rubro'];
+  selEl.style.color = col;
+  selEl.style.borderColor = col;
+  selEl.title = val || 'Sin rubro';
   // autosave
   saveRubros();
 }
@@ -9814,9 +9820,41 @@ function setRubro(emp, val, selEl) {
 // ── Marcar/desmarcar empresa como inactiva — puramente informativo dentro
 // de este módulo (no excluye a la empresa de ningún otro cálculo del
 // dashboard). Refresca solo el panel de Rubros, autosave igual que setRubro.
+// Al marcar como inactiva se pide la fecha desde la que lo está; al
+// reactivarla se borra el estado (y la fecha) directamente.
 function toggleEmpresaInactiva(emp) {
-  if (empresasInactivas[emp]) delete empresasInactivas[emp];
-  else empresasInactivas[emp] = true;
+  if (empresasInactivas[emp]) {
+    delete empresasInactivas[emp];
+    saveRubros();
+    buildRubros();
+  } else {
+    _iniciarFechaInactiva(emp);
+  }
+}
+
+function _iniciarFechaInactiva(emp) {
+  const empId = emp.replace(/[^a-zA-Z0-9]/g,'_');
+  const btn = document.getElementById('rubbtn-' + empId);
+  if (!btn) return;
+  let cancelado = false;
+  const input = document.createElement('input');
+  input.type  = 'date';
+  input.value = new Date().toISOString().slice(0,10);
+  input.style.cssText = 'flex-shrink:0;width:112px;padding:1px 3px;background:var(--s2);border:1px solid var(--neg);' +
+    'color:var(--text);font-family:var(--mono);font-size:9px;border-radius:2px;outline:none';
+  input.title = 'Fecha desde la que está inactiva (Enter para confirmar, Esc para cancelar)';
+  input.onblur = () => { if (!cancelado) _confirmarFechaInactiva(emp, input.value); };
+  input.onkeydown = e => {
+    if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { cancelado = true; buildRubros(); }
+  };
+  btn.style.display = 'none';
+  btn.parentNode.insertBefore(input, btn);
+  input.focus();
+}
+
+function _confirmarFechaInactiva(emp, fecha) {
+  empresasInactivas[emp] = fecha || true;
   saveRubros();
   buildRubros();
 }
@@ -38616,7 +38654,7 @@ function applyCloudData(cloud, opts) {
     // para la empresa (activa o inactiva) no se pisa con lo de Sheets.
     cloud.rubros.forEach(r => {
       if (r.empresa && r.activo === 'NO' && empresasInactivas[r.empresa] === undefined) {
-        empresasInactivas[r.empresa] = true;
+        empresasInactivas[r.empresa] = r.fecha_inactiva || true;
       }
     });
     try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
@@ -39081,7 +39119,8 @@ function buildCloudPayload() {
     ...Object.keys(empresasInactivas || {}),
   ])];
   const rubrosRows = rubrosEmpresas.map(emp => ({
-    empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo: empresasInactivas[emp] ? 'NO' : 'SI'
+    empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo: empresasInactivas[emp] ? 'NO' : 'SI',
+    fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : ''
   }));
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
   const rubroListaRows = (typeof RUBRO_LIST !== 'undefined' ? RUBRO_LIST : []).map((r, i) => ({
