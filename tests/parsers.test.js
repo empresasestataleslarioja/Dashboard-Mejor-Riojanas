@@ -354,12 +354,17 @@ group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya e
   const srcFusionar    = extractFn(html, '_fusionarEmpresas');
   const srcConfirmar   = extractFn(html, '_confirmarRenombre');
   const srcTombstone   = extractFn(html, '_tombstoneEmpresa');
+  const srcStoresConst = extractConstBlock(html, 'const PER_EMPRESA_STORES = [', '];');
+  const srcPurgarStores    = extractFn(html, '_purgarPerEmpresaStores');
+  const srcRenombrarStores = extractFn(html, '_renombrarPerEmpresaStores');
+  const srcFusionarStores  = extractFn(html, '_fusionarPerEmpresaStores');
   const factory = new Function(
-    'let rubros = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},empresas_eliminadas:[]}; let _balances = {};\n' +
+    'let rubros = {}; let empresasInactivas = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},empresas_eliminadas:[]}; let _balances = {};\n' +
     'let confirmResult = true;\n' +
     'function confirm(msg){ return confirmResult; }\n' +
     'function saveRubros(){} function computeTotals(){} function saveDataToLocalCache(){}\n' +
     'function marcarPendienteGuardar(){} function populateSelects(){} function rebuildActive(){} function buildRubros(){}\n' +
+    srcStoresConst + '\n' + srcPurgarStores + '\n' + srcRenombrarStores + '\n' + srcFusionarStores + '\n' +
     srcTombstone + '\n' + srcRenombrar + '\n' + srcFusionar + '\n' + srcConfirmar + '\n' +
     'function setState(r,d,b){ rubros=r; DATA=d; _balances=b; }\n' +
     'function getState(){ return { rubros, DATA, _balances }; }\n' +
@@ -1682,6 +1687,10 @@ group('tryParseERAnualMultihoja — una pestaña que no reconcilia no aporta dat
 group('autoridades — sigue el mismo criterio de migración que el resto de los módulos al renombrar/fusionar/eliminar una empresa', () => {
   function nuevoContexto() {
     const src = [
+      extractConstBlock(html, 'const PER_EMPRESA_STORES = [', '];'),
+      extractFn(html, '_purgarPerEmpresaStores'),
+      extractFn(html, '_renombrarPerEmpresaStores'),
+      extractFn(html, '_fusionarPerEmpresaStores'),
       extractFn(html, '_tombstoneEmpresa'),
       extractFn(html, '_purgarEmpresaDeData'),
       extractFn(html, '_renombrarEmpresa'),
@@ -1689,8 +1698,8 @@ group('autoridades — sigue el mismo criterio de migración que el resto de los
       extractFn(html, '_eliminarEmpresa'),
     ].join('\n');
     const factory = new Function(
-      'let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
-      'let rubros = {};\nlet _balances = {};\n' +
+      'let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
+      'let rubros = {};\nlet empresasInactivas = {};\nlet _balances = {};\n' +
       src + '\n' +
       'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, getDATA: () => DATA };'
     );
@@ -1743,6 +1752,10 @@ group('autoridades — sigue el mismo criterio de migración que el resto de los
 group('_tombstoneEmpresa / _purgarEmpresaDeData — evita que una empresa borrada/fusionada/renombrada resucite', () => {
   function nuevoContexto() {
     const src = [
+      extractConstBlock(html, 'const PER_EMPRESA_STORES = [', '];'),
+      extractFn(html, '_purgarPerEmpresaStores'),
+      extractFn(html, '_renombrarPerEmpresaStores'),
+      extractFn(html, '_fusionarPerEmpresaStores'),
       extractFn(html, '_tombstoneEmpresa'),
       extractFn(html, '_purgarEmpresaDeData'),
       extractFn(html, '_renombrarEmpresa'),
@@ -1750,8 +1763,8 @@ group('_tombstoneEmpresa / _purgarEmpresaDeData — evita que una empresa borrad
       extractFn(html, '_eliminarEmpresa'),
     ].join('\n');
     const factory = new Function(
-      'let DATA = {fact:{},sit:{},personal:[],notas:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
-      'let rubros = {};\nlet _balances = {};\n' +
+      'let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
+      'let rubros = {};\nlet empresasInactivas = {};\nlet _balances = {};\n' +
       src + '\n' +
       'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, _purgarEmpresaDeData, getDATA: () => DATA };'
     );

@@ -9347,17 +9347,55 @@ function _tombstoneEmpresa(emp) {
   }
 }
 
+// ── Registro de "stores" simples por empresa (empresa → valor) ───────────
+// Todos comparten el mismo contrato: al eliminar la empresa se borra su
+// entrada, al renombrar se migra tal cual, y al fusionar el destino
+// prevalece (solo se completa si estaba vacío — nunca se pisa un dato ya
+// cargado con el del origen). _purgarEmpresaDeData/_renombrarEmpresa/
+// _fusionarEmpresas recorren este registro en vez de tener cada store
+// hardcodeado a mano: agregar un store nuevo de este tipo es agregar una
+// línea acá, sin tocar esas tres funciones. Así se evita el tipo de bug
+// donde un store nuevo (ej. empresasInactivas cuando se agregó) queda
+// "revivido" tras un renombre/fusión o como registro fantasma tras un
+// borrado, simplemente porque alguien se olvidó de conectarlo a mano en
+// alguna de las tres.
+const PER_EMPRESA_STORES = [
+  { nombre: 'rubros',        get: () => (typeof rubros !== 'undefined' ? rubros : null) },
+  { nombre: 'inactiva',      get: () => (typeof empresasInactivas !== 'undefined' ? empresasInactivas : null) },
+  { nombre: 'notas',         get: () => DATA.notas },
+  { nombre: 'institucional', get: () => DATA.institucional },
+  { nombre: 'presupuesto',   get: () => DATA.presupuesto },
+];
+
+function _purgarPerEmpresaStores(emp) {
+  PER_EMPRESA_STORES.forEach(({get}) => {
+    const store = get();
+    if (store && store[emp] !== undefined) delete store[emp];
+  });
+}
+function _renombrarPerEmpresaStores(from, to) {
+  PER_EMPRESA_STORES.forEach(({get}) => {
+    const store = get();
+    if (store && store[from] !== undefined) { store[to] = store[from]; delete store[from]; }
+  });
+}
+function _fusionarPerEmpresaStores(from, to) {
+  PER_EMPRESA_STORES.forEach(({get}) => {
+    const store = get();
+    if (store && store[from] !== undefined) {
+      if (store[to] === undefined) store[to] = store[from];
+      delete store[from];
+    }
+  });
+}
+
 // Borra a `emp` de todos los datasets (usado por _eliminarEmpresa y para
 // purgar resucitaciones detectadas vía tombstones en applyCloudData).
 function _purgarEmpresaDeData(emp) {
   if (DATA.fact[emp]) delete DATA.fact[emp];
   if (DATA.sit[emp])  delete DATA.sit[emp];
   DATA.personal = (DATA.personal || []).filter(d => d.e !== emp);
-  if (DATA.notas?.[emp])        delete DATA.notas[emp];
-  if (DATA.institucional?.[emp]) delete DATA.institucional[emp];
-  if (DATA.presupuesto?.[emp]) delete DATA.presupuesto[emp];
-  if (typeof rubros !== 'undefined' && rubros?.[emp]) delete rubros[emp];
-  if (typeof empresasInactivas !== 'undefined' && empresasInactivas?.[emp]) delete empresasInactivas[emp];
+  _purgarPerEmpresaStores(emp);
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
     if (DATA[k] && DATA[k][emp]) delete DATA[k][emp];
   });
@@ -9419,19 +9457,8 @@ function _renombrarEmpresa(from, to) {
   // personal
   const pd = DATA.personal.find(d => d.e === from);
   if (pd) pd.e = to;
-  // notas
-  if (DATA.notas?.[from]) { DATA.notas[to] = DATA.notas[from]; delete DATA.notas[from]; }
-  // datos institucionales
-  if (DATA.institucional?.[from]) { DATA.institucional[to] = DATA.institucional[from]; delete DATA.institucional[from]; }
-  // presupuesto
-  if (DATA.presupuesto?.[from]) { DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
-  // rubros
-  if (rubros?.[from]) { rubros[to] = rubros[from]; delete rubros[from]; }
-  // estado activa/inactiva (y su fecha)
-  if (typeof empresasInactivas !== 'undefined' && empresasInactivas?.[from] !== undefined) {
-    empresasInactivas[to] = empresasInactivas[from];
-    delete empresasInactivas[from];
-  }
+  // notas, datos institucionales, presupuesto, rubros, estado activa/inactiva
+  _renombrarPerEmpresaStores(from, to);
   // balances
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
@@ -9480,15 +9507,8 @@ function _fusionarEmpresas(from, to) {
     }
     DATA.personal = DATA.personal.filter(d => d.e !== from);
   }
-  // notas, datos institucionales, presupuesto, rubros, balances
-  if (DATA.notas?.[from])       { if (!DATA.notas[to]) DATA.notas[to] = DATA.notas[from]; delete DATA.notas[from]; }
-  if (DATA.institucional?.[from]) { if (!DATA.institucional[to]) DATA.institucional[to] = DATA.institucional[from]; delete DATA.institucional[from]; }
-  if (DATA.presupuesto?.[from]) { if (!DATA.presupuesto[to]) DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
-  if (rubros?.[from])   { if (!rubros[to]) rubros[to] = rubros[from]; delete rubros[from]; }
-  if (typeof empresasInactivas !== 'undefined' && empresasInactivas?.[from] !== undefined) {
-    if (empresasInactivas[to] === undefined) empresasInactivas[to] = empresasInactivas[from];
-    delete empresasInactivas[from];
-  }
+  // notas, datos institucionales, presupuesto, rubros, estado activa/inactiva
+  _fusionarPerEmpresaStores(from, to);
   Object.values(_balances||{}).forEach(b => {
     if (b.empresa === from)   b.empresa   = to;
     if (b.vinculada === from) b.vinculada = to;
