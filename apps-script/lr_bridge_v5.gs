@@ -32,6 +32,7 @@ const TAB = {
   personal:       'personal',
   transferencias: 'transferencias',
   notas:          'notas',
+  institucional:  'institucional',
   presupuesto:    'presupuesto',
   balances:       'balances',
   balances_rubros:'balances_rubros',
@@ -77,6 +78,7 @@ function doGet(e) {
     personal:        leerHoja(ss, TAB.personal),
     transferencias:  leerHoja(ss, TAB.transferencias),
     notas:           leerHoja(ss, TAB.notas),
+    institucional:   leerHoja(ss, TAB.institucional),
     presupuesto:     leerHoja(ss, TAB.presupuesto),
     balances:        leerHoja(ss, TAB.balances),
     balances_rubros: leerHoja(ss, TAB.balances_rubros),
@@ -139,7 +141,7 @@ function doPost(e) {
     const resultados = {};
 
     // ── Secciones estándar (reemplazo total) ──────────────────────
-    ['fact','resultado','personal','notas','presupuesto'].forEach(sec => {
+    ['fact','resultado','personal','notas','institucional','presupuesto'].forEach(sec => {
       if (Array.isArray(payload[sec])) {
         escribirHoja(ss, TAB[sec], payload[sec]);
         resultados[sec] = payload[sec].length;
