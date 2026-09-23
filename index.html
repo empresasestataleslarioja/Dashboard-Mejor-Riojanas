@@ -861,14 +861,14 @@ body {
 .rb-pro { background:rgba(71,255,180,.12); color:#1a9e68; border:1px solid rgba(71,255,180,.25); }
 .rb-sin { background:rgba(74,82,104,.12);  color:var(--dim); border:1px solid var(--bd); }
 /* Rubro panel editor */
-.rub-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:8px; }
+.rub-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:8px; }
 .rub-row {
   background:var(--s2); border:1px solid var(--bd); border-radius:3px;
-  padding:9px 12px; display:flex; align-items:center; gap:10px;
+  padding:9px 12px; display:flex; align-items:center; gap:8px;
   transition:border-color .12s;
 }
 .rub-row:hover { border-color:var(--bd2); }
-.rub-name { flex:1; font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rub-name { flex:1; min-width:70px; font-size:11px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .rub-sel {
   background:var(--s3); border:1px solid var(--bd2); color:var(--text);
   font-family:var(--mono); font-size:10px; padding:3px 7px; border-radius:2px;
@@ -9648,13 +9648,13 @@ function buildRubros() {
         style="cursor:text;${inactiva?'text-decoration:line-through':''}" title="Doble click para renombrar">${emp}</span>
       <select class="rub-sel" onchange="setRubro('${emp}',this.value,this)">${opts}</select>
       <button onclick="toggleEmpresaInactiva('${emp}')"
-        style="padding:2px 6px;background:${inactiva?'rgba(255,71,102,.12)':'none'};
+        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${inactiva?'rgba(255,71,102,.12)':'none'};
         border:1px solid ${inactiva?'var(--neg)':'var(--bd2)'};
-        color:${inactiva?'var(--neg)':'var(--dim)'};font-family:var(--mono);font-size:8px;
-        border-radius:2px;cursor:pointer;white-space:nowrap"
-        title="${inactiva?'Marcar como vigente de nuevo':'Marcar empresa como inactiva'}">${inactiva?'○ Inactiva':'● Vigente'}</button>
+        color:${inactiva?'var(--neg)':'var(--dim)'};font-family:var(--mono);font-size:10px;
+        border-radius:2px;cursor:pointer"
+        title="${inactiva?'Inactiva — click para marcar como vigente de nuevo':'Vigente — click para marcar como inactiva'}">${inactiva?'○':'●'}</button>
       <button onclick="_iniciarRenombre('${emp}')"
-        style="padding:2px 6px;background:none;border:1px solid var(--bd2);
+        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:none;border:1px solid var(--bd2);
         color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
         title="Renombrar empresa">✎</button>
     </div>`;
