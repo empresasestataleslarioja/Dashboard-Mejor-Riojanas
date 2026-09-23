@@ -2359,6 +2359,12 @@ self.onmessage = async (e) => {
     box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:340px;
     font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
 
+  <!-- Popover de datos institucionales (fecha de constitución / decreto) -->
+  <div id="rub-inst-popover" style="display:none;position:fixed;z-index:9000;
+    background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+    box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:260px;
+    font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
+
   <div id="viz-panel" style="display:none;position:fixed;top:52px;left:210px;right:0;
     background:var(--s1);border-bottom:2px solid var(--bd2);z-index:150;
     padding:10px 22px 12px;box-shadow:0 6px 20px rgba(0,0,0,.35)">
@@ -2979,6 +2985,30 @@ self.onmessage = async (e) => {
 
       <!-- Resultado neto (operativo + transferencias) -->
       <div id="emp-neto-kpi" style="display:none;margin-bottom:10px"></div>
+
+      <!-- Datos institucionales por empresa -->
+      <div class="rowfull card" id="emp-inst-wrap" style="padding:12px 16px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)">🏛 Datos institucionales</span>
+          <span id="emp-inst-lbl" style="font-size:9px;color:var(--dim)"></span>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:8.5px;color:var(--dim)">
+            Fecha de constitución
+            <input type="date" id="emp-inst-fecha" onchange="saveEmpInstitucional()"
+              style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:10.5px;border-radius:3px;outline:none">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:8.5px;color:var(--dim);flex:1;min-width:220px">
+            Decreto de creación
+            <input type="text" id="emp-inst-decreto" onblur="saveEmpInstitucional()"
+              onkeydown="if(event.key==='Enter')this.blur()"
+              placeholder="Ej: Decreto N° 1234/1995"
+              style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+              font-family:var(--mono);font-size:10.5px;border-radius:3px;outline:none;width:100%;box-sizing:border-box">
+          </label>
+        </div>
+      </div>
 
       <!-- Notas analíticas por empresa -->
       <div class="rowfull card" id="emp-notas-wrap" style="padding:12px 16px;margin-bottom:12px">
@@ -6018,6 +6048,10 @@ const DATA = {
 
   // Notas analíticas por empresa — { 'EMPRESA': 'texto libre...' }
   notas: {},
+
+  // Datos institucionales por empresa — fecha de constitución y decreto de
+  // creación. { 'EMPRESA': { fechaConstitucion:'AAAA-MM-DD', decreto:'texto' } }
+  institucional: {},
 
   // Transferencias — cargado desde Pagos_SAPEM_XXXX.xls/xlsx
   // Estructura: [ { saf, organismo, beneficiario, ff, cgto, observacion, mes, año, importe, categoria } ]
@@ -9286,7 +9320,8 @@ function _purgarEmpresaDeData(emp) {
   if (DATA.fact[emp]) delete DATA.fact[emp];
   if (DATA.sit[emp])  delete DATA.sit[emp];
   DATA.personal = (DATA.personal || []).filter(d => d.e !== emp);
-  if (DATA.notas?.[emp])       delete DATA.notas[emp];
+  if (DATA.notas?.[emp])        delete DATA.notas[emp];
+  if (DATA.institucional?.[emp]) delete DATA.institucional[emp];
   if (DATA.presupuesto?.[emp]) delete DATA.presupuesto[emp];
   if (typeof rubros !== 'undefined' && rubros?.[emp]) delete rubros[emp];
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
@@ -9352,6 +9387,8 @@ function _renombrarEmpresa(from, to) {
   if (pd) pd.e = to;
   // notas
   if (DATA.notas?.[from]) { DATA.notas[to] = DATA.notas[from]; delete DATA.notas[from]; }
+  // datos institucionales
+  if (DATA.institucional?.[from]) { DATA.institucional[to] = DATA.institucional[from]; delete DATA.institucional[from]; }
   // presupuesto
   if (DATA.presupuesto?.[from]) { DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
   // rubros
@@ -9404,8 +9441,9 @@ function _fusionarEmpresas(from, to) {
     }
     DATA.personal = DATA.personal.filter(d => d.e !== from);
   }
-  // notas, presupuesto, rubros, balances
+  // notas, datos institucionales, presupuesto, rubros, balances
   if (DATA.notas?.[from])       { if (!DATA.notas[to]) DATA.notas[to] = DATA.notas[from]; delete DATA.notas[from]; }
+  if (DATA.institucional?.[from]) { if (!DATA.institucional[to]) DATA.institucional[to] = DATA.institucional[from]; delete DATA.institucional[from]; }
   if (DATA.presupuesto?.[from]) { if (!DATA.presupuesto[to]) DATA.presupuesto[to] = DATA.presupuesto[from]; delete DATA.presupuesto[from]; }
   if (rubros?.[from])   { if (!rubros[to]) rubros[to] = rubros[from]; delete rubros[from]; }
   Object.values(_balances||{}).forEach(b => {
@@ -9647,6 +9685,8 @@ function buildRubros() {
     const fechaInact = typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '';
     const fechaCorta = fechaInact ? (([y,m,d]) => `${d}/${m}/${y}`)(fechaInact.split('-')) : '';
     const selColor = RUBRO_COLORS[r] || RUBRO_COLORS['Sin rubro'];
+    const inst = (DATA.institucional && DATA.institucional[emp]) || {};
+    const tieneInst = !!(inst.fechaConstitucion || inst.decreto);
     return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
         ondblclick="_iniciarRenombre('${emp}')"
@@ -9659,6 +9699,11 @@ function buildRubros() {
         color:${inactiva?'var(--neg)':'var(--dim)'};font-family:var(--mono);font-size:10px;
         border-radius:2px;cursor:pointer"
         title="${inactiva?('Inactiva'+(fechaCorta?' desde '+fechaCorta:'')+' — click para marcar como vigente de nuevo'):'Vigente — click para marcar como inactiva e indicar la fecha'}">${inactiva?'○':'●'}</button>
+      <button onclick="mostrarInstPopover(event,'${emp}')"
+        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneInst?'rgba(71,232,255,.1)':'none'};
+        border:1px solid ${tieneInst?'#47e8ff':'var(--bd2)'};
+        color:${tieneInst?'#47e8ff':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
+        title="${tieneInst?'Ver/editar fecha de constitución y decreto de creación':'Agregar fecha de constitución y decreto de creación'}">🏛</button>
       <button onclick="_iniciarRenombre('${emp}')"
         style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:none;border:1px solid var(--bd2);
         color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
@@ -17725,6 +17770,97 @@ function populateSelects() {
   }
 }
 
+// ── Datos institucionales por empresa (fecha de constitución, decreto) ──
+function renderEmpInstitucional(emp) {
+  const info  = (DATA.institucional && DATA.institucional[emp]) || {};
+  const fecha = document.getElementById('emp-inst-fecha');
+  const dec   = document.getElementById('emp-inst-decreto');
+  const lbl   = document.getElementById('emp-inst-lbl');
+  if (!fecha || !dec) return;
+  fecha.value = info.fechaConstitucion || '';
+  dec.value   = info.decreto || '';
+  if (lbl) lbl.textContent = (info.fechaConstitucion || info.decreto) ? 'guardado' : '';
+}
+
+function saveEmpInstitucional() {
+  const emp = document.getElementById('sel-emp')?.value;
+  if (!emp) return;
+  const fecha   = document.getElementById('emp-inst-fecha')?.value || '';
+  const decreto = (document.getElementById('emp-inst-decreto')?.value || '').trim();
+  _guardarInstitucional(emp, fecha, decreto);
+  const lbl = document.getElementById('emp-inst-lbl');
+  if (lbl) lbl.textContent = (fecha || decreto) ? 'guardado' : '';
+}
+
+// Guarda fecha de constitución / decreto de creación de una empresa —
+// usado tanto por el panel "Evolución empresa" como por el popover rápido
+// del editor de rubros, para no duplicar la lógica de persistencia.
+function _guardarInstitucional(emp, fecha, decreto) {
+  DATA.institucional = DATA.institucional || {};
+  if (fecha || decreto) {
+    DATA.institucional[emp] = { fechaConstitucion: fecha, decreto };
+  } else {
+    delete DATA.institucional[emp];
+  }
+  saveDataToLocalCache();
+  try { marcarPendienteGuardar(); } catch(e) {}
+}
+
+// ── Popover rápido de datos institucionales (desde el editor de rubros) ──
+function mostrarInstPopover(evt, emp) {
+  const pop = document.getElementById('rub-inst-popover');
+  if (!pop) return;
+  const info = (DATA.institucional && DATA.institucional[emp]) || {};
+  pop.dataset.emp = emp;
+  pop.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:9px;font-weight:600;color:var(--text);letter-spacing:.04em">🏛 ${emp}</span>
+      <button onclick="event.stopPropagation();document.getElementById('rub-inst-popover').style.display='none'"
+        style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:8px">
+      Fecha de constitución
+      <input type="date" id="inst-pop-fecha" value="${info.fechaConstitucion||''}"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none">
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
+      Decreto de creación
+      <input type="text" id="inst-pop-decreto" value="${(info.decreto||'').replace(/"/g,'&quot;')}"
+        placeholder="Ej: Decreto N° 1234/1995"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box">
+    </label>
+    <button onclick="event.stopPropagation();_confirmarInstPopover()"
+      style="width:100%;padding:6px;background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
+      color:#b8a000;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
+      Guardar</button>`;
+  pop.style.display = 'block';
+  const rc = evt.currentTarget.getBoundingClientRect();
+  let left = rc.left, top = rc.bottom + 6;
+  const pw = 260, ph = 180;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  if (top + ph > window.innerHeight - 10) top = Math.max(10, rc.top - ph - 6);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  evt.stopPropagation();
+}
+
+function _confirmarInstPopover() {
+  const pop = document.getElementById('rub-inst-popover');
+  const emp = pop?.dataset.emp;
+  if (!emp) return;
+  const fecha   = document.getElementById('inst-pop-fecha')?.value || '';
+  const decreto = (document.getElementById('inst-pop-decreto')?.value || '').trim();
+  _guardarInstitucional(emp, fecha, decreto);
+  pop.style.display = 'none';
+  buildRubros();
+}
+
+document.addEventListener('click', e => {
+  const p = document.getElementById('rub-inst-popover');
+  if (p && p.style.display !== 'none' && !p.contains(e.target)) p.style.display = 'none';
+});
+
 // ── Notas analíticas por empresa ────────────────────────────────
 function renderEmpNotas(emp) {
   const nota  = DATA.notas[emp] || '';
@@ -17776,6 +17912,7 @@ function getNotaBadge(emp) {
 function buildEmpresa() {
   const emp = document.getElementById('sel-emp').value;
   if (!emp) return;
+  renderEmpInstitucional(emp);
   renderEmpNotas(emp);
   renderNetoKPI(emp, DATA.years.map(String));
   renderDiagnosticoEmpresa(emp);
@@ -24562,6 +24699,7 @@ function deepCopyData() {
     er:             JSON.parse(JSON.stringify(DATA.er)),
     transferencias: JSON.parse(JSON.stringify(DATA.transferencias)),
     notas:          JSON.parse(JSON.stringify(DATA.notas || {})),
+    institucional:  JSON.parse(JSON.stringify(DATA.institucional || {})),
     presupuesto:    JSON.parse(JSON.stringify(DATA.presupuesto || {})),
   };
 }
@@ -24572,6 +24710,7 @@ function restoreFromSnapshot(snap) {
   DATA.er             = JSON.parse(JSON.stringify(snap.er || {}));
   DATA.transferencias = JSON.parse(JSON.stringify(snap.transferencias || []));
   DATA.notas          = JSON.parse(JSON.stringify(snap.notas || {}));
+  DATA.institucional  = JSON.parse(JSON.stringify(snap.institucional || {}));
   DATA.presupuesto    = JSON.parse(JSON.stringify(snap.presupuesto || {}));
   computeTotals();
 }
@@ -38397,6 +38536,20 @@ function applyCloudData(cloud, opts) {
     });
   }
 
+  // datos institucionales (fecha de constitución, decreto de creación) —
+  // mismo criterio de merge: local prevalece, se completa lo ausente
+  if (cloud.institucional && cloud.institucional.length) {
+    DATA.institucional = DATA.institucional || {};
+    cloud.institucional.forEach(r => {
+      if (!r.empresa || (!r.fecha_constitucion && !r.decreto)) return;
+      const actual = DATA.institucional[r.empresa] || {};
+      DATA.institucional[r.empresa] = {
+        fechaConstitucion: actual.fechaConstitucion || r.fecha_constitucion || '',
+        decreto:           actual.decreto           || r.decreto           || '',
+      };
+    });
+  }
+
   // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
   if ((!_solo || _solo === 'balances') && Array.isArray(cloud.balances)) {
     if (true) {
@@ -38935,6 +39088,11 @@ function buildCloudPayload() {
     .filter(([,v]) => v && v.trim())
     .map(([emp, nota]) => ({ empresa: emp, nota }));
 
+  // datos institucionales: array de { empresa, fecha_constitucion, decreto }
+  const institucionalRows = Object.entries(DATA.institucional || {})
+    .filter(([,v]) => v && (v.fechaConstitucion || v.decreto))
+    .map(([emp, v]) => ({ empresa: emp, fecha_constitucion: v.fechaConstitucion || '', decreto: v.decreto || '' }));
+
   // presupuesto
   const presRows = Object.entries(DATA.presupuesto || {}).flatMap(([emp, años]) =>
     Object.entries(años).map(([año, val]) => ({ empresa: emp, año, presupuesto: val }))
@@ -39223,7 +39381,7 @@ function buildCloudPayload() {
   }));
 
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
-           notas: notasRows, presupuesto: presRows, balances: balRows,
+           notas: notasRows, institucional: institucionalRows, presupuesto: presRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
            flujos: flujosRows, flujos_config: flujosConfigRows,
            mensual: mensualRows, er_mensual: erMensualRows,
@@ -39244,6 +39402,7 @@ function saveDataToLocalCache() {
       def_count: DATA.def_count, pers_totals: DATA.pers_totals,
       transferencias: DATA.transferencias || [],
       notas:         DATA.notas || {},
+      institucional: DATA.institucional || {},
       presupuesto:   DATA.presupuesto || {},
       saf_organismo: DATA.saf_organismo || {},
       importHistory: DATA.importHistory || [],
@@ -39331,6 +39490,7 @@ function exportarHTMLConDatos() {
       pers_totals:    DATA.pers_totals,
       transferencias: DATA.transferencias || [],
       notas:          DATA.notas         || {},
+      institucional:  DATA.institucional || {},
       presupuesto:    DATA.presupuesto   || {},
       importHistory:  DATA.importHistory || [],
       _balances:      Object.values(_balances || {}),
