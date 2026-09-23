@@ -4487,7 +4487,17 @@ self.onmessage = async (e) => {
             <span id="bal-lista-count" class="card-hd-unit"></span>
             <span id="bal-lista-toggle" style="font-size:10px;color:var(--dim);margin-left:auto">▼ mostrar</span>
           </div>
-          <div id="bal-lista-body" style="display:none;margin-top:8px"></div>
+          <div id="bal-lista-body" style="display:none;margin-top:8px">
+            <div style="display:flex;align-items:center;gap:8px;padding:0 10px 8px">
+              <span style="font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)">Filtrar por empresa vinculada</span>
+              <select id="bal-lista-filtro-vinc" onclick="event.stopPropagation()" onchange="renderListaArchivos()"
+                style="padding:4px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+                font-family:var(--mono);font-size:9.5px;border-radius:3px;cursor:pointer;outline:none;min-width:180px">
+                <option value="">— Todas —</option>
+              </select>
+            </div>
+            <div id="bal-lista-tabla"></div>
+          </div>
         </div>
 
         <!-- KPI banda -->
@@ -32493,16 +32503,35 @@ function filtrarBalances()   { actualizarFiltros(); }
 
 // Lista de archivos cargados con opción de eliminación individual
 function renderListaArchivos() {
-  const wrap = document.getElementById('bal-lista-wrap');
-  const body = document.getElementById('bal-lista-body');
-  const cnt  = document.getElementById('bal-lista-count');
-  if (!wrap || !body) return;
+  const wrap  = document.getElementById('bal-lista-wrap');
+  const body  = document.getElementById('bal-lista-body');
+  const tabla = document.getElementById('bal-lista-tabla');
+  const cnt   = document.getElementById('bal-lista-count');
+  const selVinc = document.getElementById('bal-lista-filtro-vinc');
+  if (!wrap || !body || !tabla) return;
 
-  const keys = Object.keys(_balances);
-  wrap.style.display = keys.length ? '' : 'none';
-  if (cnt) cnt.textContent = keys.length + ' archivo' + (keys.length!==1?'s':'') + ' cargados';
+  const allKeys = Object.keys(_balances);
+  wrap.style.display = allKeys.length ? '' : 'none';
 
-  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
+  // Poblar el filtro de empresa vinculada con los valores presentes,
+  // preservando la selección actual si sigue siendo válida.
+  if (selVinc) {
+    const vinculadas = [...new Set(allKeys.map(k => _balances[k].vinculada).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+    const curVinc = selVinc.value;
+    selVinc.innerHTML = '<option value="">— Todas —</option>'
+      + '<option value="__sin_vincular__">(sin vincular)</option>'
+      + vinculadas.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (curVinc && (curVinc === '__sin_vincular__' || vinculadas.includes(curVinc))) selVinc.value = curVinc;
+  }
+  const filtroVinc = selVinc?.value || '';
+  const keys = !filtroVinc ? allKeys
+    : filtroVinc === '__sin_vincular__' ? allKeys.filter(k => !_balances[k].vinculada)
+    : allKeys.filter(k => _balances[k].vinculada === filtroVinc);
+
+  if (cnt) cnt.textContent = keys.length + ' archivo' + (keys.length!==1?'s':'') + ' cargados'
+    + (filtroVinc ? ` (de ${allKeys.length})` : '');
+
+  tabla.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
     <thead><tr style="border-bottom:1px solid var(--bd)">
       <th style="padding:5px 10px;text-align:left;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Empresa</th>
       <th style="padding:5px 10px;text-align:left;font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Período</th>
@@ -32537,7 +32566,9 @@ function renderListaArchivos() {
             </button>
           </td>
         </tr>`;
-      }).join('')}
+      }).join('') || `<tr><td colspan="7" style="padding:14px;text-align:center;color:var(--dim)">
+        Ningún archivo vinculado a "${filtroVinc==='__sin_vincular__'?'(sin vincular)':filtroVinc}".
+      </td></tr>`}
     </tbody>
   </table>`;
 }
