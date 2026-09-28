@@ -39145,9 +39145,17 @@ function applyCloudData(cloud, opts) {
   // reales por un glitch transitorio de lectura. Si algún día hace falta
   // vaciar esto a propósito, usar la acción explícita de borrado del panel,
   // no depender de que la sincronización lo haga sola.
+  //
+  // Además: si hay cambios locales todavía sin publicar (carga reciente,
+  // auto-sync bloqueado por un conflicto con otro dispositivo, etc.), NO
+  // vaciar de entrada — eso perdería cualquier empresa/año que solo exista
+  // localmente todavía porque nunca llegó a publicarse (caso real: ER de
+  // LRT cargado y luego pisado por una sincronización que bajó de Sheets
+  // antes de que el auto-sync hacia arriba llegara a confirmarse). Las
+  // filas que Sheets sí trae actualizan lo ya publicado sin problema; lo
+  // que Sheets todavía no tiene queda intacto hasta que se publique.
   if (Array.isArray(cloud.mensual) && cloud.mensual.length > 0) {
-    DATA.fact_mensual = {};
-    DATA.res_mensual  = {};
+    if (!_hayCambiosSinPublicar) { DATA.fact_mensual = {}; DATA.res_mensual = {}; }
     cloud.mensual.forEach(r => {
       if (!r.empresa || !r.anio || !r.mes) return;
       const emp = String(r.empresa), yS = String(r.anio), mes = String(r.mes);
@@ -39168,9 +39176,11 @@ function applyCloudData(cloud, opts) {
 
   // ── ER mensual completo (Sheets manda) ──
   // Mismo resguardo que "mensual" arriba: nunca vaciar DATA.er_mensual por
-  // una respuesta vacía, solo cuando Sheets realmente trajo filas.
+  // una respuesta vacía, solo cuando Sheets realmente trajo filas — y
+  // tampoco vaciarlo si hay cambios locales sin publicar todavía (mismo
+  // criterio y mismo motivo que arriba).
   if (Array.isArray(cloud.er_mensual) && cloud.er_mensual.length > 0) {
-    DATA.er_mensual = {};
+    if (!_hayCambiosSinPublicar) { DATA.er_mensual = {}; }
     cloud.er_mensual.forEach(r => {
       if (!r.empresa || !r.anio) return;
       const emp = String(r.empresa), yS = String(r.anio);
@@ -39186,9 +39196,10 @@ function applyCloudData(cloud, opts) {
   }
 
   // ── ER matricial detallado (DATA.er) — desglose Excel ER 20XX (Sheets manda) ──
-  // Mismo resguardo: nunca vaciar por una respuesta vacía.
+  // Mismo resguardo: nunca vaciar por una respuesta vacía, ni si hay
+  // cambios locales sin publicar todavía.
   if (Array.isArray(cloud.er_detalle) && cloud.er_detalle.length > 0) {
-    DATA.er = {};
+    if (!_hayCambiosSinPublicar) { DATA.er = {}; }
     cloud.er_detalle.forEach(r => {
       if (!r.empresa || !r.anio) return;
       const emp = String(r.empresa), yS = String(r.anio);
