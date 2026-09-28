@@ -18809,6 +18809,24 @@ function _informeEjecutivoRender(emp) {
   // Personal
   const persRec = DATA.personal.find(d => d.e === emp);
 
+  // Datos institucionales, autoridad vigente y notas — cargados en el
+  // dashboard (pestaña "Empresas y rubros") pero hasta ahora ausentes del
+  // Informe Ejecutivo pese a ser justo el tipo de dato de portada que un
+  // informe institucional debería mostrar.
+  const inst = DATA.institucional?.[emp] || {};
+  const autEmp = (DATA.autoridades || []).filter(a => a.empresa === emp);
+  const autVigente = autEmp.find(a => !a.hasta) ||
+    autEmp.slice().sort((a,b) => String(b.desde||'').localeCompare(String(a.desde||'')))[0] || null;
+  const notaEmp = DATA.notas?.[emp] || '';
+  const fmtFechaCorta = iso => { const [y,mo,d] = String(iso||'').split('-'); return (y&&mo&&d) ? `${d}/${mo}/${y}` : ''; };
+
+  // Años con ER anual (RESUMEN histórico, DATA.er) que no tienen apertura
+  // mensual — se usan tanto para el indicador de cobertura como para
+  // completar "Estado de Resultados Anual Detallado" más abajo.
+  const erAnualEmp = DATA.er?.[emp] || {};
+  const erMensualEmp0 = (DATA.er_mensual || {})[emp] || {};
+  const erAniosTodos = [...new Set([...Object.keys(erMensualEmp0), ...Object.keys(erAnualEmp)])].sort();
+
   // ── Helpers de formato ────────────────────────────────────────────────────────
   const m   = v => v == null ? '—' : fv(v);
   const p   = v => v == null ? '—' : (v * 100).toFixed(2) + '%';
@@ -18848,6 +18866,37 @@ function _informeEjecutivoRender(emp) {
   <div class="ie-kpi-strip">
     ${kpis.map(k => `<div class="ie-kpi"><div class="ie-kpi-val" style="color:${k.color}">${k.val}</div><div class="ie-kpi-lbl">${k.lbl}</div></div>`).join('')}
   </div>` : '';
+
+  // ── Franja institucional: constitución, autoridad vigente y notas ───────────
+  const institChips = [
+    (inst.fechaConstitucion || inst.decreto)
+      ? `<strong>Constitución:</strong> ${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}${inst.decreto ? ' (Decreto ' + inst.decreto + ')' : ''}`
+      : null,
+    autVigente
+      ? `<strong>Autoridad vigente:</strong> ${autVigente.nombre || '—'}${autVigente.cargo ? ' — ' + autVigente.cargo : ''}${autVigente.desde ? ' (desde ' + fmtFechaCorta(autVigente.desde) + ')' : ''}`
+      : null,
+    notaEmp ? `<strong>Notas:</strong> ${notaEmp}` : null,
+  ].filter(Boolean);
+  const htmlInst = institChips.length
+    ? `<div class="ie-inst-strip">${institChips.join('<span class="ie-inst-sep">·</span>')}</div>`
+    : '';
+
+  // ── Cobertura de datos: hasta qué año hay ER/balance cargado, y si el año
+  // en curso todavía no tiene nada — para que la ausencia de un período se
+  // note en vez de simplemente no aparecer en ninguna tabla de abajo.
+  const anioActual   = new Date().getFullYear();
+  const ultimoAnioER = erAniosTodos.length ? erAniosTodos[erAniosTodos.length - 1] : (lastY || null);
+  const tieneAnioActual = erAniosTodos.includes(String(anioActual)) || yearsConDatos.map(String).includes(String(anioActual));
+  const coberturaPartes = [
+    `ER cargado hasta: <strong>${ultimoAnioER || '—'}</strong>`,
+    `Balance más reciente: <strong>${lastBal ? lastBal.periodo : 'sin cargar'}</strong>`,
+  ];
+  if (!tieneAnioActual) {
+    coberturaPartes.push(`<span class="ie-cobertura-alerta">⚠ ${anioActual} sin ER ni balance cargado — el Diagnóstico General y los KPI de portada no reflejan el ejercicio en curso</span>`);
+  }
+  const htmlCobertura = (ultimoAnioER || lastBal)
+    ? `<div class="ie-cobertura"><strong>Cobertura de datos</strong> — ${coberturaPartes.join(' &nbsp;·&nbsp; ')}</div>`
+    : '';
 
   // ── Sección 1: Diagnóstico general — cuadro comparativo por categoría ────────
   let htmlDiag = '';
@@ -18930,10 +18979,14 @@ function _informeEjecutivoRender(emp) {
     };
 
     // ── Helper: flecha de tendencia ────────────────────────────────────────────
+    // Compara los ÚLTIMOS DOS períodos cargados (tendencia reciente), no el
+    // primero contra el último — con 3+ balances, una mejora seguida de un
+    // deterioro reciente se mostraba antes igual que una mejora sostenida,
+    // porque los períodos intermedios no influían en la flecha.
     const tendCell = (met, arr) => {
       if ((arr||bals).length < 2) return '';
       const src = arr || bals;
-      const v0 = met.get(src[0]), v1 = met.get(src[src.length-1]);
+      const v0 = met.get(src[src.length-2]), v1 = met.get(src[src.length-1]);
       if (v0 == null || v1 == null) return '<td style="text-align:center;padding:4px 6px;color:#bbb">—</td>';
       const igual = Math.abs(v1 - v0) < (Math.abs(v0) * 0.001 + 0.0001);
       if (igual) return '<td style="text-align:center;padding:4px 6px;color:#888">→</td>';
@@ -19003,18 +19056,51 @@ function _informeEjecutivoRender(emp) {
         ${filas}`;
     }).join('');
 
+    // ── Síntesis ejecutiva: párrafo corto generado a partir de los chips ────────
+    let htmlSintesis = '';
+    const activos = chipDefs.filter(c => c.status);
+    if (activos.length) {
+      const porStatus = { bad: [], warn: [], ok: [] };
+      activos.forEach(c => porStatus[c.status].push(c.lbl.toLowerCase()));
+      const frasePartes = [];
+      if (porStatus.bad.length)  frasePartes.push(`situación crítica en ${porStatus.bad.join(', ')}`);
+      if (porStatus.warn.length) frasePartes.push(`atención en ${porStatus.warn.join(', ')}`);
+      if (porStatus.ok.length)   frasePartes.push(`resultados normales en ${porStatus.ok.join(', ')}`);
+      let frase = `${emp} presenta ${frasePartes.join('; ')}.`;
+
+      // Tendencia general: últimos dos balances, mayoría de métricas mejor/peor.
+      if (bals.length >= 2) {
+        const b0 = bals[bals.length - 2], b1 = bals[bals.length - 1];
+        let mejoras = 0, empeoras = 0;
+        diagGrupos.forEach(grp => grp.metricas.forEach(met => {
+          const x0 = met.get(b0), x1 = met.get(b1);
+          if (x0 == null || x1 == null) return;
+          const igual = Math.abs(x1 - x0) < (Math.abs(x0) * 0.001 + 0.0001);
+          if (igual) return;
+          const tFn = met.trendOk || (met.inv ? (a,b)=>b<a : (a,b)=>b>a);
+          if (tFn(x0, x1)) mejoras++; else empeoras++;
+        }));
+        if (mejoras || empeoras) {
+          const dir = mejoras > empeoras ? 'mejorando' : empeoras > mejoras ? 'deteriorándose' : 'con señales mixtas';
+          frase += ` La tendencia entre ${b0.periodo} y ${b1.periodo} muestra un cuadro ${dir}.`;
+        }
+      }
+      htmlSintesis = `<div class="ie-sintesis">${frase}</div>`;
+    }
+
     htmlDiag = `
     <h2 class="ie-h2">Diagnóstico General</h2>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 14px">
       ${chipsHtml}
     </div>
+    ${htmlSintesis}
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:8.5pt;font-family:inherit">
       <thead>
         <tr>
           <th ${thL}>Indicador</th>
           ${bals.map(b => `<th ${thR}>${b.periodo}</th>`).join('')}
-          ${bals.length > 1 ? `<th ${thC}>Tendencia</th>` : ''}
+          ${bals.length > 1 ? `<th ${thC} title="Comparación entre los últimos dos períodos cargados">Tendencia</th>` : ''}
         </tr>
       </thead>
       <tbody>
@@ -19042,6 +19128,7 @@ function _informeEjecutivoRender(emp) {
       return { y, f, s, t, neto, mg, varNom, varReal };
     });
     htmlFact = `
+    <p class="ie-fuente">Fuente: RESUMEN anual (Facturación y Resultado consolidados por empresa) — para el detalle mensual del Estado de Resultados, ver "Estado de Resultados Anual Detallado" más abajo.</p>
     <table class="ie-tabla">
       <thead><tr>
         <th>Año</th><th>Facturación</th><th>Var. real</th>
@@ -19062,9 +19149,45 @@ function _informeEjecutivoRender(emp) {
     </table>`;
   }
 
-  // ── Sección 3: Estado de Resultados mensual acumulado ────────────────────────
-  const erEmp   = (DATA.er_mensual || {})[emp] || {};
-  const erYears = Object.keys(erEmp).sort();
+  // ── Presupuesto vs Real (solo si la empresa tiene presupuesto cargado) ──────
+  // Mismo criterio que el panel "Presupuesto vs Real" del dashboard: Real =
+  // Facturación (DATA.fact) — ver el comentario en buildPresupuesto() sobre
+  // la ambigüedad presupuesto-como-meta-de-ventas vs. presupuesto-como-
+  // asignación-fiscal, todavía sin resolver; se usa la misma lectura acá
+  // para no introducir una segunda interpretación distinta de la ya usada
+  // en el resto del dashboard.
+  let htmlPresupuesto = '';
+  {
+    const presEmp = DATA.presupuesto?.[emp] || {};
+    const aniosPres = Object.keys(presEmp).filter(y => presEmp[y] > 0).sort();
+    if (aniosPres.length) {
+      htmlPresupuesto = `
+      <p class="ie-fuente">Real = Facturación, mismo criterio que el panel "Presupuesto vs Real".</p>
+      <table class="ie-tabla">
+        <thead><tr><th>Año</th><th style="text-align:right">Presupuesto</th><th style="text-align:right">Real</th><th style="text-align:right">% ejecutado</th></tr></thead>
+        <tbody>${aniosPres.map(y => {
+          const pres = presEmp[y];
+          const real = fact[y] || 0;
+          const pctEj = pres > 0 ? real / pres * 100 : null;
+          return `<tr>
+            <td><strong>${y}</strong></td>
+            <td style="text-align:right">${m(pres)}</td>
+            <td style="text-align:right">${m(real)}</td>
+            <td style="text-align:right;color:${pctEj!=null&&pctEj>=90&&pctEj<=110?'#1a7a4a':pctEj!=null?'#b7770d':'inherit'}">${pctEj!=null?pctEj.toFixed(1)+'%':'—'}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>`;
+    }
+  }
+
+  // ── Sección 3: Estado de Resultados anual detallado (ER mensual + fallback anual) ──
+  const erEmp   = erMensualEmp0;
+  // Años cargados como RESUMEN anual sin apertura mensual (DATA.er) que antes
+  // desaparecían acá sin aviso — se completan con ese desglose, más pobre
+  // (no llega a Resultado Financiero/del Ejercicio), y quedan marcados como
+  // "(RESUMEN)" para que no se confundan con un año con detalle mensual real.
+  const erYears = erAniosTodos;
   let htmlERDet = '';
   if (erYears.length) {
     // Mismo universo de conceptos estándar que usa el resto del dashboard
@@ -19079,21 +19202,61 @@ function _informeEjecutivoRender(emp) {
       resFinanciero:'Resultado financiero', resAntesImp:'RESULTADO ANTES DE IMP.',
       impuesto:'Impuesto a las ganancias', resEjercicio:'RESULTADO DEL EJERCICIO'
     };
+    // DATA.er (RESUMEN anual) usa las claves de ER_LABELS, no las de
+    // CONCEPTOS_STD del ER mensual — mapeo entre ambos esquemas para los
+    // conceptos que el RESUMEN sí trae. Los que no tiene (resFinanciero,
+    // resAntesImp, impuesto, resEjercicio) quedan en "—", nunca inventados.
+    const MAP_ANUAL = {
+      ventas:'ventas_netas', costo:'costo_ventas', utilBruta:'utilidad_bruta',
+      gastoAdm:'gastos_admin', gastoCom:'gastos_comercializacion', gastoOper:'gastos_operativos',
+      otrosIngresos:'otros_ingresos', otrosGastos:'otros_egresos', resOperativo:'resultado_operativo',
+    };
+    const esSoloAnual = yr => !erEmp[yr] && !!erAnualEmp[yr];
     const calcAnual = (yr, rb) => {
-      const filas = (erEmp[yr] || {}).filas || [];
-      const fila  = filas.find(f => f.conceptoStd === rb);
-      if (!fila) return null;
-      const tot = Object.values(fila.valores || {}).reduce((s, v) => s + (v || 0), 0);
-      return tot === 0 ? null : tot;
+      if (erEmp[yr]) {
+        const filas = erEmp[yr].filas || [];
+        const fila  = filas.find(f => f.conceptoStd === rb);
+        if (!fila) return null;
+        const tot = Object.values(fila.valores || {}).reduce((s, v) => s + (v || 0), 0);
+        return tot === 0 ? null : tot;
+      }
+      if (esSoloAnual(yr) && MAP_ANUAL[rb]) {
+        const v = erAnualEmp[yr][MAP_ANUAL[rb]];
+        return (v != null && v !== 0) ? v : null;
+      }
+      return null;
     };
     const isBold   = rb => ['utilBruta','resOperativo','resAntesImp','resEjercicio'].includes(rb);
     const isSep    = rb => ['utilBruta','resOperativo','resFinanciero','resAntesImp'].includes(rb);
     const rowsER   = rubrosER.filter(rb => erYears.some(y => calcAnual(y, rb) != null));
+
+    // ── Reconciliación: años con AMBAS fuentes (RESUMEN anual — Sección 2 —
+    // y ER mensual detallado acá abajo) cuya Facturación o Resultado difieren
+    // más de un 3% sin que el informe lo explicara antes.
+    const reconciliacion = erYears.filter(y => erEmp[y] && fact[y] != null).map(y => {
+      const ventasER = calcAnual(y, 'ventas');
+      const resER    = calcAnual(y, 'resEjercicio') ?? calcAnual(y, 'resOperativo');
+      const diffVentas = (ventasER != null && fact[y]) ? (ventasER - fact[y]) / Math.abs(fact[y]) * 100 : null;
+      const diffRes = (resER != null && sit[y] != null && sit[y] !== 0) ? (resER - sit[y]) / Math.abs(sit[y]) * 100 : null;
+      return { y, ventasER, factY: fact[y], resER, sitY: sit[y], diffVentas, diffRes };
+    }).filter(r => (r.diffVentas != null && Math.abs(r.diffVentas) > 3) || (r.diffRes != null && Math.abs(r.diffRes) > 3));
+
     if (rowsER.length) {
-      // Agregar fila de margen operativo y neto si hay ventas
+      const htmlReconciliacion = reconciliacion.length ? `
+      <div class="ie-reconciliacion"><strong>⚠ Diferencia entre fuentes</strong>
+        <ul>${reconciliacion.map(r => {
+          const partes = [];
+          if (r.diffVentas != null && Math.abs(r.diffVentas) > 3) partes.push(`Ventas (ER mensual) ${m(r.ventasER)} vs. Facturación (RESUMEN anual) ${m(r.factY)} — ${pct(r.diffVentas)}`);
+          if (r.diffRes != null && Math.abs(r.diffRes) > 3) partes.push(`Resultado (ER mensual) ${m(r.resER)} vs. Resultado (RESUMEN anual) ${m(r.sitY)} — ${pct(r.diffRes)}`);
+          return `<li><strong>${r.y}:</strong> ${partes.join(' · ')}</li>`;
+        }).join('')}</ul>
+      </div>` : '';
+
       htmlERDet = `
+      <p class="ie-fuente">Fuente: ER mensual cargado por empresa. Los años sin apertura mensual se completan con el RESUMEN anual histórico —marcados "(RESUMEN)"— y quedan sin desglose de Resultado Financiero/del Ejercicio, que ese formato no releva.</p>
+      ${htmlReconciliacion}
       <table class="ie-tabla">
-        <thead><tr><th>Concepto</th>${erYears.map(y => `<th style="text-align:right">${y}</th>`).join('')}</tr></thead>
+        <thead><tr><th>Concepto</th>${erYears.map(y => `<th style="text-align:right">${y}${esSoloAnual(y) ? ' <span class="ie-anio-resumen">(RESUMEN)</span>' : ''}</th>`).join('')}</tr></thead>
         <tbody>
         ${rowsER.map(rb => {
           const vals = erYears.map(y => calcAnual(y, rb));
@@ -19102,7 +19265,8 @@ function _informeEjecutivoRender(emp) {
             <td${bold ? '' : ' style="padding-left:14px;color:#555"'}>${lblER[rb] || rb}</td>
             ${vals.map((v, i) => {
               const isNeg = v != null && v < 0;
-              return `<td style="text-align:right;color:${isNeg ? '#c0392b' : 'inherit'}">${m(v)}</td>`;
+              const soloAnual = esSoloAnual(erYears[i]);
+              return `<td style="text-align:right;color:${isNeg ? '#c0392b' : 'inherit'}${soloAnual ? ';background:#fff8e1' : ''}">${m(v)}</td>`;
             }).join('')}
           </tr>`;
         }).join('')}
@@ -19316,6 +19480,18 @@ function _informeEjecutivoRender(emp) {
     .ie-alertas ul { margin: 4px 0 0 16px; padding: 0; }
     .ie-alertas li { margin-bottom: 2px; }
     .ie-footer { margin-top: 32px; font-size: 7.5pt; color: #aaa; border-top: 1px solid #e0e4ec; padding-top: 8px; }
+    .ie-inst-strip { background: #f0f4ff; border-bottom: 1px solid #d5deef; padding: 7px 32px; font-size: 8.5pt; color: #333; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+    .ie-inst-strip strong { color: #1a3a8f; }
+    .ie-inst-sep { color: #aab4cc; margin: 0 2px; }
+    .ie-cobertura { background: #fbfcfe; border-bottom: 1px solid #e8ecf4; padding: 6px 32px; font-size: 8pt; color: #555; }
+    .ie-cobertura strong { color: #1a3a8f; }
+    .ie-cobertura-alerta { color: #b7770d; font-weight: 600; }
+    .ie-sintesis { background: #f0f4ff; border-left: 3px solid #1a3a8f; padding: 9px 14px; margin: 4px 0 12px; font-size: 9pt; line-height: 1.6; color: #2a2a3a; }
+    .ie-fuente { font-size: 7.5pt; color: #888; margin: -4px 0 8px; font-style: italic; }
+    .ie-reconciliacion { background: #fff8e1; border-left: 3px solid #b7770d; padding: 8px 14px; margin: 0 0 10px; font-size: 8.5pt; color: #6b5300; }
+    .ie-reconciliacion ul { margin: 4px 0 0 16px; padding: 0; }
+    .ie-reconciliacion li { margin-bottom: 2px; }
+    .ie-anio-resumen { font-weight: 400; font-size: 6.5pt; opacity: .85; text-transform: none; letter-spacing: 0; }
     @media print {
       body { font-size: 9pt; }
       .ie-portada, .ie-kpi-strip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -19347,10 +19523,13 @@ function _informeEjecutivoRender(emp) {
       </div>
     </div>
   </div>
+  ${htmlInst}
   ${htmlKPIs}
+  ${htmlCobertura}
   <div class="ie-body">
     ${htmlDiag}
     ${sec('Facturación, Resultado y Transferencias', htmlFact)}
+    ${sec('Ejecución Presupuestaria', htmlPresupuesto)}
     ${sec('Estado de Resultados Anual Detallado', htmlERDet)}
     ${sec('Balance y Ratios Financieros', htmlBal)}
     ${sec('Flujos de Fondos', htmlFlujos)}
