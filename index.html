@@ -4088,6 +4088,26 @@ self.onmessage = async (e) => {
         <p style="margin-top:6px;font-size:9px">Los datos se fusionan con el dataset existente · podés deshacer la carga en cualquier momento</p>
       </div>
 
+      <!-- Cargar desde Google Drive (ER Provisorio y demás formatos soportados) -->
+      <div class="rowfull" style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <span style="font-size:9px;color:var(--dim);white-space:nowrap">o desde Google Drive:</span>
+        <div style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--bd2);border-radius:4px;overflow:hidden;flex-shrink:1;min-width:0">
+          <input id="inp-drive-general" type="text" placeholder="Link o ID de Drive del Excel…"
+            style="padding:5px 9px;background:var(--s3);border:none;
+            color:var(--text);font-family:var(--mono);font-size:9px;
+            outline:none;width:240px;min-width:0"
+            onkeydown="if(event.key==='Enter')importarGeneralDrive()">
+          <button onclick="importarGeneralDrive()"
+            style="padding:5px 11px;background:rgba(71,255,180,.12);border:none;border-left:1px solid var(--bd2);
+            color:#1a9e68;font-family:var(--mono);font-size:9px;font-weight:600;
+            cursor:pointer;white-space:nowrap;flex-shrink:0"
+            title="Leer el archivo desde Google Drive usando el bridge configurado — el mismo detector automático que la carga manual (ER Provisorio, Ventas/Gastos, transferencias, etc.)">
+            📂 Drive
+          </button>
+        </div>
+        <span id="imp-drive-msg" style="font-size:9px;color:var(--dim)"></span>
+      </div>
+
 
       <!-- mapping preview -->
       <div id="import-preview">
@@ -10942,6 +10962,48 @@ function importarFlujoDrive() {
     .catch(function(err) {
       setMsg('✗ ' + err.message, 'var(--neg)');
     });
+}
+
+// ── Importar (general) desde Google Drive — ER Provisorio, Ventas/Gastos,
+// transferencias, etc. Reusa el mismo detector automático que la carga
+// manual (handleImportWorkbook): pega un link/ID de Drive en vez de subir
+// el archivo, y de ahí en más sigue exactamente el mismo camino (vista
+// previa, confirmar empresa, aplicar) que un archivo arrastrado a mano.
+function importarGeneralDrive() {
+  const input = document.getElementById('inp-drive-general');
+  const msgEl = document.getElementById('imp-drive-msg');
+  const setMsg = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c || 'var(--dim)'; } };
+
+  const raw = input ? input.value.trim() : '';
+  if (!raw) { setMsg('⚠ Ingresá el link o ID del archivo de Drive', 'var(--neg)'); return; }
+
+  const fileId = _extraerDriveId(raw);
+  if (!fileId) { setMsg('⚠ No se reconoció el link. Usá el link "Compartir" de Drive o el ID directo.', 'var(--neg)'); return; }
+
+  const bridgeUrl = (typeof _cloudUrl !== 'undefined' && _cloudUrl) ? _cloudUrl : null;
+  if (!bridgeUrl) { setMsg('⚠ Configurá el bridge en ⚙ Sheets primero.', 'var(--neg)'); return; }
+
+  setMsg('⏳ Descargando archivo desde Drive…', 'var(--dim)');
+
+  const url = bridgeUrl + '?action=getFile&fileId=' + encodeURIComponent(fileId);
+  fetch(url)
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) throw new Error(res.error || 'Error al leer el archivo de Drive');
+      const bstr = atob(res.data);
+      const bytes = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) bytes[i] = bstr.charCodeAt(i);
+
+      const ext = (res.filename || '').split('.').pop().toLowerCase();
+      const wb = ext === 'csv'
+        ? XLSX.read(new TextDecoder().decode(bytes), { type: 'string', cellDates: true })
+        : XLSX.read(bytes.buffer, { type: 'array', cellDates: true });
+
+      setMsg('✓ Archivo leído desde Drive: ' + (res.filename || fileId), 'var(--pos)');
+      if (input) input.value = '';
+      handleImportWorkbook(wb, res.filename || fileId);
+    })
+    .catch(err => setMsg('✗ ' + err.message, 'var(--neg)'));
 }
 
 // ── IMPORTAR desde Excel ─────────────────────────────────────────
