@@ -2010,6 +2010,8 @@ self.onmessage = async (e) => {
               style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
               onchange="handleImport(this.files[0]);showPanel('importar',null)">
           </label>
+          <button class="tba-btn" onclick="toggleDriveImportMenu()" id="btn-drive-import-top"
+            title="Importar Excel/CSV desde Google Drive">📂 Drive</button>
           <button class="tba-btn" onclick="toggleExportMenu()" id="btn-export-menu"
             title="Exportar / Sheets">⬇ Exportar ▾</button>
           <button class="tba-btn" onclick="imprimirPanelActivo()"
@@ -2034,6 +2036,25 @@ self.onmessage = async (e) => {
           <button onclick="exportarTransExcel();toggleExportMenu()" class="export-menu-item">💸 Excel — transferencias filtradas</button>
           <button onclick="imprimirPanelActivo();toggleExportMenu()" class="export-menu-item">🖨 PDF — panel activo</button>
           <button onclick="exportarHTMLConDatos();toggleExportMenu()" class="export-menu-item">📄 Dashboard con datos</button>
+        </div>
+
+        <!-- Popover: importar desde Google Drive (acceso directo topbar) -->
+        <div id="drive-import-menu" style="display:none;position:fixed;background:var(--s1);
+          border:1px solid var(--bd2);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.4);
+          z-index:9100;min-width:280px;overflow:hidden;padding:10px 12px">
+          <div style="font-size:8px;text-transform:uppercase;letter-spacing:.1em;
+            color:var(--dim);margin-bottom:8px;font-family:var(--mono)">Importar desde Google Drive</div>
+          <div style="display:flex;align-items:center;gap:0;border:1px solid var(--bd2);border-radius:4px;overflow:hidden">
+            <input id="inp-drive-top" type="text" placeholder="Link o ID de Drive del Excel…"
+              style="padding:6px 9px;background:var(--s3);border:none;color:var(--text);
+              font-family:var(--mono);font-size:9px;outline:none;flex:1;min-width:0"
+              onkeydown="if(event.key==='Enter')importarDriveTop()">
+            <button onclick="importarDriveTop()"
+              style="padding:6px 11px;background:rgba(71,255,180,.12);border:none;border-left:1px solid var(--bd2);
+              color:#1a9e68;font-family:var(--mono);font-size:9px;font-weight:600;
+              cursor:pointer;white-space:nowrap;flex-shrink:0">📂 Cargar</button>
+          </div>
+          <div id="imp-drive-top-msg" style="font-size:9px;color:var(--dim);margin-top:6px"></div>
         </div>
 
         <!-- IDs ocultos para compatibilidad -->
@@ -10969,12 +10990,9 @@ function importarFlujoDrive() {
 // manual (handleImportWorkbook): pega un link/ID de Drive en vez de subir
 // el archivo, y de ahí en más sigue exactamente el mismo camino (vista
 // previa, confirmar empresa, aplicar) que un archivo arrastrado a mano.
-function importarGeneralDrive() {
-  const input = document.getElementById('inp-drive-general');
-  const msgEl = document.getElementById('imp-drive-msg');
-  const setMsg = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c || 'var(--dim)'; } };
-
-  const raw = input ? input.value.trim() : '';
+// Lógica compartida por los dos puntos de entrada (panel Importar y el
+// acceso directo "📥 Importar" de la topbar).
+function _importarDriveGenerico(raw, setMsg, onListo) {
   if (!raw) { setMsg('⚠ Ingresá el link o ID del archivo de Drive', 'var(--neg)'); return; }
 
   const fileId = _extraerDriveId(raw);
@@ -11000,10 +11018,59 @@ function importarGeneralDrive() {
         : XLSX.read(bytes.buffer, { type: 'array', cellDates: true });
 
       setMsg('✓ Archivo leído desde Drive: ' + (res.filename || fileId), 'var(--pos)');
-      if (input) input.value = '';
+      if (onListo) onListo();
       handleImportWorkbook(wb, res.filename || fileId);
     })
     .catch(err => setMsg('✗ ' + err.message, 'var(--neg)'));
+}
+
+function importarGeneralDrive() {
+  const input = document.getElementById('inp-drive-general');
+  const msgEl = document.getElementById('imp-drive-msg');
+  const setMsg = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c || 'var(--dim)'; } };
+  const raw = input ? input.value.trim() : '';
+  _importarDriveGenerico(raw, setMsg, () => { if (input) input.value = ''; });
+}
+
+// Acceso directo desde la topbar (botón "📂 Drive" junto a "📥 Importar") —
+// mismo destino que subir el archivo a mano desde ahí: cambia al panel
+// Importar y muestra la vista previa ahí apenas el archivo llega.
+function importarDriveTop() {
+  const input = document.getElementById('inp-drive-top');
+  const msgEl = document.getElementById('imp-drive-top-msg');
+  const setMsg = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c || 'var(--dim)'; } };
+  const raw = input ? input.value.trim() : '';
+  _importarDriveGenerico(raw, setMsg, () => {
+    if (input) input.value = '';
+    toggleDriveImportMenu();
+    showPanel('importar', null);
+  });
+}
+
+function toggleDriveImportMenu() {
+  const menu = document.getElementById('drive-import-menu');
+  const btn  = document.getElementById('btn-drive-import-top');
+  if (!menu || !btn) return;
+  const open = menu.style.display !== 'none';
+  if (open) {
+    menu.style.display = 'none';
+    document.removeEventListener('click', _closeDriveImportMenu);
+  } else {
+    const r = btn.getBoundingClientRect();
+    menu.style.top  = (r.bottom + 4) + 'px';
+    menu.style.left = r.left + 'px';
+    menu.style.display = 'block';
+    document.getElementById('inp-drive-top')?.focus();
+    setTimeout(() => document.addEventListener('click', _closeDriveImportMenu), 10);
+  }
+}
+function _closeDriveImportMenu(e) {
+  const menu = document.getElementById('drive-import-menu');
+  const btn  = document.getElementById('btn-drive-import-top');
+  if (menu && !menu.contains(e.target) && e.target !== btn) {
+    menu.style.display = 'none';
+    document.removeEventListener('click', _closeDriveImportMenu);
+  }
 }
 
 // ── IMPORTAR desde Excel ─────────────────────────────────────────
