@@ -15737,6 +15737,58 @@ function _repararFacturacionDesdeERMensual() {
   return reparados;
 }
 
+// ── Repara Facturación/Ventas que quedaron con SOLO la primera fila de
+// ventas de un ER con varias categorías (ej. "Cerdo de los Llanos": ventas
+// de animales en pie / media res / cortes mayoristas / cortes minoristas /
+// otros ingresos, todas conceptoStd 'ventas'), en vez de la suma de todas
+// — bug real de _aplicarERColumnas (usaba .find() en lugar de sumar) ya
+// corregido para cargas nuevas, pero lo que se sincronizó ANTES del fix
+// quedó con el valor incompleto, y _repararFacturacionDesdeERMensual no lo
+// toca porque no está vacío/en 0 — tiene un valor real, solo que parcial.
+// A diferencia de esa reparación, acá SÍ hay que animarse a corregir un
+// valor ya cargado, así que la detección es estricta: solo actúa cuando el
+// valor actual coincide EXACTO con el total de UNA de las filas de ventas
+// individuales (la firma exacta que deja .find()) — nunca toca una
+// Facturación que no calza con ese patrón, para no pisar una diferencia
+// real por otro motivo. Corre en cada login/sync, igual que las otras dos.
+function _repararFacturacionMultifilaVentas() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const filasVentas = data.filas.filter(f => f.conceptoStd === 'ventas');
+      if (filasVentas.length < 2) return; // una sola fila: .find() no pudo haber descartado nada
+      const meses = [...new Set(data.filas.flatMap(f => Object.keys(f.valores || {}).map(Number)))];
+      const totalFila = f => meses.reduce((s, m) => s + (f.valores[m] || 0), 0);
+      const totCorrecto = filasVentas.reduce((s, f) => s + totalFila(f), 0);
+      const actual = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[Number(yr)];
+      if (actual == null || Math.abs(totCorrecto - actual) < 1) return; // ya está bien, o no hay nada cargado (lo cubre la otra reparación)
+      const esFirmaDelBug = filasVentas.some(f => Math.abs(actual - totalFila(f)) < 1);
+      if (!esFirmaDelBug) return;
+      if (!DATA.fact[emp]) DATA.fact[emp] = {};
+      DATA.fact[emp][yr] = totCorrecto;
+      if (!DATA.fact_mensual) DATA.fact_mensual = {};
+      if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
+      DATA.fact_mensual[emp][yr] = {};
+      meses.forEach(m => {
+        if (filasVentas.some(f => f.valores[m] != null)) {
+          DATA.fact_mensual[emp][yr][m] = filasVentas.reduce((s, f) => s + (f.valores[m] || 0), 0);
+        }
+      });
+      huboCambios = true;
+      reparados.push({ emp, yr, antes: actual, ahora: totCorrecto });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] Facturación recalculada (suma de todas las filas de ventas, antes solo tomaba la primera) para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(); } catch(e) {}
+  }
+  return reparados;
+}
+
 // ── Control cruzado: el ER Provisorio (que muestran Resultado Operativo →
 // Desglose ER y Evolución Empresa → ER Provisorio, ambos vía
 // _erDesdeMonthly) puede diferir de la Facturación/Resultado Operativo
@@ -39522,6 +39574,7 @@ function applyCloudData(cloud, opts) {
 
   try { _repararResultadoOperativoLibroMayor(); } catch(e) {}
   try { _repararFacturacionDesdeERMensual(); } catch(e) {}
+  try { _repararFacturacionMultifilaVentas(); } catch(e) {}
 }
 
 // ── Convertir DATA → formato flat para el Sheet ──────────────────

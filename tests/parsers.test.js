@@ -1903,5 +1903,78 @@ group('_matchEmpresaAutoridad — empareja razón social completa (sufijo legal,
     'no inventa una coincidencia para una empresa genuinamente ausente del portafolio');
 });
 
+// ── _repararFacturacionMultifilaVentas: bug real — "Cerdo de los Llanos"
+//    2025/2026, ER Provisorio con 5 filas de ventas por categoría de
+//    producto. _aplicarERColumnas usaba .find() para sincronizar
+//    Facturación, así que DATA.fact quedó con el total de UNA sola fila en
+//    vez de la suma de las 5 — ya corregido para cargas nuevas, pero lo
+//    que ya se había sincronizado antes del fix queda mal hasta que se
+//    recalcula. _repararFacturacionDesdeERMensual no lo toca porque el
+//    valor no está vacío/en 0, así que hace falta esta reparación aparte,
+//    con una detección estricta (solo corrige cuando el valor actual
+//    coincide con el total de una fila individual — la firma exacta del
+//    bug) para no arriesgarse a pisar una Facturación distinta por otro
+//    motivo. ────────────────────────────────────────────────────────────
+group('_repararFacturacionMultifilaVentas — corrige Facturación que quedó con una sola fila de ventas en vez de la suma de todas', () => {
+  const src = extractFn(html, '_repararFacturacionMultifilaVentas');
+  const factory = () => new Function(
+    'let DATA = {fact:{},fact_mensual:{},er_mensual:{}};\n' +
+    'function marcarPendienteGuardar(){}\n' +
+    src + '\n' +
+    'return { _repararFacturacionMultifilaVentas, setData: d => { DATA = d; }, getDATA: () => DATA };'
+  )();
+
+  // Caso real: 5 filas de ventas, DATA.fact quedó con el total de la primera.
+  const ctx1 = factory();
+  const filas5 = [
+    { lbl:'VENTAS DE ANIMALES EN PIE', conceptoStd:'ventas', valores:{1:6301075052} },
+    { lbl:'VENTAS DE MEDIA RES', conceptoStd:'ventas', valores:{1:2218398603} },
+    { lbl:'VENTAS DE CORTES MAYORISTAS', conceptoStd:'ventas', valores:{1:68456563} },
+    { lbl:'VENTAS DE CORTES MINORISTAS', conceptoStd:'ventas', valores:{1:3513634771} },
+    { lbl:'OTROS INGRESOS', conceptoStd:'ventas', valores:{1:149781081} },
+  ];
+  ctx1.setData({
+    fact: { 'CERDO DE LOS LLANOS': { '2026': 6301075052 } }, // bug viejo: solo la primera fila
+    fact_mensual: {},
+    er_mensual: { 'CERDO DE LOS LLANOS': { '2026': { filas: filas5, esTrimestral: false } } },
+  });
+  const reparados1 = ctx1._repararFacturacionMultifilaVentas();
+  const esperado = 6301075052+2218398603+68456563+3513634771+149781081;
+  assert(ctx1.getDATA().fact['CERDO DE LOS LLANOS']['2026'] === esperado,
+    'recalcula Facturación como la suma de las 5 filas de ventas, no solo la primera');
+  assert(ctx1.getDATA().fact_mensual['CERDO DE LOS LLANOS']['2026'][1] === esperado,
+    'recalcula también Facturación mensual');
+  assert(reparados1.length === 1, 'reporta exactamente una reparación');
+
+  // No toca una Facturación que no coincide con NINGUNA fila individual —
+  // podría ser una diferencia real por otro motivo, no la firma del bug.
+  const ctx2 = factory();
+  ctx2.setData({
+    fact: { 'CERDO DE LOS LLANOS': { '2026': 999999999 } }, // no coincide con ninguna fila
+    fact_mensual: {},
+    er_mensual: { 'CERDO DE LOS LLANOS': { '2026': { filas: filas5, esTrimestral: false } } },
+  });
+  ctx2._repararFacturacionMultifilaVentas();
+  assert(ctx2.getDATA().fact['CERDO DE LOS LLANOS']['2026'] === 999999999,
+    'no toca un valor que no coincide con ninguna fila individual (no es la firma del bug)');
+
+  // No toca una empresa/año con una sola fila de ventas — ahí .find() nunca
+  // pudo haber descartado nada.
+  const ctx3 = factory();
+  ctx3.setData({
+    fact: { 'OTRA EMPRESA': { '2026': 500 } },
+    fact_mensual: {},
+    er_mensual: { 'OTRA EMPRESA': { '2026': { filas: [{ lbl:'Ventas', conceptoStd:'ventas', valores:{1:500} }], esTrimestral:false } } },
+  });
+  ctx3._repararFacturacionMultifilaVentas();
+  assert(ctx3.getDATA().fact['OTRA EMPRESA']['2026'] === 500,
+    'no toca una empresa con una sola fila de ventas (nada que .find() pudiera haber descartado)');
+
+  // Es idempotente: correrla de nuevo sobre un valor ya reparado no cambia nada.
+  const reparados2 = ctx1._repararFacturacionMultifilaVentas();
+  assert(reparados2.length === 0 && ctx1.getDATA().fact['CERDO DE LOS LLANOS']['2026'] === esperado,
+    'es idempotente — no vuelve a tocar un valor ya corregido');
+});
+
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
 process.exit(fail ? 1 : 0);
