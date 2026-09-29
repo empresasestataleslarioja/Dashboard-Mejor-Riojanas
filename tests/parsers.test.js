@@ -355,6 +355,8 @@ group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya e
   const srcConfirmar   = extractFn(html, '_confirmarRenombre');
   const srcTombstone   = extractFn(html, '_tombstoneEmpresa');
   const srcStoresConst = extractConstBlock(html, 'const PER_EMPRESA_STORES = [', '];');
+  const srcMismoNombre     = extractFn(html, '_mismoNombreEmpresa');
+  const srcCoincideTumba   = extractFn(html, '_coincideEmpresaTumba');
   const srcPurgarStores    = extractFn(html, '_purgarPerEmpresaStores');
   const srcRenombrarStores = extractFn(html, '_renombrarPerEmpresaStores');
   const srcFusionarStores  = extractFn(html, '_fusionarPerEmpresaStores');
@@ -364,7 +366,8 @@ group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya e
     'function confirm(msg){ return confirmResult; }\n' +
     'function saveRubros(){} function computeTotals(){} function saveDataToLocalCache(){}\n' +
     'function marcarPendienteGuardar(){} function populateSelects(){} function rebuildActive(){} function buildRubros(){}\n' +
-    srcStoresConst + '\n' + srcPurgarStores + '\n' + srcRenombrarStores + '\n' + srcFusionarStores + '\n' +
+    srcStoresConst + '\n' + srcMismoNombre + '\n' + srcCoincideTumba + '\n' +
+    srcPurgarStores + '\n' + srcRenombrarStores + '\n' + srcFusionarStores + '\n' +
     srcTombstone + '\n' + srcRenombrar + '\n' + srcFusionar + '\n' + srcConfirmar + '\n' +
     'function setState(r,d,b){ rubros=r; DATA=d; _balances=b; }\n' +
     'function getState(){ return { rubros, DATA, _balances }; }\n' +
@@ -1688,6 +1691,8 @@ group('autoridades — sigue el mismo criterio de migración que el resto de los
   function nuevoContexto() {
     const src = [
       extractConstBlock(html, 'const PER_EMPRESA_STORES = [', '];'),
+      extractFn(html, '_mismoNombreEmpresa'),
+      extractFn(html, '_coincideEmpresaTumba'),
       extractFn(html, '_purgarPerEmpresaStores'),
       extractFn(html, '_renombrarPerEmpresaStores'),
       extractFn(html, '_fusionarPerEmpresaStores'),
@@ -1753,6 +1758,8 @@ group('_tombstoneEmpresa / _purgarEmpresaDeData — evita que una empresa borrad
   function nuevoContexto() {
     const src = [
       extractConstBlock(html, 'const PER_EMPRESA_STORES = [', '];'),
+      extractFn(html, '_mismoNombreEmpresa'),
+      extractFn(html, '_coincideEmpresaTumba'),
       extractFn(html, '_purgarPerEmpresaStores'),
       extractFn(html, '_renombrarPerEmpresaStores'),
       extractFn(html, '_fusionarPerEmpresaStores'),
@@ -1820,6 +1827,36 @@ group('_tombstoneEmpresa / _purgarEmpresaDeData — evita que una empresa borrad
     '_purgarEmpresaDeData borra personal de la empresa resucitada');
   assert(d5.autoridades.length === 1 && d5.autoridades[0].empresa === 'PEA',
     '_purgarEmpresaDeData borra autoridades de la empresa resucitada');
+
+  // Bug real reportado: "Asignación de empresas por rubro" seguía mostrando
+  // empresas ya fusionadas pese a repetir el borrado — la purga comparaba
+  // el nombre tumbado con igualdad estricta, así que una resucitación con
+  // acento o sufijo legal distinto (sin puntos: "SAU", no "S.A.U." — mismo
+  // alcance que ya prueba _mismoNombreEmpresa en el grupo de más abajo) no
+  // se reconocía como la misma empresa y quedaba sin purgar.
+  // _purgarEmpresaDeData/_purgarPerEmpresaStores ahora comparan con
+  // _mismoNombreEmpresa en vez de igualdad estricta. No cubre variantes de
+  // abreviatura (LRT ↔ razón social completa) a propósito: eso requeriría
+  // matching por substring (_matchEmpresaPortafolio), que en un par de
+  // nombres sueltos —sin una lista curada de portafolio de por medio—
+  // arriesgaría purgar una empresa distinta cuyo nombre solo comparte una
+  // palabra corta.
+  const ctx6 = nuevoContexto();
+  ctx6.getDATA().fact = { 'CERÁMICA RIOJANA SAU': { '2024': 1000 } };
+  ctx6.getDATA().personal = [{ e: 'CERÁMICA RIOJANA SAU', y: {} }];
+  ctx6._purgarEmpresaDeData('CERAMICA RIOJANA');
+  const d6 = ctx6.getDATA();
+  assert(!d6.fact['CERÁMICA RIOJANA SAU'],
+    '_purgarEmpresaDeData borra una resucitación con acento/sufijo legal distinto al nombre tumbado');
+  assert(d6.personal.length === 0,
+    '_purgarEmpresaDeData también la borra de personal aunque la grafía difiera');
+
+  // No purga otra empresa cuyo nombre no coincide, solo por compartir una palabra.
+  const ctx7 = nuevoContexto();
+  ctx7.getDATA().fact = { 'CERÁMICA RIOJANA SAU': { '2024': 1000 }, 'RIOJA BUS': { '2024': 2000 } };
+  ctx7._purgarEmpresaDeData('CERAMICA RIOJANA');
+  assert(!ctx7.getDATA().fact['CERÁMICA RIOJANA SAU'] && ctx7.getDATA().fact['RIOJA BUS'].hasOwnProperty('2024'),
+    'purga la resucitación con grafía distinta sin tocar otra empresa que solo comparte una palabra ("RIOJA")');
 });
 
 // ── _parseFechaAutoridad: normaliza fechas para la importación de

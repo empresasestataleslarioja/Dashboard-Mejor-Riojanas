@@ -9408,10 +9408,21 @@ const PER_EMPRESA_STORES = [
   { nombre: 'presupuesto',   get: () => DATA.presupuesto },
 ];
 
+// Compara nombres de empresa tolerando las mismas variantes reales que ya
+// resuelve _mismoNombreEmpresa (acentos, sufijo legal SAU/SAPEM/SRL,
+// abreviatura vs. razón social completa) — sin esto, una empresa fusionada
+// que vuelve a aparecer con una grafía apenas distinta a la tumbada no se
+// reconoce como la misma y la purga la deja pasar, así que "resucita" pese
+// a repetir el borrado. _mismoNombreEmpresa se define más abajo en el
+// archivo, pero al ser function declarations ambas quedan disponibles
+// igual sin importar el orden de definición.
+function _coincideEmpresaTumba(k, emp) { return k === emp || _mismoNombreEmpresa(k, emp); }
+
 function _purgarPerEmpresaStores(emp) {
   PER_EMPRESA_STORES.forEach(({get}) => {
     const store = get();
-    if (store && store[emp] !== undefined) delete store[emp];
+    if (!store) return;
+    Object.keys(store).forEach(k => { if (_coincideEmpresaTumba(k, emp)) delete store[k]; });
   });
 }
 function _renombrarPerEmpresaStores(from, to) {
@@ -9432,18 +9443,21 @@ function _fusionarPerEmpresaStores(from, to) {
 
 // Borra a `emp` de todos los datasets (usado por _eliminarEmpresa y para
 // purgar resucitaciones detectadas vía tombstones en applyCloudData).
+// Compara con _coincideEmpresaTumba (tolera variantes de grafía), no con
+// igualdad estricta — ver comentario junto a esa función.
 function _purgarEmpresaDeData(emp) {
-  if (DATA.fact[emp]) delete DATA.fact[emp];
-  if (DATA.sit[emp])  delete DATA.sit[emp];
-  DATA.personal = (DATA.personal || []).filter(d => d.e !== emp);
+  Object.keys(DATA.fact).forEach(k => { if (_coincideEmpresaTumba(k, emp)) delete DATA.fact[k]; });
+  Object.keys(DATA.sit).forEach(k  => { if (_coincideEmpresaTumba(k, emp)) delete DATA.sit[k]; });
+  DATA.personal = (DATA.personal || []).filter(d => !_coincideEmpresaTumba(d.e, emp));
   _purgarPerEmpresaStores(emp);
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
-    if (DATA[k] && DATA[k][emp]) delete DATA[k][emp];
+    if (!DATA[k]) return;
+    Object.keys(DATA[k]).forEach(kk => { if (_coincideEmpresaTumba(kk, emp)) delete DATA[k][kk]; });
   });
   Object.keys(_balances || {}).forEach(key => {
-    if (_balances[key] && _balances[key].empresa === emp) delete _balances[key];
+    if (_balances[key] && _coincideEmpresaTumba(_balances[key].empresa, emp)) delete _balances[key];
   });
-  DATA.autoridades = (DATA.autoridades || []).filter(a => a.empresa !== emp);
+  DATA.autoridades = (DATA.autoridades || []).filter(a => !_coincideEmpresaTumba(a.empresa, emp));
 }
 
 // ── Beneficiarios de Transferencias excluidos permanentemente ─────
