@@ -39435,6 +39435,19 @@ function applyCloudData(cloud, opts) {
   // publicar). Mismo razonamiento para estado activa/inactiva y datos
   // institucionales, que viven en esta misma pestaña.
   if (Array.isArray(cloud.rubros) && cloud.rubros.length) {
+    // Sheets puede devolver una celda de fecha (fecha_constitucion,
+    // fecha_inactiva) como Date → ISO datetime completo (ej.
+    // "2022-07-28T03:00:00.000Z") en vez del string plano "AAAA-MM-DD" que
+    // se publicó, si la celda quedó auto-formateada como fecha del lado de
+    // Sheets — un <input type="date"> rechaza en silencio cualquier valor
+    // que no sea exactamente ese formato, así que el dato parecía "no
+    // actualizarse" aunque sí hubiera llegado. Se trunca a los primeros 10
+    // caracteres cuando detecta ese patrón.
+    const _soloFecha = v => {
+      const s = String(v || '');
+      return /^\d{4}-\d{2}-\d{2}T/.test(s) ? s.slice(0, 10) : s;
+    };
+
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.rubro || r.rubro === 'Sin rubro') return;
       if (_hayCambiosSinPublicar && rubros[r.empresa]) return;
@@ -39449,7 +39462,7 @@ function applyCloudData(cloud, opts) {
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.activo) return;
       if (_hayCambiosSinPublicar && empresasInactivas[r.empresa] !== undefined) return;
-      if (r.activo === 'NO') empresasInactivas[r.empresa] = r.fecha_inactiva || true;
+      if (r.activo === 'NO') empresasInactivas[r.empresa] = _soloFecha(r.fecha_inactiva) || true;
       else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
     });
     try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
@@ -39462,8 +39475,8 @@ function applyCloudData(cloud, opts) {
       const actual = DATA.institucional[r.empresa];
       if (_hayCambiosSinPublicar && actual && (actual.fechaConstitucion || actual.decreto)) return;
       DATA.institucional[r.empresa] = {
-        fechaConstitucion: r.fecha_constitucion || '',
-        decreto:           r.decreto           || '',
+        fechaConstitucion: _soloFecha(r.fecha_constitucion),
+        decreto:           r.decreto || '',
       };
     });
   }
