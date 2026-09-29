@@ -19120,20 +19120,24 @@ function _informeEjecutivoRender(emp) {
   if (allYearsConTrans.length) {
     const filas = allYearsConTrans.map(y => {
       const f = fact[y], s = sit[y], t = transXanio[y] || 0;
-      const neto = s != null ? s + t : null;
       const mg = (f && s != null) ? p(s / f) : '—';
       const ipcP = (() => { const py = String(parseInt(y)-1); return allYearsConTrans.includes(py) ? _ipcAcumEntrePeriodos(String(y), py) : null; })();
       const varNom = (() => { const py = String(parseInt(y)-1); const pf = fact[py]; return (f && pf && pf!==0) ? (f-pf)/Math.abs(pf)*100 : null; })();
       const varReal = (varNom != null && ipcP) ? ((1+varNom/100)/(1+ipcP/100)-1)*100 : null;
-      return { y, f, s, t, neto, mg, varNom, varReal };
+      return { y, f, s, t, mg, varNom, varReal };
     });
+    // Se muestra Transferencias como columna informativa aparte, sin sumarla
+    // a Resultado operativo — son conceptos no comparables (una es un
+    // resultado contable, la otra un ingreso de fondos del Estado) y un
+    // "Resultado neto c/transf." las mezclaba como si fueran parte del mismo
+    // cálculo, dando una lectura engañosa del resultado real de la empresa.
     htmlFact = `
     <p class="ie-fuente">Fuente: RESUMEN anual (Facturación y Resultado consolidados por empresa) — para el detalle mensual del Estado de Resultados, ver "Estado de Resultados Anual Detallado" más abajo.</p>
     <table class="ie-tabla">
       <thead><tr>
         <th>Año</th><th>Facturación</th><th>Var. real</th>
         <th>Resultado operativo</th><th>Margen</th>
-        <th>Transferencias</th><th>Resultado neto c/transf.</th>
+        <th>Transferencias</th>
       </tr></thead>
       <tbody>${filas.map(c => `
         <tr>
@@ -19143,7 +19147,6 @@ function _informeEjecutivoRender(emp) {
           <td style="color:${c.s!=null?(c.s>=0?'#1a7a4a':'#c0392b'):'inherit'}">${m(c.s)}</td>
           <td>${c.mg}</td>
           <td style="color:#7d3c98">${c.t > 0 ? m(c.t) : '—'}</td>
-          <td style="color:${c.neto!=null?(c.neto>=0?'#1a7a4a':'#c0392b'):'inherit'}">${m(c.neto)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -19230,24 +19233,42 @@ function _informeEjecutivoRender(emp) {
     const isSep    = rb => ['utilBruta','resOperativo','resFinanciero','resAntesImp'].includes(rb);
     const rowsER   = rubrosER.filter(rb => erYears.some(y => calcAnual(y, rb) != null));
 
-    // ── Reconciliación: años con AMBAS fuentes (RESUMEN anual — Sección 2 —
-    // y ER mensual detallado acá abajo) cuya Facturación o Resultado difieren
-    // más de un 3% sin que el informe lo explicara antes.
-    const reconciliacion = erYears.filter(y => erEmp[y] && fact[y] != null).map(y => {
-      const ventasER = calcAnual(y, 'ventas');
-      const resER    = calcAnual(y, 'resEjercicio') ?? calcAnual(y, 'resOperativo');
-      const diffVentas = (ventasER != null && fact[y]) ? (ventasER - fact[y]) / Math.abs(fact[y]) * 100 : null;
-      const diffRes = (resER != null && sit[y] != null && sit[y] !== 0) ? (resER - sit[y]) / Math.abs(sit[y]) * 100 : null;
-      return { y, ventasER, factY: fact[y], resER, sitY: sit[y], diffVentas, diffRes };
-    }).filter(r => (r.diffVentas != null && Math.abs(r.diffVentas) > 3) || (r.diffRes != null && Math.abs(r.diffRes) > 3));
+    // ── Reconciliación: años con ER mensual cargado (acá abajo) cuya
+    // Facturación/Resultado (Sección 2, RESUMEN anual) difiere sin que el
+    // informe lo explicara antes. Dos casos, tratados por separado porque
+    // "0 vs. un valor real" es el más grave de los dos y una comparación
+    // porcentual contra 0 no tiene sentido (división por cero) — antes
+    // quedaba directamente sin flaguear, el hueco más visible del cuadro
+    // (caso real detectado: Cerdo de los Llanos 2025/2026, Resultado
+    // Operativo con detalle mensual real pero Resultado anual en $0).
+    const comparar = (valER, valAnual) => {
+      if (valER == null) return null;
+      if (valAnual == null || valAnual === 0) {
+        return (valER !== 0) ? { tipo: 'ausente', valER } : null;
+      }
+      const diff = (valER - valAnual) / Math.abs(valAnual) * 100;
+      return Math.abs(diff) > 3 ? { tipo: 'diff', valER, valAnual, diff } : null;
+    };
+    const reconciliacion = erYears.filter(y => erEmp[y]).map(y => {
+      const ventas = comparar(calcAnual(y, 'ventas'), fact[y]);
+      const res    = comparar(calcAnual(y, 'resEjercicio') ?? calcAnual(y, 'resOperativo'), sit[y]);
+      return { y, ventas, res };
+    }).filter(r => r.ventas || r.res);
 
     if (rowsER.length) {
+      const fraseCaso = (lbl, c, valAnualLbl) => {
+        if (!c) return null;
+        return c.tipo === 'ausente'
+          ? `${lbl} (ER mensual) ${m(c.valER)} sin cargar en ${valAnualLbl} (figura en $0)`
+          : `${lbl} (ER mensual) ${m(c.valER)} vs. ${valAnualLbl} ${m(c.valAnual)} — ${pct(c.diff)}`;
+      };
       const htmlReconciliacion = reconciliacion.length ? `
       <div class="ie-reconciliacion"><strong>⚠ Diferencia entre fuentes</strong>
         <ul>${reconciliacion.map(r => {
-          const partes = [];
-          if (r.diffVentas != null && Math.abs(r.diffVentas) > 3) partes.push(`Ventas (ER mensual) ${m(r.ventasER)} vs. Facturación (RESUMEN anual) ${m(r.factY)} — ${pct(r.diffVentas)}`);
-          if (r.diffRes != null && Math.abs(r.diffRes) > 3) partes.push(`Resultado (ER mensual) ${m(r.resER)} vs. Resultado (RESUMEN anual) ${m(r.sitY)} — ${pct(r.diffRes)}`);
+          const partes = [
+            fraseCaso('Ventas', r.ventas, 'Facturación (RESUMEN anual)'),
+            fraseCaso('Resultado', r.res, 'Resultado (RESUMEN anual)'),
+          ].filter(Boolean);
           return `<li><strong>${r.y}:</strong> ${partes.join(' · ')}</li>`;
         }).join('')}</ul>
       </div>` : '';
