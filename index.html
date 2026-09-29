@@ -15704,9 +15704,11 @@ function _repararFacturacionDesdeERMensual() {
       if (!data || !Array.isArray(data.filas)) return;
       const actual = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[Number(yr)];
       if (actual != null && actual !== 0) return; // ya tiene un valor real cargado — no se toca
-      const fVentas = data.filas.find(f => f.conceptoStd === 'ventas');
-      if (!fVentas) return;
-      const totV = Object.values(fVentas.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+      // Puede haber varias filas de ventas (una por categoría de producto,
+      // ver _aplicarERColumnas) — sumar todas, no solo la primera.
+      const filasVentas = data.filas.filter(f => f.conceptoStd === 'ventas');
+      if (!filasVentas.length) return;
+      const totV = filasVentas.reduce((s, f) => s + Object.values(f.valores || {}).reduce((s2, v) => s2 + (Number(v) || 0), 0), 0);
       if (totV === 0) return;
       if (!DATA.fact[emp]) DATA.fact[emp] = {};
       DATA.fact[emp][yr] = totV;
@@ -27589,16 +27591,29 @@ function _aplicarERColumnas() {
   DATA.er_mensual[emp][yS] = { filas: r.filas, esTrimestral: false };
 
   // Derivar facturación y resultado de las filas
-  const fVentas = r.filas.find(f => f.conceptoStd === 'ventas');
+  // Ventas puede venir como VARIAS filas — una por categoría de producto,
+  // todas con conceptoStd 'ventas' (caso real: "Cerdo de los Llanos" trae
+  // Ventas de animales en pie / media res / cortes mayoristas / cortes
+  // minoristas / otros ingresos, 5 filas separadas). Antes se usaba
+  // .find(), que se queda con la PRIMERA fila que matchea y descarta el
+  // resto — la Facturación anual sincronizada quedaba en la mitad de la
+  // real (solo la primera categoría) sin que ningún aviso lo mostrara,
+  // porque "ER Provisorio Completo" sí suma todas las filas correctamente
+  // y no mostraba discrepancia con algo que en teoría ya coincidía.
+  const filasVentas = r.filas.filter(f => f.conceptoStd === 'ventas');
   const fRes    = r.filas.find(f => ['resEjercicio','resOperativo'].includes(f.conceptoStd));
   const meses   = [...new Set(r.filas.flatMap(f => Object.keys(f.valores).map(Number)))].sort((a,b)=>a-b);
 
-  if (fVentas) {
+  if (filasVentas.length) {
     if (!DATA.fact_mensual) DATA.fact_mensual = {};
     if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
     DATA.fact_mensual[emp][yS] = {};
-    meses.forEach(m => { if (fVentas.valores[m] != null) DATA.fact_mensual[emp][yS][m] = fVentas.valores[m]; });
-    const totV = meses.reduce((s,m) => s + (fVentas.valores[m] || 0), 0);
+    meses.forEach(m => {
+      if (filasVentas.some(f => f.valores[m] != null)) {
+        DATA.fact_mensual[emp][yS][m] = filasVentas.reduce((s,f) => s + (f.valores[m] || 0), 0);
+      }
+    });
+    const totV = filasVentas.reduce((s,f) => s + meses.reduce((s2,m) => s2 + (f.valores[m] || 0), 0), 0);
     if (!DATA.fact[emp]) DATA.fact[emp] = {};
     DATA.fact[emp][yS] = totV;
   }
