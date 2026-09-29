@@ -1976,5 +1976,65 @@ group('_repararFacturacionMultifilaVentas — corrige Facturación que quedó co
     'es idempotente — no vuelve a tocar un valor ya corregido');
 });
 
+// ── _repararIngresosBrutosComoVenta: bug real — "Cerdo de los Llanos" 2026
+//    tenía una fila "INGRESOS BRUTOS" (impuesto provincial) con
+//    conceptoStd 'ventas' — pese al nombre no es un ingreso, es un gasto,
+//    pero al compartir la palabra "INGRESOS" con los patrones de venta
+//    puede quedar mal etiquetada. Efecto real detectado: "ER Provisorio
+//    Completo" restaba el impuesto de Ventas Netas ($12.093.807.556)
+//    mientras que Facturación/"ER Original Detallado" no lo hacían
+//    ($12.251.346.070) — la discrepancia entre ambos módulos que expuso
+//    el bug. ─────────────────────────────────────────────────────────────
+group('_repararIngresosBrutosComoVenta — reclasifica "Ingresos Brutos" de venta a gasto y recalcula Facturación', () => {
+  const src = extractFn(html, '_repararIngresosBrutosComoVenta');
+  const factory = () => new Function(
+    'let DATA = {fact:{},fact_mensual:{},er_mensual:{}};\n' +
+    'function marcarPendienteGuardar(){}\n' +
+    src + '\n' +
+    'return { _repararIngresosBrutosComoVenta, setData: d => { DATA = d; }, getDATA: () => DATA };'
+  )();
+
+  const filasReales = [
+    { lbl:'VENTAS DE ANIMALES EN PIE', conceptoStd:'ventas', valores:{1:6301075052} },
+    { lbl:'VENTAS DE MEDIA RES', conceptoStd:'ventas', valores:{1:2218398603} },
+    { lbl:'VENTAS DE CORTES MAYORISTAS', conceptoStd:'ventas', valores:{1:68456563} },
+    { lbl:'VENTAS DE CORTES MINORISTAS', conceptoStd:'ventas', valores:{1:3513634771} },
+    { lbl:'OTROS INGRESOS', conceptoStd:'ventas', valores:{1:149781081} },
+    { lbl:'INGRESOS BRUTOS', conceptoStd:'ventas', valores:{1:-157538514} }, // mal clasificada
+  ];
+  const ctx1 = factory();
+  ctx1.setData({
+    fact: { 'CERDO DE LOS LLANOS': { '2026': 12093807556 } }, // bug viejo: incluye el impuesto restando
+    fact_mensual: {},
+    er_mensual: { 'CERDO DE LOS LLANOS': { '2026': { filas: filasReales, esTrimestral: false } } },
+  });
+  const reparados1 = ctx1._repararIngresosBrutosComoVenta();
+  const esperado = 6301075052+2218398603+68456563+3513634771+149781081;
+  assert(reparados1.length === 1, 'reporta exactamente una reparación');
+  assert(ctx1.getDATA().fact['CERDO DE LOS LLANOS']['2026'] === esperado,
+    'recalcula Facturación sin el impuesto (suma de las ventas reales)');
+  assert(ctx1.getDATA().fact_mensual['CERDO DE LOS LLANOS']['2026'][1] === esperado,
+    'recalcula también Facturación mensual sin el impuesto');
+  const filaIB = ctx1.getDATA().er_mensual['CERDO DE LOS LLANOS']['2026'].filas.find(f => f.lbl === 'INGRESOS BRUTOS');
+  assert(filaIB.conceptoStd === 'gastoAdm',
+    'reclasifica la fila de Ingresos Brutos a gasto en vez de venta');
+
+  // No toca una empresa sin ninguna fila "Ingresos Brutos".
+  const ctx2 = factory();
+  ctx2.setData({
+    fact: { 'OTRA EMPRESA': { '2026': 500 } },
+    fact_mensual: {},
+    er_mensual: { 'OTRA EMPRESA': { '2026': { filas: [{ lbl:'Ventas', conceptoStd:'ventas', valores:{1:500} }], esTrimestral:false } } },
+  });
+  ctx2._repararIngresosBrutosComoVenta();
+  assert(ctx2.getDATA().fact['OTRA EMPRESA']['2026'] === 500,
+    'no toca una empresa sin ninguna fila "Ingresos Brutos" mal clasificada');
+
+  // Es idempotente.
+  const reparados2 = ctx1._repararIngresosBrutosComoVenta();
+  assert(reparados2.length === 0,
+    'es idempotente — la segunda vez no encuentra nada para reclasificar');
+});
+
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
 process.exit(fail ? 1 : 0);

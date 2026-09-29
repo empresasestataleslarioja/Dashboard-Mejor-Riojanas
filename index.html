@@ -15789,6 +15789,57 @@ function _repararFacturacionMultifilaVentas() {
   return reparados;
 }
 
+// ── Repara filas de "Ingresos Brutos" (impuesto provincial) mal
+// clasificadas como conceptoStd 'ventas' — bug real: pese al nombre no es
+// un ingreso, es un gasto/impuesto sobre la facturación, pero al compartir
+// la palabra "INGRESOS" con los patrones de ventas puede quedar mal
+// etiquetada (por una carga vieja de antes de que los parsers reconocieran
+// este caso, o por una reclasificación manual equivocada desde el editor
+// de "ER Original Detallado" — entendible, "Ingresos Brutos" suena a
+// ingreso). El efecto es que "ER Provisorio Completo" resta el impuesto de
+// Ventas Netas (mostrando una cifra menor a la real), mientras que
+// Facturación/"ER Original Detallado" no lo hacían — la discrepancia entre
+// ambos módulos que expuso este bug. Reclasifica a 'gastoAdm' (mismo
+// criterio que ya usan los parsers para impuestos/tasas) y recalcula
+// Facturación desde las filas de ventas ya correctas. Corre en cada
+// login/sync, igual que las otras reparaciones.
+function _repararIngresosBrutosComoVenta() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const filaIB = data.filas.find(f => f.conceptoStd === 'ventas' && /INGRESOS?\s+BRUTOS?/i.test(f.lbl || ''));
+      if (!filaIB) return;
+      filaIB.conceptoStd = 'gastoAdm';
+      // Recalcular Facturación anual/mensual desde las filas de ventas que
+      // quedan (ya sin el impuesto reclasificado).
+      const filasVentas = data.filas.filter(f => f.conceptoStd === 'ventas');
+      const meses = [...new Set(data.filas.flatMap(f => Object.keys(f.valores || {}).map(Number)))];
+      const totCorrecto = filasVentas.reduce((s, f) => s + meses.reduce((s2, m) => s2 + (f.valores[m] || 0), 0), 0);
+      if (!DATA.fact[emp]) DATA.fact[emp] = {};
+      DATA.fact[emp][yr] = totCorrecto;
+      if (!DATA.fact_mensual) DATA.fact_mensual = {};
+      if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
+      DATA.fact_mensual[emp][yr] = {};
+      meses.forEach(m => {
+        if (filasVentas.some(f => f.valores[m] != null)) {
+          DATA.fact_mensual[emp][yr][m] = filasVentas.reduce((s, f) => s + (f.valores[m] || 0), 0);
+        }
+      });
+      huboCambios = true;
+      reparados.push({ emp, yr, factCorregida: totCorrecto });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] "Ingresos Brutos" reclasificado de venta a gasto para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(); } catch(e) {}
+  }
+  return reparados;
+}
+
 // ── Control cruzado: el ER Provisorio (que muestran Resultado Operativo →
 // Desglose ER y Evolución Empresa → ER Provisorio, ambos vía
 // _erDesdeMonthly) puede diferir de la Facturación/Resultado Operativo
@@ -27077,6 +27128,11 @@ function tryParseERHojasMensuales(wb, fname) {
   const _clasif = (lbl) => {
     const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
     if (!t) return null;
+    // Impuesto a los Ingresos Brutos (IIBB): pese al nombre es un gasto, no un
+    // ingreso — chequear antes que los patrones de "ventas"/"ingresos" de
+    // abajo, que si no lo cuentan como venta por compartir la palabra
+    // "INGRESOS" (bug real detectado en producción).
+    if (/INGRESOS?\s+BRUTOS?/.test(t)) return 'gastoAdm';
     if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS?|INGRESOS\s+TOTALES?/.test(t)) return 'ventas';
     if (_esIngExcluido(t)) return 'otrosIngresos';
     if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
@@ -27208,6 +27264,13 @@ function tryParseERColumnasMeses(wb, fname) {
     // empresa declara como tal — se respeta aunque el rótulo también mencione
     // aportes del Estado (ej. "Ventas netas - Aportes del Estado"), porque suele
     // ser la única línea de ingresos del archivo y anularla dejaría el ER en cero.
+    // Impuesto a los Ingresos Brutos (IIBB, provincial): pese al nombre no es
+    // un ingreso — es un gasto/impuesto sobre la facturación. Se chequea ANTES
+    // que los patrones de "ventas"/"ingresos" de abajo porque, si no, cae en
+    // "INGRESOS TOTALES?"/"OTROS INGRESO" por compartir la palabra "INGRESOS"
+    // — bug real: quedó contado como venta, inflando/desinflando la
+    // Facturación sincronizada según el signo del monto.
+    if (/INGRESOS?\s+BRUTOS?/.test(t)) return 'gastoAdm';
     if (/VENTAS\s+NETAS?|INGRESOS\s+NETOS?|INGRESOS\s+TOTALES?/.test(t)) return 'ventas';
     // Aportes/asistencia financiera/subsidios del Estado como línea aparte (sin
     // "ventas netas" en el rótulo) no son ventas — se registran como otros ingresos.
@@ -39574,6 +39637,7 @@ function applyCloudData(cloud, opts) {
 
   try { _repararResultadoOperativoLibroMayor(); } catch(e) {}
   try { _repararFacturacionDesdeERMensual(); } catch(e) {}
+  try { _repararIngresosBrutosComoVenta(); } catch(e) {}
   try { _repararFacturacionMultifilaVentas(); } catch(e) {}
 }
 
