@@ -39419,48 +39419,51 @@ function applyCloudData(cloud, opts) {
     try { saveDataToLocalCache(); } catch(e) {}
   }
 
-  // Restaurar rubros desde Sheets
-  // Si hay rubros locales → merge (local prevalece, se agregan los de Sheets que falten)
-  // Si no hay locales → usar Sheets como fuente de restauración
+  // Restaurar rubros desde Sheets.
+  //
+  // Antes, con rubros locales ya cargados, se hacía merge "solo completar lo
+  // ausente" (nunca pisar una empresa que ya tuviera rubro asignado) — pensado
+  // para no perder una reasignación local recién hecha antes de publicarse.
+  // Pero eso tiene un efecto secundario real: una reasignación de rubro hecha
+  // y YA PUBLICADA desde OTRO dispositivo nunca llegaba a un dispositivo que
+  // ya tenía esa empresa categorizada (aunque fuera con el rubro viejo) —
+  // caso real reportado: "publiqué el cambio desde otro dispositivo, impacta
+  // en Sheets, pero al descargar en el mío no lo toma". Mismo criterio que ya
+  // usamos para Facturación/Resultado: Sheets manda salvo que ESTE
+  // dispositivo tenga cambios propios sin publicar todavía (ahí sí se
+  // protege lo local, por si es justo la reasignación que se está por
+  // publicar). Mismo razonamiento para estado activa/inactiva y datos
+  // institucionales, que viven en esta misma pestaña.
   if (Array.isArray(cloud.rubros) && cloud.rubros.length) {
-    const tieneLocales = Object.keys(rubros || {}).length > 0;
-    if (tieneLocales) {
-      // Merge: solo agregar los que no existen localmente
-      cloud.rubros.forEach(r => {
-        if (r.empresa && r.rubro && r.rubro !== 'Sin rubro' && !rubros[r.empresa]) {
-          rubros[r.empresa] = r.rubro;
-        }
-      });
-    } else {
-      // Sin locales → restaurar completo desde Sheets
-      cloud.rubros.forEach(r => {
-        if (r.empresa && r.rubro && r.rubro !== 'Sin rubro') {
-          rubros[r.empresa] = r.rubro;
-        }
-      });
-    }
+    cloud.rubros.forEach(r => {
+      if (!r.empresa || !r.rubro || r.rubro === 'Sin rubro') return;
+      if (_hayCambiosSinPublicar && rubros[r.empresa]) return;
+      rubros[r.empresa] = r.rubro;
+    });
     try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
 
-    // Estado activa/inactiva — mismo criterio "local prevalece, completar lo
-    // ausente" que el rubro: si esta pestaña ya tiene un estado registrado
-    // para la empresa (activa o inactiva) no se pisa con lo de Sheets.
+    // Estado activa/inactiva — tanto pasar a inactiva como REACTIVAR (Sheets
+    // trae 'SI' y esta pestaña todavía la tenía marcada inactiva) tienen que
+    // poder llegar de otro dispositivo cuando no hay cambios propios sin
+    // publicar; antes solo se aplicaba la baja, nunca la reactivación.
     cloud.rubros.forEach(r => {
-      if (r.empresa && r.activo === 'NO' && empresasInactivas[r.empresa] === undefined) {
-        empresasInactivas[r.empresa] = r.fecha_inactiva || true;
-      }
+      if (!r.empresa || !r.activo) return;
+      if (_hayCambiosSinPublicar && empresasInactivas[r.empresa] !== undefined) return;
+      if (r.activo === 'NO') empresasInactivas[r.empresa] = r.fecha_inactiva || true;
+      else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
     });
     try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
 
     // Datos institucionales (fecha de constitución, decreto de creación) —
-    // viven en la misma pestaña "rubros" que el resto del maestro de
-    // empresas. Mismo criterio: local prevalece, se completa lo ausente.
+    // viven en la misma pestaña "rubros" que el resto del maestro de empresas.
     DATA.institucional = DATA.institucional || {};
     cloud.rubros.forEach(r => {
       if (!r.empresa || (!r.fecha_constitucion && !r.decreto)) return;
-      const actual = DATA.institucional[r.empresa] || {};
+      const actual = DATA.institucional[r.empresa];
+      if (_hayCambiosSinPublicar && actual && (actual.fechaConstitucion || actual.decreto)) return;
       DATA.institucional[r.empresa] = {
-        fechaConstitucion: actual.fechaConstitucion || r.fecha_constitucion || '',
-        decreto:           actual.decreto           || r.decreto           || '',
+        fechaConstitucion: r.fecha_constitucion || '',
+        decreto:           r.decreto           || '',
       };
     });
   }
