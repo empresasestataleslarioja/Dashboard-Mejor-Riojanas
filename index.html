@@ -39448,6 +39448,18 @@ function applyCloudData(cloud, opts) {
       return /^\d{4}-\d{2}-\d{2}T/.test(s) ? s.slice(0, 10) : s;
     };
 
+    // El decreto se escribe como "NNNN/AA" (número/año, ej. "1668/10"). Cuando
+    // el año de 2 cifras es <= 12, Sheets lo confunde con un mes y lo
+    // autoconvierte a fecha "AAAA/MM" (tomando el número de decreto como año
+    // y el "/AA" como mes) → vuelve como ISO datetime (ej.
+    // "1668-10-01T03:53:48.000Z"). Se reconstruye el "NNNN/AA" original a
+    // partir de esos mismos componentes.
+    const _decretoLimpio = v => {
+      const s = String(v || '');
+      const m = s.match(/^(\d{4})-(\d{2})-\d{2}T/);
+      return m ? `${m[1]}/${m[2]}` : s;
+    };
+
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.rubro || r.rubro === 'Sin rubro') return;
       if (_hayCambiosSinPublicar && rubros[r.empresa]) return;
@@ -39476,7 +39488,7 @@ function applyCloudData(cloud, opts) {
       if (_hayCambiosSinPublicar && actual && (actual.fechaConstitucion || actual.decreto)) return;
       DATA.institucional[r.empresa] = {
         fechaConstitucion: _soloFecha(r.fecha_constitucion),
-        decreto:           r.decreto || '',
+        decreto:           _decretoLimpio(r.decreto),
       };
     });
   }
