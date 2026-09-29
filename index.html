@@ -38706,21 +38706,42 @@ async function syncToCloud(nota) {
   // ER mensual hecha desde un dispositivo fue pisada por el auto-sync de
   // otro que todavía tenía la versión anterior en memoria.
   const esAuto = nota === 'Auto-sync';
-  const conflicto = await _chequearConflictoSync();
+  let conflicto = await _chequearConflictoSync();
+
+  // ── Reintento automático (auto-sync) ───────────────────────────────
+  // Antes, un conflicto en auto-sync cancelaba la publicación y dejaba el
+  // cambio local varado hasta que alguien notara el aviso y sincronizara a
+  // mano — la causa real detrás de varias pérdidas de datos reportadas en
+  // esta sesión (LRT, Cerdo de los Llanos, empresas fusionadas: el equipo
+  // trabaja en paralelo desde varios dispositivos, así que este choque es
+  // frecuente, no una excepción). Ahora, en vez de cancelar directo, se
+  // baja y fusiona lo nuevo de Sheets (mismo criterio "local prevalece
+  // para lo no publicado" que ya usa applyCloudData — _hayCambiosSinPublicar
+  // sigue en true en este punto, así que nada local se pierde en la bajada)
+  // y se reintenta UNA sola vez. Si el conflicto persiste incluso después
+  // (otra publicación ocurrió en el ínterin, o falló la bajada), se cae al
+  // comportamiento anterior: cancelar y avisar, sin reintentar en bucle.
+  if (conflicto && esAuto) {
+    const indPre = document.getElementById('save-indicator');
+    if (indPre) { indPre.textContent = '⏳ Conflicto detectado — sincronizando antes de reintentar…'; indPre.style.color = '#47e8ff'; }
+    console.warn(`[Sync] Conflicto en auto-sync (${conflicto.updatedBy || 'otro dispositivo'}, ${conflicto.savedAt}) — bajando y fusionando antes de reintentar.`);
+    try { await syncFromCloud(true); } catch(e) { console.warn('[Sync] Falló la bajada previa al reintento de auto-sync:', e); }
+    conflicto = await _chequearConflictoSync();
+  }
+
   if (conflicto) {
     const cuando = conflicto.savedAt ? fmtFechaAR(conflicto.savedAt) : '(fecha desconocida)';
     const quien  = conflicto.updatedBy || 'otro usuario/dispositivo';
     if (esAuto) {
-      // Auto-sync: nunca publicar a ciegas sobre un cambio ajeno más nuevo.
-      // Se deja _hayCambiosSinPublicar en true (no se toca acá) para que el
-      // aviso de "cambios sin publicar" siga visible, y se avisa con
-      // claridad qué hacer en vez de fallar en silencio.
+      // Seguía en conflicto incluso después de bajar y fusionar — no
+      // reintentar en bucle. Se deja _hayCambiosSinPublicar en true (no se
+      // toca acá) para que el aviso de "cambios sin publicar" siga visible.
       const ind = document.getElementById('save-indicator');
       if (ind) {
         ind.textContent = `⚠ Hay cambios más nuevos en Sheets (de ${quien}, ${cuando}) que este dispositivo no bajó — auto-guardado pausado para no pisarlos. Actualizá la página (⟳) antes de seguir cargando datos.`;
         ind.style.color = '#ff8c47';
       }
-      console.warn(`[Sync] Auto-sync cancelado — conflicto: Sheets tiene datos más nuevos de ${quien} (${cuando}) que esta pestaña no vio.`);
+      console.warn(`[Sync] Auto-sync cancelado — conflicto persiste tras reintentar: Sheets tiene datos más nuevos de ${quien} (${cuando}) que esta pestaña no vio.`);
       return;
     }
     const seguir = confirm(
