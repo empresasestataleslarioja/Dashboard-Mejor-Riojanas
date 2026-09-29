@@ -38865,7 +38865,23 @@ function applyCloudData(cloud, opts) {
   }
 
   // fact: rows con columnas: empresa, 2020, 2021, 2022, 2023, 2024, 2025, 2026
+  //
+  // A diferencia de mensual/er_mensual/er_detalle (que solo se reemplazan si
+  // Sheets trae filas), acá SIEMPRE se reconstruye entero desde lo que
+  // manda Sheets, incluso con cambios locales sin publicar — porque es una
+  // tabla densa (todas las empresas, todos los años en cada fila) y no hay
+  // forma de distinguir "esta empresa/año no cambió" de "genuinamente 0" a
+  // nivel de sección completa. Pero SÍ se protege celda por celda: si hay
+  // cambios sin publicar y Sheets trae un 0 donde el dashboard ya tenía un
+  // valor real, se conserva el valor local en vez de pisarlo — mismo bug
+  // que afectó a LRT (ver fix de fact_mensual/er_mensual/er) pero acá con
+  // el anual: caso real detectado, Facturación 2025/2026 de "Cerdo de los
+  // Llanos" sí se publicó, pero Resultado se quedó en 0 porque el auto-sync
+  // de esa carga quedó bloqueado por un conflicto multi-dispositivo, y una
+  // sincronización posterior bajó el 0 viejo de Sheets encima del valor
+  // real recién calculado en memoria.
   if ((!_solo || _solo === 'fact') && cloud.fact && cloud.fact.length) {
+    const factPrevio = _hayCambiosSinPublicar ? DATA.fact : null;
     DATA.fact = {};
     DATA.totals_fact = {};
     cloud.fact.forEach(row => {
@@ -38873,15 +38889,19 @@ function applyCloudData(cloud, opts) {
       if (!emp) return;
       DATA.fact[emp] = {};
       DATA.years.forEach(y => {
-        const v = parseFloat(row[String(y)]) || 0;
-        DATA.fact[emp][String(y)] = v;
-        DATA.totals_fact[String(y)] = (DATA.totals_fact[String(y)] || 0) + v;
+        const yS = String(y);
+        let v = parseFloat(row[yS]) || 0;
+        if (v === 0 && factPrevio?.[emp]?.[yS]) v = factPrevio[emp][yS];
+        DATA.fact[emp][yS] = v;
+        DATA.totals_fact[yS] = (DATA.totals_fact[yS] || 0) + v;
       });
     });
   }
 
-  // resultado: rows con columnas: empresa, 2020..2026
+  // resultado: rows con columnas: empresa, 2020..2026 — mismo resguardo por
+  // celda que fact (ver comentario arriba).
   if (cloud.resultado && cloud.resultado.length) {
+    const sitPrevio = _hayCambiosSinPublicar ? DATA.sit : null;
     DATA.sit = {};
     DATA.totals_sup = {}; DATA.totals_def = {};
     DATA.sup_count  = {}; DATA.def_count  = {};
@@ -38890,15 +38910,17 @@ function applyCloudData(cloud, opts) {
       if (!emp) return;
       DATA.sit[emp] = {};
       DATA.years.forEach(y => {
-        const v = row[String(y)] !== null && row[String(y)] !== '' ? parseFloat(row[String(y)]) : null;
-        DATA.sit[emp][String(y)] = v;
+        const yS = String(y);
+        let v = row[yS] !== null && row[yS] !== '' ? parseFloat(row[yS]) : null;
+        if ((v == null || v === 0) && sitPrevio?.[emp]?.[yS]) v = sitPrevio[emp][yS];
+        DATA.sit[emp][yS] = v;
         if (v !== null) {
           if (v > 0) {
-            DATA.totals_sup[String(y)] = (DATA.totals_sup[String(y)] || 0) + v;
-            DATA.sup_count[String(y)]  = (DATA.sup_count[String(y)]  || 0) + 1;
+            DATA.totals_sup[yS] = (DATA.totals_sup[yS] || 0) + v;
+            DATA.sup_count[yS]  = (DATA.sup_count[yS]  || 0) + 1;
           } else if (v < 0) {
-            DATA.totals_def[String(y)] = (DATA.totals_def[String(y)] || 0) + v;
-            DATA.def_count[String(y)]  = (DATA.def_count[String(y)]  || 0) + 1;
+            DATA.totals_def[yS] = (DATA.totals_def[yS] || 0) + v;
+            DATA.def_count[yS]  = (DATA.def_count[yS]  || 0) + 1;
           }
         }
       });
