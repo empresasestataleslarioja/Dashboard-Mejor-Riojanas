@@ -7186,16 +7186,18 @@ function _rptEmpresasRubros() {
       const inst = _inst[e] || {};
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
         <td style="padding:3px 8px">${inst.decreto || '—'}</td>
       </tr>`;
     }).join('');
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
-      <table style="width:100%;border-collapse:collapse;font-size:8.5pt">
+      <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px">Empresa</th>
-          <th style="text-align:left;padding:5px 8px">Constitución</th>
-          <th style="text-align:left;padding:5px 8px">Decreto de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:22%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:32%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:14%">Constitución</th>
+          <th style="text-align:left;padding:5px 8px;width:32%">Decreto de creación</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
