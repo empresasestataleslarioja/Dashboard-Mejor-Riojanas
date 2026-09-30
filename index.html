@@ -6354,7 +6354,7 @@ function saveRubros() {
       setTimeout(() => { st.textContent = ''; }, 2500); }
   } catch(e) {}
   rebuildActive();
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['rubros']); } catch(e) {}
 }
 function resetRubros() {
   rubros = Object.assign({}, RUBROS_DEFAULT);
@@ -9310,7 +9310,7 @@ function gestionNuevaEmpresa() {
   computeTotals();
   rebuildActive();
   populateSelects();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['fact','resultado','notas','rubros']);
 }
 
 function gestionRenombrar() {
@@ -9332,7 +9332,7 @@ function gestionRenombrar() {
   computeTotals();
   try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
   rebuildActive();
   populateSelects();
   if (msg) { msg.textContent += ' Publicá a Sheets para guardar el cambio.'; }
@@ -9354,7 +9354,7 @@ function gestionRenombrarRapido(emp) {
   populateSelects();
   try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
 }
 
 function gestionFusionar() {
@@ -9370,7 +9370,7 @@ function gestionFusionar() {
   computeTotals();
   try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
   rebuildActive();
   populateSelects();
 }
@@ -9499,7 +9499,7 @@ function _excluirBeneficiario(ben) {
   if (!_beneficiarioExcluido(n)) DATA.beneficiarios_excluidos.push(n);
   const quitadas = _purgarBeneficiariosExcluidos();
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['transferencias']); } catch(e) {}
   return quitadas;
 }
 
@@ -9595,7 +9595,7 @@ function gestionEliminar() {
   try { computeTotals(); } catch(e) {}
   try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
   _poblarGestionSelects();
   try { rebuildActive(); } catch(e) {}
   if (msg) { msg.textContent = '✓ "'+emp+'" eliminada. Publicá a Sheets para guardar.'; msg.style.color = 'var(--pos)'; }
@@ -9888,7 +9888,7 @@ function agregarEmpresaRubro() {
 
   // Guardar en localStorage (persistencia completa)
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['fact','resultado','notas']);
 }
 
 // ── Renombrar empresa ─────────────────────────────────────────────
@@ -9940,7 +9940,7 @@ function _confirmarRenombre(empViejo, empNuevo) {
   saveRubros();
   computeTotals();
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']);
   populateSelects();
   rebuildActive();
   buildRubros();
@@ -10167,7 +10167,7 @@ function _guardarPerfilEmpresa(empresa, mappings) {
   const key = _empKeyPerfil(empresa);
   DATA.flujos_config.perfiles[key] = { empresa: empresa, rowMappings: mappings, updatedAt: nowAR() };
   saveDataToLocalCache();
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['flujos']); } catch(e) {}
 }
 
 function _mostrarWizardMapeado(res) {
@@ -15690,7 +15690,7 @@ function _repararResultadoOperativoLibroMayor() {
   });
   if (huboCambios) {
     console.log('[LR] Resultado Operativo recalculado (formato libro mayor) para', reparados.length, 'empresa(s)/año(s):', reparados);
-    try { marcarPendienteGuardar(); } catch(e) {}
+    try { marcarPendienteGuardar(['resultado']); } catch(e) {}
   }
   return reparados;
 }
@@ -15732,7 +15732,7 @@ function _repararFacturacionDesdeERMensual() {
   });
   if (huboCambios) {
     console.log('[LR] Facturación completada desde ER Provisorio para', reparados.length, 'empresa(s)/año(s):', reparados);
-    try { marcarPendienteGuardar(); } catch(e) {}
+    try { marcarPendienteGuardar(['fact']); } catch(e) {}
   }
   return reparados;
 }
@@ -15784,7 +15784,7 @@ function _repararFacturacionMultifilaVentas() {
   });
   if (huboCambios) {
     console.log('[LR] Facturación recalculada (suma de todas las filas de ventas, antes solo tomaba la primera) para', reparados.length, 'empresa(s)/año(s):', reparados);
-    try { marcarPendienteGuardar(); } catch(e) {}
+    try { marcarPendienteGuardar(['fact','mensual']); } catch(e) {}
   }
   return reparados;
 }
@@ -15835,7 +15835,7 @@ function _repararIngresosBrutosComoVenta() {
   });
   if (huboCambios) {
     console.log('[LR] "Ingresos Brutos" reclasificado de venta a gasto para', reparados.length, 'empresa(s)/año(s):', reparados);
-    try { marcarPendienteGuardar(); } catch(e) {}
+    try { marcarPendienteGuardar(['er_mensual','fact','mensual']); } catch(e) {}
   }
   return reparados;
 }
@@ -16653,7 +16653,7 @@ function guardarAutoridad() {
   else DATA.autoridades.push(registro);
 
   document.getElementById('autoridad-form').style.display = 'none';
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
 }
 
@@ -16662,7 +16662,7 @@ function eliminarAutoridad(idx) {
   if (!a) return;
   if (!confirm(`¿Eliminar el registro de ${a.nombre} (${a.cargo} — ${a.empresa})?`)) return;
   DATA.autoridades.splice(idx, 1);
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
 }
 
@@ -16677,7 +16677,7 @@ function cerrarVigenciaAutoridad(idx) {
   if (!fecha) return;
   if (a.desde && fecha < a.desde) { alert('La fecha de cese no puede ser anterior a la fecha "Desde".'); return; }
   a.hasta = fecha;
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
 }
 
@@ -16956,7 +16956,7 @@ function importarAutoridades(file) {
 
         if (chkReemplazar) chkReemplazar.checked = false;
         saveDataToLocalCache();
-        marcarPendienteGuardar();
+        marcarPendienteGuardar(['autoridades']);
         buildAutoridades();
 
         if (msg) {
@@ -17407,7 +17407,7 @@ function guardarPersonalManual() {
   });
 
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['personal']);
   populateSelects();
   buildPersonal();
 
@@ -17560,7 +17560,7 @@ function importarNomina(file) {
         });
 
         saveDataToLocalCache();
-        marcarPendienteGuardar();
+        marcarPendienteGuardar(['personal']);
         populateSelects();
         buildPersonal();
 
@@ -18121,7 +18121,7 @@ function _guardarInstitucional(emp, fecha, decreto) {
     delete DATA.institucional[emp];
   }
   saveDataToLocalCache();
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['institucional']); } catch(e) {}
 }
 
 // ── Popover rápido de datos institucionales (desde el editor de rubros) ──
@@ -18216,7 +18216,7 @@ function saveEmpNota(value) {
   // Guardar en cache local inmediatamente
   saveDataToLocalCache();
   // Las notas también deben impactar Sheets (fuente de verdad)
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['notas']); } catch(e) {}
 }
 
 // Mostrar indicador de nota en tabla portafolio (tooltip)
@@ -18659,7 +18659,7 @@ function _erStdAnual(emp, yr) {
 // Marcar pendiente de guardar + cache
 function _erMensualSync(emp, anio) {
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
   try { computeTotals(); } catch(e) {}
 }
 
@@ -22114,7 +22114,7 @@ function restaurarTransDesdeBackup() {
   if (!confirm(`¿Restaurar ${parsed.length} transferencias del backup (${fechaFmt})?\n\nEsto reemplazará los datos actuales (${DATA.transferencias.length} registros).`)) return;
   DATA.transferencias = parsed;
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['transferencias']);
   buildTransferencias();
   showStorageStatus('✓ Transferencias restauradas desde backup', '#47ffb4');
 }
@@ -23381,7 +23381,7 @@ function actualizarInflacionMensual() {
     }));
   } catch(e) {}
 
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['inflacion']);
   _renderInflMesesEstado();
   buildInflacion();
 
@@ -25305,7 +25305,7 @@ function rebuildFromHistory() {
   rebuildActive();
   // Deshacer/restaurar también debe impactar Sheets (fuente de verdad)
   try { saveDataToLocalCache(); } catch(e) {}
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','personal','notas','presupuesto']); } catch(e) {}
 }
 
 function updateImportUI() {
@@ -25609,7 +25609,7 @@ function importSafOrganismo(file) {
       DATA.saf_organismo = mapa;
       const nBackfill = _backfillOrganismoTransferencias();
       saveDataToLocalCache();
-      try { marcarPendienteGuardar(); } catch(err) {}
+      try { marcarPendienteGuardar(['transferencias']); } catch(err) {}
       if (typeof buildTransferencias === 'function' && currentPanel === 'transferencias') buildTransferencias();
       _renderSafOrganismoEstado();
       setCtrlMsg(`✓ Mapa SAF → Organismo cargado: ${detectados} organismos — ${nBackfill} transferencias completadas`);
@@ -26331,7 +26331,7 @@ function tryParseERNativo(wb, fname) {
   // Persistir a Sheets: el ER 20XX modifica DATA.er/fact/sit
   if (imported > 0) {
     try { saveDataToLocalCache(); } catch(e) {}
-    try { marcarPendienteGuardar(); } catch(e) {}
+    try { marcarPendienteGuardar(['fact','resultado','mensual','er_mensual','er_detalle']); } catch(e) {}
   }
 
   return { year: detectedYear, imported, skipped, mensualCount, sheetName, syncLog, discrepancias };
@@ -26537,7 +26537,7 @@ function eliminarSinAño() {
   const eliminados = antes - DATA.transferencias.length;
 
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['transferencias']);
   populateTransSelects();
   buildTransferencias();
   renderAuditoriaTransferencias();
@@ -26585,7 +26585,7 @@ function limpiarDuplicadosTrans() {
 
   const eliminados = antes - DATA.transferencias.length;
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['balances']);
   buildTransferencias();
   renderAuditoriaTransferencias();
   alert('✓ ' + eliminados + ' duplicados eliminados. Quedan ' + DATA.transferencias.length + ' registros.');
@@ -26754,7 +26754,7 @@ function _aplicarSIDIF(sidifResult, fname, modo, periodoOverride) {
   populateTransSelects();
   if (typeof buildTransferencias === 'function') buildTransferencias();
   rebuildActive();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['transferencias']);
 }
 
 // ── Selector de período para archivos sin semana/mes en el nombre ──
@@ -27091,7 +27091,7 @@ function _aplicarVentasGastos() {
   // que hace que el aviso de "cambios sin publicar" (al cerrar/recargar la
   // pestaña) funcione si el auto-sync llega a fallar en silencio. Sin esto,
   // una carga que no se terminó de publicar podía perderse sin ningún aviso.
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','mensual','er_mensual']); } catch(e) {}
 
   const t = document.getElementById('imp-vg-preview');
   if (t) t.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
@@ -27777,7 +27777,7 @@ function _aplicarERColumnas() {
   // que hace que el aviso de "cambios sin publicar" (al cerrar/recargar la
   // pestaña) funcione si el auto-sync llega a fallar en silencio. Sin esto,
   // una carga que no se terminó de publicar podía perderse sin ningún aviso.
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['fact','resultado','mensual','er_mensual']); } catch(e) {}
 
   const target = document.getElementById('imp-vg-preview');
   if (target) target.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
@@ -29093,7 +29093,7 @@ function _aplicarERMatricial() {
   computeTotals();
   try { syncYearChips(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['fact','resultado','mensual','er_mensual']);
 
   const t = document.getElementById('imp-er-preview');
   if (t) t.innerHTML = `<div style="padding:14px;background:rgba(71,255,180,.08);border:1px solid var(--pos);border-radius:6px;font-size:11px;color:var(--pos);margin-bottom:12px">
@@ -30162,7 +30162,7 @@ function importPresupuesto(file) {
         }
       });
       saveDataToLocalCache();
-      try { marcarPendienteGuardar(); } catch(e) {}
+      try { marcarPendienteGuardar(['presupuesto']); } catch(e) {}
       buildPresupuesto();
       setCtrlMsg('✓ Presupuesto importado: '+Object.keys(DATA.presupuesto).length+' empresas');
     } catch(err) { alert('Error al leer archivo: '+err.message); }
@@ -31642,7 +31642,7 @@ async function loadBalanceExcel(file) {
     // Poblar selectores con el universo completo antes de renderizar
     populateSelects();
     renderBalanceUI();
-    marcarPendienteGuardar();
+    marcarPendienteGuardar(['balances']);
     saveDataToLocalCache();
 
   } catch(err) {
@@ -33184,7 +33184,7 @@ function eliminarBalance(key) {
   }
   // Persistir inmediatamente — sin esto el balance vuelve al recargar
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['balances']);
   renderBalanceUI();
 }
 
@@ -34275,7 +34275,7 @@ function vincularBalanceVis() {
   // Sincronizar con el select hidden
   const vincSel = document.getElementById('bal-vincular-sel');
   if (vincSel) vincSel.value = emp;
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['balances']);
   saveDataToLocalCache();
 }
 
@@ -36108,7 +36108,7 @@ function _balEditorGuardarInterno() {
   // Refrescar panel de balances con los datos editados
   showBalanceResult();
   _renderBalEditor(); // actualizar colores de inputs
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['balances']);
   saveDataToLocalCache();
   // Actualizar todos los paneles que consumen datos de _balances
   // (resumen, empresa, portafolio, sostenibilidad, heatmap)
@@ -36490,7 +36490,7 @@ function editarCeldaTrans(span, idx, campo) {
       if (v >= 1 && v <= 12) {
         t.mes = v;
         saveDataToLocalCache();
-        marcarPendienteGuardar();
+        marcarPendienteGuardar(['transferencias']);
       }
       renderTransTabla(_transTablaPreFiltrada());
     };
@@ -36517,7 +36517,7 @@ function editarCeldaTrans(span, idx, campo) {
       if (v >= 2000 && v <= 2100) {
         t.año = v;
         saveDataToLocalCache();
-        marcarPendienteGuardar();
+        marcarPendienteGuardar(['transferencias']);
         populateTransSelects();
       }
       renderTransTabla(_transTablaPreFiltrada());
@@ -36545,7 +36545,7 @@ function editarCeldaTrans(span, idx, campo) {
       const v = ta.value.trim();
       t.observacion = v;
       saveDataToLocalCache();
-      marcarPendienteGuardar();
+      marcarPendienteGuardar(['transferencias']);
       renderTransTabla(_transTablaPreFiltrada());
     };
     ta.addEventListener('blur', commit);
@@ -36735,7 +36735,7 @@ function importarClasificaciones(file) {
       });
 
       saveDataToLocalCache();
-      marcarPendienteGuardar();
+      marcarPendienteGuardar(['transferencias']);
       buildTransferencias();
 
       if (res) {
@@ -36838,7 +36838,7 @@ function eliminarTransPorPeriodo() {
 
   // Actualizar UI
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['transferencias']);
   populateTransSelects();
   buildTransferencias();
   _actualizarDelPreview();
@@ -36874,7 +36874,7 @@ function asignarAñoMasivo() {
 
   if (asignados > 0) {
     saveDataToLocalCache();
-    marcarPendienteGuardar();
+    marcarPendienteGuardar(['transferencias']);
     populateTransSelects();
     buildTransferencias();
   }
@@ -36933,7 +36933,7 @@ function corregirMesDesdeObservacion() {
 
   if (asignados > 0) {
     saveDataToLocalCache();
-    marcarPendienteGuardar();
+    marcarPendienteGuardar(['transferencias']);
     buildTransferencias();
   }
   if (res) {
@@ -36970,7 +36970,7 @@ function asignarMesMasivo() {
 
   if (asignados > 0) {
     saveDataToLocalCache();
-    marcarPendienteGuardar();
+    marcarPendienteGuardar(['transferencias']);
     buildTransferencias();
   }
   if (res) {
@@ -36987,7 +36987,7 @@ function editarAnoTrans(idx, valor) {
   if (!DATA.transferencias[idx]) return;
   DATA.transferencias[idx].año = año;
   saveDataToLocalCache();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['transferencias']);
   populateTransSelects();
   buildTransferencias();
 }
@@ -37010,7 +37010,7 @@ function editarAnoInline(span, idx) {
     if (año >= 2000 && año <= 2100) {
       t.año = año;
       saveDataToLocalCache();
-      marcarPendienteGuardar();
+      marcarPendienteGuardar(['transferencias']);
       populateTransSelects();
       buildTransferencias();
     } else {
@@ -37044,7 +37044,7 @@ function cambiarCategoriaTrans(idx, nuevaCat) {
   // Reconstruir KPIs + gráficos sin tocar la tabla
   _rebuildTransSoloGraficos();
   saveDataToLocalCache();
-  try { marcarPendienteGuardar(); } catch(e) {}
+  try { marcarPendienteGuardar(['transferencias']); } catch(e) {}
 }
 
 function _rebuildTransSoloGraficos() {
@@ -38500,7 +38500,7 @@ function _recuperarBackupTransferencias() {
   if (!ok) return;
   DATA.transferencias = sel.rows;
   renderTransferencias();
-  marcarPendienteGuardar();
+  marcarPendienteGuardar(['transferencias']);
   alert(`✓ Restaurados ${sel.n.toLocaleString('es-AR')} registros. Revisá los datos y publicá a Sheets cuando estés conforme.`);
 }
 
@@ -38600,6 +38600,7 @@ async function syncSoloTransferencias() {
 
     if (enSheets === total || enSheets === '?') {
       localStorage.setItem(_LS_TRANS_LAST_CNT, String(total));
+      limpiarPendienteGuardar('transferencias');
       setMsg(`✓ ${total.toLocaleString('es-AR')} transferencias publicadas`, '#47ffb4');
     } else {
       setMsg(`⚠ Enviadas ${total}, en Sheets ${enSheets}. Reintentá si no coinciden.`, '#ff8c47');
@@ -38623,6 +38624,7 @@ async function syncSoloBalances() {
   if (ind) { ind.textContent = '⏳ Publicando balances…'; ind.style.color = '#47e8ff'; }
   try {
     await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros } });
+    limpiarPendienteGuardar('balances');
     if (ind) { ind.textContent = '✓ Balances publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
@@ -38635,6 +38637,7 @@ async function syncSoloFlujos() {
   if (ind) { ind.textContent = '⏳ Publicando flujos…'; ind.style.color = '#47e8ff'; }
   try {
     await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación flujos', data: { flujos: payload.flujos, flujos_config: payload.flujos_config, flujos_a_eliminar: payload.flujos_a_eliminar } });
+    limpiarPendienteGuardar('flujos');
     if (ind) { ind.textContent = '✓ Flujos publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
@@ -38647,6 +38650,7 @@ async function syncSoloPersonal() {
   if (ind) { ind.textContent = '⏳ Publicando personal…'; ind.style.color = '#47e8ff'; }
   try {
     await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación personal', data: { personal: payload.personal } });
+    limpiarPendienteGuardar('personal');
     if (ind) { ind.textContent = '✓ Personal publicado'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
@@ -39055,7 +39059,7 @@ function applyCloudData(cloud, opts) {
   // sincronización posterior bajó el 0 viejo de Sheets encima del valor
   // real recién calculado en memoria.
   if ((!_solo || _solo === 'fact') && cloud.fact && cloud.fact.length) {
-    const factPrevio = _hayCambiosSinPublicar ? DATA.fact : null;
+    const factPrevio = _seccionPendiente('fact') ? DATA.fact : null;
     DATA.fact = {};
     DATA.totals_fact = {};
     cloud.fact.forEach(row => {
@@ -39075,7 +39079,7 @@ function applyCloudData(cloud, opts) {
   // resultado: rows con columnas: empresa, 2020..2026 — mismo resguardo por
   // celda que fact (ver comentario arriba).
   if (cloud.resultado && cloud.resultado.length) {
-    const sitPrevio = _hayCambiosSinPublicar ? DATA.sit : null;
+    const sitPrevio = _seccionPendiente('resultado') ? DATA.sit : null;
     DATA.sit = {};
     DATA.totals_sup = {}; DATA.totals_def = {};
     DATA.sup_count  = {}; DATA.def_count  = {};
@@ -39108,7 +39112,7 @@ function applyCloudData(cloud, opts) {
   // cambios propios sin publicar; la restauración explícita de este módulo
   // (restaurarDesdeSheets, con confirmación del usuario) sigue funcionando
   // igual porque pasa _solo==='personal'.
-  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length && !(_hayCambiosSinPublicar && !_solo)) {
+  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length && !(_seccionPendiente('personal') && !_solo)) {
     DATA.personal    = [];
     DATA.pers_totals = {};
     cloud.personal.forEach(row => {
@@ -39205,7 +39209,7 @@ function applyCloudData(cloud, opts) {
     DATA.notas = DATA.notas || {};
     cloud.notas.forEach(r => {
       if (!r.empresa || !r.nota) return;
-      if (_hayCambiosSinPublicar && DATA.notas[r.empresa]) return;
+      if (_seccionPendiente('notas') && DATA.notas[r.empresa]) return;
       DATA.notas[r.empresa] = r.nota;
     });
   }
@@ -39221,7 +39225,7 @@ function applyCloudData(cloud, opts) {
       const anio = String(r.año != null ? r.año : (r.anio != null ? r.anio : ''));
       const val  = parseFloat(r.presupuesto);
       if (!emp || !anio || isNaN(val)) return;
-      if (_hayCambiosSinPublicar && DATA.presupuesto[emp] && DATA.presupuesto[emp][anio] != null) return;
+      if (_seccionPendiente('presupuesto') && DATA.presupuesto[emp] && DATA.presupuesto[emp][anio] != null) return;
       if (!DATA.presupuesto[emp]) DATA.presupuesto[emp] = {};
       DATA.presupuesto[emp][anio] = val;
     });
@@ -39500,7 +39504,7 @@ function applyCloudData(cloud, opts) {
 
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.rubro || r.rubro === 'Sin rubro') return;
-      if (_hayCambiosSinPublicar && rubros[r.empresa]) return;
+      if (_seccionPendiente('rubros') && rubros[r.empresa]) return;
       rubros[r.empresa] = r.rubro;
     });
     try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
@@ -39511,7 +39515,7 @@ function applyCloudData(cloud, opts) {
     // publicar; antes solo se aplicaba la baja, nunca la reactivación.
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.activo) return;
-      if (_hayCambiosSinPublicar && empresasInactivas[r.empresa] !== undefined) return;
+      if (_seccionPendiente('rubros') && empresasInactivas[r.empresa] !== undefined) return;
       if (r.activo === 'NO') empresasInactivas[r.empresa] = _soloFecha(r.fecha_inactiva) || true;
       else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
     });
@@ -39523,7 +39527,7 @@ function applyCloudData(cloud, opts) {
     cloud.rubros.forEach(r => {
       if (!r.empresa || (!r.fecha_constitucion && !r.decreto)) return;
       const actual = DATA.institucional[r.empresa];
-      if (_hayCambiosSinPublicar && actual && (actual.fechaConstitucion || actual.decreto)) return;
+      if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto)) return;
       DATA.institucional[r.empresa] = {
         fechaConstitucion: _soloFecha(r.fecha_constitucion),
         decreto:           _decretoLimpio(r.decreto),
@@ -39608,7 +39612,7 @@ function applyCloudData(cloud, opts) {
   // filas que Sheets sí trae actualizan lo ya publicado sin problema; lo
   // que Sheets todavía no tiene queda intacto hasta que se publique.
   if (Array.isArray(cloud.mensual) && cloud.mensual.length > 0) {
-    if (!_hayCambiosSinPublicar) { DATA.fact_mensual = {}; DATA.res_mensual = {}; }
+    if (!_seccionPendiente('mensual')) { DATA.fact_mensual = {}; DATA.res_mensual = {}; }
     cloud.mensual.forEach(r => {
       if (!r.empresa || !r.anio || !r.mes) return;
       const emp = String(r.empresa), yS = String(r.anio), mes = String(r.mes);
@@ -39622,14 +39626,14 @@ function applyCloudData(cloud, opts) {
       if (f != null && !isNaN(f)) {
         if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
         if (!DATA.fact_mensual[emp][yS]) DATA.fact_mensual[emp][yS] = {};
-        if (!(_hayCambiosSinPublicar && DATA.fact_mensual[emp][yS][mes] != null)) {
+        if (!(_seccionPendiente('mensual') && DATA.fact_mensual[emp][yS][mes] != null)) {
           DATA.fact_mensual[emp][yS][mes] = f;
         }
       }
       if (res != null && !isNaN(res)) {
         if (!DATA.res_mensual[emp]) DATA.res_mensual[emp] = {};
         if (!DATA.res_mensual[emp][yS]) DATA.res_mensual[emp][yS] = {};
-        if (!(_hayCambiosSinPublicar && DATA.res_mensual[emp][yS][mes] != null)) {
+        if (!(_seccionPendiente('mensual') && DATA.res_mensual[emp][yS][mes] != null)) {
           DATA.res_mensual[emp][yS][mes] = res;
         }
       }
@@ -39642,7 +39646,7 @@ function applyCloudData(cloud, opts) {
   // tampoco vaciarlo si hay cambios locales sin publicar todavía (mismo
   // criterio y mismo motivo que arriba).
   if (Array.isArray(cloud.er_mensual) && cloud.er_mensual.length > 0) {
-    if (!_hayCambiosSinPublicar) { DATA.er_mensual = {}; }
+    if (!_seccionPendiente('er_mensual')) { DATA.er_mensual = {}; }
     cloud.er_mensual.forEach(r => {
       if (!r.empresa || !r.anio) return;
       const emp = String(r.empresa), yS = String(r.anio);
@@ -39652,7 +39656,7 @@ function applyCloudData(cloud, opts) {
         if (Array.isArray(filas) && filas.length > 0) {
           if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
           // Protección puntual, mismo motivo que fact_mensual/res_mensual arriba.
-          if (!(_hayCambiosSinPublicar && DATA.er_mensual[emp][yS])) {
+          if (!(_seccionPendiente('er_mensual') && DATA.er_mensual[emp][yS])) {
             DATA.er_mensual[emp][yS] = { filas, conceptos, esTrimestral: r.es_trimestral === 'SI' };
           }
         }
@@ -39664,7 +39668,7 @@ function applyCloudData(cloud, opts) {
   // Mismo resguardo: nunca vaciar por una respuesta vacía, ni si hay
   // cambios locales sin publicar todavía.
   if (Array.isArray(cloud.er_detalle) && cloud.er_detalle.length > 0) {
-    if (!_hayCambiosSinPublicar) { DATA.er = {}; }
+    if (!_seccionPendiente('er_detalle')) { DATA.er = {}; }
     cloud.er_detalle.forEach(r => {
       if (!r.empresa || !r.anio) return;
       const emp = String(r.empresa), yS = String(r.anio);
@@ -39673,7 +39677,7 @@ function applyCloudData(cloud, opts) {
         if (partidas && typeof partidas === 'object') {
           if (!DATA.er[emp]) DATA.er[emp] = {};
           // Protección puntual, mismo motivo que fact_mensual/res_mensual arriba.
-          if (!(_hayCambiosSinPublicar && DATA.er[emp][yS])) {
+          if (!(_seccionPendiente('er_detalle') && DATA.er[emp][yS])) {
             DATA.er[emp][yS] = partidas;
           }
         }
@@ -39687,7 +39691,7 @@ function applyCloudData(cloud, opts) {
   // separada, de una publicación previa), se concatenan acá sin perder el dato.
   // Reemplazo total sin ninguna protección — igual que personal: se omite si
   // hay cambios locales sin publicar, para no perder una edición en curso.
-  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0 && !_hayCambiosSinPublicar) {
+  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0 && !_seccionPendiente('autoridades')) {
     DATA.autoridades = cloud.autoridades
       .filter(r => r.empresa && (r.nombre || r.apellido))
       .map(r => ({
@@ -40489,11 +40493,45 @@ if (!window._syncPeriodicoIniciado) {
   });
 }
 
-// Flag global: true solo cuando el usuario cargó datos nuevos no publicados en Sheets
-var _hayCambiosSinPublicar = false;
+// ── Cambios locales sin publicar, por sección ──────────────────────
+// Antes esto era un único booleano global: cualquier edición en cualquier
+// parte del dashboard (aunque fuera, por ejemplo, una transferencia)
+// bloqueaba la bajada de TODAS las secciones protegidas de applyCloudData
+// (rubros, notas, presupuesto, fact/resultado, mensual, autoridades,
+// personal) hasta que esa publicación se confirmara — con varios
+// dispositivos usando el dashboard a la vez, un cambio pendiente sin
+// relación con lo que otro dispositivo acababa de publicar igual bloqueaba
+// que ese dato llegara acá.
+//
+// Ahora es un Set con los nombres de las secciones que tienen algo local
+// sin publicar. '*' es el comodín "no se identificó una sección específica"
+// y preserva el comportamiento anterior (protege todas las secciones) para
+// cualquier llamado a marcarPendienteGuardar() que no indique una sección
+// puntual — así que ningún call site sin migrar pierde protección.
+var _seccionesPendientes = new Set();
 
-function marcarPendienteGuardar() {
-  _hayCambiosSinPublicar = true;
+// Compatibilidad: el resto del código (aviso de cierre de pestaña,
+// disparador de auto-sync, y los merges de mensual/er_mensual/er_detalle/
+// personal/autoridades que protegen la sección entera en vez de por celda)
+// sigue leyendo _hayCambiosSinPublicar como booleano — true si CUALQUIER
+// sección tiene algo pendiente.
+Object.defineProperty(window, '_hayCambiosSinPublicar', {
+  get: function() { return _seccionesPendientes.size > 0; },
+  set: function(v) { if (v) _seccionesPendientes.add('*'); else _seccionesPendientes.clear(); },
+  configurable: true,
+});
+
+// true si la sección dada (o '*') tiene algo local sin publicar — lo usan
+// los merges de applyCloudData que sí distinguen por sección.
+function _seccionPendiente(nombre) {
+  return _seccionesPendientes.has('*') || _seccionesPendientes.has(nombre);
+}
+
+// secciones: nombre de sección, array de nombres, o nada (equivale a '*',
+// protege todo — mismo comportamiento que antes de este cambio).
+function marcarPendienteGuardar(secciones) {
+  const lista = secciones == null ? ['*'] : (Array.isArray(secciones) ? secciones : [secciones]);
+  lista.forEach(function(s) { _seccionesPendientes.add(s); });
   const btn = document.getElementById('btn-guardar');
   const ind = document.getElementById('save-indicator');
   if (btn && !btn.disabled) {
@@ -40509,8 +40547,13 @@ function marcarPendienteGuardar() {
   try { if (typeof _dispararAutoSync === 'function') _dispararAutoSync(); } catch(e) {}
 }
 
-function limpiarPendienteGuardar() {
-  _hayCambiosSinPublicar = false;
+// Sin argumento: publicación general completa, se resuelve todo lo pendiente.
+// Con sección/array: solo esa sección se da por publicada (usado por las
+// publicaciones parciales de un solo módulo).
+function limpiarPendienteGuardar(secciones) {
+  if (secciones == null) { _seccionesPendientes.clear(); return; }
+  const lista = Array.isArray(secciones) ? secciones : [secciones];
+  lista.forEach(function(s) { _seccionesPendientes.delete(s); });
 }
 
 // ── guardarDatos: alias para compatibilidad ───────────────────────
