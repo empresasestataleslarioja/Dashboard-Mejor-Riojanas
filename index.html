@@ -2386,6 +2386,12 @@ self.onmessage = async (e) => {
     box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:260px;
     font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
 
+  <!-- Popover de actividad puntual que desarrolla la empresa -->
+  <div id="rub-act-popover" style="display:none;position:fixed;z-index:9000;
+    background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+    box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:260px;
+    font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
+
   <div id="viz-panel" style="display:none;position:fixed;top:52px;left:210px;right:0;
     background:var(--s1);border-bottom:2px solid var(--bd2);z-index:150;
     padding:10px 22px 12px;box-shadow:0 6px 20px rgba(0,0,0,.35)">
@@ -7144,7 +7150,6 @@ function _rptPresupuesto() {
 // estado vigente/inactiva, agrupado por rubro — el mismo cruce que arma
 // buildRubros() para el editor de asignaciones, pero como reporte imprimible.
 function _rptEmpresasRubros() {
-  const lastY = ys().map(String).slice(-1)[0];
   const _rub = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
   const _inact = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
   const _inst  = (typeof DATA !== 'undefined' && DATA.institucional) ? DATA.institucional : {};
@@ -7154,7 +7159,6 @@ function _rptEmpresasRubros() {
     ...(DATA.personal||[]).map(d=>d.e),
   ])].sort((a,b)=>a.localeCompare(b,'es'));
 
-  const fmt = v => { if(!v) return '—'; return '$ '+Math.round(v).toLocaleString('es-AR'); };
   const vigentes = allEmps.filter(e=>!_inact[e]);
   const inactivas = allEmps.filter(e=>_inact[e]);
 
@@ -7179,22 +7183,19 @@ function _rptEmpresasRubros() {
       const inact = !!_inact[e];
       const fechaInact = typeof _inact[e] === 'string' ? _inact[e] : '';
       const fechaCorta = fechaInact ? fmtFechaCorta(fechaInact) : '';
-      const fact = DATA.fact?.[e]?.[lastY];
       const inst = _inst[e] || {};
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
-        <td>${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
-        <td>${inst.decreto || '—'}</td>
-        <td style="text-align:right">${fmt(fact)}</td>
+        <td style="padding:3px 8px">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
+        <td style="padding:3px 8px">${inst.decreto || '—'}</td>
       </tr>`;
     }).join('');
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
           <th style="text-align:left;padding:5px 8px">Empresa</th>
-          <th style="text-align:left">Constitución</th>
-          <th style="text-align:left">Decreto de creación</th>
-          <th style="text-align:right">Facturación ${lastY||''}</th>
+          <th style="text-align:left;padding:5px 8px">Constitución</th>
+          <th style="text-align:left;padding:5px 8px">Decreto de creación</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
@@ -9806,6 +9807,7 @@ function buildRubros() {
     const selColor = RUBRO_COLORS[r] || RUBRO_COLORS['Sin rubro'];
     const inst = (DATA.institucional && DATA.institucional[emp]) || {};
     const tieneInst = !!(inst.fechaConstitucion || inst.decreto);
+    const tieneActividad = !!inst.actividad;
     return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
         ondblclick="_iniciarRenombre('${emp}')"
@@ -9823,10 +9825,11 @@ function buildRubros() {
         border:1px solid ${tieneInst?'#47e8ff':'var(--bd2)'};
         color:${tieneInst?'#47e8ff':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
         title="${tieneInst?'Ver/editar fecha de constitución y decreto de creación':'Agregar fecha de constitución y decreto de creación'}">🏛</button>
-      <button onclick="_iniciarRenombre('${emp}')"
-        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:none;border:1px solid var(--bd2);
-        color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:2px;cursor:pointer"
-        title="Renombrar empresa">✎</button>
+      <button onclick="mostrarActividadPopover(event,'${emp}')"
+        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneActividad?'rgba(232,255,71,.1)':'none'};
+        border:1px solid ${tieneActividad?'#e8ff47':'var(--bd2)'};
+        color:${tieneActividad?'#b8a000':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
+        title="${tieneActividad?'Ver/editar actividad puntual que desarrolla':'Agregar actividad puntual que desarrolla (doble click en el nombre para renombrar)'}">📋</button>
     </div>`;
   }).join('');
 }
@@ -18115,8 +18118,28 @@ function saveEmpInstitucional() {
 // del editor de rubros, para no duplicar la lógica de persistencia.
 function _guardarInstitucional(emp, fecha, decreto) {
   DATA.institucional = DATA.institucional || {};
-  if (fecha || decreto) {
-    DATA.institucional[emp] = { fechaConstitucion: fecha, decreto };
+  const actividad = DATA.institucional[emp]?.actividad || '';
+  if (fecha || decreto || actividad) {
+    DATA.institucional[emp] = { fechaConstitucion: fecha, decreto, actividad };
+  } else {
+    delete DATA.institucional[emp];
+  }
+  saveDataToLocalCache();
+  try { marcarPendienteGuardar(['institucional']); } catch(e) {}
+}
+
+// Guarda la actividad puntual que desarrolla la empresa — mismo store que
+// fecha de constitución/decreto (misma fila de la pestaña "rubros"), pero
+// con su propio botón/popover en el editor de rubros porque es un dato de
+// carga manual e independiente. Se carga a mano, no se deriva de nada.
+function _guardarActividad(emp, actividad) {
+  DATA.institucional = DATA.institucional || {};
+  const existing = DATA.institucional[emp] || {};
+  const fecha   = existing.fechaConstitucion || '';
+  const decreto = existing.decreto || '';
+  const act     = (actividad || '').trim();
+  if (fecha || decreto || act) {
+    DATA.institucional[emp] = { fechaConstitucion: fecha, decreto, actividad: act };
   } else {
     delete DATA.institucional[emp];
   }
@@ -18176,6 +18199,54 @@ function _confirmarInstPopover() {
 
 document.addEventListener('click', e => {
   const p = document.getElementById('rub-inst-popover');
+  if (p && p.style.display !== 'none' && !p.contains(e.target)) p.style.display = 'none';
+});
+
+// ── Popover rápido de actividad puntual (desde el editor de rubros) ──
+// Dato de carga manual, sin relación con ningún cálculo del dashboard.
+function mostrarActividadPopover(evt, emp) {
+  const pop = document.getElementById('rub-act-popover');
+  if (!pop) return;
+  const info = (DATA.institucional && DATA.institucional[emp]) || {};
+  pop.dataset.emp = emp;
+  pop.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:9px;font-weight:600;color:var(--text);letter-spacing:.04em">📋 ${emp}</span>
+      <button onclick="event.stopPropagation();document.getElementById('rub-act-popover').style.display='none'"
+        style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
+      Actividad puntual que desarrolla
+      <textarea id="act-pop-texto" rows="3" placeholder="Ej: Producción y venta de embutidos porcinos"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box;resize:vertical">${(info.actividad||'').replace(/</g,'&lt;')}</textarea>
+    </label>
+    <button onclick="event.stopPropagation();_confirmarActividadPopover()"
+      style="width:100%;padding:6px;background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
+      color:#b8a000;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
+      Guardar</button>`;
+  pop.style.display = 'block';
+  const rc = evt.currentTarget.getBoundingClientRect();
+  let left = rc.left, top = rc.bottom + 6;
+  const pw = 260, ph = 160;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  if (top + ph > window.innerHeight - 10) top = Math.max(10, rc.top - ph - 6);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  evt.stopPropagation();
+}
+
+function _confirmarActividadPopover() {
+  const pop = document.getElementById('rub-act-popover');
+  const emp = pop?.dataset.emp;
+  if (!emp) return;
+  const texto = document.getElementById('act-pop-texto')?.value || '';
+  _guardarActividad(emp, texto);
+  pop.style.display = 'none';
+  buildRubros();
+}
+
+document.addEventListener('click', e => {
+  const p = document.getElementById('rub-act-popover');
   if (p && p.style.display !== 'none' && !p.contains(e.target)) p.style.display = 'none';
 });
 
@@ -39540,16 +39611,18 @@ function applyCloudData(cloud, opts) {
     });
     try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
 
-    // Datos institucionales (fecha de constitución, decreto de creación) —
-    // viven en la misma pestaña "rubros" que el resto del maestro de empresas.
+    // Datos institucionales (fecha de constitución, decreto de creación,
+    // actividad puntual que desarrolla) — viven en la misma pestaña "rubros"
+    // que el resto del maestro de empresas.
     DATA.institucional = DATA.institucional || {};
     cloud.rubros.forEach(r => {
-      if (!r.empresa || (!r.fecha_constitucion && !r.decreto)) return;
+      if (!r.empresa || (!r.fecha_constitucion && !r.decreto && !r.actividad)) return;
       const actual = DATA.institucional[r.empresa];
-      if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto)) return;
+      if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto || actual.actividad)) return;
       DATA.institucional[r.empresa] = {
         fechaConstitucion: _soloFecha(r.fecha_constitucion),
         decreto:           _decretoLimpio(r.decreto),
+        actividad:         r.actividad || '',
       };
     });
   }
@@ -40052,6 +40125,7 @@ function buildCloudPayload() {
       fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '',
       fecha_constitucion: inst.fechaConstitucion || '',
       decreto: inst.decreto || '',
+      actividad: inst.actividad || '',
     };
   });
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)

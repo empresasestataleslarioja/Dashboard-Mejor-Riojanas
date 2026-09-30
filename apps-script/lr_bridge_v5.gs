@@ -42,6 +42,7 @@ const TAB = {
   er_detalle:     'er_detalle',
   flujos:         'flujos',
   flujos_config:  'flujos_config',
+  autoridades:    'autoridades',
   meta:           'meta',
   auditoria:      'auditoria',
   log:            '_log',
@@ -87,6 +88,7 @@ function doGet(e) {
     er_detalle:      leerHoja(ss, TAB.er_detalle),
     flujos:          leerHoja(ss, TAB.flujos),
     flujos_config:   leerHoja(ss, TAB.flujos_config),
+    autoridades:     leerHoja(ss, TAB.autoridades),
     meta:            leerMeta(ss),
   });
   } catch(err) {
@@ -246,6 +248,12 @@ function doPost(e) {
       resultados.flujos_config = payload.flujos_config.length;
     }
 
+    // ── AUTORIDADES (director/presidente, síndico, etc. por empresa) ──
+    if (Array.isArray(payload.autoridades)) {
+      escribirHoja(ss, TAB.autoridades, payload.autoridades);
+      resultados.autoridades = payload.autoridades.length;
+    }
+
     escribirMeta(ss, savedAt, updBy, nota);
     registrarAuditoria(ss, savedAt, updBy, nota, resultados);
     escribirLog(ss, savedAt, 'OK', JSON.stringify(resultados), '');
@@ -366,7 +374,7 @@ function registrarAuditoria(ss, savedAt, updBy, nota, resultados) {
       hoja = ss.insertSheet(TAB.auditoria);
       hoja.appendRow(['fecha','usuario','nota','fact','resultado','personal',
                       'transferencias','notas','presupuesto','balances','rubros',
-                      'mensual','er_mensual','er_detalle','flujos','flujos_config']);
+                      'mensual','er_mensual','er_detalle','flujos','flujos_config','autoridades']);
     }
     hoja.appendRow([
       savedAt, updBy, nota,
@@ -383,6 +391,7 @@ function registrarAuditoria(ss, savedAt, updBy, nota, resultados) {
       resultados.er_detalle     || 0,
       resultados.flujos         || 0,
       resultados.flujos_config  || 0,
+      resultados.autoridades    || 0,
     ]);
     const last = hoja.getLastRow();
     if (last > 201) hoja.deleteRows(2, last - 201);
