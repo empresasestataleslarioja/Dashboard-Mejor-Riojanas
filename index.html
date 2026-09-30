@@ -7184,20 +7184,27 @@ function _rptEmpresasRubros() {
       const fechaInact = typeof _inact[e] === 'string' ? _inact[e] : '';
       const fechaCorta = fechaInact ? fmtFechaCorta(fechaInact) : '';
       const inst = _inst[e] || {};
+      // text-align:left explícito en las 4 celdas: el CSS genérico de
+      // reportes (_rptCSS) alinea las columnas a la derecha por default
+      // (pensado para tablas numéricas) salvo la primera — sin esto, los
+      // encabezados (alineados a la izquierda por estilo propio de esta
+      // tabla) quedaban desalineados contra datos alineados a la derecha,
+      // y un texto largo de Actividad terminaba pegado al borde derecho de
+      // su columna en vez de empezar debajo de su encabezado.
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:3px 8px">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
-        <td style="padding:3px 8px">${inst.actividad || '—'}</td>
-        <td style="padding:3px 8px">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
-        <td style="padding:3px 8px">${inst.decreto || '—'}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
       </tr>`;
     }).join('');
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:22%">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:32%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:20%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:36%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:14%">Constitución</th>
-          <th style="text-align:left;padding:5px 8px;width:32%">Decreto de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:30%">Decreto de creación</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
