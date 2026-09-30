@@ -18448,9 +18448,17 @@ function buildEmpresa() {
   // Transferencias recibidas: comparativo por año y promedio mensual
   buildTransferenciasEmpresa(emp);
 
-  // Evolución mensual — resetear vista a estándar al cambiar empresa
-  window._erMensualVista = 'estandar';
-  window._erRptAnio = null;
+  // Evolución mensual — resetear vista/filtro de año solo al cambiar de
+  // EMPRESA, no en cada reconstrucción del panel. Antes se reseteaba acá
+  // sin condición, así que cualquier rebuildActive() de este panel — por
+  // ejemplo el sync periódico en segundo plano, que corre cada 2 minutos
+  // mientras la pestaña está abierta — borraba el filtro de año que el
+  // usuario acababa de elegir, aunque siguiera viendo la misma empresa.
+  if (window._empresaAnteriorEvo !== emp) {
+    window._erMensualVista = 'estandar';
+    window._erRptAnio = null;
+    window._empresaAnteriorEvo = emp;
+  }
   buildEvolucionMensual(emp);
 
   // Auditoría ER provisorio vs balance formal
