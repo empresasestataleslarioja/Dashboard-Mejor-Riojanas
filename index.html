@@ -15862,6 +15862,60 @@ function _repararIngresosBrutosComoVenta() {
   return reparados;
 }
 
+// ── Reparación automática: filas de Ventas/Otros Ingresos sin clasificar
+// en el ER mensual — bug real: algunas empresas (ej. "Cerdo de los
+// Llanos") tienen su detalle mensual importado con filas como "VENTA DE
+// CARNE PORCINA"/"VENTA DESDE FRIGORIFICO"/"OTROS INGRESOS" que nunca
+// quedaron etiquetadas conceptoStd:'ventas'/'otrosIngresos' — el
+// clasificador usado en esa importación reconoce "VENTAS NETAS"/"TOTAL
+// VENTAS" y variantes similares, pero no "VENTA DE <detalle de
+// producto>" en singular. _erDesdeMonthly tiene un resguardo que usa
+// DATA.fact cuando no hay ninguna fila de ventas, así que la Facturación
+// ANUAL sigue mostrando el número correcto — pero el desglose mensual/por
+// concepto (ER Provisorio, Desglose ER) queda sin discriminar Ventas, lo
+// que se ve como "Ventas" vacío o en 0 aunque Facturación esté bien.
+// Solo actúa si esta empresa/año no tiene NINGUNA fila ya clasificada
+// como 'ventas' (para no tocar datos ya correctos), y solo si el total de
+// las filas candidatas coincide (1% de tolerancia) con la Facturación
+// oficial ya cargada — si no valida, no se toca nada para esa
+// empresa/año y queda para revisión manual. Nunca cambia ningún valor
+// numérico, solo la etiqueta de clasificación de filas ya existentes.
+function _repararVentasSinClasificar() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      if (data.filas.some(f => f.conceptoStd === 'ventas')) return; // ya tiene ventas clasificadas
+      const candidatas = data.filas.filter(f =>
+        f.conceptoStd == null &&
+        /^VENTAS?(\s|$)/i.test(String(f.lbl || '').trim()) &&
+        !/DEVOLUC|DESCUENTO|BRUTA/i.test(String(f.lbl || ''))
+      );
+      if (!candidatas.length) return;
+      const otrosIng = data.filas.filter(f => f.conceptoStd == null && String(f.lbl || '').trim().toUpperCase() === 'OTROS INGRESOS');
+      const sumar = fs => fs.reduce((s, f) => s + Object.values(f.valores || {}).reduce((s2, v) => s2 + (Number(v) || 0), 0), 0);
+      const totalCandidato = sumar(candidatas) + sumar(otrosIng);
+      const oficial = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[Number(yr)];
+      if (oficial != null && oficial !== 0) {
+        const diff = Math.abs(totalCandidato - oficial) / Math.abs(oficial);
+        if (diff > 0.01) return; // no valida contra la Facturación oficial — no tocar
+      }
+      candidatas.forEach(f => { f.conceptoStd = 'ventas'; });
+      otrosIng.forEach(f => { f.conceptoStd = 'otrosIngresos'; });
+      huboCambios = true;
+      reparados.push({ emp, yr, filasVentas: candidatas.length, filasOtrosIngresos: otrosIng.length });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] Ventas/Otros Ingresos reclasificadas (estaban sin etiquetar) para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
+  }
+  return reparados;
+}
+
 // ── Control cruzado: el ER Provisorio (que muestran Resultado Operativo →
 // Desglose ER y Evolución Empresa → ER Provisorio, ambos vía
 // _erDesdeMonthly) puede diferir de la Facturación/Resultado Operativo
@@ -39862,6 +39916,7 @@ function applyCloudData(cloud, opts) {
     syncYearChips();
   }
 
+  try { _repararVentasSinClasificar(); } catch(e) {}
   try { _repararResultadoOperativoLibroMayor(); } catch(e) {}
   try { _repararFacturacionDesdeERMensual(); } catch(e) {}
   try { _repararIngresosBrutosComoVenta(); } catch(e) {}
