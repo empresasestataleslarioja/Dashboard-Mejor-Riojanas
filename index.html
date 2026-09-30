@@ -39507,6 +39507,25 @@ function applyCloudData(cloud, opts) {
       if (_seccionPendiente('rubros') && rubros[r.empresa]) return;
       rubros[r.empresa] = r.rubro;
     });
+    // Podar empresas fantasma: el merge de arriba es upsert puro (nunca
+    // borra) — si una empresa se renombró/fusionó editando la planilla de
+    // Sheets DIRECTAMENTE (sin pasar por "Renombrar"/"Fusionar" del
+    // dashboard, que sí generan una tumba en empresas_eliminadas), el nombre
+    // viejo queda pegado para siempre en cualquier dispositivo que ya lo
+    // tuviera cacheado, sin importar cuántas veces sincronice — bug real
+    // confirmado: nombres viejos (ej. abreviaturas de antes de un rename)
+    // que ya no existen en ninguna fila de Sheets seguían apareciendo en
+    // "Asignación de empresas por rubro". cloud.rubros es siempre la bajada
+    // COMPLETA de la pestaña (nunca parcial, ver _solo más arriba no aplica
+    // acá), así que es seguro tratarla como autoritativa. Solo se poda
+    // cuando este dispositivo no tiene cambios de rubros sin publicar —
+    // podría ser justo una empresa nueva que el usuario acaba de cargar y
+    // todavía no llegó a Sheets.
+    if (!_seccionPendiente('rubros')) {
+      const _empresasEnSheetsRubros = new Set(cloud.rubros.map(r => r.empresa));
+      Object.keys(rubros).forEach(emp => { if (!_empresasEnSheetsRubros.has(emp)) delete rubros[emp]; });
+      Object.keys(empresasInactivas).forEach(emp => { if (!_empresasEnSheetsRubros.has(emp)) delete empresasInactivas[emp]; });
+    }
     try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
 
     // Estado activa/inactiva — tanto pasar a inactiva como REACTIVAR (Sheets
