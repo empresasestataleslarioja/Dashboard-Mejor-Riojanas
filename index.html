@@ -6494,6 +6494,8 @@ function imprimirPanelActivo() {
           else if (pid3==='facturacion')    html3 = _rptFacturacion();
           else if (pid3==='resultado')      html3 = _rptResultado();
           else if (pid3==='portafolio')     html3 = _rptPortafolio();
+          else if (pid3==='presupuesto')    html3 = _rptPresupuesto();
+          else if (pid3==='rubros')         html3 = _rptEmpresasRubros();
           else if (pid3==='empresa')        html3 = _rptERMensual();
           if (html3) html3 = html3.replace('</head>', autoprintScript+'</head>');
         } catch(e3) { html3 = '<html><body><pre>'+String(e3)+'</pre></body></html>'; }
@@ -7191,8 +7193,13 @@ function _rptEmpresasRubros() {
       // tabla) quedaban desalineados contra datos alineados a la derecha,
       // y un texto largo de Actividad terminaba pegado al borde derecho de
       // su columna en vez de empezar debajo de su encabezado.
+      // Badge de inactiva SIN "desde" (más corto) y columna Empresa más
+      // ancha: con el texto completo, un nombre largo + el badge no
+      // entraban en una sola línea y la fila pasaba a ocupar dos renglones
+      // (se veía como "doble fila" por empresa) — la fecha exacta de baja
+      // sigue disponible en el editor de rubros del dashboard.
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' desde '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
@@ -7201,8 +7208,8 @@ function _rptEmpresasRubros() {
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:20%">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:36%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:26%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:30%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:14%">Constitución</th>
           <th style="text-align:left;padding:5px 8px;width:30%">Decreto de creación</th>
         </tr></thead>
