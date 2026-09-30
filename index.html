@@ -6762,6 +6762,9 @@ function _rptCSS() {
   .chart-unit{font-size:7pt;color:#999;font-family:'Courier New',monospace;float:right}
   .r2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @page{margin:.7cm .7cm 1.2cm .7cm;size:A4 portrait}
+  @media print{
+    *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  }
   </style>`;
 }
 
