@@ -37991,6 +37991,13 @@ function updateCloudStatusBar(state, detail) {
   };
   const s = states[state] || states.unconfigured;
 
+  // Registrar el último contacto exitoso con Sheets (subida o bajada), para
+  // el indicador de frescura (_tickFrescuraSheets) — hoy el único aviso de
+  // que un dispositivo quedó desactualizado es este texto chico, fácil de
+  // pasar por alto; el ticker lo va coloreando con el tiempo transcurrido.
+  window._ultimoEstadoCloudBar = state;
+  if (state === 'ok') window._ultimoSyncOkAt = Date.now();
+
   // Dot en topbar (botón Sync)
   const dot = document.getElementById('cloud-dot');
   if (dot) dot.style.background = s.color;
@@ -38807,6 +38814,7 @@ async function syncToCloud(nota) {
     const _erMensualNuevo   = _guardiaSeccionVacia('er_mensual',  'lr_er_mensual_last_count');
     const _erDetalleNuevo   = _guardiaSeccionVacia('er_detalle',  'lr_er_detalle_last_count');
     const _autoridadesNuevo = _guardiaSeccionVacia('autoridades', 'lr_autoridades_last_count');
+    const _presupuestoNuevo = _guardiaSeccionVacia('presupuesto', 'lr_presupuesto_last_count');
 
     const payload = {
       tab:       'all',
@@ -38921,6 +38929,7 @@ async function syncToCloud(nota) {
     if (_erMensualNuevo   > 0) localStorage.setItem('lr_er_mensual_last_count',  String(_erMensualNuevo));
     if (_erDetalleNuevo   > 0) localStorage.setItem('lr_er_detalle_last_count',  String(_erDetalleNuevo));
     if (_autoridadesNuevo > 0) localStorage.setItem('lr_autoridades_last_count', String(_autoridadesNuevo));
+    if (_presupuestoNuevo > 0) localStorage.setItem('lr_presupuesto_last_count', String(_presupuestoNuevo));
 
     const pubDate = (result.savedAt||'').slice(0,16).replace('T',' ');
     updateCloudStatusBar('ok', 'Publicado ' + pubDate);
@@ -39092,8 +39101,14 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // personal: rows con columnas: empresa, 2020..2026
-  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length) {
+  // personal: rows con columnas: empresa, 2020..2026 — reemplazo total, sin
+  // ninguna protección para ediciones locales sin publicar (a diferencia de
+  // fact/resultado/rubros): un simple "Actualizar" manual podía borrar
+  // trabajo en curso. Se omite durante una sincronización general si hay
+  // cambios propios sin publicar; la restauración explícita de este módulo
+  // (restaurarDesdeSheets, con confirmación del usuario) sigue funcionando
+  // igual porque pasa _solo==='personal'.
+  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length && !(_hayCambiosSinPublicar && !_solo)) {
     DATA.personal    = [];
     DATA.pers_totals = {};
     cloud.personal.forEach(row => {
@@ -39181,11 +39196,34 @@ function applyCloudData(cloud, opts) {
     DATA.years.sort();
   }
 
-  // notas — merge: agregar desde Sheets las que no existen localmente
+  // notas — Sheets manda salvo que ESTE dispositivo tenga un cambio propio
+  // sin publicar todavía para esa empresa (mismo criterio que rubros): antes
+  // solo se completaba si estaba vacío localmente, así que una nota
+  // actualizada y publicada desde otro dispositivo nunca llegaba si ya
+  // había cualquier nota (aunque fuera vieja) cacheada acá.
   if (cloud.notas && cloud.notas.length) {
     DATA.notas = DATA.notas || {};
     cloud.notas.forEach(r => {
-      if (r.empresa && r.nota && !DATA.notas[r.empresa]) DATA.notas[r.empresa] = r.nota;
+      if (!r.empresa || !r.nota) return;
+      if (_hayCambiosSinPublicar && DATA.notas[r.empresa]) return;
+      DATA.notas[r.empresa] = r.nota;
+    });
+  }
+
+  // presupuesto — mismo criterio (Sheets manda salvo celda empresa/año con
+  // cambio local sin publicar). No existía ningún bloque de bajada para esta
+  // sección: un presupuesto importado en un dispositivo nunca llegaba a los
+  // demás aunque se publicara correctamente a Sheets.
+  if (Array.isArray(cloud.presupuesto) && cloud.presupuesto.length) {
+    DATA.presupuesto = DATA.presupuesto || {};
+    cloud.presupuesto.forEach(r => {
+      const emp  = r.empresa;
+      const anio = String(r.año != null ? r.año : (r.anio != null ? r.anio : ''));
+      const val  = parseFloat(r.presupuesto);
+      if (!emp || !anio || isNaN(val)) return;
+      if (_hayCambiosSinPublicar && DATA.presupuesto[emp] && DATA.presupuesto[emp][anio] != null) return;
+      if (!DATA.presupuesto[emp]) DATA.presupuesto[emp] = {};
+      DATA.presupuesto[emp][anio] = val;
     });
   }
 
@@ -39576,15 +39614,24 @@ function applyCloudData(cloud, opts) {
       const emp = String(r.empresa), yS = String(r.anio), mes = String(r.mes);
       const f = (r.facturacion !== '' && r.facturacion != null) ? parseFloat(r.facturacion) : null;
       const res = (r.resultado !== '' && r.resultado != null) ? parseFloat(r.resultado) : null;
+      // El vaciado wholesale de arriba ya respeta _hayCambiosSinPublicar,
+      // pero esta escritura celda por celda no lo hacía: una edición reciente
+      // sin publicar para esta empresa/año/mes puntual podía ser pisada por
+      // el valor viejo que Sheets todavía tiene para esa misma celda. Mismo
+      // criterio de protección que ya usa fact/resultado (anual).
       if (f != null && !isNaN(f)) {
         if (!DATA.fact_mensual[emp]) DATA.fact_mensual[emp] = {};
         if (!DATA.fact_mensual[emp][yS]) DATA.fact_mensual[emp][yS] = {};
-        DATA.fact_mensual[emp][yS][mes] = f;
+        if (!(_hayCambiosSinPublicar && DATA.fact_mensual[emp][yS][mes] != null)) {
+          DATA.fact_mensual[emp][yS][mes] = f;
+        }
       }
       if (res != null && !isNaN(res)) {
         if (!DATA.res_mensual[emp]) DATA.res_mensual[emp] = {};
         if (!DATA.res_mensual[emp][yS]) DATA.res_mensual[emp][yS] = {};
-        DATA.res_mensual[emp][yS][mes] = res;
+        if (!(_hayCambiosSinPublicar && DATA.res_mensual[emp][yS][mes] != null)) {
+          DATA.res_mensual[emp][yS][mes] = res;
+        }
       }
     });
   }
@@ -39604,7 +39651,10 @@ function applyCloudData(cloud, opts) {
         const conceptos = r.conceptos_json ? JSON.parse(r.conceptos_json) : {};
         if (Array.isArray(filas) && filas.length > 0) {
           if (!DATA.er_mensual[emp]) DATA.er_mensual[emp] = {};
-          DATA.er_mensual[emp][yS] = { filas, conceptos, esTrimestral: r.es_trimestral === 'SI' };
+          // Protección puntual, mismo motivo que fact_mensual/res_mensual arriba.
+          if (!(_hayCambiosSinPublicar && DATA.er_mensual[emp][yS])) {
+            DATA.er_mensual[emp][yS] = { filas, conceptos, esTrimestral: r.es_trimestral === 'SI' };
+          }
         }
       } catch(e) {}
     });
@@ -39622,7 +39672,10 @@ function applyCloudData(cloud, opts) {
         const partidas = r.partidas_json ? JSON.parse(r.partidas_json) : null;
         if (partidas && typeof partidas === 'object') {
           if (!DATA.er[emp]) DATA.er[emp] = {};
-          DATA.er[emp][yS] = partidas;
+          // Protección puntual, mismo motivo que fact_mensual/res_mensual arriba.
+          if (!(_hayCambiosSinPublicar && DATA.er[emp][yS])) {
+            DATA.er[emp][yS] = partidas;
+          }
         }
       } catch(e) {}
     });
@@ -39632,7 +39685,9 @@ function applyCloudData(cloud, opts) {
   // Nombre y Apellido se guardan unificados en un solo campo "nombre" — si
   // Sheets todavía trae filas del formato anterior (columna "apellido"
   // separada, de una publicación previa), se concatenan acá sin perder el dato.
-  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0) {
+  // Reemplazo total sin ninguna protección — igual que personal: se omite si
+  // hay cambios locales sin publicar, para no perder una edición en curso.
+  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0 && !_hayCambiosSinPublicar) {
     DATA.autoridades = cloud.autoridades
       .filter(r => r.empresa && (r.nombre || r.apellido))
       .map(r => ({
@@ -40375,6 +40430,63 @@ function _dispararAutoSync() {
     };
     _intentarAutoGuardar(0);
   }, AUTOSYNC_DELAY);
+}
+
+// ── Indicador de frescura de Sheets ───────────────────────────────
+// El único aviso de que este dispositivo quedó desactualizado era el texto
+// chico "Sheets: <fecha>" en la topbar, que nunca cambiaba de color ni decía
+// cuánto tiempo pasó — con varios dispositivos usando el dashboard a la vez,
+// eso hace fácil no notar que hace rato no se sincroniza. Este ticker
+// recalcula el tiempo transcurrido desde el último contacto exitoso con
+// Sheets (subida o bajada) y escala el color: verde <10min, naranja 10-30min,
+// rojo 30min+.
+function _tickFrescuraSheets() {
+  const topTxt = document.getElementById('cloud-status-txt-top');
+  if (!topTxt || !window._ultimoSyncOkAt) return;
+  if (window._ultimoEstadoCloudBar !== 'ok') return; // no pisar "sincronizando…"/error
+  const base = topTxt.textContent.replace(/\s*\(hace[^)]*\)\s*$/, '');
+  const minAgo = Math.floor((Date.now() - window._ultimoSyncOkAt) / 60000);
+  if (minAgo < 1) { topTxt.textContent = base; return; }
+  let color = topTxt.style.color || '#47ffb4';
+  if (minAgo >= 30)      color = '#ff4766';
+  else if (minAgo >= 10) color = '#ff8c47';
+  topTxt.textContent = base + ` (hace ${minAgo}m)`;
+  topTxt.style.color = color;
+}
+if (!window._frescuraTickIniciado) {
+  window._frescuraTickIniciado = true;
+  setInterval(_tickFrescuraSheets, 30000);
+}
+
+// ── Sincronización periódica en segundo plano (solo bajada) ──────
+// Hasta ahora la bajada de Sheets solo ocurría al abrir el dashboard, al
+// hacer clic manual en "↓ Sincronizar", o como efecto colateral de un
+// reintento de auto-sync tras un conflicto. Una pestaña abierta y sin
+// ediciones propias podía quedar desactualizada indefinidamente sin ningún
+// aviso. Esto solo LEE y fusiona (mismas reglas de applyCloudData, incluido
+// el resguardo de _hayCambiosSinPublicar) — no publica nada, así que no
+// agrega riesgo de sobreescritura que no existiera ya.
+var AUTO_DOWNLOAD_INTERVAL = 120000; // 2 minutos
+function _sincronizarPeriodicoSilencioso() {
+  if (!_cloudUrl) return;
+  if (document.visibilityState !== 'visible') return; // no gastar red en segundo plano
+  if (window._syncPeriodicoEnCurso) return; // evitar solapamiento
+  window._syncPeriodicoEnCurso = true;
+  syncFromCloud(true)
+    .catch(e => console.warn('[SyncPeriodico] Falló la bajada automática:', e))
+    .finally(() => { window._syncPeriodicoEnCurso = false; });
+}
+if (!window._syncPeriodicoIniciado) {
+  window._syncPeriodicoIniciado = true;
+  setInterval(_sincronizarPeriodicoSilencioso, AUTO_DOWNLOAD_INTERVAL);
+  // Al volver a la pestaña después de un rato, no esperar hasta el próximo
+  // tick del intervalo — ponerse al día de inmediato.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (!window._ultimoSyncOkAt || (Date.now() - window._ultimoSyncOkAt) > AUTO_DOWNLOAD_INTERVAL) {
+      _sincronizarPeriodicoSilencioso();
+    }
+  });
 }
 
 // Flag global: true solo cuando el usuario cargó datos nuevos no publicados en Sheets
