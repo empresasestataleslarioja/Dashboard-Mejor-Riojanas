@@ -15938,18 +15938,33 @@ function _crossCheckEREmpresaAnio(emp, yr) {
   const fact = DATA.fact?.[emp]?.[yr] ?? DATA.fact?.[emp]?.[yS];
   const sit  = DATA.sit?.[emp]?.[yr]  ?? DATA.sit?.[emp]?.[yS];
   const diffs = [];
+  const cerca = (a, b) => Math.abs(a - b) <= 1000 || Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b), 1) <= 0.005;
   const cmp = (label, a, b) => {
     if (a == null || a === 0) return; // el ER no aporta esa partida — nada que comparar
     // b===0 se trata igual que null: la pantalla muestra ambos como "N/D"
     // (ver f>0?fv(f):'N/D'), así que un 0 oficial es el mismo caso a marcar.
     if (b == null || b === 0) { diffs.push({ label, erProvisorio: a, oficial: null, diffPct: null }); return; }
-    if (a === b) return;
+    if (a === b || cerca(a, b)) return;
     const base = Math.max(Math.abs(a), Math.abs(b), 1);
-    if (Math.abs(a - b) > 1000 && Math.abs(a - b) / base > 0.005) {
-      diffs.push({ label, erProvisorio: a, oficial: b, diffPct: (a - b) / base * 100 });
-    }
+    diffs.push({ label, erProvisorio: a, oficial: b, diffPct: (a - b) / base * 100 });
   };
-  cmp('Facturación', (erY.ventas_netas || 0) + (erY.otros_ingresos || 0), fact);
+  // Facturación oficial puede seguir dos convenciones distintas según cómo
+  // se cargó para cada empresa: la mayoría de los parsers/reparaciones del
+  // ER mensual suman SOLO filas 'ventas' (excluyen Otros Ingresos a
+  // propósito — ver _aplicarERColumnas, _repararFacturacionDesdeERMensual,
+  // _repararFacturacionMultifilaVentas, _repararIngresosBrutosComoVenta);
+  // pero algunas empresas (ej. Cerdo de los Llanos) tienen su Facturación
+  // oficial cargada de forma independiente del ER mensual, con un total que
+  // sí incluye Otros Ingresos. Sin una marca explícita de qué convención usa
+  // cada empresa, se acepta cualquiera de las dos y solo se marca diferencia
+  // si NINGUNA concilia — así no se reintroducen falsos positivos para la
+  // convención mayoritaria (Ventas sola) ni se pierde la detección real para
+  // la convención con Otros Ingresos incluidos.
+  const ventasSolas = erY.ventas_netas;
+  const ventasConOtrosIng = (erY.ventas_netas || 0) + (erY.otros_ingresos || 0);
+  const concilia = ventasSolas != null && ventasSolas !== 0 && fact != null && fact !== 0
+    && (cerca(ventasSolas, fact) || cerca(ventasConOtrosIng, fact));
+  if (!concilia) cmp('Facturación', ventasSolas, fact);
   cmp('Resultado Operativo', erY.resultado_operativo, sit);
   return diffs.length ? diffs : null;
 }
