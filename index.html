@@ -30916,16 +30916,18 @@ document.addEventListener('visibilitychange', () => {
       requestWakeLock();
     }
   }
-  // Al ocultar/cerrar: guardar en localStorage para no perder datos
+  // Al ocultar/cerrar: guardar en localStorage para no perder datos.
+  // Inmediato, no debounced — no hay garantía de que un setTimeout llegue
+  // a correr si la pestaña se cierra ahora mismo.
   if (document.visibilityState === 'hidden') {
-    try { saveDataToLocalCache(); } catch(e) {}
+    try { _saveDataToLocalCacheInmediato(); } catch(e) {}
   }
 });
 
 // Salvaguarda adicional: guardar antes de cerrar la pestaña
 window.addEventListener('beforeunload', () => {
   try {
-    saveDataToLocalCache();
+    _saveDataToLocalCacheInmediato();
     // Guardar rubros explícitamente también
     if (typeof rubros !== 'undefined')
       localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros));
@@ -40348,7 +40350,10 @@ function buildCloudPayload() {
 }
 
 // ── Cache local (fallback sin conexión) ──────────────────────────
-function saveDataToLocalCache() {
+// Escribe el snapshot ahora mismo, sin esperar el debounce — para los
+// caminos donde la pestaña puede cerrarse/ocultarse de inmediato después
+// (beforeunload, visibilitychange a "hidden") y no hay margen para esperar.
+function _saveDataToLocalCacheInmediato() {
   try {
     const snap = {
       fact: DATA.fact, sit: DATA.sit, personal: DATA.personal,
@@ -40381,6 +40386,27 @@ function saveDataToLocalCache() {
       showStorageStatus('⚠ Almacenamiento local lleno — el navegador no tiene más espacio disponible (localStorage). Los datos se mantienen en memoria pero no se guardarán al cerrar la pestaña. Para liberar espacio: Configuración del sitio → Borrar datos del sitio, o exportá los datos antes de cerrar.', '#ff8c47');
     }
   }
+}
+
+// _saveDataToLocalCacheInmediato() serializa TODO el dataset local (fact,
+// er_mensual, institucional, etc.) a JSON y lo escribe en localStorage —
+// con un portafolio real (decenas de empresas, varias con detalle mensual
+// de ER) esto pesa varios MB y tarda bastante más de lo que parece: medido
+// con un volumen sintético pero realista (90 empresas, 30 con ER mensual
+// completo), el stringify+setItem solo tardaba ~150ms. El problema es que
+// saveDataToLocalCache() se llama desde más de 50 lugares — cada blur de
+// un campo, cada cambio de rubro, cada celda editada en el ER Provisorio —
+// así que esos ~150ms de bloqueo del hilo principal se repetían en cada
+// interacción, y cualquier scroll/click a otro panel que llegara justo
+// después quedaba en cola detrás de ese bloqueo (de ahí la sensación de
+// "lento al desplazar o cambiar de módulos"). Se debounca: varias llamadas
+// seguidas (tipeo, múltiples campos) colapsan en una sola escritura real
+// después de una pausa breve, sin tocar ninguno de los más de 50 call
+// sites existentes.
+var _saveLocalCacheTimer = null;
+function saveDataToLocalCache() {
+  clearTimeout(_saveLocalCacheTimer);
+  _saveLocalCacheTimer = setTimeout(_saveDataToLocalCacheInmediato, 600);
 }
 
 
