@@ -6450,6 +6450,10 @@ function imprimirPanelActivo() {
       + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap" id="_rpt_bar_right">'
       + '<span style="color:#555;font-size:8pt;font-family:monospace">Año:</span>'
       + '<select id="_rpt_anio_filtro" style="padding:3px 8px;font-size:8pt;font-family:monospace;background:#222;color:#ddd;border:1px solid #444;border-radius:3px;cursor:pointer"></select>'
+      + '<span id="_rpt_estado_lbl" style="display:none;color:#555;font-size:8pt;font-family:monospace">Estado:</span>'
+      + '<select id="_rpt_estado_filtro" style="display:none;padding:3px 8px;font-size:8pt;font-family:monospace;background:#222;color:#ddd;border:1px solid #444;border-radius:3px;cursor:pointer">'
+      + '<option value="todas">Todas</option><option value="activas">Solo activas</option><option value="inactivas">Solo inactivas</option>'
+      + '</select>'
       + '<span style="color:#555;font-size:8pt;font-family:monospace">Secciones:</span>'
       + '<div id="_rpt_chk_wrap" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'
       + '<div style="display:flex;gap:8px" id="_rpt_bar_btns"></div>'
@@ -6612,6 +6616,31 @@ function imprimirPanelActivo() {
           imprimirPanelActivo();
         }
       };
+    }
+    // Filtro Activas/Inactivas/Todas — solo tiene sentido en el reporte de
+    // Ficha Institucional de Empresas (panelId 'rubros'); se oculta en el
+    // resto. Visibilidad se recalcula en cada apertura (el overlay/select
+    // son singletons reusados entre distintos reportes).
+    var selEstado = document.getElementById('_rpt_estado_filtro');
+    var lblEstado = document.getElementById('_rpt_estado_lbl');
+    if (selEstado && lblEstado) {
+      var esRubros = (typeof panelId !== 'undefined' && panelId === 'rubros');
+      selEstado.style.display = esRubros ? '' : 'none';
+      lblEstado.style.display = esRubros ? '' : 'none';
+      if (esRubros) {
+        selEstado.value = window._rptEstadoFiltro || 'todas';
+        if (!selEstado._wired) {
+          selEstado._wired = true;
+          selEstado.onchange = function() {
+            window._rptEstadoFiltro = this.value;
+            if (typeof imprimirPanelActivo === 'function') {
+              var ov = document.getElementById('_rpt_overlay');
+              if (ov) ov.style.display = 'none';
+              imprimirPanelActivo();
+            }
+          };
+        }
+      }
     }
     var wrap = document.getElementById('_rpt_chk_wrap');
     if (!wrap) return;
@@ -7169,9 +7198,19 @@ function _rptEmpresasRubros() {
     + _rptKpi('Rubros', String((typeof RUBRO_LIST!=='undefined'?RUBRO_LIST:[]).length), 'categorías comerciales', '#ba7517')
     + '</div>';
 
+  // Filtro Activas/Inactivas/Todas (elegido en la barra de vista previa) —
+  // los KPIs de arriba siempre muestran el portafolio completo como
+  // contexto; este filtro solo acota el listado por rubro de abajo.
+  const estadoFiltro = (typeof window !== 'undefined' && window._rptEstadoFiltro) || 'todas';
+  const emprsFiltradas = estadoFiltro === 'activas' ? vigentes
+    : estadoFiltro === 'inactivas' ? inactivas
+    : allEmps;
+  const estadoFiltroLbl = estadoFiltro === 'activas' ? 'solo activas'
+    : estadoFiltro === 'inactivas' ? 'solo inactivas' : 'activas e inactivas';
+
   // Agrupado por rubro — cada grupo con sus empresas, vigencia y facturación último año
   const porRubro = {};
-  allEmps.forEach(e => {
+  emprsFiltradas.forEach(e => {
     const rb = _rub[e] || 'Sin rubro';
     if (!porRubro[rb]) porRubro[rb] = [];
     porRubro[rb].push(e);
@@ -7222,10 +7261,10 @@ function _rptEmpresasRubros() {
   }).join('');
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
-    + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas`)
+    + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas · ${estadoFiltroLbl}`)
     + kpis
-    + '<div class="st">Listado por rubro</div>'
-    + tablaRubros
+    + `<div class="st">Listado por rubro — ${emprsFiltradas.length} empresa${emprsFiltradas.length!==1?'s':''} (${estadoFiltroLbl})</div>`
+    + (tablaRubros || '<div style="padding:16px;color:#888;font-size:9pt">No hay empresas que cumplan este filtro.</div>')
     + _rptFooter() + '</div></body></html>';
 }
 
