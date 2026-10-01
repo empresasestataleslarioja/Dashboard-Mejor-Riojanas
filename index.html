@@ -20366,6 +20366,10 @@ function buildEvolucionMensual(emp) {
         if (/DESCUENTO.*OTORGAD/.test(t)) return 'gastoCom';
         // Componentes de ventas netas (Bruta/Devoluciones/Descuentos) — si hay VENTAS NETAS no se suman
         if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
+        // Ingresos Brutos: pese al nombre, es el impuesto provincial sobre
+        // ingresos — un gasto, no una venta (mismo criterio que
+        // _repararIngresosBrutosComoVenta para filas ya cargadas).
+        if (/INGRESOS?\s+BRUTOS?/.test(t)) return 'gastoAdm';
         // VENTAS / INGRESOS por venta
         if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) {
           if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
