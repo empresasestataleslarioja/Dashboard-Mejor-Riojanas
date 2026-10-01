@@ -15949,7 +15949,7 @@ function _crossCheckEREmpresaAnio(emp, yr) {
       diffs.push({ label, erProvisorio: a, oficial: b, diffPct: (a - b) / base * 100 });
     }
   };
-  cmp('Facturación', erY.ventas_netas, fact);
+  cmp('Facturación', (erY.ventas_netas || 0) + (erY.otros_ingresos || 0), fact);
   cmp('Resultado Operativo', erY.resultado_operativo, sit);
   return diffs.length ? diffs : null;
 }
