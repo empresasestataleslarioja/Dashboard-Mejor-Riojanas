@@ -15862,6 +15862,39 @@ function _repararIngresosBrutosComoVenta() {
   return reparados;
 }
 
+// ── Reparación automática: fila "Otros Ingresos" mal clasificada como
+// venta — bug real: Cerdo de los Llanos 2025/2026 trae la fila "OTROS
+// INGRESOS" con conceptoStd:'ventas' ya cargado (a diferencia de 2023/2024,
+// donde la misma fila está bien etiquetada como 'otrosIngresos'). Esto hace
+// que "ER Provisorio Completo" sume ese monto dentro de "Ventas Netas"
+// (inflándola), mientras "ER Original Detallado" sigue mostrando la fila
+// con su texto original sin reclasificar nada — de ahí la apariencia de que
+// un mismo concepto se trata distinto según la vista. No afecta a
+// Facturación (DATA.fact, que se carga aparte): solo corrige la etiqueta
+// para que "Ventas Netas"/"Otros Ingresos" se expongan por separado, igual
+// que en el resto de los años de la misma empresa.
+function _repararOtrosIngresosComoVenta() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const filaOI = data.filas.find(f => f.conceptoStd === 'ventas' && String(f.lbl || '').trim().toUpperCase() === 'OTROS INGRESOS');
+      if (!filaOI) return;
+      filaOI.conceptoStd = 'otrosIngresos';
+      huboCambios = true;
+      reparados.push({ emp, yr });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] "Otros Ingresos" reclasificado de venta a su propio rubro para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
+  }
+  return reparados;
+}
+
 // ── Reparación automática: filas de Ventas/Otros Ingresos sin clasificar
 // en el ER mensual — bug real: algunas empresas (ej. "Cerdo de los
 // Llanos") tienen su detalle mensual importado con filas como "VENTA DE
@@ -39939,6 +39972,7 @@ function applyCloudData(cloud, opts) {
   try { _repararResultadoOperativoLibroMayor(); } catch(e) {}
   try { _repararFacturacionDesdeERMensual(); } catch(e) {}
   try { _repararIngresosBrutosComoVenta(); } catch(e) {}
+  try { _repararOtrosIngresosComoVenta(); } catch(e) {}
   try { _repararFacturacionMultifilaVentas(); } catch(e) {}
 }
 
