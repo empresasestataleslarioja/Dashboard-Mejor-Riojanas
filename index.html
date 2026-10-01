@@ -7214,7 +7214,7 @@ function _rptEmpresasRubros() {
           <th style="text-align:left;padding:5px 8px;width:26%">Empresa</th>
           <th style="text-align:left;padding:5px 8px;width:30%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:14%">Constitución</th>
-          <th style="text-align:left;padding:5px 8px;width:30%">Decreto de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:30%">Instrumento de creación</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
@@ -9843,7 +9843,7 @@ function buildRubros() {
         style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneInst?'rgba(71,232,255,.1)':'none'};
         border:1px solid ${tieneInst?'#47e8ff':'var(--bd2)'};
         color:${tieneInst?'#47e8ff':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
-        title="${tieneInst?'Ver/editar fecha de constitución y decreto de creación':'Agregar fecha de constitución y decreto de creación'}">🏛</button>
+        title="${tieneInst?'Ver/editar fecha de constitución e instrumento de creación':'Agregar fecha de constitución e instrumento de creación'}">🏛</button>
       <button onclick="mostrarActividadPopover(event,'${emp}')"
         style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneActividad?'rgba(232,255,71,.1)':'none'};
         border:1px solid ${tieneActividad?'#e8ff47':'var(--bd2)'};
@@ -18287,9 +18287,9 @@ function mostrarInstPopover(evt, emp) {
         font-family:var(--mono);font-size:10px;border-radius:3px;outline:none">
     </label>
     <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
-      Decreto de creación
+      Instrumento de creación
       <input type="text" id="inst-pop-decreto" value="${(info.decreto||'').replace(/"/g,'&quot;')}"
-        placeholder="Ej: Decreto N° 1234/1995"
+        placeholder="Ej: Decreto N° 1234/1995, Ley N° 1234"
         style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
         font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box">
     </label>
