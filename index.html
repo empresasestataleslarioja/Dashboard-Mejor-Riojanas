@@ -7150,7 +7150,7 @@ function _rptPresupuesto() {
     + _rptFooter() + '</div></body></html>';
 }
 
-// ── Reporte: Empresas y Rubros (padrón del portafolio) ────────────
+// ── Reporte: Ficha Institucional de Empresas (padrón del portafolio) ────
 // Listado completo de empresas del portafolio con su rubro asignado y su
 // estado vigente/inactiva, agrupado por rubro — el mismo cruce que arma
 // buildRubros() para el editor de asignaciones, pero como reporte imprimible.
@@ -7221,7 +7221,7 @@ function _rptEmpresasRubros() {
   }).join('');
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
-    + _rptHeader('Empresas y Rubros', `Padrón del portafolio · ${allEmps.length} empresas`)
+    + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas`)
     + kpis
     + '<div class="st">Listado por rubro</div>'
     + tablaRubros
