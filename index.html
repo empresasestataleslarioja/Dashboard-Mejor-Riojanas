@@ -2380,16 +2380,11 @@ self.onmessage = async (e) => {
     box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:340px;
     font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
 
-  <!-- Popover de datos institucionales (fecha de constitución / decreto) -->
+  <!-- Popover único de datos institucionales (constitución, instrumento de
+       creación, tipo societario, participación accionaria, actividad) -->
   <div id="rub-inst-popover" style="display:none;position:fixed;z-index:9000;
     background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
-    box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:260px;
-    font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
-
-  <!-- Popover de actividad puntual que desarrolla la empresa -->
-  <div id="rub-act-popover" style="display:none;position:fixed;z-index:9000;
-    background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
-    box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:260px;
+    box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:300px;
     font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
 
   <div id="viz-panel" style="display:none;position:fixed;top:52px;left:210px;right:0;
@@ -7201,8 +7196,13 @@ function _rptEmpresasRubros() {
       // entraban en una sola línea y la fila pasaba a ocupar dos renglones
       // (se veía como "doble fila" por empresa) — la fecha exacta de baja
       // sigue disponible en el editor de rubros del dashboard.
+      const societario = [inst.tipoSocietario, inst.participacionAccionaria]
+        .filter(Boolean)
+        .map((t,i) => i===0 ? t : `<span style="font-size:7pt;color:#777">${t}</span>`)
+        .join('<br>') || '—';
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${societario}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
@@ -7211,10 +7211,11 @@ function _rptEmpresasRubros() {
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:26%">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:30%">Actividad</th>
-          <th style="text-align:left;padding:5px 8px;width:14%">Constitución</th>
-          <th style="text-align:left;padding:5px 8px;width:30%">Instrumento de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:19%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:19%">Tipo Societario</th>
+          <th style="text-align:left;padding:5px 8px;width:22%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:12%">Constitución</th>
+          <th style="text-align:left;padding:5px 8px;width:28%">Instrumento de creación</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
@@ -9825,8 +9826,7 @@ function buildRubros() {
     const fechaCorta = fechaInact ? (([y,m,d]) => `${d}/${m}/${y}`)(fechaInact.split('-')) : '';
     const selColor = RUBRO_COLORS[r] || RUBRO_COLORS['Sin rubro'];
     const inst = (DATA.institucional && DATA.institucional[emp]) || {};
-    const tieneInst = !!(inst.fechaConstitucion || inst.decreto);
-    const tieneActividad = !!inst.actividad;
+    const tieneInst = !!(inst.fechaConstitucion || inst.decreto || inst.actividad || inst.tipoSocietario || inst.participacionAccionaria);
     return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
         ondblclick="_iniciarRenombre('${emp}')"
@@ -9843,12 +9843,7 @@ function buildRubros() {
         style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneInst?'rgba(71,232,255,.1)':'none'};
         border:1px solid ${tieneInst?'#47e8ff':'var(--bd2)'};
         color:${tieneInst?'#47e8ff':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
-        title="${tieneInst?'Ver/editar fecha de constitución e instrumento de creación':'Agregar fecha de constitución e instrumento de creación'}">🏛</button>
-      <button onclick="mostrarActividadPopover(event,'${emp}')"
-        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneActividad?'rgba(232,255,71,.1)':'none'};
-        border:1px solid ${tieneActividad?'#e8ff47':'var(--bd2)'};
-        color:${tieneActividad?'#b8a000':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
-        title="${tieneActividad?'Ver/editar actividad puntual que desarrolla':'Agregar actividad puntual que desarrolla (doble click en el nombre para renombrar)'}">📋</button>
+        title="${tieneInst?'Ver/editar datos institucionales (constitución, instrumento de creación, tipo societario, participación accionaria, actividad)':'Agregar datos institucionales (constitución, instrumento de creación, tipo societario, participación accionaria, actividad)'}">🏛</button>
     </div>`;
   }).join('');
 }
@@ -18235,32 +18230,17 @@ function saveEmpInstitucional() {
 }
 
 // Guarda fecha de constitución / decreto de creación de una empresa —
-// usado tanto por el panel "Evolución empresa" como por el popover rápido
-// del editor de rubros, para no duplicar la lógica de persistencia.
+// usado por el panel "Evolución empresa" (ese formulario solo tiene estos
+// dos campos). Conserva el resto de los campos institucionales (actividad,
+// tipo societario, participación accionaria) ya cargados desde el popover
+// unificado del editor de rubros, para no pisarlos.
 function _guardarInstitucional(emp, fecha, decreto) {
   DATA.institucional = DATA.institucional || {};
-  const actividad = DATA.institucional[emp]?.actividad || '';
-  if (fecha || decreto || actividad) {
-    DATA.institucional[emp] = { fechaConstitucion: fecha, decreto, actividad };
-  } else {
-    delete DATA.institucional[emp];
-  }
-  saveDataToLocalCache();
-  try { marcarPendienteGuardar(['institucional']); } catch(e) {}
-}
-
-// Guarda la actividad puntual que desarrolla la empresa — mismo store que
-// fecha de constitución/decreto (misma fila de la pestaña "rubros"), pero
-// con su propio botón/popover en el editor de rubros porque es un dato de
-// carga manual e independiente. Se carga a mano, no se deriva de nada.
-function _guardarActividad(emp, actividad) {
-  DATA.institucional = DATA.institucional || {};
   const existing = DATA.institucional[emp] || {};
-  const fecha   = existing.fechaConstitucion || '';
-  const decreto = existing.decreto || '';
-  const act     = (actividad || '').trim();
-  if (fecha || decreto || act) {
-    DATA.institucional[emp] = { fechaConstitucion: fecha, decreto, actividad: act };
+  const merged = { ...existing, fechaConstitucion: fecha, decreto };
+  const tieneAlgo = merged.fechaConstitucion || merged.decreto || merged.actividad || merged.tipoSocietario || merged.participacionAccionaria;
+  if (tieneAlgo) {
+    DATA.institucional[emp] = merged;
   } else {
     delete DATA.institucional[emp];
   }
@@ -18268,7 +18248,12 @@ function _guardarActividad(emp, actividad) {
   try { marcarPendienteGuardar(['institucional']); } catch(e) {}
 }
 
-// ── Popover rápido de datos institucionales (desde el editor de rubros) ──
+// ── Popover único de datos institucionales (desde el editor de rubros) ──
+// Un solo botón/popover para los 5 campos institucionales de la empresa:
+// fecha de constitución, instrumento de creación, tipo societario, detalle
+// de participación accionaria y actividad puntual que desarrolla. Antes
+// eran dos botones/popovers separados (🏛 y 📋); se unifican para no seguir
+// agregando un ícono por campo a la fila.
 function mostrarInstPopover(evt, emp) {
   const pop = document.getElementById('rub-inst-popover');
   if (!pop) return;
@@ -18286,12 +18271,31 @@ function mostrarInstPopover(evt, emp) {
         style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
         font-family:var(--mono);font-size:10px;border-radius:3px;outline:none">
     </label>
-    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:8px">
       Instrumento de creación
       <input type="text" id="inst-pop-decreto" value="${(info.decreto||'').replace(/"/g,'&quot;')}"
         placeholder="Ej: Decreto N° 1234/1995, Ley N° 1234"
         style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
         font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box">
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:8px">
+      Tipo societario
+      <input type="text" id="inst-pop-tipo" value="${(info.tipoSocietario||'').replace(/"/g,'&quot;')}"
+        placeholder="Ej: S.A.U., Sociedad del Estado"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box">
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:8px">
+      Detalle de participación accionaria
+      <textarea id="inst-pop-partic" rows="2" placeholder="Ej: 51% Estado Provincial, 49% privado"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box;resize:vertical">${(info.participacionAccionaria||'').replace(/</g,'&lt;')}</textarea>
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
+      Actividad puntual que desarrolla
+      <textarea id="inst-pop-actividad" rows="2" placeholder="Ej: Producción y venta de embutidos porcinos"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box;resize:vertical">${(info.actividad||'').replace(/</g,'&lt;')}</textarea>
     </label>
     <button onclick="event.stopPropagation();_confirmarInstPopover()"
       style="width:100%;padding:6px;background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
@@ -18300,7 +18304,7 @@ function mostrarInstPopover(evt, emp) {
   pop.style.display = 'block';
   const rc = evt.currentTarget.getBoundingClientRect();
   let left = rc.left, top = rc.bottom + 6;
-  const pw = 260, ph = 180;
+  const pw = 300, ph = 420;
   if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
   if (top + ph > window.innerHeight - 10) top = Math.max(10, rc.top - ph - 6);
   pop.style.left = left + 'px'; pop.style.top = top + 'px';
@@ -18311,63 +18315,27 @@ function _confirmarInstPopover() {
   const pop = document.getElementById('rub-inst-popover');
   const emp = pop?.dataset.emp;
   if (!emp) return;
-  const fecha   = document.getElementById('inst-pop-fecha')?.value || '';
-  const decreto = (document.getElementById('inst-pop-decreto')?.value || '').trim();
-  _guardarInstitucional(emp, fecha, decreto);
+  const campos = {
+    fechaConstitucion: document.getElementById('inst-pop-fecha')?.value || '',
+    decreto: (document.getElementById('inst-pop-decreto')?.value || '').trim(),
+    tipoSocietario: (document.getElementById('inst-pop-tipo')?.value || '').trim(),
+    participacionAccionaria: (document.getElementById('inst-pop-partic')?.value || '').trim(),
+    actividad: (document.getElementById('inst-pop-actividad')?.value || '').trim(),
+  };
+  DATA.institucional = DATA.institucional || {};
+  if (Object.values(campos).some(Boolean)) {
+    DATA.institucional[emp] = campos;
+  } else {
+    delete DATA.institucional[emp];
+  }
+  saveDataToLocalCache();
+  try { marcarPendienteGuardar(['institucional']); } catch(e) {}
   pop.style.display = 'none';
   buildRubros();
 }
 
 document.addEventListener('click', e => {
   const p = document.getElementById('rub-inst-popover');
-  if (p && p.style.display !== 'none' && !p.contains(e.target)) p.style.display = 'none';
-});
-
-// ── Popover rápido de actividad puntual (desde el editor de rubros) ──
-// Dato de carga manual, sin relación con ningún cálculo del dashboard.
-function mostrarActividadPopover(evt, emp) {
-  const pop = document.getElementById('rub-act-popover');
-  if (!pop) return;
-  const info = (DATA.institucional && DATA.institucional[emp]) || {};
-  pop.dataset.emp = emp;
-  pop.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <span style="font-size:9px;font-weight:600;color:var(--text);letter-spacing:.04em">📋 ${emp}</span>
-      <button onclick="event.stopPropagation();document.getElementById('rub-act-popover').style.display='none'"
-        style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
-    </div>
-    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
-      Actividad puntual que desarrolla
-      <textarea id="act-pop-texto" rows="3" placeholder="Ej: Producción y venta de embutidos porcinos"
-        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
-        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box;resize:vertical">${(info.actividad||'').replace(/</g,'&lt;')}</textarea>
-    </label>
-    <button onclick="event.stopPropagation();_confirmarActividadPopover()"
-      style="width:100%;padding:6px;background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
-      color:#b8a000;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
-      Guardar</button>`;
-  pop.style.display = 'block';
-  const rc = evt.currentTarget.getBoundingClientRect();
-  let left = rc.left, top = rc.bottom + 6;
-  const pw = 260, ph = 160;
-  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
-  if (top + ph > window.innerHeight - 10) top = Math.max(10, rc.top - ph - 6);
-  pop.style.left = left + 'px'; pop.style.top = top + 'px';
-  evt.stopPropagation();
-}
-
-function _confirmarActividadPopover() {
-  const pop = document.getElementById('rub-act-popover');
-  const emp = pop?.dataset.emp;
-  if (!emp) return;
-  const texto = document.getElementById('act-pop-texto')?.value || '';
-  _guardarActividad(emp, texto);
-  pop.style.display = 'none';
-  buildRubros();
-}
-
-document.addEventListener('click', e => {
-  const p = document.getElementById('rub-act-popover');
   if (p && p.style.display !== 'none' && !p.contains(e.target)) p.style.display = 'none';
 });
 
@@ -39749,13 +39717,15 @@ function applyCloudData(cloud, opts) {
     // que el resto del maestro de empresas.
     DATA.institucional = DATA.institucional || {};
     cloud.rubros.forEach(r => {
-      if (!r.empresa || (!r.fecha_constitucion && !r.decreto && !r.actividad)) return;
+      if (!r.empresa || (!r.fecha_constitucion && !r.decreto && !r.actividad && !r.tipo_societario && !r.participacion_accionaria)) return;
       const actual = DATA.institucional[r.empresa];
-      if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto || actual.actividad)) return;
+      if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto || actual.actividad || actual.tipoSocietario || actual.participacionAccionaria)) return;
       DATA.institucional[r.empresa] = {
         fechaConstitucion: _soloFecha(r.fecha_constitucion),
         decreto:           _decretoLimpio(r.decreto),
         actividad:         r.actividad || '',
+        tipoSocietario:            r.tipo_societario || '',
+        participacionAccionaria:   r.participacion_accionaria || '',
       };
     });
   }
@@ -40261,6 +40231,8 @@ function buildCloudPayload() {
       fecha_constitucion: inst.fechaConstitucion || '',
       decreto: inst.decreto || '',
       actividad: inst.actividad || '',
+      tipo_societario: inst.tipoSocietario || '',
+      participacion_accionaria: inst.participacionAccionaria || '',
     };
   });
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
