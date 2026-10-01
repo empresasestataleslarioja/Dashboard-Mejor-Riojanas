@@ -15889,11 +15889,31 @@ function _clasificarConceptoERPorLabel(lblRaw) {
     if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
     return 'ventas';
   }
+  // Subtotales/acumulados que agrupan OTRAS filas ya contadas por separado
+  // (ej. "SUBTOTAL ADMINISTRATIVOS", "SUBTOTAL VARIOS", "TOTALES POR MES")
+  // — bug real encontrado al validar esta reparación: "SUBTOTAL
+  // ADMINISTRATIVOS"/"SUBTOTAL VARIOS" caían en las reglas de
+  // administración/catch-all de más abajo y se sumaban COMO SI fueran una
+  // fila de gasto más, duplicando el monto ya contado por sus propias
+  // filas individuales. Van después de la detección de venta/ingreso para
+  // no tapar un eventual "TOTAL VENTAS" legítimo.
+  if (/^(SUBTOTAL|TOTALES?)\b/.test(t)) return 'IGNORAR';
   // Ingresos varios
   if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
   // COSTO
   if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
-  // Financiero
+  // "Gastos Financieros" (nombrado así, explícitamente un gasto) va a
+  // gastoOper — SÍ resta en el Resultado Operativo, a diferencia de
+  // "Resultado Financiero" (más abajo), que es un neto que en la cascada
+  // del ER se ubica DESPUÉS del Resultado Operativo y no se incluye en su
+  // cálculo. Antes "Gastos Financieros" cayía en 'resFinanciero' por
+  // compartir la palabra "financier" — bug real reportado: en empresas
+  // (ej. Cerdo de los Llanos) donde el ER Original trae literalmente una
+  // fila "Gastos Financieros", tratarla como Resultado Financiero la
+  // dejaba afuera del Resultado Operativo calculado, inflándolo.
+  if (/^GASTOS?\s+FINANCIEROS?\b/.test(t)) return 'gastoOper';
+  // Financiero (resultado neto, intereses) — este sí queda fuera del
+  // Resultado Operativo, por diseño.
   if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
   // Impuesto a las ganancias
   if (/IMPUEST.*GANANCIA|IMPUESTO\s+DIFERIDO|A\s+LAS\s+GANANCIAS/.test(t)) return 'impuesto';
