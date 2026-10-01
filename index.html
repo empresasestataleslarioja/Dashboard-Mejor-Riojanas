@@ -15639,9 +15639,19 @@ function _erDesdeMonthly(emp) {
         const suma = Object.values(f.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
         if (suma !== 0) { acc[clave] = (acc[clave] || 0) + suma; }
       });
-      // Derivar subtotales si faltan
+      // Derivar subtotales si faltan. Costo de Ventas y los gastos de abajo
+      // se RESTAN por su magnitud (Math.abs), no se suman el valor crudo —
+      // bug real: varias empresas (ej. Cerdo de los Llanos) tienen sus
+      // filas de gasto cargadas en positivo (tal como figuran en el Excel
+      // original), y sumarlas tal cual en vez de restar su magnitud
+      // duplica el efecto hacia arriba en vez de reducir el resultado
+      // (Resultado Operativo calculado salía MAYOR a Ventas Netas, muy por
+      // encima del oficial). Usar Math.abs no cambia nada para una empresa
+      // cuyo gasto ya viniera cargado en negativo (incluía su propio signo
+      // al sumarlo) — en ese caso Math.abs(negativo) y restarlo da el mismo
+      // resultado que sumarlo tal cual.
       if (acc.utilidad_bruta == null && acc.ventas_netas != null) {
-        acc.utilidad_bruta = (acc.ventas_netas || 0) + (acc.costo_ventas || 0);
+        acc.utilidad_bruta = (acc.ventas_netas || 0) - Math.abs(acc.costo_ventas || 0);
       }
       // Solo derivar Resultado Operativo desde Utilidad Bruta + gastos si
       // efectivamente hay ALGO de ese detalle de gastos (import individual
@@ -15658,8 +15668,8 @@ function _erDesdeMonthly(emp) {
       // la mostrara, sin que hubiera ningún error real en los datos.
       if (acc.resultado_operativo == null && acc.utilidad_bruta != null &&
           (acc.gastos_admin != null || acc.gastos_comercializacion != null || acc.gastos_operativos != null)) {
-        acc.resultado_operativo = (acc.utilidad_bruta || 0) + (acc.gastos_admin || 0) + (acc.gastos_comercializacion || 0) +
-          (acc.gastos_operativos || 0) + (acc.otros_ingresos || 0) + (acc.otros_egresos || 0);
+        acc.resultado_operativo = (acc.utilidad_bruta || 0) - Math.abs(acc.gastos_admin || 0) - Math.abs(acc.gastos_comercializacion || 0)
+          - Math.abs(acc.gastos_operativos || 0) + (acc.otros_ingresos || 0) - Math.abs(acc.otros_egresos || 0);
       }
       // Fallback: si todavía no hay resultado_operativo, derivarlo de fact/sit de ese año
       if (acc.resultado_operativo == null) {
@@ -15845,6 +15855,66 @@ function _repararFacturacionMultifilaVentas() {
   return reparados;
 }
 
+// ── Clasificador exhaustivo de filas del ER Original a un rubro estándar
+// (conceptoStd) a partir de su etiqueta de texto. GLOBAL y compartido entre
+// la vista "Evolución Mensual" (buildEvolucionMensual, vista "ER Provisorio
+// Completo") y la reparación automática _repararGastosSinClasificar() —
+// antes cada una tenía su propia copia de esta lógica, y una corrección
+// hecha en una (ej. excluir "Ingresos Brutos" de Ventas) no se replicaba en
+// la otra, generando discrepancias entre lo que se veía en pantalla y lo
+// que quedaba guardado. Con una sola función no puede volver a pasar.
+function _clasificarConceptoERPorLabel(lblRaw) {
+  const t = String(lblRaw || '').toUpperCase().trim();
+  if (!t) return null;
+  // Encabezados de sección puros — se ignoran
+  if (['INGRESOS','GASTOS','CUADRO DE RESULTADOS','CUENTA'].includes(t)) return null;
+  // Subtotales / resultados calculados
+  if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
+  if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA|RESULTADO\s+DE\s+OPERACI/.test(t)) return 'resOperativo';
+  if (/ANTES\s+(DE|DEL)\s+IMP/.test(t)) return 'resAntesImp';
+  if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO|RESULTADO\s+FINAL/.test(t)) return 'resEjercicio';
+  // Totales de gasto (subtotales) — no sumar para no duplicar
+  if (/TOTAL\s+(DE\s+)?GASTOS/.test(t)) return 'IGNORAR';
+  // Gastos que mencionan "venta" pero son gastos (comisiones, gastos de venta, descuentos otorgados)
+  if (/COMISION|GASTO.*VENTA|GASTOS\s+DE\s+VENTA/.test(t)) return 'gastoCom';
+  if (/DESCUENTO.*OTORGAD/.test(t)) return 'gastoCom';
+  // Componentes de ventas netas (Bruta/Devoluciones/Descuentos) — si hay VENTAS NETAS no se suman
+  if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
+  // Ingresos Brutos: pese al nombre, es el impuesto provincial sobre
+  // ingresos — un gasto, no una venta (mismo criterio que
+  // _repararIngresosBrutosComoVenta para filas ya cargadas).
+  if (/INGRESOS?\s+BRUTOS?/.test(t)) return 'gastoAdm';
+  // VENTAS / INGRESOS por venta
+  if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) {
+    if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+    return 'ventas';
+  }
+  // Ingresos varios
+  if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
+  // COSTO
+  if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
+  // Financiero
+  if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
+  // Impuesto a las ganancias
+  if (/IMPUEST.*GANANCIA|IMPUESTO\s+DIFERIDO|A\s+LAS\s+GANANCIAS/.test(t)) return 'impuesto';
+  // Comercialización
+  if (/COMERCIALIZAC|COMERCIALES|MERCADOTECNIA|PUBLICIDAD|FLETE|ENCOMIENDA/.test(t)) return 'gastoCom';
+  // Administración
+  if (/ADMINISTRAC|ADMINISTRATIV/.test(t)) return 'gastoAdm';
+  // Otros ingresos/egresos
+  if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
+  if (/OTROS\s+EGRESO/.test(t)) return 'otrosGastos';
+  // CAPTURA-TODO de gastos: sueldos, cargas, honorarios, servicios, etc. →
+  // gastoOper. Incluye términos de costos de producción agropecuaria (SAC,
+  // inseminación artificial, osmosis, sanidad veterinaria) agregados al
+  // encontrar casos reales (Cerdo de los Llanos) que quedaban sin
+  // clasificar pese a ser gastos genuinos.
+  if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA|SOCIAL|APORTE|CONTRIBUC|HONORARIO|AMORTIZAC|DEPRECIAC|SEGURO|ART\b|ALQUILER|COMBUSTIBLE|LUBRICANTE|MANTENIMIENTO|REPARACION|REPUESTO|HERRAMIENTA|SERVICIO|IMPUESTO|TASA|VIATICO|MOVILIDAD|PREVISION|ENERGIA|ELECTRICID|TELEFON|INTERNET|PAPELERIA|ROPA|VEHICULO|RODADO|ASIGNACION|FAMILIAR|INDEMNIZAC|INDEMINIZAC|CESE|FONDO|UOYEP|IERIC|RENATRE|GASTO|EGRESO|VARIOS|GENERAL|PERSONAL|SUMAS|REMUNERAT|PASAJE|VIGILANCIA|LIMPIEZA|GAS\b|AGUA\b|INSUMOS|PROVISION|ESCRIBAN|AUDITORIA|PUBLICACION|CONSUMO|DIETA|REFRIGERIO|CAPACITAC|OFICINA|\bSAC\b|INSEMINAC|OSMOSIS|VETERINARI|SANIDAD/.test(t)) {
+    return 'gastoOper';
+  }
+  return null; // no clasificable
+}
+
 // ── Repara filas de "Ingresos Brutos" (impuesto provincial) mal
 // clasificadas como conceptoStd 'ventas' — bug real: pese al nombre no es
 // un ingreso, es un gasto/impuesto sobre la facturación, pero al compartir
@@ -15924,6 +15994,78 @@ function _repararOtrosIngresosComoVenta() {
   });
   if (huboCambios) {
     console.log('[LR] "Otros Ingresos" reclasificado de venta a su propio rubro para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
+  }
+  return reparados;
+}
+
+// ── Reparación automática: filas de GASTO sin clasificar en el ER mensual
+// — bug real: varias empresas (ej. Cerdo de los Llanos) tienen la mayoría
+// de sus filas de gasto (costos de producción, administración, insumos,
+// etc.) con conceptoStd:null — nunca llegaron a clasificarse en el
+// import. Esto hace que "ER Provisorio Completo"/Resultado Operativo →
+// Desglose ER calculen un Resultado Operativo muy por encima del real (no
+// se resta casi ningún gasto), aunque Facturación y el resto de la
+// pantalla muestren los valores oficiales correctos (que vienen de
+// DATA.sit/DATA.fact, no de este cálculo derivado).
+//
+// Usa el mismo clasificador global que la vista (_clasificarConceptoERPorLabel)
+// para que nunca vuelva a divergir de lo que se ve en pantalla. Solo
+// clasifica filas que el clasificador reconoce como un gasto "simple"
+// (costo/gastoAdm/gastoCom/gastoOper/otrosGastos) — deliberadamente NO
+// toca candidatos a utilBruta/resOperativo/resAntesImp/resEjercicio/
+// impuesto/resFinanciero/ventas/otrosIngresos (esos los maneja su propia
+// reparación dedicada, o no participan de este cálculo simplificado de
+// Resultado Operativo, ver _erDesdeMonthly).
+//
+// Antes de aplicar nada, SIMULA el Resultado Operativo resultante (mismo
+// criterio que _erDesdeMonthly: resta la magnitud de cada gasto, sin
+// importar en qué signo esté cargado) y lo valida con 1% de tolerancia
+// contra el Resultado Operativo oficial (DATA.sit) ya cargado — si no
+// valida, no reclasifica nada para esa empresa/año y queda para revisión
+// manual. Nunca cambia ningún valor numérico, solo la etiqueta.
+function _repararGastosSinClasificar() {
+  if (!DATA.er_mensual) return [];
+  const GASTO_CATS = ['costo', 'gastoAdm', 'gastoCom', 'gastoOper', 'otrosGastos'];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const sit = DATA.sit?.[emp]?.[yr] ?? DATA.sit?.[emp]?.[Number(yr)];
+      if (sit == null) return; // sin Resultado Operativo oficial para validar — no tocar
+
+      const candidatas = [];
+      data.filas.forEach(f => {
+        if (f.conceptoStd != null) return;
+        const concepto = _clasificarConceptoERPorLabel(f.lbl);
+        if (GASTO_CATS.includes(concepto)) candidatas.push({ fila: f, concepto });
+      });
+      if (!candidatas.length) return;
+
+      const sumar = f => Object.values(f.valores || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+      const sumarConcepto = cs => data.filas.filter(f => cs.includes(f.conceptoStd)).reduce((s, f) => s + sumar(f), 0)
+        + candidatas.filter(c => cs.includes(c.concepto)).reduce((s, c) => s + sumar(c.fila), 0);
+
+      const ventas = sumarConcepto(['ventas']);
+      const otrosIng = sumarConcepto(['otrosIngresos']);
+      if (ventas === 0 && otrosIng === 0) return; // sin ingresos clasificados — nada con qué validar
+
+      const utilBruta = ventas - Math.abs(sumarConcepto(['costo']));
+      const resultadoSimulado = utilBruta - Math.abs(sumarConcepto(['gastoAdm'])) - Math.abs(sumarConcepto(['gastoCom']))
+        - Math.abs(sumarConcepto(['gastoOper'])) + otrosIng - Math.abs(sumarConcepto(['otrosGastos']));
+
+      const diff = Math.abs(resultadoSimulado - sit) / Math.max(Math.abs(sit), 1);
+      if (diff > 0.01) return; // no valida contra el Resultado Operativo oficial — no tocar
+
+      candidatas.forEach(({ fila, concepto }) => { fila.conceptoStd = concepto; });
+      huboCambios = true;
+      reparados.push({ emp, yr, filas: candidatas.length, resultadoSimulado, oficial: sit });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] Gastos sin clasificar reparados para', reparados.length, 'empresa(s)/año(s):', reparados);
     try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
   }
   return reparados;
@@ -20401,56 +20543,11 @@ function buildEvolucionMensual(emp) {
         return `<tr style="${peso}">${lblCell}${celdas}${totCell}${delCell}</tr>`;
       }).join('');
     } else {
-      // ── Clasificador exhaustivo: asigna CADA fila del ER Original a un rubro
-      // estándar. Nada queda afuera: lo que no encaja en un rubro específico
-      // de gasto cae en "Otros Gastos Operativos". ──
-      const clasificar = (lblRaw) => {
-        const t = String(lblRaw || '').toUpperCase().trim();
-        if (!t) return null;
-        // Encabezados de sección puros — se ignoran
-        if (['INGRESOS','GASTOS','CUADRO DE RESULTADOS','CUENTA'].includes(t)) return null;
-        // Subtotales / resultados calculados
-        if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
-        if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA|RESULTADO\s+DE\s+OPERACI/.test(t)) return 'resOperativo';
-        if (/ANTES\s+(DE|DEL)\s+IMP/.test(t)) return 'resAntesImp';
-        if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO|RESULTADO\s+FINAL/.test(t)) return 'resEjercicio';
-        // Totales de gasto (subtotales) — no sumar para no duplicar
-        if (/TOTAL\s+(DE\s+)?GASTOS/.test(t)) return 'IGNORAR';
-        // Gastos que mencionan "venta" pero son gastos (comisiones, gastos de venta, descuentos otorgados)
-        if (/COMISION|GASTO.*VENTA|GASTOS\s+DE\s+VENTA/.test(t)) return 'gastoCom';
-        if (/DESCUENTO.*OTORGAD/.test(t)) return 'gastoCom';
-        // Componentes de ventas netas (Bruta/Devoluciones/Descuentos) — si hay VENTAS NETAS no se suman
-        if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
-        // Ingresos Brutos: pese al nombre, es el impuesto provincial sobre
-        // ingresos — un gasto, no una venta (mismo criterio que
-        // _repararIngresosBrutosComoVenta para filas ya cargadas).
-        if (/INGRESOS?\s+BRUTOS?/.test(t)) return 'gastoAdm';
-        // VENTAS / INGRESOS por venta
-        if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) {
-          if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
-          return 'ventas';
-        }
-        // Ingresos varios
-        if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
-        // COSTO
-        if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
-        // Financiero
-        if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
-        // Impuesto a las ganancias
-        if (/IMPUEST.*GANANCIA|IMPUESTO\s+DIFERIDO|A\s+LAS\s+GANANCIAS/.test(t)) return 'impuesto';
-        // Comercialización
-        if (/COMERCIALIZAC|COMERCIALES|MERCADOTECNIA|PUBLICIDAD|FLETE|ENCOMIENDA/.test(t)) return 'gastoCom';
-        // Administración
-        if (/ADMINISTRAC|ADMINISTRATIV/.test(t)) return 'gastoAdm';
-        // Otros ingresos/egresos
-        if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
-        if (/OTROS\s+EGRESO/.test(t)) return 'otrosGastos';
-        // CAPTURA-TODO de gastos: sueldos, cargas, honorarios, servicios, etc. → gastoOper
-        if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA|SOCIAL|APORTE|CONTRIBUC|HONORARIO|AMORTIZAC|DEPRECIAC|SEGURO|ART\b|ALQUILER|COMBUSTIBLE|LUBRICANTE|MANTENIMIENTO|REPARACION|REPUESTO|HERRAMIENTA|SERVICIO|IMPUESTO|TASA|VIATICO|MOVILIDAD|PREVISION|ENERGIA|ELECTRICID|TELEFON|INTERNET|PAPELERIA|ROPA|VEHICULO|RODADO|ASIGNACION|FAMILIAR|INDEMNIZAC|INDEMINIZAC|CESE|FONDO|UOYEP|IERIC|RENATRE|GASTO|EGRESO|VARIOS|GENERAL|PERSONAL|SUMAS|REMUNERAT|PASAJE|VIGILANCIA|LIMPIEZA|GAS\b|AGUA\b|INSUMOS|PROVISION|ESCRIBAN|AUDITORIA|PUBLICACION|CONSUMO|DIETA|REFRIGERIO|CAPACITAC|OFICINA/.test(t)) {
-          return 'gastoOper';
-        }
-        return null; // no clasificable
-      };
+      // ── Clasificador exhaustivo (global, ver _clasificarConceptoERPorLabel):
+      // asigna CADA fila del ER Original a un rubro estándar. Nada queda
+      // afuera: lo que no encaja en un rubro específico de gasto cae en
+      // "Otros Gastos Operativos". ──
+      const clasificar = _clasificarConceptoERPorLabel;
 
       // Agrupar todas las filas por rubro, sumando valores mes a mes
       const rubroVals = {}; // rubroVals[rubro][mes] = suma
@@ -39984,6 +40081,7 @@ function applyCloudData(cloud, opts) {
   try { _repararFacturacionDesdeERMensual(); } catch(e) {}
   try { _repararIngresosBrutosComoVenta(); } catch(e) {}
   try { _repararOtrosIngresosComoVenta(); } catch(e) {}
+  try { _repararGastosSinClasificar(); } catch(e) {}
   try { _repararFacturacionMultifilaVentas(); } catch(e) {}
 }
 
