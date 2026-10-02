@@ -10894,7 +10894,12 @@ function parsearFlujoExcel(wb, XLSX) {
       (lUP.includes('NECESIDAD') && !lUP.includes('SEMANAL') && !lUP.includes('MENSUAL') && !lUP.includes('DIARIA')) ||
       lUP.includes('RESULTADO') || lUP.includes('DÉFICIT') || lUP.includes('DEFICIT') ||
       lUP.includes('REQUERI') ||
-      (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO')));
+      (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO'))) ||
+      // "SALDO MENSUAL"/"SALDO DEL PERÍODO"/etc. es el resultado neto del
+      // período (ingresos − egresos), no un concepto de egreso — distinto de
+      // "SALDO INICIAL"/"SALDO ANTERIOR" (arrastre de caja, sigue siendo un
+      // ingreso) que NO debe entrar acá.
+      /SALDO\s*(DEL\s*)?(MES|MENSUAL|PERIODO|PERÍODO|CUATRIMESTRE|TRIMESTRE|FINAL|NETO)\b/.test(lUP);
     const esTotalizador = /^(TOTAL|SUBTOTAL|SUB-TOTAL|SUB TOTAL)/i.test(lbl) ||
       (lUP.includes('TOTAL') && (lUP.includes('ING') || lUP.includes('EGR')));
     const esTotal = esTotalizador || esResultadoLbl;
@@ -10929,6 +10934,26 @@ function parsearFlujoExcel(wb, XLSX) {
       : esResultadoLbl ? 'sup_def'
       : lbl.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
             .replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').substring(0, 40);
+
+    // Evitar duplicar/triplicar ingresos o egresos: algunos formatos (ej.
+    // Caudillos Riojanos, Mayo-Agosto 2026) apilan varias "mini-tablas" en
+    // una sola hoja — detalle de GASTOS OPERATIVOS con su propio TOTAL,
+    // detalle de GASTOS DE FUNCIONAMIENTO con su propio TOTAL, luego una
+    // sección EGRESOS que repite cada uno de esos totales bajo un nombre
+    // corto SIN la palabra "TOTAL" (ej. "Gastos Operativos" con el mismo
+    // importe que "TOTAL GASTOS OPERATIVOS"), y más abajo un CUADRO RESUMEN
+    // que repite otra vez el gran total como "EGRESOS OPERATIVOS". Como esas
+    // filas de repetición no empiezan con TOTAL/SUBTOTAL, el detector de
+    // arriba las toma como si fueran un concepto nuevo — si no se filtran,
+    // el detalle de egresos termina sumando el mismo importe 2 o 3 veces y
+    // "TOTAL EGRESOS" queda inflado. Si el importe de esta fila coincide
+    // (al peso) con el de un totalizador YA cargado, es una repetición, no
+    // un concepto nuevo.
+    if (!esTotal && (tipo === 'egreso' || tipo === 'ingreso') && valTotalCalc != null) {
+      const esRepeticionDeTotal = rubros.some(r2 =>
+        r2.esTotal && r2.actual != null && Math.abs(Math.abs(r2.actual) - Math.abs(valTotalCalc)) < 0.5);
+      if (esRepeticionDeTotal) continue;
+    }
 
     rubros.push({
       key, label: lbl, tipo, esTotal, nivel,
