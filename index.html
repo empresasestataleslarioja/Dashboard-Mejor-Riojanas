@@ -39756,6 +39756,33 @@ async function syncToCloud(nota) {
     const _autoridadesNuevo = _guardiaSeccionVacia('autoridades', 'lr_autoridades_last_count');
     const _presupuestoNuevo = _guardiaSeccionVacia('presupuesto', 'lr_presupuesto_last_count');
 
+    // Guardia de rubros — a diferencia de las de arriba (que bloquean solo un
+    // vaciado total a 0), acá una pestaña puede legítimamente publicar MENOS
+    // empresas que antes (fusionar/eliminar reduce el conteo a propósito), así
+    // que "menos filas" no alcanza como señal. En cambio, se bloquea si el
+    // payload está por omitir una empresa puntual que la ÚLTIMA bajada de
+    // Sheets sí traía y que esta pestaña no fusionó ni eliminó (no está en
+    // DATA.empresas_eliminadas): eso es la firma exacta de una pestaña con
+    // caché local incompleta/vieja publicando sobre una empresa que otra
+    // pestaña acaba de agregar o corregir y esta nunca llegó a bajar — bug
+    // real reportado: empresas recién hechas visibles (fix de "Sin rubro")
+    // que una pestaña vieja no conocía, borradas de Sheets por el primer
+    // auto-sync de esa pestaña al publicar su propio estado incompleto.
+    if (Array.isArray(restoData.rubros)) {
+      let _snapRubrosAnterior = [];
+      try { _snapRubrosAnterior = JSON.parse(localStorage.getItem('lr_rubros_sheets_snap_v1') || '[]'); } catch(e) {}
+      if (_snapRubrosAnterior.length) {
+        const _tumbadas = new Set((DATA.empresas_eliminadas||[]).map(t => t.empresa));
+        const _nuevasEmpresas = new Set(restoData.rubros.map(r => r.empresa));
+        const _faltantes = _snapRubrosAnterior.filter(emp => !_nuevasEmpresas.has(emp) && !_tumbadas.has(emp));
+        if (_faltantes.length) {
+          console.warn(`[Sync] Guardia rubros: la publicación omitía ${_faltantes.length} empresa(s) que Sheets ya tenía y esta pestaña no fusionó/eliminó — se cancela la sección rubros:`, _faltantes);
+          delete restoData.rubros;
+          showStorageStatus(`⚠ "rubros" omitido del sync — faltan ${_faltantes.length} empresa(s) que esta pestaña no tiene actualizadas (${_faltantes.slice(0,3).join(', ')}${_faltantes.length>3?'…':''}). Refrescá la página y reintentá.`, '#ff8c47');
+        }
+      }
+    }
+
     const payload = {
       tab:       'all',
       nota:      nota || 'Actualización manual',
@@ -40431,6 +40458,13 @@ function applyCloudData(cloud, opts) {
   // publicar). Mismo razonamiento para estado activa/inactiva y datos
   // institucionales, que viven en esta misma pestaña.
   if (Array.isArray(cloud.rubros) && cloud.rubros.length) {
+    // Recordar qué empresas trajo Sheets en esta bajada — syncToCloud() lo usa
+    // como guardia antes de publicar "rubros" (ver ahí mismo el comentario),
+    // para que una pestaña con caché local incompleta no borre para siempre,
+    // vía su propio auto-sync, una empresa que otra pestaña acaba de agregar
+    // o corregir y esta todavía no bajó.
+    try { localStorage.setItem('lr_rubros_sheets_snap_v1', JSON.stringify(cloud.rubros.map(r => r.empresa).filter(Boolean))); } catch(e) {}
+
     // Sheets puede devolver una celda de fecha (fecha_constitucion,
     // fecha_inactiva) como Date → ISO datetime completo (ej.
     // "2022-07-28T03:00:00.000Z") en vez del string plano "AAAA-MM-DD" que
