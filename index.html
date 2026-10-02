@@ -13844,6 +13844,10 @@ function buildComparacionFlujos() {
       if (r.tipo === 'resultado' || r.tipo === 'total') return false;
       if (r.esTotal) return false;  // cualquier subtotal intermedio
       if (_esImpCredDeb(r.label)) return false;
+      // Sin importe en NINGUNO de los dos períodos (0 o sin dato en ambos)
+      // — no aporta nada a la comparación y es puro ruido visual, sobre
+      // todo los conceptos "▲ NUEVO"/"▼ BAJA" que entraron o salieron en $0.
+      if (!rA?.actual && !rB?.actual) return false;
       return true;
     });
 
@@ -14302,6 +14306,9 @@ function exportarFlujoExcel() {
     if(_esImpCredDeb(r.label)) return false;
     if(r.tipo==='egreso' && r.esTotal) return false;
     if(r.tipo==='total') { const k=rA?.key??rB?.key; return _rKeepTot.has(k); }
+    // Sin importe en ninguno de los dos períodos — mismo criterio que la
+    // tabla del panel: no aporta nada a la comparación.
+    if(!rA?.actual && !rB?.actual) return false;
     return true;
   }).map(({rA,rB})=>{
     const tipo=rA?.tipo||rB?.tipo||'egreso';
