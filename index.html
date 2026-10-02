@@ -9608,19 +9608,19 @@ function gestionNuevaEmpresa() {
   marcarPendienteGuardar(['fact','resultado','notas','rubros']);
 }
 
-function gestionRenombrar() {
+async function gestionRenombrar() {
   const from = document.getElementById('gest-rename-from')?.value?.trim();
   const to   = document.getElementById('gest-rename-to')?.value?.trim();
   const msg  = document.getElementById('gest-rename-msg');
   if (!from || !to) { if (msg) { msg.style.color='#ff4766'; msg.textContent='Completá empresa y nuevo nombre.'; } return; }
   if (from === to)  { if (msg) { msg.style.color='#ff8c47'; msg.textContent='El nombre es igual al actual.'; } return; }
+  let huboFusion = false;
   if (DATA.fact[to] || DATA.sit[to]) {
     if (!confirm(`Ya existe una empresa llamada "${to}". ¿Fusionar los datos de "${from}" en "${to}"?`)) return;
     _fusionarEmpresas(from, to);
-    if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ Datos de "${from}" fusionados en "${to}".`; }
+    huboFusion = true;
   } else {
     _renombrarEmpresa(from, to);
-    if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ "${from}" renombrada a "${to}".`; }
   }
   document.getElementById('gest-rename-to').value = '';
   _poblarGestionSelects();
@@ -9630,16 +9630,28 @@ function gestionRenombrar() {
   try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
   rebuildActive();
   populateSelects();
-  if (msg) { msg.textContent += ' Publicá a Sheets para guardar el cambio.'; }
+  // Publicar de inmediato — ver comentario en gestionFusionar(): dejar el
+  // cambio solo "pendiente" es lo que permite que la empresa vieja
+  // reaparezca en el próximo sync desde otra pestaña o dispositivo.
+  const accion = huboFusion ? `Datos de "${from}" fusionados en "${to}"` : `"${from}" renombrada a "${to}"`;
+  if (msg) { msg.style.color='#47e8ff'; msg.textContent=`⏳ ${accion} — publicando a Sheets…`; }
+  try {
+    await syncToCloud(huboFusion ? ('Fusión de empresas: ' + from + ' → ' + to) : ('Renombre: ' + from + ' → ' + to));
+    if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ ${accion} y publicado a Sheets.`; }
+  } catch(e) {
+    if (msg) { msg.style.color='#ff8c47'; msg.textContent=`⚠ ${accion} localmente, pero falló la publicación a Sheets — reintentá desde ⚙ Guardar y sincronizar.`; }
+  }
 }
 
-function gestionRenombrarRapido(emp) {
+async function gestionRenombrarRapido(emp) {
   const to = window.prompt(`Nuevo nombre para:\n"${emp}"`, emp);
   if (!to || to.trim() === emp) return;
   const nuevo = to.trim();
+  let huboFusion = false;
   if (DATA.fact[nuevo] || DATA.sit[nuevo]) {
     if (!confirm(`Ya existe "${nuevo}". ¿Fusionar "${emp}" en "${nuevo}"?`)) return;
     _fusionarEmpresas(emp, nuevo);
+    huboFusion = true;
   } else {
     _renombrarEmpresa(emp, nuevo);
   }
@@ -9650,9 +9662,12 @@ function gestionRenombrarRapido(emp) {
   try { saveRubros(); } catch(e) {}
   try { saveDataToLocalCache(); } catch(e) {}
   try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
+  // Publicar de inmediato — ver comentario en gestionFusionar()
+  try { await syncToCloud(huboFusion ? ('Fusión de empresas: ' + emp + ' → ' + nuevo) : ('Renombre: ' + emp + ' → ' + nuevo)); }
+  catch(e) { showStorageStatus('⚠ Cambio aplicado localmente, pero falló la publicación a Sheets — sincronizá manualmente.', '#ff8c47'); }
 }
 
-function gestionFusionar() {
+async function gestionFusionar() {
   const from = document.getElementById('gest-merge-from')?.value?.trim();
   const to   = document.getElementById('gest-merge-to')?.value?.trim();
   const msg  = document.getElementById('gest-merge-msg');
@@ -9660,7 +9675,6 @@ function gestionFusionar() {
   if (from === to)  { if (msg) { msg.style.color='#ff8c47'; msg.textContent='No podés fusionar una empresa consigo misma.'; } return; }
   if (!confirm(`¿Fusionar "${from}" → "${to}"?\n\nLos datos de "${from}" se sumarán a "${to}" y "${from}" se eliminará.\nEsta operación no se puede deshacer.`)) return;
   _fusionarEmpresas(from, to);
-  if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ "${from}" fusionada en "${to}" y eliminada del portafolio. Publicá a Sheets para guardar.`; }
   _poblarGestionSelects();
   computeTotals();
   try { saveRubros(); } catch(e) {}
@@ -9668,6 +9682,18 @@ function gestionFusionar() {
   try { marcarPendienteGuardar(['fact','resultado','personal','notas','institucional','presupuesto','rubros','balances','mensual','er_mensual','er_detalle','autoridades']); } catch(e) {}
   rebuildActive();
   populateSelects();
+  // Publicar de inmediato — una fusión que queda solo "pendiente" y nunca
+  // se sincroniza es exactamente lo que deja viva la fila vieja en Sheets,
+  // que vuelve a aparecer en el próximo sync desde otro dispositivo o
+  // pestaña (caso real reportado varias veces: empresas fusionadas que
+  // "resucitan"). Fusionar y publicar quedan como una sola operación.
+  if (msg) { msg.style.color='#47e8ff'; msg.textContent=`⏳ "${from}" fusionada en "${to}" — publicando a Sheets…`; }
+  try {
+    await syncToCloud('Fusión de empresas: ' + from + ' → ' + to);
+    if (msg) { msg.style.color='#47ffb4'; msg.textContent=`✓ "${from}" fusionada en "${to}" y publicado a Sheets.`; }
+  } catch(e) {
+    if (msg) { msg.style.color='#ff8c47'; msg.textContent=`⚠ "${from}" fusionada en "${to}" localmente, pero falló la publicación a Sheets — reintentá desde ⚙ Guardar y sincronizar para que no vuelva a aparecer.`; }
+  }
 }
 
 // Registra que `emp` ya no debe existir como empresa independiente (borrada,
