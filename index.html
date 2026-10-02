@@ -3584,6 +3584,8 @@ self.onmessage = async (e) => {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
         <div id="trans-filtro-resumen" style="font-size:9px;color:var(--dim);font-family:var(--mono);
           flex:1;min-height:14px"></div>
+        <div id="trans-filtro-total" style="font-size:10px;color:#1a9e68;font-family:var(--mono);
+          font-weight:600;white-space:nowrap;min-height:14px"></div>
         <button onclick="toggleAuditoriaPanel()"
           id="btn-auditoria-trans"
           style="padding:3px 9px;background:rgba(100,100,80,.07);border:1px solid rgba(100,100,80,.25);
@@ -8504,8 +8506,12 @@ function _rptTransferencias(autoPrint) {
   var kpiEl  = document.getElementById('kpi-trans');
   var kpiTxt = kpiEl ? kpiEl.innerText.replace(/\n+/g,' | ') : '';
 
-  // Filtros activos
-  var empFil = _transFiltros.empresa ? [..._transFiltros.empresa][0] : null;
+  // Filtros activos — antes solo tomaba la primera empresa seleccionada
+  // ([0]) aunque hubiera varias marcadas; ahora lista todas (o la
+  // cantidad, si son muchas) para que el subtítulo del reporte sea
+  // consistente con el filtro realmente aplicado.
+  var empSel  = _transFiltros.empresa ? [..._transFiltros.empresa].sort() : null;
+  var empFil  = empSel ? (empSel.length <= 3 ? empSel.join(', ') : empSel.length + ' empresas seleccionadas') : null;
   var añoFil = _transFiltros.año     ? [..._transFiltros.año].sort().join(', ') : 'todos';
   var subtitle = empFil
     ? empFil + ' · año ' + añoFil
@@ -21450,7 +21456,7 @@ const TRANS_COLORS = {
   'Gastos Operativos':           '#47e8ffcc',
   'Subsidios':                   '#c447ffcc',
   'Pago Ventas/Obras':           '#ff8c47cc',
-  'Obras/Proyectos Específicos': '#e8ff47cc',
+  'Obras/Proyectos Específicos': '#4775ffcc',
   'Inversiones':                 '#47ffb4cc',
   'Sin Clasificar':              '#94a3b8cc',
 };
@@ -21569,7 +21575,19 @@ function transFiltered() {
 
 // ── Exportar detalle de transferencias filtrado a Excel ──────────
 function exportarTransExcel() {
-  const rows = transFiltered(); // respeta todos los filtros activos + columna
+  // transFiltered() aplica los filtros de la barra (año/mes/saf/ben/cat/
+  // empresa + búsqueda); acá se le suman además los filtros de columna de
+  // la tabla de detalle (_transColFiltros) — antes se ignoraban, así que
+  // el Excel podía traer filas que la tabla tenía ocultas por un filtro
+  // de columna activo.
+  const PROP_MAP_EXPORT = {0:'saf',1:'organismo',2:'beneficiario',3:'cgto',4:'observacion',5:'año',7:'categoria'};
+  const rows = transFiltered().filter(t => Object.entries(_transColFiltros).every(([ci, sel]) => {
+    const p = PROP_MAP_EXPORT[ci];
+    if (!p) return true;
+    const v = t[p];
+    const vStr = (v == null || v === '' || (p === 'año' && !v)) ? '__vacio__' : String(v);
+    return sel.has(vStr);
+  }));
   if (!rows.length) {
     alert('No hay registros para exportar con los filtros actuales.');
     return;
@@ -21634,7 +21652,7 @@ function exportarTransExcel() {
 
     // Nombre del archivo con filtros activos
     const fechaStr = nowAR().slice(0,10);
-    const filtrosStr = Object.values(_transFiltros).filter(Boolean).length > 0 ? '_filtrado' : '';
+    const filtrosStr = (Object.values(_transFiltros).filter(Boolean).length > 0 || Object.keys(_transColFiltros).length > 0) ? '_filtrado' : '';
     XLSX.writeFile(wb, `transferencias${filtrosStr}_${fechaStr}.xlsx`);
   };
 
@@ -21916,6 +21934,18 @@ function renderTransTabla(rows) {
       </tr>`;
     }).join('')}
     </tbody>`;
+
+  // Reaplicar filtros de columna (ocultar filas + apariencia de los
+  // botones ▼ + total visible) sobre el tbody recién creado — bug real:
+  // renderTransTabla() arma el tbody desde cero y cualquier re-render
+  // disparado por el sync periódico en segundo plano (cada 2 minutos,
+  // vía rebuildActive() → buildTransferencias()) perdía el efecto visual
+  // de _transColFiltros (la fila volvía a mostrarse y el botón ▼ perdía
+  // el punto activo) aunque el objeto _transColFiltros en sí seguía
+  // teniendo la selección — de ahí la sensación de que el filtro "se
+  // rompía" solo. Esto corre siempre (no solo cuando hay filtros
+  // activos) porque también es lo que actualiza el total en $ visible.
+  aplicarFiltrosColumnasTrans();
 }
 
 // ── Estado de filtros globales multi-selección ───────────────────
@@ -22183,8 +22213,23 @@ function abrirDropTrans(event, colIdx) {
   const MESES_D = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-  // Valores únicos de TODOS los datos (no filtrados por columna)
-  const todosVals = [...new Set(DATA.transferencias.map(t => {
+  // Valores únicos de las filas que ya corresponden al contexto actual:
+  // filtros de la barra (incluida empresa) + selector de año de Detalle +
+  // el resto de los filtros de columna YA aplicados en OTRAS columnas (no
+  // la propia, para poder seguir ajustando su selección libremente) —
+  // bug real reportado: antes esto listaba valores de TODA la base
+  // (DATA.transferencias sin filtrar), así que con un filtro de empresa
+  // activo, columnas como "Observación" igual ofrecían valores de otras
+  // empresas sin relación con lo ya filtrado.
+  const baseRowsDrop = _transTablaPreFiltrada().filter(t => Object.entries(_transColFiltros).every(([ci, sel]) => {
+    if (Number(ci) === colIdx) return true;
+    const p = PROP_MAP[ci];
+    if (!p) return true;
+    const v = t[p];
+    const vStr = (v == null || v === '' || (p === 'año' && !v)) ? '__vacio__' : String(v);
+    return sel.has(vStr);
+  }));
+  const todosVals = [...new Set(baseRowsDrop.map(t => {
     const v = t[prop];
     if (v == null || v === '' || (prop === 'año' && !v)) return '__vacio__';
     return String(v);
@@ -22341,8 +22386,9 @@ function aplicarFiltrosColumnasTrans() {
     btn.style.borderColor = activo ? '#47e8ff44' : 'var(--bd2)';
   });
 
-  // Filtrar filas
+  // Filtrar filas y totalizar importes de las que quedan visibles
   let visible = 0;
+  let totalVisible = 0;
   tbody.querySelectorAll('tr').forEach(tr => {
     const idx = parseInt(tr.id?.replace('trans-row-',''));
     if (isNaN(idx)) return;
@@ -22356,7 +22402,7 @@ function aplicarFiltrosColumnasTrans() {
       return sel.has(vStr);
     });
     tr.style.display = show ? '' : 'none';
-    if (show) visible++;
+    if (show) { visible++; totalVisible += Number(t.importe) || 0; }
   });
 
   // Actualizar resumen
@@ -22370,6 +22416,11 @@ function aplicarFiltrosColumnasTrans() {
       ? `Filtros activos (${Object.keys(_transColFiltros).map(c=>COLS_N[c]).join(', ')}) — ${visible} de ${total} registros`
       : `${total} registros`;
   }
+  // Total en $ de las filas visibles en la tabla (respeta tanto los
+  // filtros de la barra como los de columna) — pedido del usuario:
+  // totalizar los importes visibles, no solo contarlos.
+  const totEl = document.getElementById('trans-filtro-total');
+  if (totEl) totEl.textContent = `Total visible: ${fvFull(totalVisible)}`;
 }
 
 // Limpiar todos los filtros de columna
