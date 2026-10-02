@@ -8519,17 +8519,17 @@ function _rptResultadosEjercicio() {
   if (!empresas.length || !años.length) { alert('No hay resultados de ejercicio cargados en los balances.'); return; }
 
   const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
-  const thAños = años.map(a => `<th style="text-align:right">${a}</th>`).join('');
+  const thAños = años.map(a => `<th data-anio="${a}" style="text-align:right">${a}</th>`).join('');
 
   const filas = empresas.map(emp => {
     const vals  = años.map(a => porEmpresaAño[emp][a]);
     const total = vals.some(v => v != null) ? vals.reduce((s,v) => s + (v||0), 0) : null;
     const celdas = años.map(a => {
       const v = porEmpresaAño[emp][a];
-      if (v == null) return `<td style="text-align:right;color:#c7cad6;font-size:9.5px;padding:6px 10px;border-bottom:1px solid #e5e7eb">—</td>`;
+      if (v == null) return `<td data-anio="${a}" style="text-align:right;color:#c7cad6;font-size:9.5px;padding:6px 10px;border-bottom:1px solid #e5e7eb">—</td>`;
       const c  = v >= 0 ? '#065f46' : '#991b1b';
       const bg = v >= 0 ? '#ecfdf5' : '#fef2f2';
-      return `<td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${c};background:${bg};padding:6px 10px;border-bottom:1px solid #e5e7eb">${fM(v)}</td>`;
+      return `<td data-anio="${a}" style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${c};background:${bg};padding:6px 10px;border-bottom:1px solid #e5e7eb">${fM(v)}</td>`;
     }).join('');
     const tColor = total == null ? '#888' : total >= 0 ? '#065f46' : '#991b1b';
     return `<tr data-emp="${emp.replace(/"/g,'&quot;')}">
@@ -8544,7 +8544,7 @@ function _rptResultadosEjercicio() {
     const sum  = vals.length ? vals.reduce((s,v) => s+v, 0) : null;
     const c  = sum == null ? '#888'    : sum >= 0 ? '#065f46' : '#991b1b';
     const bg = sum == null ? '#f9fafb' : sum >= 0 ? '#d1fae5' : '#fee2e2';
-    return `<td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${c};background:${bg};padding:6px 10px">${fM(sum)}</td>`;
+    return `<td data-anio="${a}" style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${c};background:${bg};padding:6px 10px">${fM(sum)}</td>`;
   }).join('');
   const granTotal = (() => {
     const todosVals = empresas.flatMap(e => años.map(a => porEmpresaAño[e][a])).filter(v => v != null);
@@ -8552,7 +8552,8 @@ function _rptResultadosEjercicio() {
   })();
   const gtColor = granTotal == null ? '#1a3a8f' : granTotal >= 0 ? '#065f46' : '#991b1b';
 
-  const opcionesEmp = empresas.map(e => `<option value="${e.replace(/"/g,'&quot;')}">${e}</option>`).join('');
+  const opcionesEmp  = empresas.map(e => `<option value="${e.replace(/"/g,'&quot;')}">${e}</option>`).join('');
+  const opcionesAnio = años.map(a => `<option value="${a}">${a}</option>`).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -8576,7 +8577,7 @@ function _rptResultadosEjercicio() {
     border:1px solid #e3e6f0;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
   .filtro-bar label{font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
   .filtro-bar select{padding:7px 12px;border:1.5px solid #c5cae9;border-radius:5px;font-family:monospace;
-    font-size:11px;color:#1a3a8f;background:#f8faff;cursor:pointer;min-width:240px}
+    font-size:11px;color:#1a3a8f;background:#f8faff;cursor:pointer;min-width:190px}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
   .kpi{background:#fff;border-radius:8px;border:1px solid #e3e6f0;padding:14px 16px;
     text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)}
@@ -8629,6 +8630,11 @@ function _rptResultadosEjercicio() {
       <option value="">— Todas las empresas —</option>
       ${opcionesEmp}
     </select>
+    <label>Año</label>
+    <select id="f-anio" onchange="filtrarAnio(this.value)">
+      <option value="">— Todos los años —</option>
+      ${opcionesAnio}
+    </select>
     <span id="f-info" style="font-size:9px;color:#9ea3b8;font-family:monospace"></span>
   </div>
 
@@ -8641,7 +8647,7 @@ function _rptResultadosEjercicio() {
   <div class="card">
     <div class="card-title">Resultado del Ejercicio por empresa y año</div>
     <table>
-      <thead><tr><th>Empresa</th>${thAños}<th style="border-left:2px solid #c5cae9">Acumulado</th></tr></thead>
+      <thead><tr><th>Empresa</th>${thAños}<th style="border-left:2px solid #c5cae9" title="Suma de todos los años cargados — no se ve afectada por el filtro de año">Acumulado</th></tr></thead>
       <tbody id="tbody-resultados">
         ${filas}
         <tr data-emp="__total__" style="background:#f0f4ff;font-weight:700">
@@ -8657,15 +8663,30 @@ function _rptResultadosEjercicio() {
   <div class="footer">Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; <span style="font-weight:600">SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span> &nbsp;·&nbsp; ${fecha}</div>
 </div>
 <script>
+  function _actualizarInfoFiltro() {
+    var emp  = document.getElementById('f-emp').value;
+    var anio = document.getElementById('f-anio').value;
+    var partes = [];
+    if (emp)  partes.push(emp);
+    if (anio) partes.push('Año ' + anio);
+    var info = document.getElementById('f-info');
+    if (info) info.textContent = partes.length ? '☰ Mostrando: ' + partes.join(' · ') : '';
+  }
   function filtrarEmpresa(emp) {
     var rows = document.querySelectorAll('#tbody-resultados tr');
     rows.forEach(function(tr) {
       var e = tr.getAttribute('data-emp');
-      if (!emp) { tr.style.display = ''; return; }
-      tr.style.display = (e === emp) ? '' : 'none';
+      tr.style.display = (!emp || e === emp) ? '' : 'none';
     });
-    var info = document.getElementById('f-info');
-    if (info) info.textContent = emp ? '☰ Mostrando: ' + emp : '';
+    _actualizarInfoFiltro();
+  }
+  function filtrarAnio(anio) {
+    var celdas = document.querySelectorAll('[data-anio]');
+    celdas.forEach(function(el) {
+      var a = el.getAttribute('data-anio');
+      el.style.display = (!anio || a === anio) ? '' : 'none';
+    });
+    _actualizarInfoFiltro();
   }
 <\/script>
 </body></html>`;
