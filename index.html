@@ -4449,6 +4449,11 @@ self.onmessage = async (e) => {
                   color:var(--acc);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600;white-space:nowrap">
                   📊 Reporte Integral
                 </button>
+                <button onclick="_rptResultadosEjercicio()" title="Resultado del ejercicio por empresa y año, con filtro individual o de todas"
+                  style="padding:8px 14px;background:rgba(100,100,80,.08);border:1px solid #47e8ff55;
+                  color:var(--acc);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600;white-space:nowrap">
+                  📈 Resultados de Ejercicio
+                </button>
                 <button onclick="_rptClasificacionBalances()" title="Clasificación superávit/déficit según balances vs carga manual"
                   style="padding:8px 14px;background:rgba(100,100,80,.08);border:1px solid #47e8ff55;
                   color:var(--acc);font-size:10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-weight:600;white-space:nowrap">
@@ -8476,6 +8481,211 @@ function _rptBalanceIntegral() {
     + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
   var iframe = document.createElement('iframe');
   iframe.name = '_rpt_frame';
+  iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
+  overlay.appendChild(bar);
+  overlay.appendChild(iframe);
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+}
+
+// ══════════════════════════════════════════════════
+//   REPORTE: RESULTADOS DE EJERCICIO (empresa × año)
+// ══════════════════════════════════════════════════
+function _rptResultadosEjercicio() {
+  const todos = Object.values(_balances);
+  if (!todos.length) { alert('No hay balances cargados.'); return; }
+
+  const fM = v => {
+    if (v == null) return '—';
+    return (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+  };
+  const empCanon = b => (b.vinculada || b.empresa || '(Sin empresa)').trim();
+
+  // Un balance por empresa+año — guardarBalance()/applyCloudData() ya
+  // eliminan cualquier entrada previa de la misma clave empresa+período
+  // antes de guardar una nueva, así que no hay colisiones que resolver acá.
+  const porEmpresaAño = {};
+  todos.forEach(b => {
+    const emp = empCanon(b);
+    const año = parseInt(b.periodo);
+    if (isNaN(año)) return;
+    const rN = b.indicadores?.rentabilidad?.resultado_neto;
+    if (!porEmpresaAño[emp]) porEmpresaAño[emp] = {};
+    porEmpresaAño[emp][año] = rN != null ? rN : null;
+  });
+
+  const empresas = Object.keys(porEmpresaAño).sort();
+  const años = [...new Set(todos.map(b => parseInt(b.periodo)).filter(a => !isNaN(a)))].sort((a,b) => a-b);
+  if (!empresas.length || !años.length) { alert('No hay resultados de ejercicio cargados en los balances.'); return; }
+
+  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const thAños = años.map(a => `<th style="text-align:right">${a}</th>`).join('');
+
+  const filas = empresas.map(emp => {
+    const vals  = años.map(a => porEmpresaAño[emp][a]);
+    const total = vals.some(v => v != null) ? vals.reduce((s,v) => s + (v||0), 0) : null;
+    const celdas = años.map(a => {
+      const v = porEmpresaAño[emp][a];
+      if (v == null) return `<td style="text-align:right;color:#c7cad6;font-size:9.5px;padding:6px 10px;border-bottom:1px solid #e5e7eb">—</td>`;
+      const c  = v >= 0 ? '#065f46' : '#991b1b';
+      const bg = v >= 0 ? '#ecfdf5' : '#fef2f2';
+      return `<td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${c};background:${bg};padding:6px 10px;border-bottom:1px solid #e5e7eb">${fM(v)}</td>`;
+    }).join('');
+    const tColor = total == null ? '#888' : total >= 0 ? '#065f46' : '#991b1b';
+    return `<tr data-emp="${emp.replace(/"/g,'&quot;')}">
+      <td style="padding:6px 10px;font-size:10px;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb">${emp}</td>
+      ${celdas}
+      <td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${tColor};padding:6px 10px;border-bottom:1px solid #e5e7eb;border-left:2px solid #c5cae9">${fM(total)}</td>
+    </tr>`;
+  }).join('');
+
+  const totalesPorAño = años.map(a => {
+    const vals = empresas.map(e => porEmpresaAño[e][a]).filter(v => v != null);
+    const sum  = vals.length ? vals.reduce((s,v) => s+v, 0) : null;
+    const c  = sum == null ? '#888'    : sum >= 0 ? '#065f46' : '#991b1b';
+    const bg = sum == null ? '#f9fafb' : sum >= 0 ? '#d1fae5' : '#fee2e2';
+    return `<td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${c};background:${bg};padding:6px 10px">${fM(sum)}</td>`;
+  }).join('');
+  const granTotal = (() => {
+    const todosVals = empresas.flatMap(e => años.map(a => porEmpresaAño[e][a])).filter(v => v != null);
+    return todosVals.length ? todosVals.reduce((s,v) => s+v, 0) : null;
+  })();
+  const gtColor = granTotal == null ? '#1a3a8f' : granTotal >= 0 ? '#065f46' : '#991b1b';
+
+  const opcionesEmp = empresas.map(e => `<option value="${e.replace(/"/g,'&quot;')}">${e}</option>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8">
+<title>Resultados de Ejercicio por Empresa y Año</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f8;color:#1e1e2d;font-size:11px}
+  .page{max-width:1020px;margin:0 auto;padding:28px 20px}
+  .header{background:linear-gradient(135deg,#0d1b4b 0%,#1a3a8f 60%,#1565c0 100%);
+    color:#fff;padding:26px 30px 22px;border-radius:10px;margin-bottom:20px;
+    box-shadow:0 4px 18px rgba(21,101,192,.25)}
+  .header-inner{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+  .header h1{font-size:18px;font-weight:700;margin-bottom:5px}
+  .header .sub{font-size:9px;color:rgba(255,255,255,.6);letter-spacing:.05em;margin-bottom:10px}
+  .badge{display:inline-block;background:rgba(255,255,255,.13);color:#fff;
+    font-size:8px;font-family:monospace;letter-spacing:.1em;padding:3px 9px;border-radius:20px;
+    border:1px solid rgba(255,255,255,.2);margin-right:6px}
+  .logos-area{display:flex;align-items:center;gap:10px;color:#fff;flex-shrink:0;opacity:.9}
+  .filtro-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;
+    border:1px solid #e3e6f0;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .filtro-bar label{font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+  .filtro-bar select{padding:7px 12px;border:1.5px solid #c5cae9;border-radius:5px;font-family:monospace;
+    font-size:11px;color:#1a3a8f;background:#f8faff;cursor:pointer;min-width:240px}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+  .kpi{background:#fff;border-radius:8px;border:1px solid #e3e6f0;padding:14px 16px;
+    text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+  .kpi .v{font-size:22px;font-weight:700;font-family:monospace}
+  .kpi .l{font-size:8px;color:#9ea3b8;text-transform:uppercase;letter-spacing:.1em;margin-top:4px}
+  .card{background:#fff;border-radius:8px;border:1px solid #e3e6f0;
+    overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.05);margin-bottom:16px}
+  .card-title{padding:12px 16px 8px;font-size:11px;font-weight:700;color:#0d1b4b;
+    letter-spacing:.05em;border-bottom:1px solid #e5e7eb}
+  table{width:100%;border-collapse:collapse}
+  thead tr{background:#f0f4ff}
+  th{font-size:8.5px;font-weight:700;color:#1a3a8f;text-transform:uppercase;
+    letter-spacing:.06em;padding:7px 10px;text-align:right;border-bottom:2px solid #c5cae9;white-space:nowrap}
+  th:first-child{text-align:left;padding-left:10px;min-width:160px}
+  .nota{padding:8px 16px;font-size:8.5px;color:#9ea3b8;border-top:1px solid #f0f0f0;background:#fafafa}
+  .footer{text-align:center;margin-top:20px;font-size:8px;color:#bbb;font-family:monospace}
+  @media print{
+    body{background:#fff}.page{padding:8px 10px}.card{break-inside:avoid}
+    .header{background:#1a3a8f !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .logos-area{color:#fff !important}
+    .filtro-bar{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="header-inner">
+      <div>
+        <div class="sub">ANÁLISIS DE BALANCES</div>
+        <h1>Resultados de Ejercicio por Empresa y Año</h1>
+        <div class="sub">Empresas Estatales · Provincia de La Rioja</div>
+        <div style="margin-top:10px">
+          <span class="badge">${empresas.length} EMPRESAS</span>
+          <span class="badge">${años[0]}–${años[años.length-1]}</span>
+          <span class="badge">${fecha}</span>
+        </div>
+      </div>
+      <div class="logos-area">
+        ${_svgLaRioja(44)}
+        <div style="width:1px;height:38px;background:rgba(255,255,255,.3)"></div>
+        ${_svgMejorRiojanas(38)}
+      </div>
+    </div>
+  </div>
+
+  <div class="filtro-bar">
+    <label>Empresa</label>
+    <select id="f-emp" onchange="filtrarEmpresa(this.value)">
+      <option value="">— Todas las empresas —</option>
+      ${opcionesEmp}
+    </select>
+    <span id="f-info" style="font-size:9px;color:#9ea3b8;font-family:monospace"></span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v" style="color:#1a3a8f">${empresas.length}</div><div class="l">Empresas con resultado cargado</div></div>
+    <div class="kpi"><div class="v" style="color:#1a3a8f">${años.length}</div><div class="l">Años con balances</div></div>
+    <div class="kpi"><div class="v" style="color:${gtColor}">${fM(granTotal)}</div><div class="l">Resultado acumulado total</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Resultado del Ejercicio por empresa y año</div>
+    <table>
+      <thead><tr><th>Empresa</th>${thAños}<th style="border-left:2px solid #c5cae9">Acumulado</th></tr></thead>
+      <tbody id="tbody-resultados">
+        ${filas}
+        <tr data-emp="__total__" style="background:#f0f4ff;font-weight:700">
+          <td style="padding:6px 10px;font-size:9px;font-weight:700;color:#1a3a8f">TOTAL POR AÑO</td>
+          ${totalesPorAño}
+          <td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${gtColor};padding:6px 10px;border-left:2px solid #c5cae9">${fM(granTotal)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="nota">Valores en pesos corrientes de cada balance (sin ajuste por inflación) · "—" = sin balance cargado para ese año.</div>
+  </div>
+
+  <div class="footer">Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; <span style="font-weight:600">SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span> &nbsp;·&nbsp; ${fecha}</div>
+</div>
+<script>
+  function filtrarEmpresa(emp) {
+    var rows = document.querySelectorAll('#tbody-resultados tr');
+    rows.forEach(function(tr) {
+      var e = tr.getAttribute('data-emp');
+      if (!emp) { tr.style.display = ''; return; }
+      tr.style.display = (e === emp) ? '' : 'none';
+    });
+    var info = document.getElementById('f-info');
+    if (info) info.textContent = emp ? '☰ Mostrando: ' + emp : '';
+  }
+<\/script>
+</body></html>`;
+
+  var overlay = document.getElementById('_rpt_overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = '_rpt_overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:#000;display:flex;flex-direction:column';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = '';
+  overlay.style.display = 'flex';
+  var bar = document.createElement('div');
+  bar.style.cssText = 'background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #333';
+  bar.innerHTML = '<span style="color:#47e8ff;font-family:monospace;font-size:11px;flex:1">📈 Resultados de Ejercicio por Empresa y Año</span>'
+    + '<button onclick="window.frames[\'_rpt_frame_resej\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
+    + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
+  var iframe = document.createElement('iframe');
+  iframe.name = '_rpt_frame_resej';
   iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
   overlay.appendChild(bar);
   overlay.appendChild(iframe);
