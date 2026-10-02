@@ -16096,19 +16096,28 @@ function _repararGastosSinClasificar() {
 }
 
 // ── Reparación automática: filas "GASTOS FINANCIEROS" ya cargadas con
-// conceptoStd:'resFinanciero' — bug real: antes de agregar el concepto
-// dedicado 'gastoFinanciero', una fila con ese texto exacto quedaba
-// etiquetada como 'resFinanciero' (Resultado Financiero neto), que la
-// dashboard excluye del Resultado Operativo y muestra como línea aparte
-// debajo de él. Pedido del usuario (Cerdo de los Llanos, 2023-2026):
-// "Gastos Financieros" debe imputarse como gasto dentro de ER Provisorio,
-// no como Resultado Financiero. _repararGastosSinClasificar() solo toca
-// filas sin clasificar (conceptoStd:null) — esta reparación cubre el caso
-// de filas que YA estaban (mal) clasificadas como 'resFinanciero' antes
-// de este fix. Es una relabel directa por texto exacto, sin gate de
-// validación numérica (igual que _repararOtrosIngresosComoVenta): no hay
-// ambigüedad posible en una fila llamada literalmente "Gastos
-// Financieros". Nunca cambia ningún valor numérico, solo la etiqueta.
+// conceptoStd:'resFinanciero' o 'gastoOper' — bug real: antes de agregar
+// el concepto dedicado 'gastoFinanciero', una fila con ese texto exacto
+// quedaba etiquetada como 'resFinanciero' (Resultado Financiero neto, que
+// la dashboard excluye del Resultado Operativo y muestra como línea
+// aparte debajo de él) en algunas empresas/años, o como 'gastoOper'
+// (catch-all genérico — fix previo de esta misma sesión, antes de crear
+// el concepto dedicado) en otras: Cerdo de los Llanos 2023/2024 quedó en
+// 'gastoOper' con ese fix anterior, mientras que 2025/2026 ya traía la
+// fila cargada como 'resFinanciero'. En ambos casos el Resultado
+// Operativo YA daba correcto (ambos conceptos restan en la fórmula) pero
+// la fila no se mostraba como su propia línea "Gastos Financieros" en ER
+// Provisorio. Pedido del usuario: debe imputarse como "Gastos
+// Financieros" dentro de ER Provisorio. _repararGastosSinClasificar()
+// solo toca filas sin clasificar (conceptoStd:null) — esta reparación
+// cubre el caso de filas que YA estaban clasificadas (en cualquiera de
+// los dos conceptos) antes de agregar 'gastoFinanciero'. Es una relabel
+// directa por texto exacto, sin gate de validación numérica (igual que
+// _repararOtrosIngresosComoVenta): no hay ambigüedad posible en una fila
+// llamada literalmente "Gastos Financieros", y mover de gastoOper/
+// resFinanciero a gastoFinanciero no cambia ningún valor numérico, solo
+// la etiqueta (y en el caso de gastoOper, ni siquiera cambia el total de
+// Resultado Operativo, que ya restaba este monto).
 function _repararGastosFinancierosMalClasificados() {
   if (!DATA.er_mensual) return [];
   let huboCambios = false;
@@ -16117,7 +16126,7 @@ function _repararGastosFinancierosMalClasificados() {
     if (!porAnio) return;
     Object.entries(porAnio).forEach(([yr, data]) => {
       if (!data || !Array.isArray(data.filas)) return;
-      const filas = data.filas.filter(f => f.conceptoStd === 'resFinanciero' && /^GASTOS?\s+FINANCIEROS?\b/.test(String(f.lbl || '').trim().toUpperCase()));
+      const filas = data.filas.filter(f => ['resFinanciero', 'gastoOper'].includes(f.conceptoStd) && /^GASTOS?\s+FINANCIEROS?\b/.test(String(f.lbl || '').trim().toUpperCase()));
       if (!filas.length) return;
       filas.forEach(f => { f.conceptoStd = 'gastoFinanciero'; });
       huboCambios = true;
