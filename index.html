@@ -12238,9 +12238,19 @@ function _flujoNecesidadSignada(f) {
   const _hasIngresos = _rubros.some(r => r.tipo === 'ingreso' && (r.actual||0) > 0);
   const _signResult = v => (!_hasIngresos && v > 0) ? -v : v; // sin ingresos: resultado positivo = déficit
 
-  const rDef = _rubros.find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
-            ?? _rubros.find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
-            ?? _rubros.find(r => r.tipo === 'resultado' && r.actual != null && r.actual !== 0);
+  // Usar el ÚLTIMO rubro que matchee cada prioridad, no el primero: en
+  // formatos con varias filas de "resultado" apiladas (ej. "SALDO MENSUAL"
+  // — subtotal ingresos−egresos ANTES del impuesto — seguido más abajo por
+  // "REQUERIMIENTO MENSUAL" — el resultado final, ya con el impuesto
+  // descontado), ambas caen en la misma key genérica 'sup_def' porque
+  // ninguna contiene "FONDOS"/"NECESIDAD". Tomar la primera devolvía el
+  // subtotal intermedio como si fuera el resultado final, y al sumarle de
+  // nuevo el impuesto en el pie de la tabla (ver cálculo de `subtotal` más
+  // abajo) lo restaba dos veces. El resultado final siempre cierra la
+  // lista (mismo criterio que _flujoEgrTotal con los totalizadores).
+  const rDef = [..._rubros].reverse().find(r => r.key === 'sup_def' && r.actual != null && r.actual !== 0)
+            ?? [..._rubros].reverse().find(r => r.key === 'subtotal_resultado' && r.actual != null && r.actual !== 0)
+            ?? [..._rubros].reverse().find(r => r.tipo === 'resultado' && r.actual != null && r.actual !== 0);
   if (rDef) return _signResult(rDef.actual);
   if (f.necesidad_fondos != null && f.necesidad_fondos !== 0) return -Math.abs(f.necesidad_fondos);
   // Fallback: _flujoNecesidad con sus propios pasos (busca esTotal, etc.)
@@ -12279,10 +12289,14 @@ function _flujoNecesidad(f) {
   const rNec = (f.rubros||[]).find(r => r.key === 'necesidad_fondos' && r.actual != null
     && !/(SEMANAL|MENSUAL|DIARIA)/i.test(r.label||''));
   if (rNec) return Math.abs(rNec.actual);
-  // 3. Superávit/Déficit/Resultado — preferir sup_def (RESULTADO NETO) sobre subtotal_resultado (SUBTOTAL pre-ajustes)
-  const rDef = (f.rubros||[]).find(r => r.key === 'sup_def' && r.actual != null)
-            ?? (f.rubros||[]).find(r => r.key === 'subtotal_resultado' && r.actual != null)
-            ?? (f.rubros||[]).find(r => r.tipo === 'resultado' && r.actual != null);
+  // 3. Superávit/Déficit/Resultado — preferir sup_def (RESULTADO NETO) sobre subtotal_resultado (SUBTOTAL pre-ajustes).
+  // Usar el ÚLTIMO match de cada prioridad, no el primero: ver comentario
+  // en _flujoNecesidadSignada — formatos con un subtotal intermedio y el
+  // resultado final apilados bajo la misma key genérica deben resolver al
+  // de más abajo (el resultado final siempre cierra la lista).
+  const rDef = [...(f.rubros||[])].reverse().find(r => r.key === 'sup_def' && r.actual != null)
+            ?? [...(f.rubros||[])].reverse().find(r => r.key === 'subtotal_resultado' && r.actual != null)
+            ?? [...(f.rubros||[])].reverse().find(r => r.tipo === 'resultado' && r.actual != null);
   if (rDef) return Math.abs(rDef.actual);
   // 4. Cualquier rubro cuyo label contenga palabras clave de necesidad/resultado
   const rLbl = (f.rubros||[]).find(r => {
