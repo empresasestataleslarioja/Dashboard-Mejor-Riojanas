@@ -4027,11 +4027,11 @@ self.onmessage = async (e) => {
           <div id="trans-tabla-wrap" style="display:none">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap" onclick="event.stopPropagation()">
               <label style="font-size:9px;color:var(--dim);font-family:var(--mono)">Año a desplegar:</label>
-              <select id="sel-trans-detalle-anio" onchange="renderTransTabla(_transTablaPreFiltrada())"
+              <button id="btn-trans-detalle-anio" onclick="abrirSelTransDetalleAnio(event)"
                 style="background:var(--s2);border:1px solid var(--bd2);color:var(--text);
-                font-family:var(--mono);font-size:9px;padding:4px 8px;border-radius:3px;
-                cursor:pointer;outline:none"></select>
-              <span style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">ℹ Para no listar todos los años de una — elegí "Todos" si igual lo necesitás.</span>
+                font-family:var(--mono);font-size:9px;padding:4px 10px;border-radius:3px;
+                cursor:pointer;outline:none;white-space:nowrap"></button>
+              <span style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">ℹ Para no listar todos los años de una — podés elegir uno, varios o "Todos los años".</span>
             </div>
             <div class="tbl-wrap">
             <table class="tbl" id="tbl-trans" style="font-size:9.5px;width:100%"></table>
@@ -21684,32 +21684,143 @@ function limpiarFiltrosTrans() {
 // Independiente del filtro global (_transFiltros.año, que afecta también
 // gráficos y KPIs): acá el objetivo es que al abrir "Detalle de
 // transferencias" no se listen de entrada todas las transferencias de
-// todos los años cargados (podían ser miles de filas), sino un año por
-// vez — por defecto, el más reciente con datos. "Todos" sigue disponible
-// para quien lo necesite.
+// todos los años cargados (podían ser miles de filas), sino uno o unos
+// pocos años por vez — por defecto, el más reciente con datos. Permite
+// elegir uno, varios o "Todos los años" (panel multi-selección, igual
+// criterio que abrirFiltroTrans).
+let _transDetalleAniosSel; // undefined = sin inicializar; null = todos los años; Set = años elegidos (strings)
+
 function _poblarSelTransDetalleAnio() {
-  const sel = document.getElementById('sel-trans-detalle-anio');
-  if (!sel) return;
-  const años = [...new Set(
+  const btn = document.getElementById('btn-trans-detalle-anio');
+  if (!btn) return;
+  const añosStr = [...new Set(
     (DATA.transferencias || [])
       .map(t => parseInt(t.año))
       .filter(y => y >= 2000 && y <= 2100)
-  )].sort((a,b) => b - a); // más reciente primero
-  const valorPrevio = sel.value;
-  const valorDefault = años.length ? String(años[0]) : 'todos';
-  const valor = (valorPrevio === 'todos' || años.map(String).includes(valorPrevio)) ? valorPrevio : valorDefault;
-  sel.innerHTML = años.map(y => `<option value="${y}" ${String(y)===valor?'selected':''}>${y}</option>`).join('')
-    + `<option value="todos" ${valor==='todos'?'selected':''}>Todos los años</option>`;
+  )].sort((a,b) => b - a).map(String); // más reciente primero
+  window._transDetalleAniosDisponibles = añosStr;
+
+  if (_transDetalleAniosSel === undefined) {
+    // Primera vez: por defecto, solo el año más reciente con datos
+    _transDetalleAniosSel = añosStr.length ? new Set([añosStr[0]]) : null;
+  } else if (_transDetalleAniosSel) {
+    // Si cambió el universo de años disponibles (recarga/sync), descartar
+    // los que ya no existen; si no queda ninguno, volver al más reciente
+    const interseccion = [..._transDetalleAniosSel].filter(y => añosStr.includes(y));
+    _transDetalleAniosSel = interseccion.length
+      ? new Set(interseccion)
+      : (añosStr.length ? new Set([añosStr[0]]) : null);
+  }
+
+  _actualizarBtnTransDetalleAnio();
 }
 
-// Combina el filtro global del panel (transFiltered) con el año elegido
-// específicamente para esta tabla.
+function _actualizarBtnTransDetalleAnio() {
+  const btn = document.getElementById('btn-trans-detalle-anio');
+  if (!btn) return;
+  if (!_transDetalleAniosSel) {
+    btn.textContent = 'Todos los años ▾';
+  } else {
+    const años = [..._transDetalleAniosSel].sort((a,b) => b - a);
+    btn.textContent = (años.length <= 2 ? años.join(', ') : `${años.length} años`) + ' ▾';
+  }
+}
+
+// Combina el filtro global del panel (transFiltered) con el/los año(s)
+// elegidos específicamente para esta tabla.
 function _transTablaPreFiltrada() {
   _poblarSelTransDetalleAnio();
-  const sel = document.getElementById('sel-trans-detalle-anio');
   const rows = transFiltered();
-  if (!sel || sel.value === 'todos') return rows;
-  return rows.filter(t => String(t.año) === sel.value);
+  if (!_transDetalleAniosSel) return rows;
+  return rows.filter(t => _transDetalleAniosSel.has(String(t.año)));
+}
+
+// Panel multi-selección de años para el Detalle de transferencias
+function abrirSelTransDetalleAnio(event) {
+  event.stopPropagation();
+  const yaAbierto = document.getElementById('trans-detalle-anio-panel');
+  cerrarSelTransDetalleAnio();
+  cerrarPanelFiltroTrans();
+  cerrarDropsTrans();
+  if (yaAbierto) return; // el click fue para cerrar el que ya estaba abierto
+
+  const btn = event.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const años = window._transDetalleAniosDisponibles || [];
+  const activos = _transDetalleAniosSel || new Set(años);
+
+  const panel = document.createElement('div');
+  panel.id = 'trans-detalle-anio-panel';
+  panel.style.cssText = `position:fixed;z-index:9999;background:var(--s1);
+    border:1px solid var(--bd2);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.5);
+    min-width:170px;max-width:220px;
+    top:${Math.min(rect.bottom + 3, window.innerHeight - 280)}px;
+    left:${Math.min(rect.left, window.innerWidth - 230)}px;
+    font-family:var(--mono)`;
+
+  panel.innerHTML = `
+    <div style="padding:7px 10px;border-bottom:1px solid var(--bd);display:flex;
+      align-items:center;justify-content:space-between">
+      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;
+        color:var(--acc);font-weight:600">Año a desplegar</span>
+      <button onclick="cerrarSelTransDetalleAnio()"
+        style="background:none;border:none;color:var(--dim);cursor:pointer;
+        font-size:13px;padding:0 2px;line-height:1">✕</button>
+    </div>
+    <div style="padding:5px 10px;border-bottom:1px solid var(--bd)">
+      <label style="font-size:9px;color:var(--dim);cursor:pointer;
+        display:flex;align-items:center;gap:6px;user-select:none">
+        <input type="checkbox" id="chk-trans-detalle-anio-todos" ${activos.size >= años.length ? 'checked' : ''}
+          onchange="document.querySelectorAll('#lista-trans-detalle-anio input').forEach(cb=>cb.checked=this.checked)"
+          style="cursor:pointer;accent-color:#1a9e68">
+        <span style="font-weight:600">Todos los años</span>
+      </label>
+    </div>
+    <div id="lista-trans-detalle-anio" style="max-height:200px;overflow-y:auto;padding:4px 0">
+      ${años.map(y => `<label style="display:flex;align-items:center;gap:8px;padding:5px 12px;
+          cursor:pointer;user-select:none"
+          onmouseover="this.style.background='var(--s2)'"
+          onmouseout="this.style.background=''">
+          <input type="checkbox" value="${y}" ${activos.has(y) ? 'checked' : ''}
+            onchange="document.getElementById('chk-trans-detalle-anio-todos').checked =
+              [...document.querySelectorAll('#lista-trans-detalle-anio input')].every(cb=>cb.checked)"
+            style="cursor:pointer;accent-color:#1a9e68">
+          <span style="font-size:9.5px;font-family:var(--mono);color:var(--text)">${y}</span>
+        </label>`).join('')}
+    </div>
+    <div style="padding:7px 10px;border-top:1px solid var(--bd);display:flex;gap:6px">
+      <button onclick="aplicarSelTransDetalleAnio()"
+        style="flex:1;padding:6px;background:rgba(71,255,180,.12);
+        border:1px solid #2ecc8a40;color:#1a9e68;font-family:var(--mono);
+        font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">
+        ✓ Aplicar
+      </button>
+    </div>`;
+
+  document.body.appendChild(panel);
+  setTimeout(() => document.addEventListener('click', _cerrarSelTransDetalleAnioOutside, true), 50);
+}
+
+function _cerrarSelTransDetalleAnioOutside(e) {
+  const panel = document.getElementById('trans-detalle-anio-panel');
+  const btn = document.getElementById('btn-trans-detalle-anio');
+  if (panel && !panel.contains(e.target) && btn && !btn.contains(e.target)) {
+    cerrarSelTransDetalleAnio();
+  }
+}
+
+function cerrarSelTransDetalleAnio() {
+  document.removeEventListener('click', _cerrarSelTransDetalleAnioOutside, true);
+  document.getElementById('trans-detalle-anio-panel')?.remove();
+}
+
+function aplicarSelTransDetalleAnio() {
+  const checks = [...document.querySelectorAll('#lista-trans-detalle-anio input[type=checkbox]')];
+  const sel = new Set(checks.filter(cb => cb.checked).map(cb => cb.value));
+  _transDetalleAniosSel = (sel.size === 0 || sel.size === checks.length) ? null : sel;
+  cerrarSelTransDetalleAnio();
+  _actualizarBtnTransDetalleAnio();
+  renderTransTabla(_transTablaPreFiltrada());
 }
 
 function toggleTransTabla() {
@@ -22243,11 +22354,42 @@ function abrirDropTrans(event, colIdx) {
   const yaFiltrado  = _transColFiltros[colIdx];
   const seleccionados = yaFiltrado ? new Set([...yaFiltrado]) : new Set(todosVals);
 
+  // Texto completo siempre visible (sin truncar con "…" + tooltip nativo,
+  // que en columnas de texto largo como Observación quedaba amontonado y
+  // se superponía a la tabla de abajo) — en su lugar el panel es más ancho
+  // para estas columnas y el texto hace salto de línea dentro del ítem.
   const labelVal = v => {
     if (v === '__vacio__') return '(sin dato)';
     if (prop === 'mes') return MESES_D[parseInt(v)] || v;
-    return v.length > 45 ? v.slice(0, 43) + '…' : v;
+    return v;
   };
+
+  // Columnas de texto libre/largo (observación, organismo, beneficiario)
+  // necesitan un panel más ancho para que el salto de línea sea legible;
+  // el resto mantiene el ancho compacto de siempre.
+  const ANCHO_CFG = {
+    observacion: { min: 320, max: 560 },
+    organismo:   { min: 280, max: 460 },
+    beneficiario:{ min: 260, max: 420 },
+  };
+  const anchoCfg  = ANCHO_CFG[prop] || { min: 210, max: 320 };
+  const maxWidth  = Math.min(anchoCfg.max, window.innerWidth - 24);
+  const minWidth  = Math.min(anchoCfg.min, maxWidth);
+
+  // Posición: igual criterio que abrirFiltroTrans — abrir hacia abajo si
+  // hay espacio, si no hacia arriba, y limitar la altura de la lista al
+  // espacio real disponible (antes la altura/posición eran fijas y en
+  // columnas con texto largo el panel se cortaba o tapaba la tabla).
+  const PANEL_FIJO_DROP = 175;
+  const ITEM_H_DROP     = (prop === 'observacion' || prop === 'organismo' || prop === 'beneficiario') ? 42 : 32;
+  const listaIdealDrop  = todosVals.length * ITEM_H_DROP;
+  const espacioAbajoDrop  = window.innerHeight - rect.bottom - 8;
+  const espacioArribaDrop = rect.top - 8;
+  const abreAbajoDrop     = espacioAbajoDrop >= 220 || espacioAbajoDrop >= espacioArribaDrop;
+  const espacioDispDrop   = abreAbajoDrop ? espacioAbajoDrop : espacioArribaDrop;
+  const listaMaxHDrop     = Math.max(140, Math.min(listaIdealDrop, espacioDispDrop - PANEL_FIJO_DROP));
+  const panelHDrop        = PANEL_FIJO_DROP + listaMaxHDrop;
+  const topPosDrop        = abreAbajoDrop ? rect.bottom + 4 : rect.top - panelHDrop - 4;
 
   const drop = document.createElement('div');
   drop.id = 'trans-col-drop';
@@ -22255,9 +22397,9 @@ function abrirDropTrans(event, colIdx) {
     position:fixed;z-index:10000;
     background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
     box-shadow:0 8px 28px rgba(0,0,0,.55);
-    min-width:210px;max-width:320px;
-    top:${Math.min(rect.bottom + 4, window.innerHeight - 340)}px;
-    left:${Math.min(rect.left, window.innerWidth - 330)}px;
+    min-width:${minWidth}px;max-width:${maxWidth}px;
+    top:${Math.max(4, Math.min(topPosDrop, window.innerHeight - panelHDrop - 4))}px;
+    left:${Math.min(rect.left, window.innerWidth - maxWidth - 10)}px;
     font-family:var(--mono)`;
 
   drop.innerHTML = `
@@ -22287,22 +22429,21 @@ function abrirDropTrans(event, colIdx) {
       </label>
     </div>
     <div id="drop-lista-col-${colIdx}"
-      style="max-height:230px;overflow-y:auto;padding:4px 0">
+      style="max-height:${Math.round(listaMaxHDrop)}px;overflow-y:auto;padding:4px 0">
       ${todosVals.map(v => {
         const lbl   = labelVal(v);
         const color = v === '__vacio__' ? '#ff8c47' : 'var(--text)';
         const chk   = seleccionados.has(v) ? 'checked' : '';
         const vEsc  = v.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
         return `<label class="drop-item-col"
-          style="display:flex;align-items:center;gap:8px;padding:5px 12px;
+          style="display:flex;align-items:flex-start;gap:8px;padding:6px 12px;
           cursor:pointer;user-select:none"
           onmouseover="this.style.background='var(--s2)'"
           onmouseout="this.style.background=''">
           <input type="checkbox" value="${vEsc}" ${chk}
-            style="cursor:pointer;flex-shrink:0;accent-color:#1a9e68">
-          <span style="font-size:9.5px;color:${color};overflow:hidden;
-            text-overflow:ellipsis;white-space:nowrap"
-            title="${lbl}">${lbl}</span>
+            style="cursor:pointer;flex-shrink:0;margin-top:2px;accent-color:#1a9e68">
+          <span style="font-size:9.5px;color:${color};overflow-wrap:anywhere;
+            white-space:normal;line-height:1.35">${lbl}</span>
         </label>`;
       }).join('')}
     </div>
