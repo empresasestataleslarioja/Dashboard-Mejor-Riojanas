@@ -11693,12 +11693,21 @@ function _poblarSelectoresFlujos() {
   // Filtrar por empresa seleccionada
   const filtrados = empresa ? flujos.filter(f => f.empresa === empresa) : flujos;
 
-  // Selectores de comparación — ordenados por empresa + período desc
+  // Selectores de comparación — ordenados por empresa + período desc.
+  // "Período anterior" (B) solo tiene sentido comparado contra la MISMA
+  // empresa que "Período actual" (A) — si ya hay un A elegido, su lista
+  // se acota a esa empresa (independiente del filtro de empresa de la
+  // barra, que puede estar en "Todas").
+  const claveAPrevia = document.getElementById('sel-flujo-a')?.value;
+  const fAPrevio = claveAPrevia ? DATA.flujos[claveAPrevia] : null;
   ['sel-flujo-a','sel-flujo-b'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const cur = sel.value;
-    const ordenados = [...filtrados].sort((a,b) => {
+    const listaBase = (id === 'sel-flujo-b' && fAPrevio)
+      ? filtrados.filter(f => f.empresa === fAPrevio.empresa)
+      : filtrados;
+    const ordenados = [...listaBase].sort((a,b) => {
       if (a.empresa < b.empresa) return -1;
       if (a.empresa > b.empresa) return 1;
       return b.timestamp - a.timestamp;
@@ -11711,7 +11720,8 @@ function _poblarSelectoresFlujos() {
       }).join('');
   });
 
-  // FIX 10: Al cambiar sel-flujo-a, auto-cargar el IPC — usar función nombrada para poder remover
+  // FIX 10: Al cambiar sel-flujo-a, auto-cargar el IPC y reacotar "Período
+  // anterior" a la misma empresa — usar función nombrada para poder remover
   const selA = document.getElementById('sel-flujo-a');
   if (selA) {
     if (selA._ipcListenerFn) selA.removeEventListener('change', selA._ipcListenerFn);
@@ -11721,6 +11731,7 @@ function _poblarSelectoresFlujos() {
       if (f?.ipc && ipcEl && (!ipcEl.value || parseFloat(ipcEl.value) === 0)) {
         ipcEl.value = f.ipc;
       }
+      _poblarSelectoresFlujos();
     };
     selA.addEventListener('change', selA._ipcListenerFn);
   }
