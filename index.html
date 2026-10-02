@@ -40457,8 +40457,21 @@ function applyCloudData(cloud, opts) {
     };
 
     cloud.rubros.forEach(r => {
-      if (!r.empresa || !r.rubro || r.rubro === 'Sin rubro') return;
+      if (!r.empresa || !r.rubro) return;
       if (_seccionPendiente('rubros') && rubros[r.empresa]) return;
+      // "Sin rubro" (empresa sin rubro asignado todavía) se guarda igual que
+      // cualquier otro valor — antes se saltaba, así que una empresa que
+      // existía en Sheets SOLO como fila "Sin rubro" (sin facturación, sin
+      // resultado, sin dato institucional, activa) no quedaba en NINGÚN
+      // store local: no entraba a `rubros`, no estaba en empresasInactivas
+      // (por estar activa) ni en DATA.institucional (sin datos cargados) —
+      // quedaba invisible en Gestión de Empresas y Rubros y en la Ficha
+      // Institucional pese a existir como fila real en la planilla maestra
+      // (bug real reportado: duplicados activos tipo "VIVERO OESTE RIOJANO"
+      // / "VIVERO DEL OESTE RIOJANO" que no aparecían para poder fusionarlos).
+      // "Sin rubro" ya es un valor de primera clase en el editor (ver
+      // getRubro() y el <option> explícito en el selector de rubro), así
+      // que guardarlo tal cual es seguro.
       rubros[r.empresa] = r.rubro;
     });
     // Podar empresas fantasma: el merge de arriba es upsert puro (nunca
