@@ -88,12 +88,16 @@ function extractConstBlock(html, startMarker, endMarker) {
   return html.slice(s, e + endMarker.length);
 }
 const erConsts = extractConstBlock(html, 'const ER_LABELS = {', 'const ER_ORDER = Object.keys(ER_LABELS);');
+// _erStdAnual (y buildEvolucionMensual en el navegador) delegan en el
+// clasificador global compartido — tiene que viajar en el mismo bundle o
+// el new Function de abajo revienta con ReferenceError.
+const clasificarSrc = extractFn(html, '_clasificarConceptoERPorLabel');
 const erDesdeMonthlySrc = extractFn(html, '_erDesdeMonthly');
 const crossCheckSrc = extractFn(html, '_crossCheckEREmpresaAnio');
 const repararSrc = extractFn(html, '_repararResultadoOperativoLibroMayor');
 const erStdAnualSrc = extractFn(html, '_erStdAnual');
 const { _erDesdeMonthly, _crossCheckEREmpresaAnio, _repararResultadoOperativoLibroMayor, _erStdAnual, setData } = new Function(
-  erConsts + '\n' + erDesdeMonthlySrc + '\n' + crossCheckSrc + '\n' + repararSrc + '\n' + erStdAnualSrc + '\n' +
+  erConsts + '\n' + clasificarSrc + '\n' + erDesdeMonthlySrc + '\n' + crossCheckSrc + '\n' + repararSrc + '\n' + erStdAnualSrc + '\n' +
   'let DATA = {};\nfunction setData(d) { DATA = d; }\nfunction marcarPendienteGuardar(){}\n' +
   'return { _erDesdeMonthly, _crossCheckEREmpresaAnio, _repararResultadoOperativoLibroMayor, _erStdAnual, setData };'
 )();

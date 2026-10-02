@@ -15604,16 +15604,17 @@ function _erDesdeMonthly(emp) {
   if (erM) {
     // Mapeo conceptoStd → clave ER_LABELS (cubre todos los CONCEPTOS_STD posibles)
     const MAP = {
-      ventas:        'ventas_netas',
-      costo:         'costo_ventas',
-      utilBruta:     'utilidad_bruta',
-      gastoAdm:      'gastos_admin',
-      gastoCom:      'gastos_comercializacion',
-      gastoOper:     'gastos_operativos',
-      otrosIngresos: 'otros_ingresos',
-      otrosGastos:   'otros_egresos',
-      resOperativo:  'resultado_operativo',
-      resFinanciero: 'gastos_financieros',   // resultado financiero como partida
+      ventas:         'ventas_netas',
+      costo:          'costo_ventas',
+      utilBruta:      'utilidad_bruta',
+      gastoAdm:       'gastos_admin',
+      gastoCom:       'gastos_comercializacion',
+      gastoOper:      'gastos_operativos',
+      gastoFinanciero:'gastos_financieros_op', // Gastos Financieros: SÍ resta en Resultado Operativo (ver más abajo)
+      otrosIngresos:  'otros_ingresos',
+      otrosGastos:    'otros_egresos',
+      resOperativo:   'resultado_operativo',
+      resFinanciero:  'gastos_financieros',    // Resultado Financiero neto (no gastoFinanciero): queda FUERA del Resultado Operativo
     };
     Object.entries(erM).forEach(([yr, data]) => {
       if (!data || !Array.isArray(data.filas)) return;
@@ -15669,7 +15670,7 @@ function _erDesdeMonthly(emp) {
       if (acc.resultado_operativo == null && acc.utilidad_bruta != null &&
           (acc.gastos_admin != null || acc.gastos_comercializacion != null || acc.gastos_operativos != null)) {
         acc.resultado_operativo = (acc.utilidad_bruta || 0) - Math.abs(acc.gastos_admin || 0) - Math.abs(acc.gastos_comercializacion || 0)
-          - Math.abs(acc.gastos_operativos || 0) + (acc.otros_ingresos || 0) - Math.abs(acc.otros_egresos || 0);
+          - Math.abs(acc.gastos_operativos || 0) - Math.abs(acc.gastos_financieros_op || 0) + (acc.otros_ingresos || 0) - Math.abs(acc.otros_egresos || 0);
       }
       // Fallback: si todavía no hay resultado_operativo, derivarlo de fact/sit de ese año
       if (acc.resultado_operativo == null) {
@@ -15902,16 +15903,19 @@ function _clasificarConceptoERPorLabel(lblRaw) {
   if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
   // COSTO
   if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
-  // "Gastos Financieros" (nombrado así, explícitamente un gasto) va a
-  // gastoOper — SÍ resta en el Resultado Operativo, a diferencia de
-  // "Resultado Financiero" (más abajo), que es un neto que en la cascada
-  // del ER se ubica DESPUÉS del Resultado Operativo y no se incluye en su
-  // cálculo. Antes "Gastos Financieros" cayía en 'resFinanciero' por
-  // compartir la palabra "financier" — bug real reportado: en empresas
-  // (ej. Cerdo de los Llanos) donde el ER Original trae literalmente una
-  // fila "Gastos Financieros", tratarla como Resultado Financiero la
-  // dejaba afuera del Resultado Operativo calculado, inflándolo.
-  if (/^GASTOS?\s+FINANCIEROS?\b/.test(t)) return 'gastoOper';
+  // "Gastos Financieros" (nombrado así, explícitamente un gasto) es su
+  // propio concepto 'gastoFinanciero' — SÍ resta en el Resultado
+  // Operativo y se muestra como su propia línea "Gastos Financieros" en
+  // ER Provisorio, a diferencia de "Resultado Financiero" (más abajo),
+  // que es un neto (puede ser + o −) que en la cascada del ER se ubica
+  // DESPUÉS del Resultado Operativo y no se incluye en su cálculo. Antes
+  // "Gastos Financieros" caía en 'resFinanciero' por compartir la palabra
+  // "financier" — bug real reportado: en empresas (ej. Cerdo de los
+  // Llanos) donde el ER Original trae literalmente una fila "Gastos
+  // Financieros", tratarla como Resultado Financiero la dejaba afuera del
+  // Resultado Operativo calculado (inflándolo) y además no se veía como
+  // su propia línea en ER Provisorio (quedaba mezclada o ausente).
+  if (/^GASTOS?\s+FINANCIEROS?\b/.test(t)) return 'gastoFinanciero';
   // Financiero (resultado neto, intereses) — este sí queda fuera del
   // Resultado Operativo, por diseño.
   if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
@@ -16046,7 +16050,7 @@ function _repararOtrosIngresosComoVenta() {
 // manual. Nunca cambia ningún valor numérico, solo la etiqueta.
 function _repararGastosSinClasificar() {
   if (!DATA.er_mensual) return [];
-  const GASTO_CATS = ['costo', 'gastoAdm', 'gastoCom', 'gastoOper', 'otrosGastos'];
+  const GASTO_CATS = ['costo', 'gastoAdm', 'gastoCom', 'gastoOper', 'otrosGastos', 'gastoFinanciero'];
   let huboCambios = false;
   const reparados = [];
   Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
@@ -16074,7 +16078,7 @@ function _repararGastosSinClasificar() {
 
       const utilBruta = ventas - Math.abs(sumarConcepto(['costo']));
       const resultadoSimulado = utilBruta - Math.abs(sumarConcepto(['gastoAdm'])) - Math.abs(sumarConcepto(['gastoCom']))
-        - Math.abs(sumarConcepto(['gastoOper'])) + otrosIng - Math.abs(sumarConcepto(['otrosGastos']));
+        - Math.abs(sumarConcepto(['gastoOper'])) - Math.abs(sumarConcepto(['gastoFinanciero'])) + otrosIng - Math.abs(sumarConcepto(['otrosGastos']));
 
       const diff = Math.abs(resultadoSimulado - sit) / Math.max(Math.abs(sit), 1);
       if (diff > 0.01) return; // no valida contra el Resultado Operativo oficial — no tocar
@@ -16086,6 +16090,42 @@ function _repararGastosSinClasificar() {
   });
   if (huboCambios) {
     console.log('[LR] Gastos sin clasificar reparados para', reparados.length, 'empresa(s)/año(s):', reparados);
+    try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
+  }
+  return reparados;
+}
+
+// ── Reparación automática: filas "GASTOS FINANCIEROS" ya cargadas con
+// conceptoStd:'resFinanciero' — bug real: antes de agregar el concepto
+// dedicado 'gastoFinanciero', una fila con ese texto exacto quedaba
+// etiquetada como 'resFinanciero' (Resultado Financiero neto), que la
+// dashboard excluye del Resultado Operativo y muestra como línea aparte
+// debajo de él. Pedido del usuario (Cerdo de los Llanos, 2023-2026):
+// "Gastos Financieros" debe imputarse como gasto dentro de ER Provisorio,
+// no como Resultado Financiero. _repararGastosSinClasificar() solo toca
+// filas sin clasificar (conceptoStd:null) — esta reparación cubre el caso
+// de filas que YA estaban (mal) clasificadas como 'resFinanciero' antes
+// de este fix. Es una relabel directa por texto exacto, sin gate de
+// validación numérica (igual que _repararOtrosIngresosComoVenta): no hay
+// ambigüedad posible en una fila llamada literalmente "Gastos
+// Financieros". Nunca cambia ningún valor numérico, solo la etiqueta.
+function _repararGastosFinancierosMalClasificados() {
+  if (!DATA.er_mensual) return [];
+  let huboCambios = false;
+  const reparados = [];
+  Object.entries(DATA.er_mensual).forEach(([emp, porAnio]) => {
+    if (!porAnio) return;
+    Object.entries(porAnio).forEach(([yr, data]) => {
+      if (!data || !Array.isArray(data.filas)) return;
+      const filas = data.filas.filter(f => f.conceptoStd === 'resFinanciero' && /^GASTOS?\s+FINANCIEROS?\b/.test(String(f.lbl || '').trim().toUpperCase()));
+      if (!filas.length) return;
+      filas.forEach(f => { f.conceptoStd = 'gastoFinanciero'; });
+      huboCambios = true;
+      reparados.push({ emp, yr, filas: filas.length });
+    });
+  });
+  if (huboCambios) {
+    console.log('[LR] "Gastos Financieros" reclasificado de Resultado Financiero a gasto para', reparados.length, 'empresa(s)/año(s):', reparados);
     try { marcarPendienteGuardar(['er_mensual']); } catch(e) {}
   }
   return reparados;
@@ -18878,38 +18918,13 @@ function _erStdAnual(emp, yr) {
   const erData = DATA.er_mensual?.[emp]?.[yr];
   if (!erData || !Array.isArray(erData.filas) || !erData.filas.length) return {};
 
-  // Same classifier as buildEvolucionMensual
-  const clasificar = t => {
-    t = String(t || '').toUpperCase().trim();
-    if (!t) return null;
-    if (['INGRESOS','GASTOS','CUADRO DE RESULTADOS','CUENTA'].includes(t)) return null;
-    if (/UTILIDAD\s+BRUTA|RESULTADO\s+BRUTO|GANANCIA\s+BRUTA/.test(t)) return 'utilBruta';
-    if (/RESULTADO\s+OPERATIVO|GANANCIA\s+OPERATIVA|RESULTADO\s+DE\s+OPERACI/.test(t)) return 'resOperativo';
-    if (/ANTES\s+(DE|DEL)\s+IMP/.test(t)) return 'resAntesImp';
-    if (/RESULTADO\s+DEL\s+EJERCICIO|RESULTADO\s+NETO|RESULTADO\s+FINAL/.test(t)) return 'resEjercicio';
-    if (/TOTAL\s+(DE\s+)?GASTOS/.test(t)) return 'IGNORAR';
-    if (/COMISION|GASTO.*VENTA|GASTOS\s+DE\s+VENTA/.test(t)) return 'gastoCom';
-    if (/DESCUENTO.*OTORGAD/.test(t)) return 'gastoCom';
-    if (/VENTAS\s+BRUTAS|DEVOLUCION|^DESCUENTO/.test(t)) return 'COMPONENTE_VENTA';
-    if (/VENTA|INGRESO/.test(t) && !/COSTO|GASTO|FINANCIER/.test(t)) {
-      if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
-      return 'ventas';
-    }
-    if (/CERTIFICAD.*OBRA|BENEFICIO.*OBTENIDO|REINTEGRO|INTERES.*GANADO|INTERES\s+POR\s+FINANC/.test(t)) return 'otrosIngresos';
-    if (/COSTO|^COMPRAS|MATERIALES\s+CONSUMID|MERCADERIA/.test(t)) return 'costo';
-    if (/FINANCIER|INTERES.*PAGAD|INTERES.*PERDID/.test(t)) return 'resFinanciero';
-    if (/IMPUEST.*GANANCIA|IMPUESTO\s+DIFERIDO|A\s+LAS\s+GANANCIAS/.test(t)) return 'impuesto';
-    if (/COMERCIALIZAC|COMERCIALES|MERCADOTECNIA|PUBLICIDAD|FLETE|ENCOMIENDA/.test(t)) return 'gastoCom';
-    if (/ADMINISTRAC|ADMINISTRATIV/.test(t)) return 'gastoAdm';
-    if (/OTROS\s+INGRESO/.test(t)) return 'otrosIngresos';
-    if (/OTROS\s+EGRESO/.test(t)) return 'otrosGastos';
-    if (/SUELDO|SALARIO|JORNAL|REMUNERAC|CARGA|SOCIAL|APORTE|CONTRIBUC|HONORARIO|AMORTIZAC|DEPRECIAC|SEGURO|ART\b|ALQUILER|COMBUSTIBLE|LUBRICANTE|MANTENIMIENTO|REPARACION|REPUESTO|HERRAMIENTA|SERVICIO|IMPUESTO|TASA|VIATICO|MOVILIDAD|PREVISION|ENERGIA|ELECTRICID|TELEFON|INTERNET|PAPELERIA|ROPA|VEHICULO|RODADO|ASIGNACION|FAMILIAR|INDEMNIZAC|INDEMINIZAC|CESE|FONDO|UOYEP|IERIC|RENATRE|GASTO|EGRESO|VARIOS|GENERAL|PERSONAL|SUMAS|REMUNERAT|PASAJE|VIGILANCIA|LIMPIEZA|GAS\b|AGUA\b|INSUMOS|PROVISION|ESCRIBAN|AUDITORIA|PUBLICACION|CONSUMO|DIETA|REFRIGERIO|CAPACITAC|OFICINA/.test(t)) return 'gastoOper';
-    return null;
-  };
+  // Mismo clasificador global que buildEvolucionMensual (antes era una copia
+  // local separada, que podía desactualizarse igual que ya pasó una vez).
+  const clasificar = _clasificarConceptoERPorLabel;
 
   // Step 1: accumulate raw rubro values per period key (same as buildEvolucionMensual rubroVals)
   const rubroVals = {};
-  const _RUBROS_GASTO = new Set(['costo','gastoAdm','gastoCom','gastoOper','otrosGastos']);
+  const _RUBROS_GASTO = new Set(['costo','gastoAdm','gastoCom','gastoOper','otrosGastos','gastoFinanciero']);
   const addVal = (rb, m, v) => {
     if (v == null) return;
     if (!rubroVals[rb]) rubroVals[rb] = {};
@@ -18926,6 +18941,7 @@ function _erStdAnual(emp, yr) {
     else if (cs === 'gastoAdm') rb = 'gastoAdm';
     else if (cs === 'gastoCom') rb = 'gastoCom';
     else if (cs === 'gastoOper') rb = 'gastoOper';
+    else if (cs === 'gastoFinanciero') rb = 'gastoFinanciero';
     else if (cs === 'otrosIngresos') rb = 'otrosIngresos';
     else if (cs === 'otrosGastos') rb = 'otrosGastos';
     else if (cs === 'resOperativo') rb = 'resOperativo';
@@ -18964,6 +18980,7 @@ function _erStdAnual(emp, yr) {
     const gastoAdm  = gv('gastoAdm', m);
     const gastoCom  = gv('gastoCom', m);
     const gastoOper = gv('gastoOper', m);
+    const gastoFin  = gv('gastoFinanciero', m);
     const otrosIng  = gv('otrosIngresos', m);
     const otrosGas  = gv('otrosGastos', m);
     const resFin    = gv('resFinanciero', m);
@@ -18978,7 +18995,7 @@ function _erStdAnual(emp, yr) {
     // vez de mostrar Resultado Operativo = Utilidad Bruta.
     let resOp = gv('resOperativo', m);
     if (resOp == null && (gastoAdm != null || gastoCom != null || gastoOper != null))
-      resOp = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (otrosIng || 0) + (otrosGas || 0);
+      resOp = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (gastoFin || 0) + (otrosIng || 0) + (otrosGas || 0);
 
     let resAntesImp = gv('resAntesImp', m);
     if (resAntesImp == null && (resOp != null || resFin != null))
@@ -18994,6 +19011,7 @@ function _erStdAnual(emp, yr) {
     sv('gastoAdm', m, gastoAdm);
     sv('gastoCom', m, gastoCom);
     sv('gastoOper', m, gastoOper);
+    sv('gastoFinanciero', m, gastoFin);
     sv('otrosIngresos', m, otrosIng);
     sv('otrosGastos', m, otrosGas);
     sv('resOperativo', m, resOp);
@@ -20430,6 +20448,7 @@ function buildEvolucionMensual(emp) {
     ['', '— (sin clasificar)'], ['ventas','Ventas'], ['costo','Costo de Ventas'],
     ['utilBruta','Utilidad Bruta'], ['gastoAdm','Gastos Administración'],
     ['gastoCom','Gastos Comercialización'], ['gastoOper','Otros Gastos'],
+    ['gastoFinanciero','Gastos Financieros'],
     ['otrosIngresos','Otros Ingresos'], ['otrosGastos','Otros Egresos'],
     ['resOperativo','Resultado Operativo'],
     ['resFinanciero','Resultado Financiero'], ['resAntesImp','Resultado antes Imp.'],
@@ -20571,7 +20590,7 @@ function buildEvolucionMensual(emp) {
 
       // Agrupar todas las filas por rubro, sumando valores mes a mes
       const rubroVals = {}; // rubroVals[rubro][mes] = suma
-      const _RUBROS_GASTO = new Set(['costo','gastoAdm','gastoCom','gastoOper','otrosGastos']);
+      const _RUBROS_GASTO = new Set(['costo','gastoAdm','gastoCom','gastoOper','otrosGastos','gastoFinanciero']);
       const addVal = (rubro, m, v) => {
         if (v == null) return;
         if (!rubroVals[rubro]) rubroVals[rubro] = {};
@@ -20590,6 +20609,7 @@ function buildEvolucionMensual(emp) {
         else if (cs === 'gastoAdm') rubro = 'gastoAdm';
         else if (cs === 'gastoCom') rubro = 'gastoCom';
         else if (cs === 'gastoOper') rubro = 'gastoOper';
+        else if (cs === 'gastoFinanciero') rubro = 'gastoFinanciero';
         else if (cs === 'otrosIngresos') rubro = 'otrosIngresos';
         else if (cs === 'otrosGastos') rubro = 'otrosGastos';
         else if (cs === 'resOperativo') rubro = 'resOperativo';
@@ -20624,6 +20644,7 @@ function buildEvolucionMensual(emp) {
         const gastoAdm = gv('gastoAdm', m);
         const gastoCom = gv('gastoCom', m);
         const gastoOper = gv('gastoOper', m);
+        const gastoFin = gv('gastoFinanciero', m);
         const otrosIng = gv('otrosIngresos', m);
         const otrosGas = gv('otrosGastos', m);
         const resFin = gv('resFinanciero', m);
@@ -20640,7 +20661,7 @@ function buildEvolucionMensual(emp) {
         // (sin restar ningún gasto) en vez de dejarlo en blanco.
         let resOperativo = gv('resOperativo', m);
         if (resOperativo == null && (gastoAdm != null || gastoCom != null || gastoOper != null))
-          resOperativo = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (otrosIng || 0) + (otrosGas || 0);
+          resOperativo = (utilBruta || 0) + (gastoAdm || 0) + (gastoCom || 0) + (gastoOper || 0) + (gastoFin || 0) + (otrosIng || 0) + (otrosGas || 0);
         // Resultado antes de Imp.
         let resAntesImp = gv('resAntesImp', m);
         if (resAntesImp == null && (resOperativo != null || resFin != null))
@@ -20656,6 +20677,7 @@ function buildEvolucionMensual(emp) {
         setVCM('gastoAdm', m, gastoAdm);
         setVCM('gastoCom', m, gastoCom);
         setVCM('gastoOper', m, gastoOper);
+        setVCM('gastoFinanciero', m, gastoFin);
         setVCM('otrosIngresos', m, otrosIng);
         setVCM('otrosGastos', m, otrosGas);
         setVCM('resOperativo', m, resOperativo);
@@ -20676,7 +20698,7 @@ function buildEvolucionMensual(emp) {
         { lbl: erRowPrefix('ventas_netas') + ER_LABELS['ventas_netas'],                     concepto:'ventas',        bold:false },
         { lbl: erRowPrefix('costo_ventas') + ER_LABELS['costo_ventas'],                     concepto:'costo',         bold:false },
         { lbl: erRowPrefix('utilidad_bruta') + ER_LABELS['utilidad_bruta'],                 concepto:'utilBruta',     bold:true  },
-        { lbl: erRowPrefix('gastos_financieros') + ER_LABELS['gastos_financieros'],         concepto:'_na_fin',       bold:false },
+        { lbl: erRowPrefix('gastos_financieros') + ER_LABELS['gastos_financieros'],         concepto:'gastoFinanciero', bold:false },
         { lbl: erRowPrefix('gastos_admin') + ER_LABELS['gastos_admin'],                     concepto:'gastoAdm',      bold:false },
         { lbl: erRowPrefix('gastos_operativos') + ER_LABELS['gastos_operativos'],           concepto:'_na_oper',      bold:false },
         { lbl: erRowPrefix('gastos_fiscales') + ER_LABELS['gastos_fiscales'],               concepto:'_na_fiscal',    bold:false },
@@ -40101,6 +40123,7 @@ function applyCloudData(cloud, opts) {
   try { _repararFacturacionDesdeERMensual(); } catch(e) {}
   try { _repararIngresosBrutosComoVenta(); } catch(e) {}
   try { _repararOtrosIngresosComoVenta(); } catch(e) {}
+  try { _repararGastosFinancierosMalClasificados(); } catch(e) {}
   try { _repararGastosSinClasificar(); } catch(e) {}
   try { _repararFacturacionMultifilaVentas(); } catch(e) {}
 }
