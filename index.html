@@ -4331,18 +4331,10 @@ self.onmessage = async (e) => {
         <div style="font-size:38px;margin-bottom:12px">📊</div>
         <div style="font-size:15px;font-weight:500;color:var(--text);margin-bottom:8px">Análisis de balances contables</div>
         <div style="font-size:11px;color:var(--dim);max-width:520px;margin:0 auto 18px;line-height:1.7">
-          Cargá un balance en PDF (digital o escaneado) o en Excel. El sistema extrae el texto,
-          identifica los estados financieros y calcula los indicadores de liquidez, solvencia,
-          rentabilidad y eficiencia.
+          Cargá un balance en Excel. El sistema identifica los estados financieros y calcula
+          los indicadores de liquidez, solvencia, rentabilidad y eficiencia.
         </div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;
-            background:rgba(232,255,71,.1);border:1px solid var(--y21);border-radius:3px;
-            cursor:pointer;font-size:11px;color:#b8a000;font-family:var(--mono)">
-            📄 Cargar balance PDF
-            <input type="file" id="file-bal" accept=".pdf" style="display:none"
-              onchange="loadBalanceArchivo(this.files[0])">
-          </label>
           <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;
             background:rgba(100,100,80,.08);border:1px solid #47e8ff55;border-radius:3px;
             cursor:pointer;font-size:11px;color:var(--acc);font-family:var(--mono)">
@@ -4350,6 +4342,8 @@ self.onmessage = async (e) => {
             <input type="file" id="file-bal-xlsx" accept=".xlsx,.xls" style="display:none"
               onchange="loadBalanceArchivo(this.files[0])">
           </label>
+          <input type="file" id="file-bal" accept=".pdf" style="display:none" disabled
+            onchange="loadBalanceArchivo(this.files[0])">
         </div>
         <div id="bal-error-msg" style="display:none;max-width:520px;margin:14px auto 0"></div>
       </div>
@@ -4434,9 +4428,10 @@ self.onmessage = async (e) => {
                 <label id="btn-cargar-bal" style="display:flex;align-items:center;gap:6px;padding:8px 14px;
                   background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.4);
                   border-radius:4px;cursor:pointer;font-size:10px;color:#b8a000;
-                  font-family:var(--mono);white-space:nowrap;font-weight:600">
-                  📄/📊 Cargar balance
-                  <input type="file" id="file-bal2" accept=".pdf,.xlsx,.xls" style="display:none"
+                  font-family:var(--mono);white-space:nowrap;font-weight:600"
+                  title="Carga de balances en Excel">
+                  📊 Cargar balance
+                  <input type="file" id="file-bal2" accept=".xlsx,.xls" style="display:none"
                     onchange="loadBalanceArchivo(this.files[0])">
                 </label>
                 <button onclick="_rptBalanceEstado()" title="Balances presentados y faltantes por empresa y año"
@@ -8492,6 +8487,9 @@ function _rptBalanceIntegral() {
 //   REPORTE: RESULTADOS DE EJERCICIO (empresa × año)
 // ══════════════════════════════════════════════════
 function _rptResultadosEjercicio() {
+  // Asegurar que resultado_neto coincida con la fila final de cada Estado
+  // de Resultados antes de armar la matriz (ver _repararResultadoEjercicioBalances).
+  if (typeof _repararResultadoEjercicioBalances === 'function') _repararResultadoEjercicioBalances();
   const todos = Object.values(_balances);
   if (!todos.length) { alert('No hay balances cargados.'); return; }
 
@@ -27410,6 +27408,72 @@ function deduplicarBalances() {
   return { total, eliminados, restantes: Object.keys(_balances).length };
 }
 
+// ── Reparar Resultado del Ejercicio divergente de la estructura del ER ──
+// buildEstadoResultados()/_buildERDesdeEstructura() pintan la fila final
+// "RESULTADO DEL EJERCICIO" tomando el ÚLTIMO renglón con calc:true de
+// b.estructura_er — esa es la cifra que el usuario ve y valida contra el
+// balance real. Pero ind.rentabilidad.resultado_neto (usado por el reporte
+// "Resultados de Ejercicio", el Reporte Integral, Clasificación y los
+// ratios ROE/ROA/margen) se completa en un paso de extracción aparte, y en
+// balances leídos por OCR (texto ruidoso de varias páginas) podía terminar
+// con un valor distinto al de la propia estructura que se ve en pantalla.
+// Se recalcula siempre desde la estructura — la fuente visible y auditable
+// — para que cualquier reporte que use resultado_neto coincida con lo que
+// el balance muestra.
+function _repararResultadoEjercicioBalances() {
+  const reparados = [];
+  Object.entries(_balances || {}).forEach(([key, b]) => {
+    const er = b?.estructura_er;
+    if (!Array.isArray(er) || !er.length) return;
+    const ultimoCalc = [...er].reverse().find(r => r.calc && r.val != null);
+    if (!ultimoCalc) return;
+    if (!b.indicadores) b.indicadores = {};
+    if (!b.indicadores.rentabilidad) b.indicadores.rentabilidad = {};
+    const antes = b.indicadores.rentabilidad.resultado_neto;
+    if (antes !== ultimoCalc.val) {
+      b.indicadores.rentabilidad.resultado_neto = ultimoCalc.val;
+      reparados.push({ key, empresa: b.empresa, periodo: b.periodo, antes, despues: ultimoCalc.val });
+    }
+  });
+  if (reparados.length) console.log('[Balances] Resultado del Ejercicio recalculado desde estructura_er:', reparados);
+  return reparados;
+}
+
+// ── Eliminaciones de balances — tombstone (mismo patrón que flujos) ──────
+// eliminarBalance() antes solo borraba de _balances en memoria: la próxima
+// vez que se sincronizaba contra Sheets, el merge de "balances PDF" de más
+// abajo (deliberadamente "nunca eliminar locales", para no perder cargas
+// de OTROS dispositivos) volvía a traer esa misma fila porque seguía
+// existiendo en la hoja — el archivo "eliminado" reaparecía. Se registra
+// cada eliminación con su fecha para que el merge la respete, salvo que
+// la fila en Sheets sea genuinamente más nueva que la eliminación (alguien
+// volvió a cargar ese balance después de borrarlo).
+const _LS_BALANCES_DEL = 'lr_balances_deleted_v1';
+function _getBalancesDelMap() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_BALANCES_DEL) || '[]');
+    const m = new Map();
+    raw.forEach(x => { if (x && x.clave) m.set(x.clave, parseInt(x.deletedAt) || 0); });
+    return m;
+  } catch(e) { return new Map(); }
+}
+function _getBalancesDel() { return new Set(_getBalancesDelMap().keys()); }
+function _addBalancesDel(clave) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_BALANCES_DEL) || '[]');
+    const list = raw.filter(x => x && x.clave !== clave);
+    list.push({ clave, deletedAt: Date.now() });
+    localStorage.setItem(_LS_BALANCES_DEL, JSON.stringify(list));
+  } catch(e) {}
+}
+function _removeBalancesDel(clave) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_BALANCES_DEL) || '[]');
+    const list = raw.filter(x => x && x.clave !== clave);
+    if (list.length !== raw.length) localStorage.setItem(_LS_BALANCES_DEL, JSON.stringify(list));
+  } catch(e) {}
+}
+
 function limpiarDuplicadosTrans() {
   const antes = DATA.transferencias.length;
 
@@ -32451,6 +32515,8 @@ async function loadBalanceExcel(file) {
           String(_balances[k].periodo) === String(periodo))
         delete _balances[k];
     });
+    // Si este balance se había eliminado antes, una carga nueva anula esa eliminación
+    if (typeof _removeBalancesDel === 'function') _removeBalancesDel(_balKey);
 
     _balances[_balKey] = {
       filename:      file.name,
@@ -32620,6 +32686,7 @@ function guardarBalance(filename, texto, metodo) {
           String(_balances[k].periodo) === String(_gPeriodo))
         delete _balances[k];
     });
+    if (typeof _removeBalancesDel === 'function') _removeBalancesDel(_gKey);
     _balances[_gKey] = {
       filename,
       empresa:       empresaFinal,
@@ -34016,6 +34083,7 @@ function eliminarBalance(key) {
   if (!b) return;
   if (!confirm(`¿Eliminar el balance de ${b.empresa} — ${b.periodo}?`)) return;
   delete _balances[key];
+  _addBalancesDel(key); // evitar que el próximo sync lo vuelva a traer de Sheets
   if (_balActivo === key) {
     // Elegir otro balance de la misma empresa si existe
     const mismEmp = Object.entries(_balances).find(([,b2])=>b2.empresa===b.empresa);
@@ -35151,6 +35219,7 @@ function renderBalanceUI() {
   document.getElementById('bal-content').style.display = keys.length ? '' : 'none';
   if (!keys.length) return;
 
+  _repararResultadoEjercicioBalances();
   actualizarFiltros();     // renderiza botones empresa + período
   renderListaArchivos();
   poblarVincularSel();
@@ -35969,7 +36038,7 @@ function setBalProgress(show, txt, pct) {
 
 function clearAllBalances() {
   if (!confirm('¿Limpiar todos los balances analizados?')) return;
-  Object.keys(_balances).forEach(k=>delete _balances[k]);
+  Object.keys(_balances).forEach(k => { _addBalancesDel(k); delete _balances[k]; });
   _balActivo = null;
   // Limpiar también de la persistencia local para que no reaparezcan al recargar
   try { saveDataToLocalCache(); } catch(e) {}
@@ -39464,7 +39533,7 @@ async function syncSoloBalances() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando balances…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros } });
+    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros, balances_a_eliminar: payload.balances_a_eliminar } });
     limpiarPendienteGuardar('balances');
     if (ind) { ind.textContent = '✓ Balances publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
@@ -40077,11 +40146,23 @@ function applyCloudData(cloud, opts) {
     if (true) {
       // Merge: agregar desde Sheets los que no existen localmente; si existe local, conservarlo
       const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
+      const _delMapBal = (typeof _getBalancesDelMap === 'function') ? _getBalancesDelMap() : new Map();
       cloud.balances.forEach(r => {
         if (!r.empresa || !r.periodo) return;
         const key = r.empresa + '_' + r.periodo;
         // Si existe local más reciente, conservarlo; si Sheets es más reciente o no existe, tomar de Sheets
         const _tsSheets = r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : 0;
+        // Eliminado localmente: respetar esa eliminación salvo que la fila de
+        // Sheets sea genuinamente más nueva (se volvió a cargar ese balance
+        // desde otro dispositivo después de borrarlo acá).
+        if (_delMapBal.has(key)) {
+          const _tsDeleted = _delMapBal.get(key) || 0;
+          if (_tsSheets > 0 && _tsSheets > _tsDeleted) {
+            _removeBalancesDel(key);
+          } else {
+            return;
+          }
+        }
         const _tsLocal  = _balances[key] ? (_balances[key].timestamp || 0) : 0;
         if (_tsLocal > 0 && _tsLocal >= _tsSheets) return; // local más reciente → conservar
         _balances[key] = {
@@ -40211,6 +40292,12 @@ function applyCloudData(cloud, opts) {
       }
     });
   }
+
+  // Resultado del Ejercicio siempre acorde a la estructura recién fusionada
+  // (ver _repararResultadoEjercicioBalances) — corre después de ambos
+  // bloques de arriba porque algunos balances recién reciben su
+  // estructura_er en el segundo (reconstrucción desde balances_rubros).
+  if (typeof _repararResultadoEjercicioBalances === 'function') _repararResultadoEjercicioBalances();
 
   // Restaurar flujos_config desde Sheets
   if (Array.isArray(cloud.flujos_config) && cloud.flujos_config.length) {
@@ -41015,7 +41102,8 @@ function buildCloudPayload() {
            empresas_eliminadas: empresasEliminadasRows,
            beneficiarios_excluidos: beneficiariosExcluidosRows,
            lr_users_extra: usersExtra, lr_readonly: readonlyExtra,
-           flujos_a_eliminar: [...(typeof _getFlujosDel === 'function' ? _getFlujosDel() : new Set())] };
+           flujos_a_eliminar: [...(typeof _getFlujosDel === 'function' ? _getFlujosDel() : new Set())],
+           balances_a_eliminar: [...(typeof _getBalancesDel === 'function' ? _getBalancesDel() : new Set())] };
 }
 
 // ── Cache local (fallback sin conexión) ──────────────────────────
