@@ -27488,6 +27488,42 @@ function _repararResultadoEjercicioBalances() {
   return reparados;
 }
 
+// ── Reparar Activo/Pasivo No Corriente faltante en balances ya cargados ──
+// Pedido del usuario: error frecuente en los Excel cargados donde el total
+// de activo/pasivo no corriente no quedó cargado (ni extraído directo del
+// Excel ni completado al cargar), aunque sí estén cargados el total y el
+// corriente — en ese caso el Estado de Situación Patrimonial mostraba "—"
+// en esas dos filas pese a que la resta es trivial y el dato "está" en el
+// balance. calcularRatiosBalance() ya sabe derivar no_corriente = total −
+// corriente (mismo criterio "preferir explícito, derivar si falta" que usa
+// toda carga/edición nueva), pero un balance ya guardado de antes de que
+// ese fallback existiera, o editado de forma que dejó el campo vacío, se
+// queda con el hueco para siempre si nadie vuelve a tocarlo — esta función
+// re-corre esa misma derivación sobre TODOS los balances ya cargados, sin
+// pisar ningún valor explícito ya presente (calcularRatiosBalance es
+// idempotente: solo completa lo que esté en null).
+function _repararActivoPasivoNoCorrienteBalances() {
+  const reparados = [];
+  Object.entries(_balances || {}).forEach(([key, b]) => {
+    if (!b || !b.indicadores) return;
+    const sol = b.indicadores.solvencia || {};
+    const antesA = sol.activo_no_corriente ?? null;
+    const antesP = sol.pasivo_no_corriente ?? null;
+    calcularRatiosBalance(b.indicadores);
+    const despuesA = b.indicadores.solvencia.activo_no_corriente ?? null;
+    const despuesP = b.indicadores.solvencia.pasivo_no_corriente ?? null;
+    if (antesA !== despuesA || antesP !== despuesP) {
+      reparados.push({
+        key, empresa: b.empresa, periodo: b.periodo,
+        activo_no_corriente: { antes: antesA, despues: despuesA },
+        pasivo_no_corriente: { antes: antesP, despues: despuesP },
+      });
+    }
+  });
+  if (reparados.length) console.log('[Balances] Activo/Pasivo No Corriente completado desde Total − Corriente:', reparados);
+  return reparados;
+}
+
 // ── Eliminaciones de balances — tombstone (mismo patrón que flujos) ──────
 // eliminarBalance() antes solo borraba de _balances en memoria: la próxima
 // vez que se sincronizaba contra Sheets, el merge de "balances PDF" de más
@@ -34156,12 +34192,25 @@ function _extractPatrimonialData(b) {
   const ind = b ? (b.indicadores || {}) : {};
   const liq = ind.liquidez || {};
   const sol = ind.solvencia || {};
-  const aC  = liq.activo_corriente ?? null;
-  const aT  = sol.activo_total ?? null;
-  const aNC = (aT != null && aC != null) ? aT - aC : null;
-  const pC  = liq.pasivo_corriente ?? null;
-  const pT  = sol.pasivo_total ?? null;
-  const pNC = (pT != null && pC != null) ? pT - pC : null;
+  const aC = liq.activo_corriente ?? null;
+  const pC = liq.pasivo_corriente ?? null;
+  // Preferir activo/pasivo no corriente ya cargado (extraído del Excel o
+  // tipeado a mano en el Editor de Datos) — antes se recalculaba siempre
+  // como total − corriente acá mismo, así que si el total no se había
+  // extraído bien del Excel (error frecuente en los balances cargados), el
+  // Estado de Situación Patrimonial mostraba "—" en esas dos filas aunque
+  // el Editor de Datos sí tuviera el valor correcto. Mismo criterio
+  // "preferir explícito, derivar solo si falta" que ya usa
+  // calcularRatiosBalance() — y, simétricamente, si lo que falta es el
+  // TOTAL (no el no corriente), completarlo sumando corriente + no corriente.
+  let aNC = sol.activo_no_corriente ?? null;
+  let aT  = sol.activo_total ?? null;
+  if (aNC == null && aT != null && aC != null) aNC = aT - aC;
+  if (aT  == null && aNC != null && aC != null) aT  = aC + aNC;
+  let pNC = sol.pasivo_no_corriente ?? null;
+  let pT  = sol.pasivo_total ?? null;
+  if (pNC == null && pT != null && pC != null) pNC = pT - pC;
+  if (pT  == null && pNC != null && pC != null) pT  = pC + pNC;
   const pN  = sol.patrimonio_neto ?? null;
   const tot = (pT != null && pN != null) ? pT + pN : aT ?? null;
   return { aC, aNC, aT, pC, pNC, pT, pN, tot };
@@ -35269,6 +35318,7 @@ function renderBalanceUI() {
   if (!keys.length) return;
 
   _repararResultadoEjercicioBalances();
+  if (typeof _repararActivoPasivoNoCorrienteBalances === 'function') _repararActivoPasivoNoCorrienteBalances();
   actualizarFiltros();     // renderiza botones empresa + período
   renderListaArchivos();
   poblarVincularSel();
@@ -40375,6 +40425,7 @@ function applyCloudData(cloud, opts) {
   // bloques de arriba porque algunos balances recién reciben su
   // estructura_er en el segundo (reconstrucción desde balances_rubros).
   if (typeof _repararResultadoEjercicioBalances === 'function') _repararResultadoEjercicioBalances();
+  if (typeof _repararActivoPasivoNoCorrienteBalances === 'function') _repararActivoPasivoNoCorrienteBalances();
 
   // Restaurar flujos_config desde Sheets
   if (Array.isArray(cloud.flujos_config) && cloud.flujos_config.length) {
