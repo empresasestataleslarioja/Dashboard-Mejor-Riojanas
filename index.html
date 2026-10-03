@@ -40024,6 +40024,107 @@ async function syncToCloud(nota) {
   }
 }
 
+// ── Parsear la fila cruda de la hoja "balances" al objeto `indicadores` ──
+// Extraído de applyCloudData para poder reusarlo también cuando el balance
+// local "gana" por fecha pero igual hay que completar huecos (ver
+// _rellenarHuecosIndicadores más abajo).
+function _parseIndicadoresDesdeFilaCloud(r) {
+  const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
+  return {
+    liquidez: {
+      liquidez_corriente:  r.liquidez_corriente  !== '' ? parseFloat(r.liquidez_corriente)  : null,
+      liquidez_seca:       r.liquidez_seca       !== '' ? parseFloat(r.liquidez_seca)       : null,
+      capital_trabajo:     r.capital_trabajo     !== '' ? parseFloat(r.capital_trabajo)     : null,
+      activo_corriente:    r.activo_corriente    !== '' ? parseFloat(r.activo_corriente)    : null,
+      pasivo_corriente:    r.pasivo_corriente    !== '' ? parseFloat(r.pasivo_corriente)    : null,
+    },
+    solvencia: {
+      razon_endeudamiento: r.razon_endeudamiento !== '' ? parseFloat(r.razon_endeudamiento) : null,
+      deuda_patrimonio:    r.deuda_patrimonio    !== '' ? parseFloat(r.deuda_patrimonio)    : null,
+      cobertura_intereses: r.cobertura_intereses !== '' ? parseFloat(r.cobertura_intereses) : null,
+      pasivo_total:        r.pasivo_total        !== '' ? parseFloat(r.pasivo_total)        : null,
+      patrimonio_neto:     r.patrimonio_neto     !== '' ? parseFloat(r.patrimonio_neto)     : null,
+      activo_total:        r.activo_total        !== '' ? parseFloat(r.activo_total)        : null,
+      activo_no_corriente: r.activo_no_corriente !== '' && r.activo_no_corriente != null ? parseFloat(r.activo_no_corriente) : (r.activo_total!==''&&r.activo_corriente!==''&&r.activo_total!=null&&r.activo_corriente!=null ? parseFloat(r.activo_total)-parseFloat(r.activo_corriente) : null),
+      pasivo_no_corriente: r.pasivo_no_corriente !== '' && r.pasivo_no_corriente != null ? parseFloat(r.pasivo_no_corriente) : (r.pasivo_total!==''&&r.pasivo_corriente!==''&&r.pasivo_total!=null&&r.pasivo_corriente!=null ? parseFloat(r.pasivo_total)-parseFloat(r.pasivo_corriente) : null),
+    },
+    rentabilidad: {
+      roe:                      _pf(r.roe),
+      roa:                      _pf(r.roa),
+      margen_neto:              _pf(r.margen_neto),
+      margen_operativo:         _pf(r.margen_operativo),
+      resultado_neto:           _pf(r.resultado_neto),
+      resultado_operativo:      _pf(r.resultado_operativo),
+      ventas_ingresos:          _pf(r.ventas_ingresos),
+      costo_ventas:             _pf(r.costo_ventas_er),
+      utilidad_bruta:           _pf(r.utilidad_bruta),
+      gastos_administracion:    _pf(r.gastos_administracion),
+      gastos_comercializacion:  _pf(r.gastos_comercializacion),
+      gastos_operativos:        _pf(r.gastos_operativos),
+      resultado_financiero:     _pf(r.resultado_financiero),
+      otros_ingresos:           _pf(r.otros_ingresos),
+      ingresos_obras_subsidios: _pf(r.ingresos_obras_subsidios),
+      otros_egresos:            _pf(r.otros_egresos),
+      recpam:                   _pf(r.recpam),
+      resultado_tenencia:       _pf(r.resultado_tenencia),
+      gastos_ejecucion_obras:   _pf(r.gastos_ejecucion_obras),
+      impuesto_ganancias:       _pf(r.impuesto_ganancias),
+      produccion_agro:          _pf(r.produccion_agro),
+      costo_produccion:         _pf(r.costo_produccion),
+      res_neto_produccion:      _pf(r.res_neto_produccion),
+      medicion_razonable:       _pf(r.medicion_razonable),
+      venta_hacienda:           _pf(r.venta_hacienda),
+      costo_venta_hacienda:     _pf(r.costo_venta_hacienda),
+      venta_frigorifico:        _pf(r.venta_frigorifico),
+      costo_venta_frigorifico:  _pf(r.costo_venta_frigorifico),
+      venta_locales:            _pf(r.venta_locales),
+      costo_venta_locales:      _pf(r.costo_venta_locales),
+      res_bruto_locales:        _pf(r.res_bruto_locales),
+      venta_semillas:           _pf(r.venta_semillas),
+      costo_semillas:           _pf(r.costo_semillas),
+      sub_total_agro:           _pf(r.sub_total_agro),
+    },
+    eficiencia: {
+      rotacion_activos:     _pf(r.rotacion_activos),
+      rotacion_inventarios: _pf(r.rotacion_inventarios),
+      dias_cobro:           _pf(r.dias_cobro),
+      dias_pago:            _pf(r.dias_pago),
+      costo_ventas:         _pf(r.costo_ventas),
+      cuentas_cobrar:       _pf(r.cuentas_cobrar),
+      cuentas_pagar:        _pf(r.cuentas_pagar),
+    },
+  };
+}
+
+// ── Completar huecos de un balance LOCAL con lo que sí tenga la fila de
+// Sheets, sin pisar ningún valor local ya presente ──
+// Pedido del usuario: detectó empresas donde Sheets tiene saldos cargados
+// (p.ej. activo/pasivo no corriente corregidos directo en la hoja, o desde
+// otro dispositivo) que el dashboard no muestra. Causa: el merge de
+// balances más abajo decide por FECHA completa (_tsLocal >= _tsSheets →
+// "local gana, no tocar nada") — pero esa guardia compara CUÁNDO se guardó
+// cada versión, no QUÉ datos tiene cada una. Si la hoja se edita a mano
+// (sin bump de fecha_analisis) o la corrección cae el mismo día que ya
+// había una copia local, el local "gana" aunque esté incompleto y la
+// corrección de Sheets queda bloqueada para siempre. Un campo vacío nunca
+// puede ser "más correcto" que uno con valor, así que acá completamos los
+// huecos igual, gane quien gane por fecha.
+function _rellenarHuecosIndicadores(localInd, cloudInd) {
+  if (!localInd || !cloudInd) return [];
+  const completados = [];
+  Object.keys(cloudInd).forEach(grupo => {
+    if (!localInd[grupo]) localInd[grupo] = {};
+    Object.entries(cloudInd[grupo]).forEach(([campo, valorCloud]) => {
+      const valorLocal = localInd[grupo][campo];
+      if ((valorLocal == null || valorLocal === '') && valorCloud != null) {
+        localInd[grupo][campo] = valorCloud;
+        completados.push(grupo + '.' + campo);
+      }
+    });
+  });
+  return completados;
+}
+
 // ── Convertir datos flat del Sheet → estructura DATA ─────────────
 function applyCloudData(cloud, opts) {
   opts = opts || {};
@@ -40272,7 +40373,6 @@ function applyCloudData(cloud, opts) {
   if ((!_solo || _solo === 'balances') && Array.isArray(cloud.balances)) {
     if (true) {
       // Merge: agregar desde Sheets los que no existen localmente; si existe local, conservarlo
-      const _pf = v => (v !== '' && v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
       const _delMapBal = (typeof _getBalancesDelMap === 'function') ? _getBalancesDelMap() : new Map();
       cloud.balances.forEach(r => {
         if (!r.empresa || !r.periodo) return;
@@ -40291,7 +40391,15 @@ function applyCloudData(cloud, opts) {
           }
         }
         const _tsLocal  = _balances[key] ? (_balances[key].timestamp || 0) : 0;
-        if (_tsLocal > 0 && _tsLocal >= _tsSheets) return; // local más reciente → conservar
+        if (_tsLocal > 0 && _tsLocal >= _tsSheets) {
+          // Local "gana" por fecha — pero un campo vacío localmente nunca es
+          // más correcto que uno con valor en Sheets (ver _rellenarHuecosIndicadores).
+          if (_balances[key]) {
+            const completados = _rellenarHuecosIndicadores(_balances[key].indicadores, _parseIndicadoresDesdeFilaCloud(r));
+            if (completados.length) console.log('[Balances] Completados desde Sheets (local tenía fecha igual/más reciente) para ' + key + ':', completados);
+          }
+          return;
+        }
         _balances[key] = {
         filename:     key,
         empresa:      r.empresa,
@@ -40308,73 +40416,7 @@ function applyCloudData(cloud, opts) {
         alertas:      r.alertas ? r.alertas.split(' | ').filter(Boolean) : [],
         diagnostico:  r.diagnostico || '',
         textoRaw:     '',
-        indicadores: {
-          liquidez: {
-            liquidez_corriente:  r.liquidez_corriente  !== '' ? parseFloat(r.liquidez_corriente)  : null,
-            liquidez_seca:       r.liquidez_seca       !== '' ? parseFloat(r.liquidez_seca)       : null,
-            capital_trabajo:     r.capital_trabajo     !== '' ? parseFloat(r.capital_trabajo)     : null,
-            activo_corriente:    r.activo_corriente    !== '' ? parseFloat(r.activo_corriente)    : null,
-            pasivo_corriente:    r.pasivo_corriente    !== '' ? parseFloat(r.pasivo_corriente)    : null,
-          },
-          solvencia: {
-            razon_endeudamiento: r.razon_endeudamiento !== '' ? parseFloat(r.razon_endeudamiento) : null,
-            deuda_patrimonio:    r.deuda_patrimonio    !== '' ? parseFloat(r.deuda_patrimonio)    : null,
-            cobertura_intereses: r.cobertura_intereses !== '' ? parseFloat(r.cobertura_intereses) : null,
-            pasivo_total:        r.pasivo_total        !== '' ? parseFloat(r.pasivo_total)        : null,
-            patrimonio_neto:     r.patrimonio_neto     !== '' ? parseFloat(r.patrimonio_neto)     : null,
-            activo_total:        r.activo_total        !== '' ? parseFloat(r.activo_total)        : null,
-            activo_no_corriente: r.activo_no_corriente !== '' && r.activo_no_corriente != null ? parseFloat(r.activo_no_corriente) : (r.activo_total!==''&&r.activo_corriente!==''&&r.activo_total!=null&&r.activo_corriente!=null ? parseFloat(r.activo_total)-parseFloat(r.activo_corriente) : null),
-            pasivo_no_corriente: r.pasivo_no_corriente !== '' && r.pasivo_no_corriente != null ? parseFloat(r.pasivo_no_corriente) : (r.pasivo_total!==''&&r.pasivo_corriente!==''&&r.pasivo_total!=null&&r.pasivo_corriente!=null ? parseFloat(r.pasivo_total)-parseFloat(r.pasivo_corriente) : null),
-          },
-          rentabilidad: {
-            // Ratios calculados
-            roe:                      _pf(r.roe),
-            roa:                      _pf(r.roa),
-            margen_neto:              _pf(r.margen_neto),
-            margen_operativo:         _pf(r.margen_operativo),
-            // Rubros ER estándar
-            resultado_neto:           _pf(r.resultado_neto),
-            resultado_operativo:      _pf(r.resultado_operativo),
-            ventas_ingresos:          _pf(r.ventas_ingresos),
-            costo_ventas:             _pf(r.costo_ventas_er),
-            utilidad_bruta:           _pf(r.utilidad_bruta),
-            gastos_administracion:    _pf(r.gastos_administracion),
-            gastos_comercializacion:  _pf(r.gastos_comercializacion),
-            gastos_operativos:        _pf(r.gastos_operativos),
-            resultado_financiero:     _pf(r.resultado_financiero),
-            otros_ingresos:           _pf(r.otros_ingresos),
-            ingresos_obras_subsidios: _pf(r.ingresos_obras_subsidios),
-            otros_egresos:            _pf(r.otros_egresos),
-            recpam:                   _pf(r.recpam),
-            resultado_tenencia:       _pf(r.resultado_tenencia),
-            gastos_ejecucion_obras:   _pf(r.gastos_ejecucion_obras),
-            impuesto_ganancias:       _pf(r.impuesto_ganancias),
-            // Rubros agropecuarios
-            produccion_agro:          _pf(r.produccion_agro),
-            costo_produccion:         _pf(r.costo_produccion),
-            res_neto_produccion:      _pf(r.res_neto_produccion),
-            medicion_razonable:       _pf(r.medicion_razonable),
-            venta_hacienda:           _pf(r.venta_hacienda),
-            costo_venta_hacienda:     _pf(r.costo_venta_hacienda),
-            venta_frigorifico:        _pf(r.venta_frigorifico),
-            costo_venta_frigorifico:  _pf(r.costo_venta_frigorifico),
-            venta_locales:            _pf(r.venta_locales),
-            costo_venta_locales:      _pf(r.costo_venta_locales),
-            res_bruto_locales:        _pf(r.res_bruto_locales),
-            venta_semillas:           _pf(r.venta_semillas),
-            costo_semillas:           _pf(r.costo_semillas),
-            sub_total_agro:           _pf(r.sub_total_agro),
-          },
-          eficiencia: {
-            rotacion_activos:     _pf(r.rotacion_activos),
-            rotacion_inventarios: _pf(r.rotacion_inventarios),
-            dias_cobro:           _pf(r.dias_cobro),
-            dias_pago:            _pf(r.dias_pago),
-            costo_ventas:         _pf(r.costo_ventas),
-            cuentas_cobrar:       _pf(r.cuentas_cobrar),
-            cuentas_pagar:        _pf(r.cuentas_pagar),
-          },
-        },
+        indicadores: _parseIndicadoresDesdeFilaCloud(r),
         estructura_er: (function() {
           // Reconstruir desde estructura_json (incluye val y valComp)
           if (r.estructura_json) {
