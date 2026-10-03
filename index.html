@@ -39410,8 +39410,23 @@ async function syncFromCloud(silent, opts) {
 
     const nEmps  = Object.keys(DATA.fact||{}).length;
     const nTrans = (DATA.transferencias||[]).length;
+    // Avisar en pantalla si esta sincronización completó o reparó
+    // automáticamente algún balance (ver _rellenarHuecosIndicadores /
+    // _repararActivoPasivoNoCorrienteBalances) — antes solo quedaba en la
+    // consola del navegador, invisible para el usuario.
+    let _detalleBalancesFix = '';
+    const _resumenBal = window._ultimoResumenBalances;
+    if (_resumenBal) {
+      const _keysAfectadas = new Set([
+        ..._resumenBal.completadosDesdeCloud.map(x => x.key),
+        ..._resumenBal.reparadosNoCorriente.map(x => x.key),
+      ]);
+      if (_keysAfectadas.size) {
+        _detalleBalancesFix = ` · ⚙ ${_keysAfectadas.size} balance${_keysAfectadas.size!==1?'s':''} corregido${_keysAfectadas.size!==1?'s':''} automáticamente (Activo/Pasivo No Corriente)`;
+      }
+    }
     mostrarResultadoSync(true, '↓ Datos actualizados desde Google Sheets',
-      `${nEmps} empresa${nEmps!==1?'s':''} · ${nTrans} transferencia${nTrans!==1?'s':''} · publicado el ${lastUpFmt}`);
+      `${nEmps} empresa${nEmps!==1?'s':''} · ${nTrans} transferencia${nTrans!==1?'s':''} · publicado el ${lastUpFmt}${_detalleBalancesFix}`);
 
     // Registrar en historial de importaciones
     const syncMeta = data.meta || {};
@@ -40370,6 +40385,10 @@ function applyCloudData(cloud, opts) {
   }
 
   // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
+  // Resumen de lo que esta corrida de applyCloudData completó/reparó en
+  // balances automáticamente — para poder mostrárselo al usuario en pantalla
+  // (ver syncFromCloud) en vez de que solo quede en la consola del navegador.
+  window._ultimoResumenBalances = { completadosDesdeCloud: [], reparadosNoCorriente: [] };
   if ((!_solo || _solo === 'balances') && Array.isArray(cloud.balances)) {
     if (true) {
       // Merge: agregar desde Sheets los que no existen localmente; si existe local, conservarlo
@@ -40396,7 +40415,10 @@ function applyCloudData(cloud, opts) {
           // más correcto que uno con valor en Sheets (ver _rellenarHuecosIndicadores).
           if (_balances[key]) {
             const completados = _rellenarHuecosIndicadores(_balances[key].indicadores, _parseIndicadoresDesdeFilaCloud(r));
-            if (completados.length) console.log('[Balances] Completados desde Sheets (local tenía fecha igual/más reciente) para ' + key + ':', completados);
+            if (completados.length) {
+              console.log('[Balances] Completados desde Sheets (local tenía fecha igual/más reciente) para ' + key + ':', completados);
+              window._ultimoResumenBalances.completadosDesdeCloud.push({ key, campos: completados });
+            }
           }
           return;
         }
@@ -40467,7 +40489,9 @@ function applyCloudData(cloud, opts) {
   // bloques de arriba porque algunos balances recién reciben su
   // estructura_er en el segundo (reconstrucción desde balances_rubros).
   if (typeof _repararResultadoEjercicioBalances === 'function') _repararResultadoEjercicioBalances();
-  if (typeof _repararActivoPasivoNoCorrienteBalances === 'function') _repararActivoPasivoNoCorrienteBalances();
+  if (typeof _repararActivoPasivoNoCorrienteBalances === 'function') {
+    window._ultimoResumenBalances.reparadosNoCorriente = _repararActivoPasivoNoCorrienteBalances();
+  }
 
   // Restaurar flujos_config desde Sheets
   if (Array.isArray(cloud.flujos_config) && cloud.flujos_config.length) {
