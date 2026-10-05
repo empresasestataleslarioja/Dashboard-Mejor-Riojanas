@@ -8074,9 +8074,18 @@ function _rptClasificacionBalances() {
 </body>
 </html>`;
 
-  // Abrir en overlay igual que los otros reportes
-  var overlay = document.getElementById('_rpt_overlay');
-  if (!overlay) { overlay = document.createElement('div'); overlay.id = '_rpt_overlay'; document.body.appendChild(overlay); }
+  // Abrir en overlay propio — id EXCLUSIVO de este reporte (antes
+  // reusaba '_rpt_overlay'/'_rpt_iframe', los mismos ids que el mecanismo
+  // genérico de imprimirPanelActivo() usa para Transferencias, Empresas y
+  // Rubros y el resto de los paneles. Como este reporte reemplaza el
+  // innerHTML completo del overlay compartido, después de abrirlo
+  // cualquier otro reporte que dependiera de ese '_rpt_iframe' original
+  // se encontraba con que ya no existía — "Cannot set properties of null
+  // (setting '_rptSecciones')" en imprimirPanelActivo(). Cada reporte con
+  // overlay propio (este, Balance Estado, Balance Integral, Resultados de
+  // Ejercicio) ahora usa su propio id, aislado del resto.
+  var overlay = document.getElementById('_rpt_overlay_clas');
+  if (!overlay) { overlay = document.createElement('div'); overlay.id = '_rpt_overlay_clas'; document.body.appendChild(overlay); }
   var blobUrl = URL.createObjectURL(new Blob([html],{type:'text/html'}));
   overlay.dataset.blobUrl = blobUrl;
   overlay.dataset.panelId = 'balances_clasif';
@@ -8084,11 +8093,11 @@ function _rptClasificacionBalances() {
   overlay.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:#111;border-bottom:1px solid #333;flex-shrink:0">'
     + '<span style="font-size:9px;color:#888;font-family:monospace;letter-spacing:.1em">CLASIFICACIÓN SEGÚN BALANCES</span>'
     + '<div style="display:flex;gap:8px;margin-left:auto">'
-    + '<button onclick="var u=document.getElementById(\'_rpt_overlay\').dataset.blobUrl;var a=document.createElement(\'a\');a.href=u;a.download=\'clasificacion-balances.html\';a.click()" style="padding:4px 12px;background:#1a3a8f;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">⬇ Descargar</button>'
-    + '<button onclick="var fr=document.getElementById(\'_rpt_iframe\');if(fr){fr.contentWindow.focus();fr.contentWindow.print();}" style="padding:4px 12px;background:#1565c0;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">🖨 Imprimir</button>'
-    + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:4px 12px;background:#333;color:#aaa;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">✕ Cerrar</button>'
+    + '<button onclick="var u=document.getElementById(\'_rpt_overlay_clas\').dataset.blobUrl;var a=document.createElement(\'a\');a.href=u;a.download=\'clasificacion-balances.html\';a.click()" style="padding:4px 12px;background:#1a3a8f;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">⬇ Descargar</button>'
+    + '<button onclick="var fr=document.getElementById(\'_rpt_iframe_clas\');if(fr){fr.contentWindow.focus();fr.contentWindow.print();}" style="padding:4px 12px;background:#1565c0;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">🖨 Imprimir</button>'
+    + '<button onclick="document.getElementById(\'_rpt_overlay_clas\').style.display=\'none\'" style="padding:4px 12px;background:#333;color:#aaa;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">✕ Cerrar</button>'
     + '</div></div>'
-    + '<iframe id="_rpt_iframe" src="'+blobUrl+'" style="flex:1;border:none;background:#fff"></iframe>';
+    + '<iframe id="_rpt_iframe_clas" src="'+blobUrl+'" style="flex:1;border:none;background:#fff"></iframe>';
 }
 
 // ══════════════════════════════════════════════════
@@ -8251,10 +8260,12 @@ function _rptBalanceEstado() {
 </div>
 </body></html>`;
 
-  var overlay = document.getElementById('_rpt_overlay');
+  // id EXCLUSIVO de este reporte — ver nota en _rptClasificacionBalances
+  // sobre por qué reusar '_rpt_overlay' rompía otros reportes.
+  var overlay = document.getElementById('_rpt_overlay_est');
   if (!overlay) {
     overlay = document.createElement('div');
-    overlay.id = '_rpt_overlay';
+    overlay.id = '_rpt_overlay_est';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:#000;display:flex;flex-direction:column';
     document.body.appendChild(overlay);
   }
@@ -8264,7 +8275,7 @@ function _rptBalanceEstado() {
   bar.style.cssText = 'background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #333';
   bar.innerHTML = '<span style="color:#47e8ff;font-family:monospace;font-size:11px;flex:1">📋 Estado de Presentación de Balances</span>'
     + '<button onclick="window.frames[\'_rpt_frame_est\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
-    + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
+    + '<button onclick="document.getElementById(\'_rpt_overlay_est\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
   var iframe = document.createElement('iframe');
   iframe.name = '_rpt_frame_est';
   iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
@@ -8459,11 +8470,13 @@ function _rptBalanceIntegral() {
 </body>
 </html>`;
 
-  // Mostrar en overlay
-  var overlay = document.getElementById('_rpt_overlay');
+  // Mostrar en overlay — id EXCLUSIVO de este reporte (ver nota en
+  // _rptClasificacionBalances sobre por qué reusar '_rpt_overlay' rompía
+  // otros reportes).
+  var overlay = document.getElementById('_rpt_overlay_int');
   if (!overlay) {
     overlay = document.createElement('div');
-    overlay.id = '_rpt_overlay';
+    overlay.id = '_rpt_overlay_int';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:#000;display:flex;flex-direction:column';
     document.body.appendChild(overlay);
   }
@@ -8473,7 +8486,7 @@ function _rptBalanceIntegral() {
   bar.style.cssText = 'background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #333';
   bar.innerHTML = '<span style="color:#47e8ff;font-family:monospace;font-size:11px;flex:1">📊 Reporte Integral de Balances</span>'
     + '<button onclick="window.frames[\'_rpt_frame\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
-    + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
+    + '<button onclick="document.getElementById(\'_rpt_overlay_int\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
   var iframe = document.createElement('iframe');
   iframe.name = '_rpt_frame';
   iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
@@ -8822,10 +8835,15 @@ function _rptResultadosEjercicio() {
 <\/script>
 </body></html>`;
 
-  var overlay = document.getElementById('_rpt_overlay');
+  // id EXCLUSIVO de este reporte (ver nota en _rptClasificacionBalances
+  // sobre por qué reusar '_rpt_overlay' rompía otros reportes — era
+  // exactamente el "Cannot set properties of null (setting
+  // '_rptSecciones')" reportado al intentar abrir Transferencias o
+  // Empresas y Rubros después de haber abierto este reporte).
+  var overlay = document.getElementById('_rpt_overlay_resej');
   if (!overlay) {
     overlay = document.createElement('div');
-    overlay.id = '_rpt_overlay';
+    overlay.id = '_rpt_overlay_resej';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:#000;display:flex;flex-direction:column';
     document.body.appendChild(overlay);
   }
@@ -8835,7 +8853,7 @@ function _rptResultadosEjercicio() {
   bar.style.cssText = 'background:#1a1a2e;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #333';
   bar.innerHTML = '<span style="color:#47e8ff;font-family:monospace;font-size:11px;flex:1">📈 Resultados de Ejercicio por Empresa y Año</span>'
     + '<button onclick="window.frames[\'_rpt_frame_resej\'].print()" style="padding:5px 14px;background:#47e8ff22;border:1px solid #47e8ff55;color:#47e8ff;border-radius:3px;cursor:pointer;font-size:10px">🖨 Imprimir</button>'
-    + '<button onclick="document.getElementById(\'_rpt_overlay\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
+    + '<button onclick="document.getElementById(\'_rpt_overlay_resej\').style.display=\'none\'" style="padding:5px 10px;background:#ff476622;border:1px solid #ff476655;color:#ff8899;border-radius:3px;cursor:pointer;font-size:10px">✕ Cerrar</button>';
   var iframe = document.createElement('iframe');
   iframe.name = '_rpt_frame_resej';
   iframe.style.cssText = 'flex:1;width:100%;border:none;background:#fff';
