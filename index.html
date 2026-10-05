@@ -9018,6 +9018,40 @@ function _rptTransferencias(autoPrint) {
     h.push('<div class="chart-card" id="sec_beneficiario"><div class="chart-title">Transferencias por beneficiario <span class="chart-unit">$ millones · top 12</span></div><img class="img-chart" src="'+imgs.ben+'"></div>');
   }
 
+  // Detalle por empresa — TODAS las empresas con su participación
+  // porcentual, no solo el top 12 del gráfico de arriba (pedido del
+  // usuario: mismo detalle que surge al hacer clic en el gráfico
+  // "Composición por categoría", ver pestaña "Por empresa" del modal en
+  // buildDetalleData — misma agrupación por _beneficiarioCanonico para
+  // que los números coincidan exactamente con lo que se ve en pantalla).
+  if (rows.length) {
+    var catsDetalle = TRANS_CATS.filter(function(c){
+      return rows.some(function(r){ return r.categoria===c; });
+    });
+    var benMapRpt = {};
+    rows.forEach(function(r) {
+      var ben = _beneficiarioCanonico(r.beneficiario);
+      if (!benMapRpt[ben]) benMapRpt[ben] = { total:0, cats:{} };
+      benMapRpt[ben].total += r.importe;
+      benMapRpt[ben].cats[r.categoria] = (benMapRpt[ben].cats[r.categoria]||0) + r.importe;
+    });
+    var bensRpt = Object.entries(benMapRpt).sort(function(a,b){ return b[1].total - a[1].total; });
+    h.push('<div class="chart-card" id="sec_detalle_empresa"><div class="chart-title">Detalle de transferencias por empresa <span class="chart-unit">todas · % del total</span></div>');
+    h.push('<div class="tw"><table><thead><tr><th>Empresa</th>');
+    catsDetalle.forEach(function(c){ h.push('<th>'+c+'</th>'); });
+    h.push('<th>Total</th><th>%</th></tr></thead><tbody>');
+    bensRpt.forEach(function(kv) {
+      var ben = kv[0], d = kv[1];
+      h.push('<tr><td>'+ben+'</td>');
+      catsDetalle.forEach(function(c){ h.push('<td>'+(d.cats[c]?fM2(d.cats[c]):'—')+'</td>'); });
+      h.push('<td>'+fM2(d.total)+'</td><td>'+(total?(d.total/total*100).toFixed(2):'0')+'%</td></tr>');
+    });
+    h.push('<tr class="trf"><td>TOTAL</td>');
+    catsDetalle.forEach(function(c){ h.push('<td>'+fM2(byCat[c]||0)+'</td>'); });
+    h.push('<td>'+fM2(total)+'</td><td>100%</td></tr>');
+    h.push('</tbody></table></div></div>');
+  }
+
   // Evolución mensual: SOLO cuando hay un año específico elegido
   // (con todos los años mezclados, el gráfico mensual no es informativo)
   var hayAñoEspecifico = !!(_rptAño || (_transFiltros.año && _transFiltros.año.size === 1));
