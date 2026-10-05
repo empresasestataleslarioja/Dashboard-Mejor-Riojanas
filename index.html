@@ -8502,14 +8502,31 @@ function _rptResultadosEjercicio() {
   // Un balance por empresa+año — guardarBalance()/applyCloudData() ya
   // eliminan cualquier entrada previa de la misma clave empresa+período
   // antes de guardar una nueva, así que no hay colisiones que resolver acá.
+  //
+  // Desagregación pedida por el usuario: mostrar siempre el efecto del
+  // Resultado Financiero y por Tenencia (incl. RECPAM) y del Impuesto a
+  // las Ganancias dentro del Resultado del Ejercicio. El campo
+  // "resultado_operativo" extraído de cada balance NO sirve como base
+  // confiable para ese subtotal: según la estructura real del Estado de
+  // Resultados de cada empresa, a veces ya incluye esos rubros y a veces
+  // no (ver buildEstadoResultadosDetalle, donde la etiqueta de esa misma
+  // fila cambia según haya o no RFyT). Para no inventar un subtotal que
+  // pueda no reconciliar, el "resto" se define acá como el residuo exacto
+  // (Neto − RFyT − Impuesto) — por construcción siempre suma el Resultado
+  // del Ejercicio real, sea cual sea la estructura de cada balance.
   const porEmpresaAño = {};
   todos.forEach(b => {
     const emp = empCanon(b);
     const año = parseInt(b.periodo);
     if (isNaN(año)) return;
-    const rN = b.indicadores?.rentabilidad?.resultado_neto;
+    const ren = b.indicadores?.rentabilidad || {};
+    const neto = ren.resultado_neto ?? null;
+    const partesRfyt = [ren.resultado_financiero, ren.recpam, ren.resultado_tenencia].filter(v => v != null);
+    const rfyt = partesRfyt.length ? partesRfyt.reduce((s,v) => s+v, 0) : null;
+    const impuesto = ren.impuesto_ganancias ?? null;
+    const subtotal = neto != null ? neto - (rfyt||0) - (impuesto||0) : null;
     if (!porEmpresaAño[emp]) porEmpresaAño[emp] = {};
-    porEmpresaAño[emp][año] = rN != null ? rN : null;
+    porEmpresaAño[emp][año] = { neto, rfyt, impuesto, subtotal };
   });
 
   const empresas = Object.keys(porEmpresaAño).sort();
@@ -8519,35 +8536,69 @@ function _rptResultadosEjercicio() {
   const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
   const thAños = años.map(a => `<th data-anio="${a}" style="text-align:right">${a}</th>`).join('');
 
-  const filas = empresas.map(emp => {
-    const vals  = años.map(a => porEmpresaAño[emp][a]);
-    const total = vals.some(v => v != null) ? vals.reduce((s,v) => s + (v||0), 0) : null;
-    const celdas = años.map(a => {
-      const v = porEmpresaAño[emp][a];
-      if (v == null) return `<td data-anio="${a}" style="text-align:right;color:#c7cad6;font-size:9.5px;padding:6px 10px;border-bottom:1px solid #e5e7eb">—</td>`;
-      const c  = v >= 0 ? '#065f46' : '#991b1b';
-      const bg = v >= 0 ? '#ecfdf5' : '#fef2f2';
-      return `<td data-anio="${a}" style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${c};background:${bg};padding:6px 10px;border-bottom:1px solid #e5e7eb">${fM(v)}</td>`;
+  // ── Renderiza una serie de valores (uno por año) como celdas + columna
+  // Acumulado — reusado por la fila principal (Resultado del Ejercicio) y
+  // por las 3 filas de desagregación, tanto por empresa como en el total ──
+  function celdasSerie(serie, { bold, muted } = {}) {
+    const acumulado = serie.some(v => v != null) ? serie.reduce((s,v) => s + (v||0), 0) : null;
+    const fsz = muted ? '8.5px' : '9.5px';
+    const pad = muted ? '3px 10px' : '6px 10px';
+    const celdas = serie.map((v, i) => {
+      const a = años[i];
+      if (v == null) return `<td data-anio="${a}" style="text-align:right;color:#c7cad6;font-size:${fsz};padding:${pad};border-bottom:1px solid #e5e7eb">—</td>`;
+      const c  = v >= 0 ? (muted ? '#1a8f6b' : '#065f46') : (muted ? '#c0564f' : '#991b1b');
+      const bg = muted ? 'transparent' : (v >= 0 ? '#ecfdf5' : '#fef2f2');
+      return `<td data-anio="${a}" style="text-align:right;font-family:monospace;font-size:${fsz};font-weight:${bold?700:(muted?500:600)};color:${c};background:${bg};padding:${pad};border-bottom:1px solid #e5e7eb">${fM(v)}</td>`;
     }).join('');
-    const tColor = total == null ? '#888' : total >= 0 ? '#065f46' : '#991b1b';
-    return `<tr data-emp="${emp.replace(/"/g,'&quot;')}">
+    const tc = acumulado == null ? '#888' : acumulado >= 0 ? (muted ? '#1a8f6b' : '#065f46') : (muted ? '#c0564f' : '#991b1b');
+    const celdaTotal = `<td style="text-align:right;font-family:monospace;font-size:${fsz};font-weight:${bold?700:600};color:${tc};padding:${pad};border-bottom:1px solid #e5e7eb;border-left:2px solid #c5cae9">${fM(acumulado)}</td>`;
+    return { celdas, celdaTotal, acumulado };
+  }
+
+  const filas = empresas.map(emp => {
+    const empAttr = emp.replace(/"/g,'&quot;');
+    const serieNeto     = años.map(a => porEmpresaAño[emp][a]?.neto     ?? null);
+    const serieSubtotal = años.map(a => porEmpresaAño[emp][a]?.subtotal ?? null);
+    const serieRfyt     = años.map(a => porEmpresaAño[emp][a]?.rfyt     ?? null);
+    const serieImpuesto = años.map(a => porEmpresaAño[emp][a]?.impuesto ?? null);
+
+    const rNeto = celdasSerie(serieNeto,     { bold: true });
+    const rSub  = celdasSerie(serieSubtotal, { muted: true });
+    const rRfyt = celdasSerie(serieRfyt,     { muted: true });
+    const rImp  = celdasSerie(serieImpuesto, { muted: true });
+
+    return `<tr data-emp="${empAttr}">
       <td style="padding:6px 10px;font-size:10px;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb">${emp}</td>
-      ${celdas}
-      <td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${tColor};padding:6px 10px;border-bottom:1px solid #e5e7eb;border-left:2px solid #c5cae9">${fM(total)}</td>
+      ${rNeto.celdas}
+      ${rNeto.celdaTotal}
+    </tr>
+    <tr data-emp="${empAttr}" data-sub="1">
+      <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap;border-bottom:1px solid #e5e7eb">↳ Resultado antes de RFyT e Impuesto a las Ganancias</td>
+      ${rSub.celdas}
+      ${rSub.celdaTotal}
+    </tr>
+    <tr data-emp="${empAttr}" data-sub="1">
+      <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap;border-bottom:1px solid #e5e7eb">↳ Resultado Financiero y por Tenencia (incl. RECPAM)</td>
+      ${rRfyt.celdas}
+      ${rRfyt.celdaTotal}
+    </tr>
+    <tr data-emp="${empAttr}" data-sub="1" style="border-bottom:2px solid #e3e6f0">
+      <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap;border-bottom:1px solid #e5e7eb">↳ Impuesto a las Ganancias</td>
+      ${rImp.celdas}
+      ${rImp.celdaTotal}
     </tr>`;
   }).join('');
 
-  const totalesPorAño = años.map(a => {
-    const vals = empresas.map(e => porEmpresaAño[e][a]).filter(v => v != null);
-    const sum  = vals.length ? vals.reduce((s,v) => s+v, 0) : null;
-    const c  = sum == null ? '#888'    : sum >= 0 ? '#065f46' : '#991b1b';
-    const bg = sum == null ? '#f9fafb' : sum >= 0 ? '#d1fae5' : '#fee2e2';
-    return `<td data-anio="${a}" style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${c};background:${bg};padding:6px 10px">${fM(sum)}</td>`;
-  }).join('');
-  const granTotal = (() => {
-    const todosVals = empresas.flatMap(e => años.map(a => porEmpresaAño[e][a])).filter(v => v != null);
-    return todosVals.length ? todosVals.reduce((s,v) => s+v, 0) : null;
-  })();
+  // ── Totales por año (misma desagregación, suma de todas las empresas) ──
+  const sumaPorAño = campo => años.map(a => {
+    const vals = empresas.map(e => porEmpresaAño[e][a]?.[campo]).filter(v => v != null);
+    return vals.length ? vals.reduce((s,v) => s+v, 0) : null;
+  });
+  const totalNeto     = celdasSerie(sumaPorAño('neto'),     { bold: true });
+  const totalSubtotal = celdasSerie(sumaPorAño('subtotal'), { muted: true });
+  const totalRfyt     = celdasSerie(sumaPorAño('rfyt'),     { muted: true });
+  const totalImpuesto = celdasSerie(sumaPorAño('impuesto'), { muted: true });
+  const granTotal = totalNeto.acumulado;
   const gtColor = granTotal == null ? '#1a3a8f' : granTotal >= 0 ? '#065f46' : '#991b1b';
 
   const opcionesEmp  = empresas.map(e => `<option value="${e.replace(/"/g,'&quot;')}">${e}</option>`).join('');
@@ -8608,6 +8659,7 @@ function _rptResultadosEjercicio() {
         <div class="sub">ANÁLISIS DE BALANCES</div>
         <h1>Resultados de Ejercicio por Empresa y Año</h1>
         <div class="sub">Empresas Estatales · Provincia de La Rioja</div>
+        <div class="sub" style="color:#ffd166;margin-top:2px">⚖ Información extraída de balances certificados — no incluye estimaciones ni balances provisorios</div>
         <div style="margin-top:10px">
           <span class="badge">${empresas.length} EMPRESAS</span>
           <span class="badge">${años[0]}–${años[años.length-1]}</span>
@@ -8650,12 +8702,27 @@ function _rptResultadosEjercicio() {
         ${filas}
         <tr data-emp="__total__" style="background:#f0f4ff;font-weight:700">
           <td style="padding:6px 10px;font-size:9px;font-weight:700;color:#1a3a8f">TOTAL POR AÑO</td>
-          ${totalesPorAño}
-          <td style="text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${gtColor};padding:6px 10px;border-left:2px solid #c5cae9">${fM(granTotal)}</td>
+          ${totalNeto.celdas}
+          ${totalNeto.celdaTotal}
+        </tr>
+        <tr data-emp="__total__" data-sub="1" style="background:#f7f9ff">
+          <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Resultado antes de RFyT e Impuesto a las Ganancias</td>
+          ${totalSubtotal.celdas}
+          ${totalSubtotal.celdaTotal}
+        </tr>
+        <tr data-emp="__total__" data-sub="1" style="background:#f7f9ff">
+          <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Resultado Financiero y por Tenencia (incl. RECPAM)</td>
+          ${totalRfyt.celdas}
+          ${totalRfyt.celdaTotal}
+        </tr>
+        <tr data-emp="__total__" data-sub="1" style="background:#f7f9ff">
+          <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Impuesto a las Ganancias</td>
+          ${totalImpuesto.celdas}
+          ${totalImpuesto.celdaTotal}
         </tr>
       </tbody>
     </table>
-    <div class="nota">Valores en pesos corrientes de cada balance (sin ajuste por inflación) · "—" = sin balance cargado para ese año.</div>
+    <div class="nota">Valores en pesos corrientes de cada balance (sin ajuste por inflación) · "—" = sin balance cargado para ese año. · Las filas tenues desagregan el Resultado del Ejercicio en: Resultado antes de RFyT e Impuesto a las Ganancias + Resultado Financiero y por Tenencia (incl. RECPAM) + Impuesto a las Ganancias (signo positivo = crédito/beneficio fiscal) — las tres suman exactamente el Resultado del Ejercicio.</div>
   </div>
 
   <div class="footer">Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; <span style="font-weight:600">SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span> &nbsp;·&nbsp; ${fecha}</div>
