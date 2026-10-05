@@ -8514,7 +8514,16 @@ function _rptResultadosEjercicio() {
   // pueda no reconciliar, el "resto" se define acá como el residuo exacto
   // (Neto − RFyT − Impuesto) — por construcción siempre suma el Resultado
   // del Ejercicio real, sea cual sea la estructura de cada balance.
-  const porEmpresaAño = {};
+  // Clasificación pedida por el usuario: separar las empresas con ejercicio
+  // económico NO coincidente con el año calendario (hoy: Agroandina y
+  // Kayne — detectado desde esCierreNoCal, no hardcodeado por nombre) en
+  // un cuadro propio, con su propio TOTAL POR AÑO. Mezclarlas en la misma
+  // columna que las empresas calendario arrastraba el mismo problema que
+  // ya se corrigió para "Acumulado": un total que suma, bajo el mismo
+  // año, un ejercicio ene-dic con otro cuyo cierre es a mitad de año.
+  const porEmpresaAño   = {};
+  const cierreMesPorEmpresa = {};
+  const empresasNoCal   = new Set();
   todos.forEach(b => {
     const emp = empCanon(b);
     const año = parseInt(b.periodo);
@@ -8527,14 +8536,24 @@ function _rptResultadosEjercicio() {
     const subtotal = neto != null ? neto - (rfyt||0) - (impuesto||0) : null;
     if (!porEmpresaAño[emp]) porEmpresaAño[emp] = {};
     porEmpresaAño[emp][año] = { neto, rfyt, impuesto, subtotal };
+    if (b.esCierreNoCal) { empresasNoCal.add(emp); cierreMesPorEmpresa[emp] = b.cierreMes; }
   });
 
   const empresas = Object.keys(porEmpresaAño).sort();
+  const empresasCal   = empresas.filter(e => !empresasNoCal.has(e));
+  const empresasNoCalArr = empresas.filter(e => empresasNoCal.has(e));
   const años = [...new Set(todos.map(b => parseInt(b.periodo)).filter(a => !isNaN(a)))].sort((a,b) => a-b);
   if (!empresas.length || !años.length) { alert('No hay resultados de ejercicio cargados en los balances.'); return; }
 
   const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  // El atributo data-anio queda siempre en el año de CIERRE (p.ej. "2024"),
+  // tanto para el cuadro calendario como para el no calendario — así el
+  // filtro de año de la barra superior muestra, para un mismo año
+  // elegido, el ejercicio calendario Y el ejercicio no calendario que
+  // cierra ese año, uno junto al otro. Lo que cambia es solo el TEXTO
+  // visible del encabezado (ver thAñosNoCal más abajo).
   const thAños = años.map(a => `<th data-anio="${a}" style="text-align:right">${a}</th>`).join('');
+  const thAñosNoCal = años.map(a => `<th data-anio="${a}" style="text-align:right">${a-1}-${a}</th>`).join('');
 
   // ── Renderiza una serie de valores (uno por año) como celdas ──
   // Reusado por la fila principal (Resultado del Ejercicio) y por las 3
@@ -8557,20 +8576,26 @@ function _rptResultadosEjercicio() {
     return { celdas };
   }
 
-  const filas = empresas.map(emp => {
-    const empAttr = emp.replace(/"/g,'&quot;');
-    const serieNeto     = años.map(a => porEmpresaAño[emp][a]?.neto     ?? null);
-    const serieSubtotal = años.map(a => porEmpresaAño[emp][a]?.subtotal ?? null);
-    const serieRfyt     = años.map(a => porEmpresaAño[emp][a]?.rfyt     ?? null);
-    const serieImpuesto = años.map(a => porEmpresaAño[emp][a]?.impuesto ?? null);
+  // ── Construye las filas (principal + 3 de desagregación) de una lista
+  // de empresas — reusado para el cuadro calendario y el no calendario ──
+  function construirFilasEmpresas(listaEmpresas) {
+    return listaEmpresas.map(emp => {
+      const empAttr = emp.replace(/"/g,'&quot;');
+      const serieNeto     = años.map(a => porEmpresaAño[emp][a]?.neto     ?? null);
+      const serieSubtotal = años.map(a => porEmpresaAño[emp][a]?.subtotal ?? null);
+      const serieRfyt     = años.map(a => porEmpresaAño[emp][a]?.rfyt     ?? null);
+      const serieImpuesto = años.map(a => porEmpresaAño[emp][a]?.impuesto ?? null);
 
-    const rNeto = celdasSerie(serieNeto,     { bold: true });
-    const rSub  = celdasSerie(serieSubtotal, { muted: true });
-    const rRfyt = celdasSerie(serieRfyt,     { muted: true });
-    const rImp  = celdasSerie(serieImpuesto, { muted: true });
+      const rNeto = celdasSerie(serieNeto,     { bold: true });
+      const rSub  = celdasSerie(serieSubtotal, { muted: true });
+      const rRfyt = celdasSerie(serieRfyt,     { muted: true });
+      const rImp  = celdasSerie(serieImpuesto, { muted: true });
 
-    return `<tr data-emp="${empAttr}">
-      <td style="padding:6px 10px;font-size:10px;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb">${emp}</td>
+      const mes = cierreMesPorEmpresa[emp];
+      const sufijoCierre = mes ? ` <span style="font-size:8px;font-weight:400;color:#9ea3b8">(cierre: ${cierreLabel(mes)})</span>` : '';
+
+      return `<tr data-emp="${empAttr}">
+      <td style="padding:6px 10px;font-size:10px;font-weight:600;white-space:nowrap;border-bottom:1px solid #e5e7eb">${emp}${sufijoCierre}</td>
       ${rNeto.celdas}
     </tr>
     <tr data-emp="${empAttr}" data-sub="1">
@@ -8585,21 +8610,37 @@ function _rptResultadosEjercicio() {
       <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap;border-bottom:1px solid #e5e7eb">↳ Impuesto a las Ganancias</td>
       ${rImp.celdas}
     </tr>`;
-  }).join('');
+    }).join('');
+  }
 
-  // ── Totales por año (misma desagregación, suma de todas las empresas) ──
-  const sumaPorAño = campo => años.map(a => {
-    const vals = empresas.map(e => porEmpresaAño[e][a]?.[campo]).filter(v => v != null);
-    return vals.length ? vals.reduce((s,v) => s+v, 0) : null;
-  });
-  const totalNeto     = celdasSerie(sumaPorAño('neto'),     { bold: true });
-  const totalSubtotal = celdasSerie(sumaPorAño('subtotal'), { muted: true });
-  const totalRfyt     = celdasSerie(sumaPorAño('rfyt'),     { muted: true });
-  const totalImpuesto = celdasSerie(sumaPorAño('impuesto'), { muted: true });
+  // ── Totales por año de una lista de empresas (misma desagregación) ──
+  function construirTotalesDe(listaEmpresas) {
+    const sumaPorAño = campo => años.map(a => {
+      const vals = listaEmpresas.map(e => porEmpresaAño[e][a]?.[campo]).filter(v => v != null);
+      return vals.length ? vals.reduce((s,v) => s+v, 0) : null;
+    });
+    return {
+      neto:     celdasSerie(sumaPorAño('neto'),     { bold: true }),
+      subtotal: celdasSerie(sumaPorAño('subtotal'), { muted: true }),
+      rfyt:     celdasSerie(sumaPorAño('rfyt'),     { muted: true }),
+      impuesto: celdasSerie(sumaPorAño('impuesto'), { muted: true }),
+      serieNeto: sumaPorAño('neto'),
+    };
+  }
 
-  // KPI del último año (no se acumula entre años — ver nota en celdasSerie)
+  const filas          = construirFilasEmpresas(empresasCal);
+  const filasNoCal      = construirFilasEmpresas(empresasNoCalArr);
+  const totalesCal      = construirTotalesDe(empresasCal);
+  const totalesNoCal    = construirTotalesDe(empresasNoCalArr);
+
+  // KPI del último año — combina ambos grupos (no se acumula entre años,
+  // ver nota en celdasSerie; agregar el ejercicio más reciente de cada
+  // empresa, calendario o no, es una agregación de cartera habitual).
   const ultimoAño = años[años.length - 1];
-  const totalUltimoAño = sumaPorAño('neto')[años.length - 1];
+  const totalUltimoAño = (() => {
+    const vals = [totalesCal.serieNeto[años.length-1], totalesNoCal.serieNeto[años.length-1]].filter(v => v != null);
+    return vals.length ? vals.reduce((s,v) => s+v, 0) : null;
+  })();
   const ultColor = totalUltimoAño == null ? '#1a3a8f' : totalUltimoAño >= 0 ? '#065f46' : '#991b1b';
 
   const opcionesEmp  = empresas.map(e => `<option value="${e.replace(/"/g,'&quot;')}">${e}</option>`).join('');
@@ -8696,31 +8737,59 @@ function _rptResultadosEjercicio() {
   </div>
 
   <div class="card">
-    <div class="card-title">Resultado del Ejercicio por empresa y año</div>
+    <div class="card-title">Ejercicio económico coincidente con el año calendario</div>
     <table>
       <thead><tr><th>Empresa</th>${thAños}</tr></thead>
       <tbody id="tbody-resultados">
         ${filas}
         <tr data-emp="__total__" style="background:#f0f4ff;font-weight:700">
           <td style="padding:6px 10px;font-size:9px;font-weight:700;color:#1a3a8f">TOTAL POR AÑO</td>
-          ${totalNeto.celdas}
+          ${totalesCal.neto.celdas}
         </tr>
         <tr data-emp="__total__" data-sub="1" style="background:#f7f9ff">
           <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Resultado antes de RFyT e Impuesto a las Ganancias</td>
-          ${totalSubtotal.celdas}
+          ${totalesCal.subtotal.celdas}
         </tr>
         <tr data-emp="__total__" data-sub="1" style="background:#f7f9ff">
           <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Resultado Financiero y por Tenencia (incl. RECPAM)</td>
-          ${totalRfyt.celdas}
+          ${totalesCal.rfyt.celdas}
         </tr>
         <tr data-emp="__total__" data-sub="1" style="background:#f7f9ff">
           <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Impuesto a las Ganancias</td>
-          ${totalImpuesto.celdas}
+          ${totalesCal.impuesto.celdas}
         </tr>
       </tbody>
     </table>
     <div class="nota">Valores en pesos corrientes de cada balance (sin ajuste por inflación) · "—" = sin balance cargado para ese año · no se totaliza entre años distintos (mezclaría poder adquisitivo distinto) · Las filas tenues desagregan el Resultado del Ejercicio en: Resultado antes de RFyT e Impuesto a las Ganancias + Resultado Financiero y por Tenencia (incl. RECPAM) + Impuesto a las Ganancias (signo positivo = crédito/beneficio fiscal) — las tres suman exactamente el Resultado del Ejercicio.</div>
   </div>
+
+  ${empresasNoCalArr.length ? `
+  <div class="card">
+    <div class="card-title">Ejercicio económico no coincidente con el año calendario</div>
+    <table>
+      <thead><tr><th>Empresa</th>${thAñosNoCal}</tr></thead>
+      <tbody id="tbody-resultados-nocal">
+        ${filasNoCal}
+        <tr data-emp="__total_nocal__" style="background:#fff4ec;font-weight:700">
+          <td style="padding:6px 10px;font-size:9px;font-weight:700;color:#b5541a">TOTAL POR EJERCICIO</td>
+          ${totalesNoCal.neto.celdas}
+        </tr>
+        <tr data-emp="__total_nocal__" data-sub="1" style="background:#fff8f2">
+          <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Resultado antes de RFyT e Impuesto a las Ganancias</td>
+          ${totalesNoCal.subtotal.celdas}
+        </tr>
+        <tr data-emp="__total_nocal__" data-sub="1" style="background:#fff8f2">
+          <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Resultado Financiero y por Tenencia (incl. RECPAM)</td>
+          ${totalesNoCal.rfyt.celdas}
+        </tr>
+        <tr data-emp="__total_nocal__" data-sub="1" style="background:#fff8f2">
+          <td style="padding:3px 10px 3px 22px;font-size:8.5px;color:#6b7280;white-space:nowrap">↳ Impuesto a las Ganancias</td>
+          ${totalesNoCal.impuesto.celdas}
+        </tr>
+      </tbody>
+    </table>
+    <div class="nota">El año de cada columna es el año de CIERRE del ejercicio (p.ej. "${años[0]-1}-${años[0]}" = ejercicio cerrado en ${años[0]}) — no coincide con enero-diciembre. Separado del cuadro anterior para que el TOTAL no mezcle ejercicios de distinta extensión de tiempo bajo el mismo año. El filtro "Año" de arriba usa el año de cierre, así que al elegir un año se muestra, una junto a la otra, la columna calendario y la columna del ejercicio no calendario que cierra ese mismo año.</div>
+  </div>` : ''}
 
   <div class="footer">Dashboard Empresas Estatales · Provincia de La Rioja &nbsp;·&nbsp; <span style="font-weight:600">SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span> &nbsp;·&nbsp; ${fecha}</div>
 </div>
@@ -8735,7 +8804,7 @@ function _rptResultadosEjercicio() {
     if (info) info.textContent = partes.length ? '☰ Mostrando: ' + partes.join(' · ') : '';
   }
   function filtrarEmpresa(emp) {
-    var rows = document.querySelectorAll('#tbody-resultados tr');
+    var rows = document.querySelectorAll('tr[data-emp]');
     rows.forEach(function(tr) {
       var e = tr.getAttribute('data-emp');
       tr.style.display = (!emp || e === emp) ? '' : 'none';
@@ -32611,7 +32680,7 @@ async function loadBalanceExcel(file) {
     // Usa wsAny (primera hoja) que está disponible en este scope.
     // Recolecta las columnas con fecha para detectar período principal y comparativo.
     let periodo = '?', periodoComp = '?';
-    const _aniosCols = []; // {col, anio}
+    const _aniosCols = []; // {col, anio, mes}
     const rngAny = XLSX.utils.decode_range(wsAny['!ref'] || 'A1:H50');
     for (let r = 0; r <= Math.min(8, rngAny.e.r); r++) {
       for (let cc = 1; cc <= Math.min(8, rngAny.e.c); cc++) {
@@ -32620,14 +32689,18 @@ async function loadBalanceExcel(file) {
         let txtH = '';
         if (cell.w) txtH = String(cell.w);
         else if (typeof cell.v === 'string') txtH = cell.v;
-        let anioCol = null;
-        let mh = txtH.match(/\d{1,2}[/\-]\d{1,2}[/\-]([12]\d{3})/);
-        if (mh) anioCol = mh[1];
+        let anioCol = null, mesCol = null;
+        // DD/MM/AAAA (o DD-MM-AAAA) — capturar también el mes de cierre,
+        // no solo el año, para poder detectar ejercicios no calendario
+        // (ver esCierreNoCal más abajo) directo del Excel, sin que el
+        // usuario tenga que marcarlo a mano.
+        let mh = txtH.match(/\d{1,2}[/\-](\d{1,2})[/\-]([12]\d{3})/);
+        if (mh) { anioCol = mh[2]; mesCol = parseInt(mh[1]); }
         else { mh = txtH.match(/([12]\d{3})/); if (mh) anioCol = mh[1]; }
         if (!anioCol && typeof cell.v === 'number' && cell.v > 30000 && cell.v < 80000) {
-          try { const d = XLSX.SSF.parse_date_code(cell.v); if (d && d.y >= 2000 && d.y <= 2100) anioCol = String(d.y); } catch(eD) {}
+          try { const d = XLSX.SSF.parse_date_code(cell.v); if (d && d.y >= 2000 && d.y <= 2100) { anioCol = String(d.y); mesCol = d.m || null; } } catch(eD) {}
         }
-        if (anioCol && !_aniosCols.some(x => x.col === cc)) _aniosCols.push({ col: cc, anio: anioCol });
+        if (anioCol && !_aniosCols.some(x => x.col === cc)) _aniosCols.push({ col: cc, anio: anioCol, mes: mesCol });
       }
       if (_aniosCols.length >= 2) break;
     }
@@ -32643,6 +32716,14 @@ async function loadBalanceExcel(file) {
       }
     }
     if (periodoComp === '?' && periodo !== '?') periodoComp = String(parseInt(periodo) - 1);
+
+    // Mes de cierre del ejercicio — detectado de la misma fecha de la que
+    // se sacó el período (p.ej. "30/06/2024" → cierra en junio, ejercicio
+    // no calendario). Si no se pudo detectar el mes (el Excel solo tenía
+    // un año suelto, sin fecha completa) se asume cierre en diciembre —
+    // corregible a mano desde el Editor de Datos si no correspondiera.
+    const cierreMes     = (_aniosCols[0] && _aniosCols[0].mes) ? _aniosCols[0].mes : 12;
+    const esCierreNoCal = cierreMes !== 12;
 
     // Determinar tipo_empresa desde estructura_er
     const keys = new Set(estructura_er.map(r => r.key));
@@ -32672,8 +32753,8 @@ async function loadBalanceExcel(file) {
       empresa:       _empNombre,
       periodo,
       periodoComp,
-      esCierreNoCal: false,
-      cierreMes:     12,
+      esCierreNoCal,
+      cierreMes,
       tipo:          'Balance General / Estado de Resultados',
       tipo_empresa,
       moneda:        'ARS',
