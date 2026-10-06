@@ -35222,18 +35222,20 @@ function buildComparativoReexpESP(b, bAnt) {
     return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const curY = _periodoYear(b.periodo);
-  // Si no hay un balance separado cargado para el año anterior, usar el
-  // comparativo embebido en el propio Excel (columna "año anterior
-  // reexpresado" junto a cada rubro/total de la Situación Patrimonial) —
-  // mismo criterio que ya usa el Estado de Resultados comparado
-  // (estructura_er.valComp). Ese valor YA viene en moneda homogénea según
-  // el balance oficial, así que a diferencia del caso con bAnt (un balance
-  // nominal de otro ejercicio) no se le aplica el factor IPC.
+  // El comparativo embebido en el propio Excel (columna "año anterior
+  // reexpresado" junto a cada rubro/total de la Situación Patrimonial, tal
+  // como la cargó/certificó la empresa en su balance) tiene PRIORIDAD sobre
+  // un balance separado cargado para el año anterior: ese dato ya viene en
+  // moneda homogénea según el balance oficial, mientras que ajustar un
+  // balance nominal de otro ejercicio con el factor IPC del INDEC es apenas
+  // una estimación interna del dashboard — mismo criterio y prioridad que
+  // ya usa el Estado de Resultados comparado (estructura_er.valComp antes
+  // que el fallback con bAnt).
   const _espRows = b.estructura_esp || [];
   const _hasEspValComp = _espRows.some(r => r.valComp != null && r.valComp !== 0);
   const liqC = b.indicadores?.liquidez  || {};
   const solC = b.indicadores?.solvencia || {};
-  const antDEmbebido = (!bAnt && _hasEspValComp) ? {
+  const antDEmbebido = _hasEspValComp ? {
     aC:  liqC.activo_corriente_comp     ?? null,
     pC:  liqC.pasivo_corriente_comp     ?? null,
     aNC: solC.activo_no_corriente_comp  ?? null,
@@ -35242,37 +35244,38 @@ function buildComparativoReexpESP(b, bAnt) {
     pT:  solC.pasivo_total_comp         ?? null,
     pN:  solC.patrimonio_neto_comp      ?? null,
   } : null;
-  const antD = bAnt ? _extractPatrimonialData(bAnt) : antDEmbebido;
-  const antY = bAnt ? _periodoYear(bAnt.periodo) : null;
-  const factor = (bAnt && antD && curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
+  const usaEmbebido = !!antDEmbebido;
+  const antD = usaEmbebido ? antDEmbebido : (bAnt ? _extractPatrimonialData(bAnt) : null);
+  const antY = (!usaEmbebido && bAnt) ? _periodoYear(bAnt.periodo) : null;
+  const factor = (!usaEmbebido && antD && curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
   const adj = v => v != null ? v * factor : null;
-  const pComp = bAnt ? (bAnt.periodo || '—')
-    : (antDEmbebido ? (b.periodoComp || (curY != null ? String(curY - 1) : '—')) : null);
+  const pComp = usaEmbebido ? (b.periodoComp || (curY != null ? String(curY - 1) : '—'))
+    : (bAnt ? (bAnt.periodo || '—') : null);
   const hasComp = !!antD;
   const P = 'padding:4px 8px';
   const thS  = `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
   const thLS = `${P};font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
   const nCols = hasComp ? 4 : 3;
   const reexpNote = hasComp
-    ? (bAnt && factor !== 1
-        ? ` <span style="font-size:7px;color:var(--dim2)">×${factor.toFixed(2)} IPC</span>`
-        : (antDEmbebido ? ` <span style="font-size:7px;color:var(--dim2)">moneda homogénea</span>` : ''))
+    ? (usaEmbebido
+        ? ` <span style="font-size:7px;color:var(--dim2)">moneda homogénea</span>`
+        : (factor !== 1 ? ` <span style="font-size:7px;color:var(--dim2)">×${factor.toFixed(2)} IPC</span>` : ''))
     : '';
   // Apertura de rubros — misma fuente que _patFilasShared (estructura_esp).
-  // Con un balance anterior separado cargado, usa _detalleSeccionEsp
-  // (empareja por lbl entre b y bAnt) y le aplica el factor IPC igual que
-  // al resto de esta vista. Sin balance separado pero con comparativo
-  // embebido en el Excel, usa directamente el valComp de cada rubro (ya
-  // viene reexpresado, sin aplicar factor).
+  // Con comparativo embebido en el Excel, usa directamente el valComp de
+  // cada rubro (ya viene reexpresado, sin aplicar factor). Si no hay
+  // comparativo embebido pero sí un balance anterior separado cargado, usa
+  // _detalleSeccionEsp (empareja por lbl entre b y bAnt) y le aplica el
+  // factor IPC igual que al resto de esta vista.
   const detalle = (seccionKey) => {
-    if (bAnt) {
-      return _detalleSeccionEsp(b, bAnt, seccionKey).map(d => ({
-        lbl: d.label, cur: d.cur, ant: adj(d.ant), color: null, indent: true, bold: false, detalle: true,
+    if (usaEmbebido) {
+      return _espRows.filter(r => r.seccion === seccionKey).map(r => ({
+        lbl: r.lbl, cur: r.val, ant: r.valComp ?? null, color: null, indent: true, bold: false, detalle: true,
       }));
     }
-    if (!antDEmbebido) return [];
-    return _espRows.filter(r => r.seccion === seccionKey).map(r => ({
-      lbl: r.lbl, cur: r.val, ant: r.valComp ?? null, color: null, indent: true, bold: false, detalle: true,
+    if (!bAnt) return [];
+    return _detalleSeccionEsp(b, bAnt, seccionKey).map(d => ({
+      lbl: d.label, cur: d.cur, ant: adj(d.ant), color: null, indent: true, bold: false, detalle: true,
     }));
   };
   const rows = [
@@ -35292,6 +35295,10 @@ function buildComparativoReexpESP(b, bAnt) {
     { sep: true },
     { lbl:'Patrimonio neto',     cur: cur.pN,  ant: adj(antD?.pN),  color:'var(--pos)',indent:false, bold:true  },
     ...detalle('patrimonio_neto'),
+    { sep: true },
+    { lbl:'Total pasivo + PN',   cur: cur.tot ?? (cur.pT!=null&&cur.pN!=null ? cur.pT+cur.pN : null),
+      ant: adj(antD ? (antD.tot ?? (antD.pT!=null&&antD.pN!=null ? antD.pT+antD.pN : null)) : null),
+      color:'var(--acc)', indent:false, bold:true },
   ];
   return `<table style="width:100%;border-collapse:collapse;font-size:10px">
     <thead><tr>
