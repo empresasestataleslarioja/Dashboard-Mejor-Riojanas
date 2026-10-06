@@ -33136,21 +33136,10 @@ async function loadBalanceExcel(file) {
       : 'estandar';
 
     // ── Clave canónica: empresa_periodo (igual que applyCloudData) ──────────
-    // Eliminar TODAS las entradas previas del mismo balance antes de guardar
     const _empNombre = empresa.split('\n')[0].trim();
     const _balKey    = _empNombre + '_' + periodo;
 
-    // Limpiar entradas duplicadas: por filename antiguo y por clave empresa_periodo
-    if (_balances[file.name] && file.name !== _balKey) delete _balances[file.name];
-    Object.keys(_balances).forEach(k => {
-      if (_balances[k] && _balances[k].empresa === _empNombre &&
-          String(_balances[k].periodo) === String(periodo))
-        delete _balances[k];
-    });
-    // Si este balance se había eliminado antes, una carga nueva anula esa eliminación
-    if (typeof _removeBalancesDel === 'function') _removeBalancesDel(_balKey);
-
-    _balances[_balKey] = {
+    const nuevoBalance = {
       filename:      file.name,
       empresa:       _empNombre,
       periodo,
@@ -33172,18 +33161,70 @@ async function loadBalanceExcel(file) {
       vinculada:     _balEmpresaActiva || '',
     };
 
-    _balActivo        = _balKey;
-    _balEmpresaActiva = _balances[_balKey].empresa;
-    setBalProgress(false);
-    // FIX 8 — Advertencia si el Excel no tiene hoja de ER
-    if (!estructura_er || estructura_er.length === 0) {
-      showStorageStatus('⚠ Balance cargado sin Estado de Resultados — no se encontró hoja de ER en el Excel. Podés ingresarlo manualmente en el editor.', '#ff8c47');
+    // ── Control preventivo de duplicado por EMPRESA+PERÍODO ────────────
+    // loadBalanceArchivo() ya avisa si el NOMBRE DE ARCHIVO coincide con
+    // uno ya cargado, pero ese control se saltea justo en el caso más
+    // importante: la carga por Drive, cuyo archivo descargado casi nunca
+    // tiene el mismo nombre que la vez anterior aunque sea el MISMO
+    // balance (misma empresa y período) — y antes de este cambio, esta
+    // función pisaba ese balance existente sin preguntar nada, con solo
+    // el nombre de archivo distinto como diferencia. Acá se vuelve a
+    // chequear, pero por la identidad real del balance (empresa+período,
+    // la misma clave _balKey que usa el resto de la app), que es la que
+    // realmente importa.
+    const existente = _empNombre
+      ? Object.entries(_balances).find(([k, b]) =>
+          b && _balancePerteneceAEmpresa(b, _empNombre) && String(b.periodo) === String(periodo))
+      : null;
+    if (existente) {
+      const [keyExistente, balExistente] = existente;
+      const fechaCarga = balExistente?.cargadoEl
+        ? fmtFechaAR(balExistente.cargadoEl)
+        : balExistente?.timestamp
+        ? fmtFechaAR(new Date(balExistente.timestamp).toISOString())
+        : '—';
+      window._pendingBalExcelSave = { keyNuevo: _balKey, keyExistente, balance: nuevoBalance };
+      const msgEl = document.getElementById('bal-dup-msg');
+      if (msgEl) {
+        msgEl.style.display = '';
+        msgEl.innerHTML = `
+          <div style="padding:14px 16px;background:rgba(255,140,71,.08);
+            border:1px solid #ff8c4740;border-radius:5px;font-family:var(--mono)">
+            <div style="font-size:10px;font-weight:600;color:#ff8c47;margin-bottom:8px">
+              ⚠ Ya existe un balance cargado para esta empresa y período
+            </div>
+            <div style="font-size:9.5px;color:var(--text);line-height:1.7;margin-bottom:12px">
+              <strong>Empresa:</strong> ${balExistente.empresa}<br>
+              <strong>Período:</strong> ${balExistente.periodo}<br>
+              <strong>Método:</strong> ${balExistente.metodo || '—'}<br>
+              <strong>Fecha de carga:</strong> ${fechaCarga}
+            </div>
+            <div style="font-size:9px;color:var(--dim);margin-bottom:12px">
+              ¿Querés reemplazarlo con el nuevo archivo (${file.name})?
+            </div>
+            <div style="display:flex;gap:8px">
+              <button onclick="_confirmarCargaBalanceExcel(true)"
+                style="flex:1;padding:7px;background:rgba(100,100,80,.1);
+                border:1px solid #47e8ff40;color:var(--acc);font-family:var(--mono);
+                font-size:9.5px;border-radius:3px;cursor:pointer;font-weight:600">
+                🔄 Sí, reemplazar
+              </button>
+              <button onclick="_confirmarCargaBalanceExcel(false)"
+                style="flex:1;padding:7px;background:var(--s2);border:1px solid var(--bd2);
+                color:var(--dim);font-family:var(--mono);font-size:9.5px;
+                border-radius:3px;cursor:pointer">
+                ✕ Cancelar
+              </button>
+            </div>
+          </div>`;
+      }
+      setBalProgress(false);
+      document.getElementById('bal-empty').style.display   = Object.keys(_balances).length ? 'none' : '';
+      document.getElementById('bal-content').style.display = Object.keys(_balances).length ? '' : 'none';
+      return;
     }
-    // Poblar selectores con el universo completo antes de renderizar
-    populateSelects();
-    renderBalanceUI();
-    marcarPendienteGuardar(['balances']);
-    saveDataToLocalCache();
+
+    _guardarBalanceExcelParseado(_balKey, nuevoBalance);
 
   } catch(err) {
     setBalProgress(false);
@@ -33197,6 +33238,44 @@ async function loadBalanceExcel(file) {
         err.message.replace(/\n/g,'<br>') + '</div>';
     }
   }
+}
+
+// Guarda efectivamente el balance ya parseado bajo su clave canónica
+// (empresa_periodo), eliminando cualquier entrada previa con esa misma
+// clave o con la misma identidad empresa+período bajo otra clave.
+function _guardarBalanceExcelParseado(balKey, balance, keyExistenteAEliminar) {
+  if (keyExistenteAEliminar && keyExistenteAEliminar !== balKey) delete _balances[keyExistenteAEliminar];
+  delete _balances[balKey];
+  // Si este balance se había eliminado antes, una carga nueva anula esa eliminación
+  if (typeof _removeBalancesDel === 'function') _removeBalancesDel(balKey);
+
+  _balances[balKey] = balance;
+  _balActivo        = balKey;
+  _balEmpresaActiva = balance.empresa;
+  setBalProgress(false);
+  // FIX 8 — Advertencia si el Excel no tiene hoja de ER
+  if (!balance.estructura_er || balance.estructura_er.length === 0) {
+    showStorageStatus('⚠ Balance cargado sin Estado de Resultados — no se encontró hoja de ER en el Excel. Podés ingresarlo manualmente en el editor.', '#ff8c47');
+  }
+  // Poblar selectores con el universo completo antes de renderizar
+  populateSelects();
+  renderBalanceUI();
+  marcarPendienteGuardar(['balances']);
+  saveDataToLocalCache();
+}
+
+function _confirmarCargaBalanceExcel(reemplazar) {
+  const msgEl = document.getElementById('bal-dup-msg');
+  if (msgEl) msgEl.style.display = 'none';
+  const pending = window._pendingBalExcelSave;
+  window._pendingBalExcelSave = null;
+  if (!pending) return;
+  if (!reemplazar) {
+    setBalProgress(false);
+    renderBalanceUI();
+    return;
+  }
+  _guardarBalanceExcelParseado(pending.keyNuevo, pending.balance, pending.keyExistente);
 }
 
 // ── Punto de entrada ───────────────────────────────────────
