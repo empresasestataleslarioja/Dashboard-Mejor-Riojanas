@@ -27836,6 +27836,32 @@ function _repararActivoPasivoNoCorrienteBalances() {
   return reparados;
 }
 
+// ── Derivar liq.inventarios desde estructura_esp para balances ya
+// cargados (sin esto, solo se derivaba en el momento de leer un Excel
+// nuevo — ver parsearExcelBalance). Habilita Liquidez Seca y Rotación de
+// Inventarios para balances que ya tenían la apertura de rubros del ESP
+// guardada pero fueron parseados antes de que esta derivación existiera.
+function _derivarInventariosDesdeEstructuraEspBalances() {
+  const KW_INVENTARIOS = ['bienes de cambio','inventario','existencias','mercader'];
+  const reparados = [];
+  Object.entries(_balances || {}).forEach(([key, b]) => {
+    if (!b || !b.indicadores || !Array.isArray(b.estructura_esp) || !b.estructura_esp.length) return;
+    if (b.indicadores.liquidez?.inventarios != null) return; // no pisar un valor ya presente
+    const rubroInv = b.estructura_esp.find(r =>
+      r.seccion === 'activo_corriente' &&
+      KW_INVENTARIOS.some(k => r.lbl.toLowerCase().includes(k))
+    );
+    if (!rubroInv) return;
+    b.indicadores.liquidez.inventarios = rubroInv.val;
+    const antesLS = b.indicadores.liquidez.liquidez_seca ?? null;
+    calcularRatiosBalance(b.indicadores);
+    reparados.push({ key, empresa: b.empresa, periodo: b.periodo, inventarios: rubroInv.val,
+      liquidez_seca: { antes: antesLS, despues: b.indicadores.liquidez.liquidez_seca ?? null } });
+  });
+  if (reparados.length) console.log('[Balances] Inventarios derivados desde estructura_esp (Liquidez Seca/Rotación de Inventarios ahora calculables):', reparados);
+  return reparados;
+}
+
 // ── Eliminaciones de balances — tombstone (mismo patrón que flujos) ──────
 // eliminarBalance() antes solo borraba de _balances en memoria: la próxima
 // vez que se sincronizaba contra Sheets, el merge de "balances PDF" de más
@@ -32863,8 +32889,26 @@ function parsearExcelBalance(wb, XLSX) {
     if (!rubro.key) rubro.key = 'extra_' + rubro.fila; // campo no mapeado
   });
 
+  // ── Nuevo indicador habilitado por la apertura de rubros del ESP ──────
+  // liq.inventarios (Bienes de Cambio) antes solo se podía cargar a mano
+  // desde el Editor de Datos — sin eso, Liquidez Seca y Rotación de
+  // Inventarios quedaban "No calculable" en todos los balances cargados
+  // por Excel. Con estructura_esp ya se puede derivar automáticamente:
+  // buscar, dentro de los rubros de Activo Corriente, el que corresponda
+  // a bienes de cambio/inventario — sin pisar un valor ya cargado a mano.
+  if (ind.liquidez.inventarios == null) {
+    const KW_INVENTARIOS = ['bienes de cambio','inventario','existencias','mercader'];
+    const rubroInv = estructura_esp.find(r =>
+      r.seccion === 'activo_corriente' &&
+      KW_INVENTARIOS.some(k => r.lbl.toLowerCase().includes(k))
+    );
+    if (rubroInv) ind.liquidez.inventarios = rubroInv.val;
+  }
+
   // Calcular ratios — ver calcularRatiosBalance(), compartida con las otras
-  // 3 vías que cargan/editan indicadores de balance.
+  // 3 vías que cargan/editan indicadores de balance. Con inventarios ya
+  // completado arriba, ahora también deriva Liquidez Seca y Rotación de
+  // Inventarios automáticamente cuando antes quedaban sin calcular.
   calcularRatiosBalance(ind);
 
   return { estructura_er, estructura_esp, indicadores: ind };
@@ -35132,18 +35176,30 @@ function buildComparativoReexpESP(b, bAnt) {
   const nCols = hasComp ? 4 : 3;
   const reexpNote = hasComp && factor !== 1
     ? ` <span style="font-size:7px;color:var(--dim2)">×${factor.toFixed(2)} IPC</span>` : '';
+  // Apertura de rubros — misma fuente que _patFilasShared (estructura_esp),
+  // con el valor del período anterior reexpresado por el mismo factor IPC
+  // que ya se le aplica al resto de esta vista, para que el detalle sea
+  // comparable igual que los subtotales.
+  const detalle = (seccionKey) => _detalleSeccionEsp(b, bAnt, seccionKey).map(d => ({
+    lbl: d.label, cur: d.cur, ant: adj(d.ant), color: null, indent: true, bold: false, detalle: true,
+  }));
   const rows = [
     { lbl:'Activo corriente',    cur: cur.aC,  ant: adj(antD?.aC),  color:null,        indent:true,  bold:false },
+    ...detalle('activo_corriente'),
     { lbl:'Activo no corriente', cur: cur.aNC, ant: adj(antD?.aNC), color:null,        indent:true,  bold:false },
+    ...detalle('activo_no_corriente'),
     { sep: true },
     { lbl:'Total activo',        cur: cur.aT,  ant: adj(antD?.aT),  color:'var(--acc)',indent:false, bold:true  },
     { sep: true },
     { lbl:'Pasivo corriente',    cur: cur.pC,  ant: adj(antD?.pC),  color:'var(--neg)',indent:true,  bold:false },
+    ...detalle('pasivo_corriente'),
     { lbl:'Pasivo no corriente', cur: cur.pNC, ant: adj(antD?.pNC), color:'var(--neg)',indent:true,  bold:false },
+    ...detalle('pasivo_no_corriente'),
     { sep: true },
     { lbl:'Total pasivo',        cur: cur.pT,  ant: adj(antD?.pT),  color:'var(--neg)',indent:false, bold:true  },
     { sep: true },
     { lbl:'Patrimonio neto',     cur: cur.pN,  ant: adj(antD?.pN),  color:'var(--pos)',indent:false, bold:true  },
+    ...detalle('patrimonio_neto'),
   ];
   return `<table style="width:100%;border-collapse:collapse;font-size:10px">
     <thead><tr>
@@ -35156,13 +35212,15 @@ function buildComparativoReexpESP(b, bAnt) {
       if (f.sep) return `<tr><td colspan="${nCols}" style="height:3px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
       const fw = f.bold ? 'font-weight:700' : 'font-weight:400';
       const bg = f.bold ? 'background:var(--s2)' : '';
-      const lc = f.color ? `color:${f.color}` : f.bold ? 'color:var(--text)' : 'color:var(--dim)';
-      const ind = f.indent ? 'padding-left:20px' : '';
+      const lc = f.detalle ? 'color:var(--dim)' : f.color ? `color:${f.color}` : f.bold ? 'color:var(--text)' : 'color:var(--dim)';
+      const ind = f.detalle ? 'padding-left:34px' : f.indent ? 'padding-left:20px' : '';
+      const fsz = f.detalle ? 'font-size:9px' : '';
+      const pad = f.detalle ? '2px 8px' : P;
       return `<tr style="border-bottom:1px solid var(--bd2);${bg}">
-        <td style="${P};${ind};${fw};${lc}">${f.lbl}</td>
-        <td style="${P};text-align:right;${fw}">${fmtM(f.cur, f.color, false)}</td>
-        ${hasComp ? `<td style="${P};text-align:right">${fmtM(f.ant, f.color, true)}</td>
-        <td style="${P};text-align:right">${fmtVar(f.cur, f.ant)}</td>` : ''}
+        <td style="${pad};${ind};${fw};${fsz};${lc}">${f.detalle?'↳ ':''}${f.lbl}</td>
+        <td style="${pad};text-align:right;${fw};${fsz}">${fmtM(f.cur, f.detalle ? 'var(--dim)' : f.color, false)}</td>
+        ${hasComp ? `<td style="${pad};text-align:right;${fsz}">${fmtM(f.ant, f.color, true)}</td>
+        <td style="${pad};text-align:right;${fsz}">${fmtVar(f.cur, f.ant)}</td>` : ''}
       </tr>`;
     }).join('')}
     </tbody>
@@ -35753,6 +35811,7 @@ function renderBalanceUI() {
 
   _repararResultadoEjercicioBalances();
   if (typeof _repararActivoPasivoNoCorrienteBalances === 'function') _repararActivoPasivoNoCorrienteBalances();
+  if (typeof _derivarInventariosDesdeEstructuraEspBalances === 'function') _derivarInventariosDesdeEstructuraEspBalances();
   actualizarFiltros();     // renderiza botones empresa + período
   renderListaArchivos();
   poblarVincularSel();
@@ -40486,6 +40545,7 @@ function _parseIndicadoresDesdeFilaCloud(r) {
       capital_trabajo:     r.capital_trabajo     !== '' ? parseFloat(r.capital_trabajo)     : null,
       activo_corriente:    r.activo_corriente    !== '' ? parseFloat(r.activo_corriente)    : null,
       pasivo_corriente:    r.pasivo_corriente    !== '' ? parseFloat(r.pasivo_corriente)    : null,
+      inventarios:         (r.inventarios != null && r.inventarios !== '') ? parseFloat(r.inventarios) : null,
     },
     solvencia: {
       razon_endeudamiento: r.razon_endeudamiento !== '' ? parseFloat(r.razon_endeudamiento) : null,
@@ -40951,6 +41011,7 @@ function applyCloudData(cloud, opts) {
   if (typeof _repararActivoPasivoNoCorrienteBalances === 'function') {
     window._ultimoResumenBalances.reparadosNoCorriente = _repararActivoPasivoNoCorrienteBalances();
   }
+  if (typeof _derivarInventariosDesdeEstructuraEspBalances === 'function') _derivarInventariosDesdeEstructuraEspBalances();
 
   // Restaurar flujos_config desde Sheets
   if (Array.isArray(cloud.flujos_config) && cloud.flujos_config.length) {
@@ -41506,6 +41567,10 @@ function buildCloudPayload() {
       capital_trabajo:       liq.capital_trabajo       ?? '',
       activo_corriente:      liq.activo_corriente      ?? '',
       pasivo_corriente:      liq.pasivo_corriente      ?? '',
+      // Bienes de Cambio/Inventarios — insumo de Liquidez Seca y Rotación
+      // de Inventarios, derivado de estructura_esp cuando no se cargó a
+      // mano (ver _derivarInventariosDesdeEstructuraEspBalances).
+      inventarios:           liq.inventarios           ?? '',
       // Solvencia
       razon_endeudamiento:   sol.razon_endeudamiento   ?? '',
       deuda_patrimonio:      sol.deuda_patrimonio      ?? '',
