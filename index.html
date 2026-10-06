@@ -4334,6 +4334,16 @@ self.onmessage = async (e) => {
           Cargá un balance en Excel. El sistema identifica los estados financieros y calcula
           los indicadores de liquidez, solvencia, rentabilidad y eficiencia.
         </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 14px;
+          flex-wrap:wrap;font-size:10px;font-family:var(--mono)">
+          <span style="color:var(--dim)">🔗 Vincular a empresa:</span>
+          <select id="bal-vincular-carga-empty" onchange="_vincularCargaChange(this.value)"
+            style="font-size:10px;font-family:var(--mono);background:var(--s3);
+            border:1px solid var(--bd2);color:var(--text);padding:5px 9px;
+            border-radius:3px;min-width:200px">
+            <option value="">— sin vincular —</option>
+          </select>
+        </div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;
             background:rgba(100,100,80,.08);border:1px solid #47e8ff55;border-radius:3px;
@@ -4365,6 +4375,15 @@ self.onmessage = async (e) => {
         z-index:9100;min-width:300px;overflow:hidden;padding:10px 12px">
         <div style="font-size:8px;text-transform:uppercase;letter-spacing:.1em;
           color:var(--dim);margin-bottom:8px;font-family:var(--mono)">Cargar balance (ESP/ER) desde Google Drive</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-size:9px;color:var(--dim);font-family:var(--mono);white-space:nowrap">🔗 Vincular a:</span>
+          <select id="bal-vincular-carga-drive" onchange="_vincularCargaChange(this.value)"
+            style="font-size:9px;font-family:var(--mono);background:var(--s3);
+            border:1px solid var(--bd2);color:var(--text);padding:4px 7px;
+            border-radius:3px;flex:1;min-width:0">
+            <option value="">— sin vincular —</option>
+          </select>
+        </div>
         <div style="display:flex;align-items:center;gap:0;border:1px solid var(--bd2);border-radius:4px;overflow:hidden">
           <input id="inp-drive-bal" type="text" placeholder="Link o ID de Drive del Excel…"
             style="padding:6px 9px;background:var(--s3);border:none;color:var(--text);
@@ -11711,6 +11730,7 @@ function toggleBalanceDriveMenu(btnEl) {
     menu.style.left = r.left + 'px';
     menu.style.display = 'block';
     menu._triggerBtn = btnEl;
+    if (typeof _poblarSelectoresVincularCarga === 'function') _poblarSelectoresVincularCarga();
     document.getElementById('inp-drive-bal')?.focus();
     setTimeout(() => document.addEventListener('click', _closeBalanceDriveMenu), 10);
   }
@@ -36125,11 +36145,48 @@ function poblarVincularSel() {
     emps.map(e => `<option value="${e}">${e}</option>`).join('');
 }
 
+// Universo completo de empresas del portafolio — rubros es la fuente
+// maestra (Asignación por rubro), igual que en el resto de los
+// selectores de vinculación de balances.
+function _poblarSelectorEmpresasPortafolio(selectEl, valorActual) {
+  if (!selectEl) return;
+  const _rub = (typeof rubros !== 'undefined' && rubros) ? rubros : {};
+  const empresas = [...new Set([
+    ...Object.keys(_rub),
+    ...Object.keys(DATA.fact || {}),
+    ...Object.keys(DATA.sit  || {}),
+  ])].sort();
+  selectEl.innerHTML = '<option value="">— sin vincular —</option>' +
+    empresas.map(e => `<option value="${e}" ${valorActual===e?'selected':''}>${e}</option>`).join('');
+}
+
+// ── Vincular a empresa EN EL MOMENTO DE LA CARGA (antes de elegir el
+// archivo/link), tanto para Excel local como para Drive — fija
+// _balEmpresaActiva, que loadBalanceExcel() ya usa para completar
+// "vinculada" del balance nuevo, así que no hace falta ningún otro
+// cambio en la carga en sí: alcanza con fijarla antes de que el archivo
+// se procese. Se mantienen sincronizados ambos selectores (el del estado
+// vacío y el del popover de Drive), sea cual sea el que el usuario tocó,
+// para que no haya que elegir la empresa dos veces si usa los dos
+// caminos en la misma sesión.
+function _vincularCargaChange(valor) {
+  _balEmpresaActiva = valor || null;
+  const selEmpty = document.getElementById('bal-vincular-carga-empty');
+  const selDrive = document.getElementById('bal-vincular-carga-drive');
+  if (selEmpty && selEmpty.value !== valor) selEmpty.value = valor;
+  if (selDrive && selDrive.value !== valor) selDrive.value = valor;
+}
+function _poblarSelectoresVincularCarga() {
+  _poblarSelectorEmpresasPortafolio(document.getElementById('bal-vincular-carga-empty'), _balEmpresaActiva);
+  _poblarSelectorEmpresasPortafolio(document.getElementById('bal-vincular-carga-drive'), _balEmpresaActiva);
+}
+
 // ── Renderizar selector de balances ───────────────────────
 function renderBalanceUI() {
   const keys = Object.keys(_balances);
   document.getElementById('bal-empty').style.display   = keys.length ? 'none' : '';
   document.getElementById('bal-content').style.display = keys.length ? '' : 'none';
+  _poblarSelectoresVincularCarga();
   if (!keys.length) return;
 
   _repararResultadoEjercicioBalances();
