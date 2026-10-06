@@ -40849,6 +40849,17 @@ function applyCloudData(cloud, opts) {
               console.log('[Balances] Completados desde Sheets (local tenía fecha igual/más reciente) para ' + key + ':', completados);
               window._ultimoResumenBalances.completadosDesdeCloud.push({ key, campos: completados });
             }
+            // Misma lógica para la apertura de rubros del ESP: si esta
+            // pestaña todavía no tiene estructura_esp (por ejemplo, otra
+            // pestaña recargó el Excel y publicó después de que esta
+            // bajara por última vez), completarla desde Sheets en vez de
+            // dejarla vacía solo porque la fecha local "ganó".
+            if ((!_balances[key].estructura_esp || !_balances[key].estructura_esp.length) && r.estructura_esp_json) {
+              try {
+                const arrEsp = JSON.parse(r.estructura_esp_json);
+                if (Array.isArray(arrEsp) && arrEsp.length) _balances[key].estructura_esp = arrEsp;
+              } catch(e) {}
+            }
           }
           return;
         }
@@ -40878,6 +40889,20 @@ function applyCloudData(cloud, opts) {
             } catch(e) {}
           }
           return []; // si no hay JSON, se reconstruye desde balances_rubros abajo
+        })(),
+        // Apertura de rubros del ESP (ver estructura_esp en parsearExcelBalance)
+        // — igual que estructura_er, viaja como JSON en la misma fila de
+        // "balances". Sin esto, la próxima sincronización pisaba el balance
+        // recién cargado (con detalle) por la versión reconstruida desde
+        // Sheets (sin detalle), perdiendo la apertura de rubros del ESP.
+        estructura_esp: (function() {
+          if (r.estructura_esp_json) {
+            try {
+              const arr = JSON.parse(r.estructura_esp_json);
+              if (Array.isArray(arr)) return arr;
+            } catch(e) {}
+          }
+          return [];
         })(),
       };
       });
@@ -41537,6 +41562,9 @@ function buildCloudPayload() {
       diagnostico:           (b.diagnostico || '').slice(0, 500),
       // Estructura completa (incluye val y valComp para comparativo reexpresado)
       estructura_json:       JSON.stringify(b.estructura_er || []),
+      // Apertura de rubros del ESP (Activo/Pasivo/Patrimonio Neto) — viaja
+      // igual que estructura_json, en la misma fila de "balances".
+      estructura_esp_json:   JSON.stringify(b.estructura_esp || []),
     };
   });
 
