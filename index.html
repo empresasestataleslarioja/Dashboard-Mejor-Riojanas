@@ -32792,6 +32792,12 @@ function parsearExcelBalance(wb, XLSX) {
     // corriente", así que sin esto, buscar "total activo" podía devolver
     // el subtotal de Activo Corriente (que aparece ANTES en la hoja) en
     // vez del verdadero Total Activo — mismo caso para Pasivo.
+    // Devuelve { val, valComp }: val es el primer numérico encontrado en
+    // las columnas siguientes al label; valComp es el numérico de la
+    // columna INMEDIATAMENTE SIGUIENTE a esa (el "año anterior
+    // reexpresado" que suelen traer los balances comparativos, misma
+    // convención que ya usa el lector del Estado de Resultados para su
+    // columna comparativa).
     const buscarFilaMultiCol = (ws, maxRow, maxCol, excluir, ...keywords) => {
       for (let r = 0; r <= maxRow; r++) {
         for (let ca = 0; ca <= maxCol; ca++) {
@@ -32802,28 +32808,55 @@ function parsearExcelBalance(wb, XLSX) {
             // Buscar el primer valor numérico en las columnas siguientes
             for (let cb = ca+1; cb <= Math.min(ca+4, maxCol); cb++) {
               const cellV = ws[XLSX.utils.encode_cell({r, c: cb})];
-              if (typeof cellV?.v === 'number' && Math.abs(cellV.v) > 0) return cellV.v;
+              if (typeof cellV?.v === 'number' && Math.abs(cellV.v) > 0) {
+                const cellComp = ws[XLSX.utils.encode_cell({r, c: cb+1})];
+                const valComp  = typeof cellComp?.v === 'number' ? cellComp.v : null;
+                return { val: cellV.v, valComp };
+              }
             }
           }
         }
       }
-      return null;
+      return { val: null, valComp: null };
     };
 
     const g      = (...k) => buscarFilaMultiCol(ws, maxR, maxC, null, ...k);
     const gTotal = (...k) => buscarFilaMultiCol(ws, maxR, maxC, ['corriente'], ...k);
-    ind.liquidez.activo_corriente     = g('total activo corriente','subtotal activo corriente','total activos corrientes');
-    ind.liquidez.pasivo_corriente     = g('total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes');
-    ind.solvencia.activo_total        = gTotal('total activo','total del activo','activo total');
-    ind.solvencia.activo_no_corriente = g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total');
-    ind.solvencia.pasivo_total        = gTotal('total pasivo','total del pasivo','pasivo total');
-    ind.solvencia.pasivo_no_corriente = g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total');
-    ind.solvencia.patrimonio_neto     = g('total patrimonio','patrimonio neto','total patrimonio neto');
+    const _acR = g('total activo corriente','subtotal activo corriente','total activos corrientes');
+    const _pcR = g('total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes');
+    const _atR = gTotal('total activo','total del activo','activo total');
+    const _ancR= g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total');
+    const _ptR = gTotal('total pasivo','total del pasivo','pasivo total');
+    const _pncR= g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total');
+    const _pnR = g('total patrimonio','patrimonio neto','total patrimonio neto');
+    ind.liquidez.activo_corriente     = _acR.val;
+    ind.liquidez.pasivo_corriente     = _pcR.val;
+    ind.solvencia.activo_total        = _atR.val;
+    ind.solvencia.activo_no_corriente = _ancR.val;
+    ind.solvencia.pasivo_total        = _ptR.val;
+    ind.solvencia.pasivo_no_corriente = _pncR.val;
+    ind.solvencia.patrimonio_neto     = _pnR.val;
     // Derivar no corriente desde totales si no se encontró explícitamente
     if (ind.solvencia.activo_no_corriente == null && ind.solvencia.activo_total != null && ind.liquidez.activo_corriente != null)
       ind.solvencia.activo_no_corriente = ind.solvencia.activo_total - ind.liquidez.activo_corriente;
     if (ind.solvencia.pasivo_no_corriente == null && ind.solvencia.pasivo_total != null && ind.liquidez.pasivo_corriente != null)
       ind.solvencia.pasivo_no_corriente = ind.solvencia.pasivo_total - ind.liquidez.pasivo_corriente;
+
+    // Comparativo embebido en el propio Excel ("moneda homogénea" del año
+    // anterior) — mismo criterio que estructura_er.valComp, para que la
+    // Situación patrimonial comparada pueda mostrar el año anterior aunque
+    // no haya un balance separado cargado para ese período.
+    ind.liquidez.activo_corriente_comp     = _acR.valComp;
+    ind.liquidez.pasivo_corriente_comp     = _pcR.valComp;
+    ind.solvencia.activo_total_comp        = _atR.valComp;
+    ind.solvencia.activo_no_corriente_comp = _ancR.valComp;
+    ind.solvencia.pasivo_total_comp        = _ptR.valComp;
+    ind.solvencia.pasivo_no_corriente_comp = _pncR.valComp;
+    ind.solvencia.patrimonio_neto_comp     = _pnR.valComp;
+    if (ind.solvencia.activo_no_corriente_comp == null && ind.solvencia.activo_total_comp != null && ind.liquidez.activo_corriente_comp != null)
+      ind.solvencia.activo_no_corriente_comp = ind.solvencia.activo_total_comp - ind.liquidez.activo_corriente_comp;
+    if (ind.solvencia.pasivo_no_corriente_comp == null && ind.solvencia.pasivo_total_comp != null && ind.liquidez.pasivo_corriente_comp != null)
+      ind.solvencia.pasivo_no_corriente_comp = ind.solvencia.pasivo_total_comp - ind.liquidez.pasivo_corriente_comp;
 
     // ── Apertura de rubros (estructura_esp) ───────────────────────────
     // Recorre fila a fila buscando, en cada una, el primer texto como
@@ -32864,17 +32897,27 @@ function parsearExcelBalance(wb, XLSX) {
       if (def.fin.some(k => lblL === k || lblL.includes(k))) { seccionActual = null; continue; }
 
       // Valor: primer numérico (directo o por fórmula) en las columnas
-      // siguientes a la del label.
-      let valor = null;
+      // siguientes a la del label. valComp: numérico de la columna
+      // INMEDIATAMENTE SIGUIENTE a esa — el año anterior reexpresado que
+      // traen los balances comparativos (misma convención que
+      // estructura_er.valComp).
+      let valor = null, valColFound = -1;
       for (let cb = colLbl + 1; cb <= Math.min(colLbl + 4, maxC); cb++) {
         const cellV = ws[XLSX.utils.encode_cell({r, c: cb})];
-        if (typeof cellV?.v === 'number') { valor = cellV.v; break; }
+        if (typeof cellV?.v === 'number') { valor = cellV.v; valColFound = cb; break; }
         if (cellV?.f) {
           const ev = evalCell(ws, r, cb, new Set());
-          if (typeof ev === 'number' && ev !== 0) { valor = ev; break; }
+          if (typeof ev === 'number' && ev !== 0) { valor = ev; valColFound = cb; break; }
         }
       }
       if (valor == null) continue; // encabezado/sub-sección sin valor propio
+      let valComp = null;
+      const cellComp = ws[XLSX.utils.encode_cell({r, c: valColFound + 1})];
+      if (typeof cellComp?.v === 'number') valComp = cellComp.v;
+      else if (cellComp?.f) {
+        const evC = evalCell(ws, r, valColFound + 1, new Set());
+        if (typeof evC === 'number') valComp = evC;
+      }
 
       const lbl = _limpiarLabelExcel(labelRaw);
       // No registrar otro TOTAL/SUBTOTAL que no sea el cierre ya
@@ -32883,7 +32926,7 @@ function parsearExcelBalance(wb, XLSX) {
       if (/^(total|subtotal|sub-total|sub total)\b/i.test(lbl)) continue;
 
       ordenEsp++;
-      estructura_esp.push({ seccion: seccionActual, lbl, val: valor, fila: r + 1, orden: ordenEsp });
+      estructura_esp.push({ seccion: seccionActual, lbl, val: valor, valComp, fila: r + 1, orden: ordenEsp });
     }
   }
 
@@ -35179,25 +35222,59 @@ function buildComparativoReexpESP(b, bAnt) {
     return `<span style="color:${c};font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap">${p>=0?'▲ +':'▼ '}${Math.abs(p).toFixed(2)}%</span>`;
   };
   const curY = _periodoYear(b.periodo);
-  const antD = bAnt ? _extractPatrimonialData(bAnt) : null;
+  // Si no hay un balance separado cargado para el año anterior, usar el
+  // comparativo embebido en el propio Excel (columna "año anterior
+  // reexpresado" junto a cada rubro/total de la Situación Patrimonial) —
+  // mismo criterio que ya usa el Estado de Resultados comparado
+  // (estructura_er.valComp). Ese valor YA viene en moneda homogénea según
+  // el balance oficial, así que a diferencia del caso con bAnt (un balance
+  // nominal de otro ejercicio) no se le aplica el factor IPC.
+  const _espRows = b.estructura_esp || [];
+  const _hasEspValComp = _espRows.some(r => r.valComp != null && r.valComp !== 0);
+  const liqC = b.indicadores?.liquidez  || {};
+  const solC = b.indicadores?.solvencia || {};
+  const antDEmbebido = (!bAnt && _hasEspValComp) ? {
+    aC:  liqC.activo_corriente_comp     ?? null,
+    pC:  liqC.pasivo_corriente_comp     ?? null,
+    aNC: solC.activo_no_corriente_comp  ?? null,
+    aT:  solC.activo_total_comp         ?? null,
+    pNC: solC.pasivo_no_corriente_comp  ?? null,
+    pT:  solC.pasivo_total_comp         ?? null,
+    pN:  solC.patrimonio_neto_comp      ?? null,
+  } : null;
+  const antD = bAnt ? _extractPatrimonialData(bAnt) : antDEmbebido;
   const antY = bAnt ? _periodoYear(bAnt.periodo) : null;
-  const factor = (antD && curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
+  const factor = (bAnt && antD && curY && antY && antY < curY) ? _ipcFactor(antY, curY) : 1;
   const adj = v => v != null ? v * factor : null;
-  const pComp = bAnt ? (bAnt.periodo || '—') : null;
+  const pComp = bAnt ? (bAnt.periodo || '—')
+    : (antDEmbebido ? (b.periodoComp || (curY != null ? String(curY - 1) : '—')) : null);
   const hasComp = !!antD;
   const P = 'padding:4px 8px';
   const thS  = `${P};text-align:right;font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
   const thLS = `${P};font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);border-bottom:1px solid var(--bd);font-weight:600`;
   const nCols = hasComp ? 4 : 3;
-  const reexpNote = hasComp && factor !== 1
-    ? ` <span style="font-size:7px;color:var(--dim2)">×${factor.toFixed(2)} IPC</span>` : '';
-  // Apertura de rubros — misma fuente que _patFilasShared (estructura_esp),
-  // con el valor del período anterior reexpresado por el mismo factor IPC
-  // que ya se le aplica al resto de esta vista, para que el detalle sea
-  // comparable igual que los subtotales.
-  const detalle = (seccionKey) => _detalleSeccionEsp(b, bAnt, seccionKey).map(d => ({
-    lbl: d.label, cur: d.cur, ant: adj(d.ant), color: null, indent: true, bold: false, detalle: true,
-  }));
+  const reexpNote = hasComp
+    ? (bAnt && factor !== 1
+        ? ` <span style="font-size:7px;color:var(--dim2)">×${factor.toFixed(2)} IPC</span>`
+        : (antDEmbebido ? ` <span style="font-size:7px;color:var(--dim2)">moneda homogénea</span>` : ''))
+    : '';
+  // Apertura de rubros — misma fuente que _patFilasShared (estructura_esp).
+  // Con un balance anterior separado cargado, usa _detalleSeccionEsp
+  // (empareja por lbl entre b y bAnt) y le aplica el factor IPC igual que
+  // al resto de esta vista. Sin balance separado pero con comparativo
+  // embebido en el Excel, usa directamente el valComp de cada rubro (ya
+  // viene reexpresado, sin aplicar factor).
+  const detalle = (seccionKey) => {
+    if (bAnt) {
+      return _detalleSeccionEsp(b, bAnt, seccionKey).map(d => ({
+        lbl: d.label, cur: d.cur, ant: adj(d.ant), color: null, indent: true, bold: false, detalle: true,
+      }));
+    }
+    if (!antDEmbebido) return [];
+    return _espRows.filter(r => r.seccion === seccionKey).map(r => ({
+      lbl: r.lbl, cur: r.val, ant: r.valComp ?? null, color: null, indent: true, bold: false, detalle: true,
+    }));
+  };
   const rows = [
     { lbl:'Activo corriente',    cur: cur.aC,  ant: adj(antD?.aC),  color:null,        indent:true,  bold:false },
     ...detalle('activo_corriente'),
@@ -36065,13 +36142,27 @@ function showBalanceResult() {
   const reexpEREl  = document.getElementById('bal-reexp-er');
   const reexpESPLbl= document.getElementById('bal-reexp-esp-lbl');
   const reexpERLbl = document.getElementById('bal-reexp-er-lbl');
-  const _hasReexp = _bAnterior || (b.estructura_er||[]).some(r=>r.valComp!=null&&r.valComp!==0);
+  const _espHasValComp = (b.estructura_esp||[]).some(r=>r.valComp!=null&&r.valComp!==0);
+  const _erHasValComp  = (b.estructura_er ||[]).some(r=>r.valComp!=null&&r.valComp!==0);
+  const _hasReexp = _bAnterior || _espHasValComp || _erHasValComp;
   if (reexpWrap) reexpWrap.style.display = _hasReexp ? '' : 'none';
   if (reexpESPEl) reexpESPEl.innerHTML = buildComparativoReexpESP(b, _bAnterior);
   if (reexpEREl)  reexpEREl.innerHTML  = buildComparativoReexpER(b, _bAnterior);
-  const _lblReexp = _bAnterior ? b.periodo + ' vs ' + _bAnterior.periodo + ' (reexp.)' : b.periodo;
-  if (reexpESPLbl) reexpESPLbl.textContent = b.empresa + ' · ' + _lblReexp;
-  if (reexpERLbl)  reexpERLbl.textContent  = b.empresa + ' · ' + _lblReexp;
+  // Cada tarjeta titula con el año que REALMENTE está comparando, y no
+  // siempre es el mismo: ESP depende de un balance separado cargado para
+  // el año anterior (o, si no, de que el propio Excel traiga una columna
+  // comparativa en la hoja de Situación Patrimonial); ER además acepta el
+  // comparativo embebido en su propia hoja de Estado de Resultados, que
+  // puede estar presente aunque el de ESP no lo esté (antes ambas
+  // tarjetas mostraban el mismo título aunque mostraran años distintos).
+  const _pCompESP = _bAnterior ? _bAnterior.periodo
+    : (_espHasValComp ? (b.periodoComp || (_curPeriodoY != null ? String(_curPeriodoY - 1) : null)) : null);
+  const _pCompER = _bAnterior ? _bAnterior.periodo
+    : (_erHasValComp ? (b.periodoComp || (_curPeriodoY != null ? String(_curPeriodoY - 1) : null)) : null);
+  const _lblReexpESP = _pCompESP ? b.periodo + ' vs ' + _pCompESP + ' (reexp.)' : b.periodo;
+  const _lblReexpER  = _pCompER  ? b.periodo + ' vs ' + _pCompER  + ' (reexp.)' : b.periodo;
+  if (reexpESPLbl) reexpESPLbl.textContent = b.empresa + ' · ' + _lblReexpESP;
+  if (reexpERLbl)  reexpERLbl.textContent  = b.empresa + ' · ' + _lblReexpER;
 
   // Comparativo plurianual — Patrimonial | Resultados
   const pluriEl     = document.getElementById('bal-plurianual');
@@ -40575,6 +40666,8 @@ function _parseIndicadoresDesdeFilaCloud(r) {
       activo_corriente:    r.activo_corriente    !== '' ? parseFloat(r.activo_corriente)    : null,
       pasivo_corriente:    r.pasivo_corriente    !== '' ? parseFloat(r.pasivo_corriente)    : null,
       inventarios:         (r.inventarios != null && r.inventarios !== '') ? parseFloat(r.inventarios) : null,
+      activo_corriente_comp: _pf(r.activo_corriente_comp),
+      pasivo_corriente_comp: _pf(r.pasivo_corriente_comp),
     },
     solvencia: {
       razon_endeudamiento: r.razon_endeudamiento !== '' ? parseFloat(r.razon_endeudamiento) : null,
@@ -40585,6 +40678,11 @@ function _parseIndicadoresDesdeFilaCloud(r) {
       activo_total:        r.activo_total        !== '' ? parseFloat(r.activo_total)        : null,
       activo_no_corriente: r.activo_no_corriente !== '' && r.activo_no_corriente != null ? parseFloat(r.activo_no_corriente) : (r.activo_total!==''&&r.activo_corriente!==''&&r.activo_total!=null&&r.activo_corriente!=null ? parseFloat(r.activo_total)-parseFloat(r.activo_corriente) : null),
       pasivo_no_corriente: r.pasivo_no_corriente !== '' && r.pasivo_no_corriente != null ? parseFloat(r.pasivo_no_corriente) : (r.pasivo_total!==''&&r.pasivo_corriente!==''&&r.pasivo_total!=null&&r.pasivo_corriente!=null ? parseFloat(r.pasivo_total)-parseFloat(r.pasivo_corriente) : null),
+      activo_total_comp:        _pf(r.activo_total_comp),
+      activo_no_corriente_comp: _pf(r.activo_no_corriente_comp),
+      pasivo_total_comp:        _pf(r.pasivo_total_comp),
+      pasivo_no_corriente_comp: _pf(r.pasivo_no_corriente_comp),
+      patrimonio_neto_comp:     _pf(r.patrimonio_neto_comp),
     },
     rentabilidad: {
       roe:                      _pf(r.roe),
@@ -41609,6 +41707,17 @@ function buildCloudPayload() {
       activo_total:          sol.activo_total          ?? '',
       activo_no_corriente:   sol.activo_no_corriente   ?? '',
       pasivo_no_corriente:   sol.pasivo_no_corriente   ?? '',
+      // Comparativo embebido en el propio Excel (columna "año anterior
+      // reexpresado" de la Situación Patrimonial) — insumo de la tarjeta
+      // Situación patrimonial comparada cuando no hay un balance separado
+      // cargado para el año anterior.
+      activo_corriente_comp:     liq.activo_corriente_comp     ?? '',
+      pasivo_corriente_comp:     liq.pasivo_corriente_comp     ?? '',
+      activo_total_comp:         sol.activo_total_comp         ?? '',
+      activo_no_corriente_comp:  sol.activo_no_corriente_comp  ?? '',
+      pasivo_total_comp:         sol.pasivo_total_comp         ?? '',
+      pasivo_no_corriente_comp:  sol.pasivo_no_corriente_comp  ?? '',
+      patrimonio_neto_comp:      sol.patrimonio_neto_comp      ?? '',
       // Rentabilidad — ratios
       roe:                        ren.roe                        ?? '',
       roa:                        ren.roa                        ?? '',
