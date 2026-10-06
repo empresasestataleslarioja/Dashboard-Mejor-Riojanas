@@ -34692,6 +34692,15 @@ function elegirEmpresa(emp)  { _balEmpresaActiva = emp; elegirEmpresaSel(emp); }
 function elegirBalance(key)  { elegirPeriodoSel(key); }
 function filtrarBalances()   { actualizarFiltros(); }
 
+// Año de cierre de un período, tolerante al formato rango de los
+// ejercicios con cierre no calendario ("2021/2022" → "2022", igual que un
+// período plano "2022" → "2022") — toma el ÚLTIMO grupo de 4 dígitos, que
+// es siempre el año de cierre en ambos formatos.
+function _periodoCierreYear(periodo) {
+  const m = String(periodo || '').match(/\d{4}/g);
+  return m && m.length ? m[m.length - 1] : null;
+}
+
 // Lista de archivos cargados con opción de eliminación individual
 function renderListaArchivos() {
   const wrap  = document.getElementById('bal-lista-wrap');
@@ -34719,8 +34728,31 @@ function renderListaArchivos() {
     : filtroVinc === '__sin_vincular__' ? allKeys.filter(k => !_balances[k].vinculada)
     : allKeys.filter(k => _balances[k].vinculada === filtroVinc);
 
+  // Detectar posibles duplicados: mismo período de cierre (tolerante al
+  // formato rango "2021/2022") y la misma empresa por el matcheador
+  // difuso ya usado en el resto del dashboard — NO se borra nada acá,
+  // solo se marca visualmente para que el usuario compare y elimine el
+  // que no corresponda con el botón 🗑 de abajo (ver balances de
+  // Agroandina con "2021/2022" y "2022/2023" cargados dos veces cada uno,
+  // invisibles entre sí mientras estuvieron bajo variantes distintas del
+  // nombre de la empresa).
+  const duplicados = new Set();
+  {
+    const grupos = [];
+    allKeys.forEach(k => {
+      const b = _balances[k];
+      const y = _periodoCierreYear(b.periodo);
+      if (!b.empresa || !y) return;
+      let g = grupos.find(g => g.year === y && _mismoNombreEmpresa(g.empresaMuestra, b.empresa));
+      if (!g) { g = { empresaMuestra: b.empresa, year: y, keys: [] }; grupos.push(g); }
+      g.keys.push(k);
+    });
+    grupos.forEach(g => { if (g.keys.length > 1) g.keys.forEach(k => duplicados.add(k)); });
+  }
+
   if (cnt) cnt.textContent = keys.length + ' archivo' + (keys.length!==1?'s':'') + ' cargados'
-    + (filtroVinc ? ` (de ${allKeys.length})` : '');
+    + (filtroVinc ? ` (de ${allKeys.length})` : '')
+    + (duplicados.size ? ` · ⚠ ${duplicados.size} con posible duplicado` : '');
 
   tabla.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:10.5px">
     <thead><tr style="border-bottom:1px solid var(--bd)">
@@ -34737,9 +34769,10 @@ function renderListaArchivos() {
         const b  = _balances[k];
         const nc = b.esCierreNoCal;
         const activo = k === _balActivo;
-        return `<tr style="border-bottom:1px solid var(--bd2);background:${activo?'var(--s2)':''}">
-          <td style="padding:6px 10px;font-weight:${activo?'600':'400'}">${b.empresa}</td>
-          <td style="padding:6px 10px;font-family:var(--mono);color:${nc?'#ff8c47':'var(--text)'}">${b.periodo}${nc?' ✦':''}</td>
+        const esDup = duplicados.has(k);
+        return `<tr style="border-bottom:1px solid var(--bd2);background:${esDup?'rgba(255,140,71,.1)':(activo?'var(--s2)':'')}">
+          <td style="padding:6px 10px;font-weight:${activo?'600':'400'}">${b.empresa}${esDup?' <span title="Mismo período de cierre que otro balance de esta empresa — revisá y eliminá el que no corresponda" style="color:#ff8c47;font-size:8.5px;font-weight:700;white-space:nowrap">⚠ duplicado</span>':''}</td>
+          <td style="padding:6px 10px;font-family:var(--mono);color:${esDup?'#ff8c47':nc?'#ff8c47':'var(--text)'}">${b.periodo}${nc?' ✦':''}</td>
           <td style="padding:6px 10px;color:${nc?'#ff8c47':'var(--dim)'}">${cierreLabel(b.cierreMes||12)}</td>
           <td style="padding:6px 10px;color:var(--acc)">${b.vinculada||'—'}</td>
           <td style="padding:6px 10px;color:var(--dim);font-size:9px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.metodo||'—'}</td>
