@@ -19948,7 +19948,7 @@ function _informeEjecutivoRender(emp) {
 
   // Balances de esta empresa, ordenados por período
   const bals = Object.values(_balances)
-    .filter(b => b.empresa === emp || b.vinculada === emp)
+    .filter(b => _balancePerteneceAEmpresa(b, emp))
     .sort((a,b) => String(a.periodo).localeCompare(String(b.periodo)));
 
   // Flujos de esta empresa
@@ -21483,7 +21483,7 @@ function renderERGraficosEmpresa(emp) {
 
   // Buscar balances vinculados a esta empresa
   const bals = Object.values(_balances || {})
-    .filter(b => (b.empresa === emp || b.vinculada === emp) && b.estructura_er?.length > 0)
+    .filter(b => _balancePerteneceAEmpresa(b, emp) && b.estructura_er?.length > 0)
     .sort((a, b2) => String(a.periodo).localeCompare(String(b2.periodo)));
 
   if (!bals.length) {
@@ -24680,7 +24680,7 @@ function _mismoNombreEmpresa(a, b) {
   const target = s => String(s || '').toUpperCase().trim();
   if (target(a) === target(b)) return true;
   const normPunct = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    .replace(/\./g, '').replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   const pa = normPunct(a), pb = normPunct(b);
   if (pa === pb) return true;
   if (pa.replace(/\s+/g, '') === pb.replace(/\s+/g, '')) return true;
@@ -24691,6 +24691,22 @@ function _mismoNombreEmpresa(a, b) {
   if (ta.size === 0 || tb.size === 0 || ta.size !== tb.size) return false;
   for (const t of ta) if (!tb.has(t)) return false;
   return true;
+}
+
+// ── ¿Este balance pertenece a esta empresa del portafolio? ──────────
+// Reemplaza la comparación exacta (b.empresa === emp || b.vinculada === emp)
+// que se usaba en varios lugares para asociar un balance a su empresa del
+// portafolio — fallaba apenas el nombre tenía una variante de grafía
+// (ej. "CERDO DE LOS LLANOS S.A.U." cargado del Excel vs. "CERDO DE LOS
+// LLANOS" en el portafolio): el balance quedaba cargado y visible en el
+// detalle de archivos, pero el combo de empresas no lo contaba ni lo
+// mostraba asociado, porque esa comparación nunca pasaba de exacta a
+// "misma empresa". Usa el mismo _mismoNombreEmpresa() que ya reconcilia
+// estas variantes en el resto del dashboard (fusión de empresas, balances
+// vs. portafolio, etc.).
+function _balancePerteneceAEmpresa(b, emp) {
+  if (!b || !emp) return false;
+  return _mismoNombreEmpresa(b.empresa, emp) || _mismoNombreEmpresa(b.vinculada, emp);
 }
 
 // ── Gap detection ───────────────────────────────────────────
@@ -34141,7 +34157,7 @@ function buildComparacionBalances() {
   const empresaActiva = _balEmpresaActiva || (_balActivo ? _balances[_balActivo]?.empresa : null);
   if (!keys.length) {
     keys = empresaActiva
-      ? Object.keys(_balances).filter(k => _balances[k].empresa === empresaActiva)
+      ? Object.keys(_balances).filter(k => _balancePerteneceAEmpresa(_balances[k], empresaActiva))
       : Object.keys(_balances);
   }
 
@@ -34354,7 +34370,7 @@ function actualizarFiltros() {
   selEmp.innerHTML = '<option value="">— Seleccioná una empresa —</option>' +
     empPortafolio.map(emp => {
       const nBal = Object.values(_balances)
-        .filter(b => b.empresa === emp || b.vinculada === emp).length;
+        .filter(b => _balancePerteneceAEmpresa(b, emp)).length;
       const badge = nBal ? ` (${nBal} balance${nBal>1?'s':''})` : '';
       return `<option value="${emp}">${emp}${badge}</option>`;
     }).join('');
@@ -34379,7 +34395,7 @@ function _actualizarInfoEmpresa(emp) {
   const el = document.getElementById('bal-empresa-info');
   if (!el) return;
   if (!emp) { el.textContent = ''; return; }
-  const bals = Object.values(_balances).filter(b => b.empresa===emp || b.vinculada===emp);
+  const bals = Object.values(_balances).filter(b => _balancePerteneceAEmpresa(b, emp));
   if (!bals.length) {
     el.innerHTML = '<span style="color:#ff8c47">Sin balances cargados — hacé clic en "Cargar balance PDF"</span>';
   } else {
@@ -34395,7 +34411,7 @@ function _alertaBalFaltantesUpdate(emp) {
 
   const añoActual = new Date().getFullYear();
   const añoDesde  = 2020;
-  const bals = Object.values(_balances).filter(b => b.empresa === emp || b.vinculada === emp);
+  const bals = Object.values(_balances).filter(b => _balancePerteneceAEmpresa(b, emp));
   const añosCargados = new Set(bals.map(b => parseInt(b.periodo)).filter(n => !isNaN(n)));
 
   const faltantes = [];
@@ -34454,7 +34470,7 @@ function actualizarPeriodos() {
 
   // Balances de esta empresa (por empresa directa o vinculada)
   const bals = Object.entries(_balances)
-    .filter(([, b]) => b.empresa === _balEmpresaActiva || b.vinculada === _balEmpresaActiva)
+    .filter(([, b]) => _balancePerteneceAEmpresa(b, _balEmpresaActiva))
     .sort(([, a], [, b]) => String(a.periodo).localeCompare(String(b.periodo)));
 
   if (!bals.length) {
@@ -34474,8 +34490,7 @@ function actualizarPeriodos() {
 
   // Mantener período activo si corresponde a esta empresa
   const perteneceActivo = _balActivo &&
-    (_balances[_balActivo]?.empresa === _balEmpresaActiva ||
-     _balances[_balActivo]?.vinculada === _balEmpresaActiva);
+    _balancePerteneceAEmpresa(_balances[_balActivo], _balEmpresaActiva);
   if (!perteneceActivo) _balActivo = bals[bals.length - 1][0];
   selPer.value = _balActivo || '';
 
@@ -39189,7 +39204,7 @@ function renderDiagnosticoEmpresa(emp) {
 
   // Buscar el balance más reciente vinculado a esta empresa
   const bal = Object.values(_balances || {})
-    .filter(b => b.empresa === emp || b.vinculada === emp)
+    .filter(b => _balancePerteneceAEmpresa(b, emp))
     .sort((a, b) => String(b.periodo).localeCompare(String(a.periodo)))[0];
 
   if (!bal?.indicadores) {
