@@ -32878,55 +32878,101 @@ function parsearExcelBalance(wb, XLSX) {
       { key: 'patrimonio_neto',     inicio: ['patrimonio neto','composición del patrimonio neto','composicion del patrimonio neto'],
         fin: ['total patrimonio neto','total del patrimonio neto','patrimonio neto total'] },
     ];
-    let seccionActual = null;
-    let ordenEsp = 0;
-    for (let r = 0; r <= maxR; r++) {
-      let labelRaw = '', colLbl = -1;
+    // Recorre un rango de columnas [colMin, colMax] fila a fila, buscando
+    // en cada una el primer texto como label (dentro de ese rango) y
+    // registrando el rubro bajo la sección vigente DE ESE RANGO —
+    // independiente de cualquier otro rango que se recorra por separado.
+    // seccionesPermitidas acota qué encabezados de SECCIONES_ESP puede
+    // reconocer esta pasada (se usa para separar Activo de Pasivo+PN
+    // cuando están en bloques de columnas distintos — ver más abajo).
+    const walkEspBlock = (colMin, colMax, seccionesPermitidas) => {
+      let seccionLocal = null;
+      let orden = 0;
+      for (let r = 0; r <= maxR; r++) {
+        let labelRaw = '', colLbl = -1;
+        for (let c = colMin; c <= colMax; c++) {
+          const cell = ws[XLSX.utils.encode_cell({r, c})];
+          if (typeof cell?.v === 'string' && cell.v.trim().length >= 2) { labelRaw = cell.v.trim(); colLbl = c; break; }
+        }
+        if (!labelRaw) continue;
+        const lblL = labelRaw.toLowerCase().trim().replace(/\s+/g, ' ');
+
+        const inicioMatch = seccionesPermitidas.find(s => s.inicio.some(k => lblL === k || lblL.startsWith(k + ' ') || lblL === k + ':'));
+        if (inicioMatch) { seccionLocal = inicioMatch.key; orden = 0; continue; }
+
+        if (!seccionLocal) continue;
+        const def = seccionesPermitidas.find(s => s.key === seccionLocal);
+        if (def.fin.some(k => lblL === k || lblL.includes(k))) { seccionLocal = null; continue; }
+
+        // Valor: primer numérico (directo o por fórmula) en las columnas
+        // siguientes a la del label, sin salir del rango del bloque.
+        // valComp: numérico de la columna INMEDIATAMENTE SIGUIENTE a esa —
+        // el año anterior reexpresado que traen los balances comparativos
+        // (misma convención que estructura_er.valComp).
+        let valor = null, valColFound = -1;
+        for (let cb = colLbl + 1; cb <= Math.min(colLbl + 4, colMax); cb++) {
+          const cellV = ws[XLSX.utils.encode_cell({r, c: cb})];
+          if (typeof cellV?.v === 'number') { valor = cellV.v; valColFound = cb; break; }
+          if (cellV?.f) {
+            const ev = evalCell(ws, r, cb, new Set());
+            if (typeof ev === 'number' && ev !== 0) { valor = ev; valColFound = cb; break; }
+          }
+        }
+        if (valor == null) continue; // encabezado/sub-sección sin valor propio
+        let valComp = null;
+        if (valColFound + 1 <= colMax) {
+          const cellComp = ws[XLSX.utils.encode_cell({r, c: valColFound + 1})];
+          if (typeof cellComp?.v === 'number') valComp = cellComp.v;
+          else if (cellComp?.f) {
+            const evC = evalCell(ws, r, valColFound + 1, new Set());
+            if (typeof evC === 'number') valComp = evC;
+          }
+        }
+
+        const lbl = _limpiarLabelExcel(labelRaw);
+        // No registrar otro TOTAL/SUBTOTAL que no sea el cierre ya
+        // reconocido de esta sección (ej. un subtotal intermedio) — son
+        // agregados, no rubros individuales.
+        if (/^(total|subtotal|sub-total|sub total)\b/i.test(lbl)) continue;
+
+        orden++;
+        estructura_esp.push({ seccion: seccionLocal, lbl, val: valor, valComp, fila: r + 1, orden });
+      }
+    };
+
+    // Algunos balances presentan Activo y Pasivo+Patrimonio Neto en DOS
+    // BLOQUES DE COLUMNAS lado a lado en las mismas filas (ej.: A-C =
+    // Activo, D-F = Pasivo), en vez de uno debajo del otro — y ni siquiera
+    // tienen la misma cantidad de filas cada bloque (el cierre de Pasivo
+    // Corriente puede caer antes o después que el de Activo Corriente).
+    // Un recorrido de una sola pasada que toma "el primer texto de la
+    // fila" como único label pierde por completo el bloque de la derecha.
+    // Para detectarlo, se busca en qué columna aparece el encabezado
+    // "ACTIVO CORRIENTE" y en cuál "PASIVO CORRIENTE": si "pasivo
+    // corriente" aparece en una columna POSTERIOR a la de "activo
+    // corriente", es un layout de 2 bloques y cada uno se recorre por
+    // separado, acotado a su propio rango de columnas; si no, es el
+    // layout apilado (vertical) de siempre y se recorre una sola vez con
+    // todas las columnas y todas las secciones, igual que antes.
+    let colActivoLbl = null, colPasivoLbl = null;
+    busquedaSplit: for (let r = 0; r <= maxR; r++) {
       for (let c = 0; c <= maxC; c++) {
         const cell = ws[XLSX.utils.encode_cell({r, c})];
-        if (typeof cell?.v === 'string' && cell.v.trim().length >= 2) { labelRaw = cell.v.trim(); colLbl = c; break; }
+        if (typeof cell?.v !== 'string') continue;
+        const l = cell.v.toLowerCase().trim().replace(/\s+/g, ' ');
+        if (colActivoLbl == null && (l === 'activo corriente' || l.startsWith('activo corriente '))) colActivoLbl = c;
+        if (colPasivoLbl == null && (l === 'pasivo corriente' || l.startsWith('pasivo corriente '))) colPasivoLbl = c;
       }
-      if (!labelRaw) continue;
-      const lblL = labelRaw.toLowerCase().trim().replace(/\s+/g, ' ');
+      if (colActivoLbl != null && colPasivoLbl != null) break busquedaSplit;
+    }
 
-      const inicioMatch = SECCIONES_ESP.find(s => s.inicio.some(k => lblL === k || lblL.startsWith(k + ' ') || lblL === k + ':'));
-      if (inicioMatch) { seccionActual = inicioMatch.key; ordenEsp = 0; continue; }
-
-      if (!seccionActual) continue;
-      const def = SECCIONES_ESP.find(s => s.key === seccionActual);
-      if (def.fin.some(k => lblL === k || lblL.includes(k))) { seccionActual = null; continue; }
-
-      // Valor: primer numérico (directo o por fórmula) en las columnas
-      // siguientes a la del label. valComp: numérico de la columna
-      // INMEDIATAMENTE SIGUIENTE a esa — el año anterior reexpresado que
-      // traen los balances comparativos (misma convención que
-      // estructura_er.valComp).
-      let valor = null, valColFound = -1;
-      for (let cb = colLbl + 1; cb <= Math.min(colLbl + 4, maxC); cb++) {
-        const cellV = ws[XLSX.utils.encode_cell({r, c: cb})];
-        if (typeof cellV?.v === 'number') { valor = cellV.v; valColFound = cb; break; }
-        if (cellV?.f) {
-          const ev = evalCell(ws, r, cb, new Set());
-          if (typeof ev === 'number' && ev !== 0) { valor = ev; valColFound = cb; break; }
-        }
-      }
-      if (valor == null) continue; // encabezado/sub-sección sin valor propio
-      let valComp = null;
-      const cellComp = ws[XLSX.utils.encode_cell({r, c: valColFound + 1})];
-      if (typeof cellComp?.v === 'number') valComp = cellComp.v;
-      else if (cellComp?.f) {
-        const evC = evalCell(ws, r, valColFound + 1, new Set());
-        if (typeof evC === 'number') valComp = evC;
-      }
-
-      const lbl = _limpiarLabelExcel(labelRaw);
-      // No registrar otro TOTAL/SUBTOTAL que no sea el cierre ya
-      // reconocido de esta sección (ej. un subtotal intermedio) — son
-      // agregados, no rubros individuales.
-      if (/^(total|subtotal|sub-total|sub total)\b/i.test(lbl)) continue;
-
-      ordenEsp++;
-      estructura_esp.push({ seccion: seccionActual, lbl, val: valor, valComp, fila: r + 1, orden: ordenEsp });
+    if (colActivoLbl != null && colPasivoLbl != null && colPasivoLbl > colActivoLbl) {
+      const SECC_ACTIVO = SECCIONES_ESP.filter(s => s.key === 'activo_corriente' || s.key === 'activo_no_corriente');
+      const SECC_PASIVO_PN = SECCIONES_ESP.filter(s => s.key !== 'activo_corriente' && s.key !== 'activo_no_corriente');
+      walkEspBlock(0, colPasivoLbl - 1, SECC_ACTIVO);
+      walkEspBlock(colPasivoLbl, maxC, SECC_PASIVO_PN);
+    } else {
+      walkEspBlock(0, maxC, SECCIONES_ESP);
     }
   }
 
