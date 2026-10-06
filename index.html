@@ -32305,6 +32305,12 @@ function parsearExcelBalance(wb, XLSX) {
 
   // Estado y estructura
   const estructura_er = [];
+  // Apertura de rubros del Estado de Situación Patrimonial dentro de
+  // Activo Corriente/No Corriente, Pasivo Corriente/No Corriente y
+  // Patrimonio Neto — pedido del usuario para la exposición del ESP en
+  // Análisis de Balances. Antes solo se guardaban los subtotales
+  // (ind.liquidez/solvencia); ver bloque "if (snSP)" más abajo.
+  const estructura_esp = [];
   const ind = {
     liquidez:     { activo_corriente:null, pasivo_corriente:null, liquidez_corriente:null, capital_trabajo:null },
     solvencia:    { activo_total:null, activo_no_corriente:null, pasivo_total:null, pasivo_no_corriente:null,
@@ -32397,53 +32403,53 @@ function parsearExcelBalance(wb, XLSX) {
                                'ganancia del ejercicio','pérdida del ejercicio'],
   };
 
+  // ── Evaluador de fórmulas simples para celdas sin valor cacheado ──────
+  // Necesario cuando Excel no guardó los valores calculados (val=undefined).
+  // Compartido entre el walker del ER y el del ESP (ver estructura_esp).
+  const evalCell = (ws, row, col, visitados) => {
+    const key = XLSX.utils.encode_cell({r: row, c: col});
+    if (!visitados) visitados = new Set();
+    if (visitados.has(key)) return 0; // evitar recursión circular
+    visitados.add(key);
+
+    const cell = ws[key];
+    if (!cell) return 0;
+    if (typeof cell.v === 'number') return cell.v;
+    if (!cell.f) return 0;
+
+    const formula = cell.f;
+
+    // SUM(B6:B8) → sumar rango
+    const mSum = formula.match(/SUM\(([A-Z])(\d+):([A-Z])(\d+)\)/i);
+    if (mSum) {
+      const c1 = mSum[1].toUpperCase().charCodeAt(0) - 65;
+      const r1 = parseInt(mSum[2]) - 1;
+      const c2 = mSum[3].toUpperCase().charCodeAt(0) - 65;
+      const r2 = parseInt(mSum[4]) - 1;
+      let s = 0;
+      for (let ri = r1; ri <= r2; ri++)
+        for (let ci = c1; ci <= c2; ci++)
+          s += evalCell(ws, ri, ci, new Set(visitados));
+      return s;
+    }
+
+    // Referencias individuales: =B6+B7, =B12+B13+B14, =+B15+B16
+    let result = 0;
+    const refs = formula.matchAll(/([+-]?)([A-Z])(\d+)/gi);
+    let hasRef = false;
+    for (const m of refs) {
+      hasRef = true;
+      const sign = m[1] === '-' ? -1 : 1;
+      const c    = m[2].toUpperCase().charCodeAt(0) - 65;
+      const r    = parseInt(m[3]) - 1;
+      result += sign * evalCell(ws, r, c, new Set(visitados));
+    }
+    return hasRef ? result : 0;
+  };
+
   if (snER) {
     const ws  = wb.Sheets[snER];
     const rng = XLSX.utils.decode_range(ws['!ref'] || 'A1:D50');
-
-    // ── Evaluador de fórmulas simples para celdas sin valor cacheado ──────
-    // Necesario cuando Excel no guardó los valores calculados (val=undefined)
-    const evalCell = (ws, row, col, visitados) => {
-      const key = XLSX.utils.encode_cell({r: row, c: col});
-      if (!visitados) visitados = new Set();
-      if (visitados.has(key)) return 0; // evitar recursión circular
-      visitados.add(key);
-
-      const cell = ws[key];
-      if (!cell) return 0;
-      if (typeof cell.v === 'number') return cell.v;
-      if (!cell.f) return 0;
-
-      const formula = cell.f;
-      const colLetraCel = String.fromCharCode(65 + col);
-
-      // SUM(B6:B8) → sumar rango
-      const mSum = formula.match(/SUM\(([A-Z])(\d+):([A-Z])(\d+)\)/i);
-      if (mSum) {
-        const c1 = mSum[1].toUpperCase().charCodeAt(0) - 65;
-        const r1 = parseInt(mSum[2]) - 1;
-        const c2 = mSum[3].toUpperCase().charCodeAt(0) - 65;
-        const r2 = parseInt(mSum[4]) - 1;
-        let s = 0;
-        for (let ri = r1; ri <= r2; ri++)
-          for (let ci = c1; ci <= c2; ci++)
-            s += evalCell(ws, ri, ci, new Set(visitados));
-        return s;
-      }
-
-      // Referencias individuales: =B6+B7, =B12+B13+B14, =+B15+B16
-      let result = 0;
-      const refs = formula.matchAll(/([+-]?)([A-Z])(\d+)/gi);
-      let hasRef = false;
-      for (const m of refs) {
-        hasRef = true;
-        const sign = m[1] === '-' ? -1 : 1;
-        const c    = m[2].toUpperCase().charCodeAt(0) - 65;
-        const r    = parseInt(m[3]) - 1;
-        result += sign * evalCell(ws, r, c, new Set(visitados));
-      }
-      return hasRef ? result : 0;
-    };
 
     // 1. Detectar columna de labels y columna de datos automáticamente
     // Soporta: labels en col A + datos en col B/C/D (más común)
@@ -32739,11 +32745,17 @@ function parsearExcelBalance(wb, XLSX) {
     const maxR = rng.e.r, maxC = rng.e.c;
 
     // Buscar en TODAS las columnas (soporta estructura de 2 columnas como ARAUCO)
-    const buscarFilaMultiCol = (ws, maxRow, maxCol, ...keywords) => {
+    // excluir: labels que NO deben considerarse aunque matcheen un keyword
+    // — necesario porque "total activo" es substring de "total activo
+    // corriente", así que sin esto, buscar "total activo" podía devolver
+    // el subtotal de Activo Corriente (que aparece ANTES en la hoja) en
+    // vez del verdadero Total Activo — mismo caso para Pasivo.
+    const buscarFilaMultiCol = (ws, maxRow, maxCol, excluir, ...keywords) => {
       for (let r = 0; r <= maxRow; r++) {
         for (let ca = 0; ca <= maxCol; ca++) {
           const cellA = ws[XLSX.utils.encode_cell({r, c: ca})];
           const lbl   = String(cellA?.v||'').toLowerCase().trim();
+          if (excluir && excluir.some(x => lbl.includes(x))) continue;
           if (keywords.some(k => lbl.includes(k))) {
             // Buscar el primer valor numérico en las columnas siguientes
             for (let cb = ca+1; cb <= Math.min(ca+4, maxCol); cb++) {
@@ -32756,12 +32768,13 @@ function parsearExcelBalance(wb, XLSX) {
       return null;
     };
 
-    const g = (...k) => buscarFilaMultiCol(ws, maxR, maxC, ...k);
+    const g      = (...k) => buscarFilaMultiCol(ws, maxR, maxC, null, ...k);
+    const gTotal = (...k) => buscarFilaMultiCol(ws, maxR, maxC, ['corriente'], ...k);
     ind.liquidez.activo_corriente     = g('total activo corriente','subtotal activo corriente','total activos corrientes');
     ind.liquidez.pasivo_corriente     = g('total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes');
-    ind.solvencia.activo_total        = g('total activo','total del activo','activo total');
+    ind.solvencia.activo_total        = gTotal('total activo','total del activo','activo total');
     ind.solvencia.activo_no_corriente = g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total');
-    ind.solvencia.pasivo_total        = g('total pasivo','total del pasivo','pasivo total');
+    ind.solvencia.pasivo_total        = gTotal('total pasivo','total del pasivo','pasivo total');
     ind.solvencia.pasivo_no_corriente = g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total');
     ind.solvencia.patrimonio_neto     = g('total patrimonio','patrimonio neto','total patrimonio neto');
     // Derivar no corriente desde totales si no se encontró explícitamente
@@ -32769,6 +32782,67 @@ function parsearExcelBalance(wb, XLSX) {
       ind.solvencia.activo_no_corriente = ind.solvencia.activo_total - ind.liquidez.activo_corriente;
     if (ind.solvencia.pasivo_no_corriente == null && ind.solvencia.pasivo_total != null && ind.liquidez.pasivo_corriente != null)
       ind.solvencia.pasivo_no_corriente = ind.solvencia.pasivo_total - ind.liquidez.pasivo_corriente;
+
+    // ── Apertura de rubros (estructura_esp) ───────────────────────────
+    // Recorre fila a fila buscando, en cada una, el primer texto como
+    // label y el primer valor numérico en las columnas siguientes (mismo
+    // criterio multi-columna que buscarFilaMultiCol, pero en orden de
+    // fila en vez de buscar un keyword puntual) — agrupa cada rubro bajo
+    // la sección vigente (Activo/Pasivo Corriente y No Corriente,
+    // Patrimonio Neto), delimitada por sus propias filas de encabezado y
+    // de total/subtotal de cierre.
+    const SECCIONES_ESP = [
+      { key: 'activo_corriente',    inicio: ['activo corriente'],
+        fin: ['total activo corriente','subtotal activo corriente','total activos corrientes'] },
+      { key: 'activo_no_corriente', inicio: ['activo no corriente'],
+        fin: ['total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total'] },
+      { key: 'pasivo_corriente',    inicio: ['pasivo corriente'],
+        fin: ['total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes'] },
+      { key: 'pasivo_no_corriente', inicio: ['pasivo no corriente'],
+        fin: ['total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total'] },
+      { key: 'patrimonio_neto',     inicio: ['patrimonio neto','composición del patrimonio neto','composicion del patrimonio neto'],
+        fin: ['total patrimonio neto','total del patrimonio neto','patrimonio neto total'] },
+    ];
+    let seccionActual = null;
+    let ordenEsp = 0;
+    for (let r = 0; r <= maxR; r++) {
+      let labelRaw = '', colLbl = -1;
+      for (let c = 0; c <= maxC; c++) {
+        const cell = ws[XLSX.utils.encode_cell({r, c})];
+        if (typeof cell?.v === 'string' && cell.v.trim().length >= 2) { labelRaw = cell.v.trim(); colLbl = c; break; }
+      }
+      if (!labelRaw) continue;
+      const lblL = labelRaw.toLowerCase().trim().replace(/\s+/g, ' ');
+
+      const inicioMatch = SECCIONES_ESP.find(s => s.inicio.some(k => lblL === k || lblL.startsWith(k + ' ') || lblL === k + ':'));
+      if (inicioMatch) { seccionActual = inicioMatch.key; ordenEsp = 0; continue; }
+
+      if (!seccionActual) continue;
+      const def = SECCIONES_ESP.find(s => s.key === seccionActual);
+      if (def.fin.some(k => lblL === k || lblL.includes(k))) { seccionActual = null; continue; }
+
+      // Valor: primer numérico (directo o por fórmula) en las columnas
+      // siguientes a la del label.
+      let valor = null;
+      for (let cb = colLbl + 1; cb <= Math.min(colLbl + 4, maxC); cb++) {
+        const cellV = ws[XLSX.utils.encode_cell({r, c: cb})];
+        if (typeof cellV?.v === 'number') { valor = cellV.v; break; }
+        if (cellV?.f) {
+          const ev = evalCell(ws, r, cb, new Set());
+          if (typeof ev === 'number' && ev !== 0) { valor = ev; break; }
+        }
+      }
+      if (valor == null) continue; // encabezado/sub-sección sin valor propio
+
+      const lbl = _limpiarLabelExcel(labelRaw);
+      // No registrar otro TOTAL/SUBTOTAL que no sea el cierre ya
+      // reconocido de esta sección (ej. un subtotal intermedio) — son
+      // agregados, no rubros individuales.
+      if (/^(total|subtotal|sub-total|sub total)\b/i.test(lbl)) continue;
+
+      ordenEsp++;
+      estructura_esp.push({ seccion: seccionActual, lbl, val: valor, fila: r + 1, orden: ordenEsp });
+    }
   }
 
   // Mapear rubros del ER a ind.rentabilidad usando labels conocidos
@@ -32793,7 +32867,7 @@ function parsearExcelBalance(wb, XLSX) {
   // 3 vías que cargan/editan indicadores de balance.
   calcularRatiosBalance(ind);
 
-  return { estructura_er, indicadores: ind };
+  return { estructura_er, estructura_esp, indicadores: ind };
 }
 
 async function loadBalanceExcel(file) {
@@ -32822,7 +32896,7 @@ async function loadBalanceExcel(file) {
     const wb  = XLSX.read(buf, { type: 'array', cellFormula: true, cellText: false, cellDates: true });
 
     // Parser estructural: lee fórmulas y estructura fila a fila
-    const { estructura_er, indicadores } = parsearExcelBalance(wb, XLSX);
+    const { estructura_er, estructura_esp, indicadores } = parsearExcelBalance(wb, XLSX);
 
     if (!estructura_er.length && !Object.values(indicadores.solvencia).some(v=>v!=null)) {
       // Fallback: convertir a texto y usar parser genérico
@@ -32939,6 +33013,7 @@ async function loadBalanceExcel(file) {
       moneda:        'ARS',
       indicadores,
       estructura_er,
+      estructura_esp,
       diagnostico:   [],
       alertas:       [],
       textoRaw:      '',
@@ -34541,19 +34616,49 @@ function _extractPatrimonialData(b) {
 }
 
 // Definición compartida de filas — usada por ambas cards para garantizar alineación exacta
-function _patFilasShared(cur, ant) {
+// Apertura de rubros de una sección del ESP (activo_corriente,
+// activo_no_corriente, pasivo_corriente, pasivo_no_corriente,
+// patrimonio_neto), extraída al cargar el Excel (ver estructura_esp en
+// parsearExcelBalance). Balances cargados ANTES de este cambio no tienen
+// estructura_esp — devuelve [] para esos casos, sin romper nada; hay que
+// recargar el Excel para que aparezca el detalle.
+function _detalleSeccionEsp(b, bAnt, seccionKey) {
+  const curRubros = (b?.estructura_esp || []).filter(r => r.seccion === seccionKey);
+  if (!curRubros.length) return [];
+  const antRubros = bAnt?.estructura_esp || [];
+  return curRubros.map(r => ({
+    label: r.lbl,
+    nivel: 2,
+    detalle: true,
+    cur: r.val,
+    ant: (antRubros.find(a => a.seccion === seccionKey && a.lbl === r.lbl) || {}).val ?? null,
+  }));
+}
+
+// incluirDetalle: solo buildEstadoPatrimonial lo pasa en true — las otras
+// dos vistas que reusan esta función (buildAnalisisHorizontal,
+// buildESPConParticipacion) siguen exactamente igual que antes.
+function _patFilasShared(cur, ant, b, bAnt, incluirDetalle) {
+  const det = incluirDetalle
+    ? (seccionKey) => _detalleSeccionEsp(b, bAnt, seccionKey)
+    : () => [];
   return [
     { label:'ACTIVO',              seccion:true,  cur:null,    ant:null     },
     { label:'Activo corriente',    nivel:1,       cur:cur.aC,  ant:ant?.aC  },
+    ...det('activo_corriente'),
     { label:'Activo no corriente', nivel:1,       cur:cur.aNC, ant:ant?.aNC },
+    ...det('activo_no_corriente'),
     { label:'TOTAL ACTIVO',        total:true,    cur:cur.aT,  ant:ant?.aT,  colorVal:'#47e8ff' },
     { separador:true },
     { label:'PASIVO',              seccion:true,  cur:null,    ant:null     },
     { label:'Pasivo corriente',    nivel:1,       cur:cur.pC,  ant:ant?.pC  },
+    ...det('pasivo_corriente'),
     { label:'Pasivo no corriente', nivel:1,       cur:cur.pNC, ant:ant?.pNC },
+    ...det('pasivo_no_corriente'),
     { label:'TOTAL PASIVO',        total:true,    cur:cur.pT,  ant:ant?.pT,  colorVal:cur.pT > 0 ? 'var(--neg)' : 'var(--text)' },
     { separador:true },
     { label:'PATRIMONIO NETO',     total:true,    cur:cur.pN,  ant:ant?.pN,  colorVal:cur.pN >= 0 ? 'var(--pos)' : 'var(--neg)' },
+    ...det('patrimonio_neto'),
     { separador:true },
     { label:'TOTAL PASIVO + PN',   total:true,    cur:cur.tot, ant:ant?.tot, colorVal:'#47e8ff' },
   ];
@@ -34562,7 +34667,7 @@ function _patFilasShared(cur, ant) {
 function buildEstadoPatrimonial(b, bAnt) {
   const cur  = _extractPatrimonialData(b);
   const ant  = bAnt ? _extractPatrimonialData(bAnt) : null;
-  const filas = _patFilasShared(cur, ant);
+  const filas = _patFilasShared(cur, ant, b, bAnt, true);
 
   const fmt  = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
   const fmtM = (v, color) => {
@@ -34587,14 +34692,15 @@ function buildEstadoPatrimonial(b, bAnt) {
     <tbody>
     ${filas.map(f => {
       if (f.separador) return `<tr><td colspan="${nCols}" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
-      const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+      const indent = f.detalle ? 'padding-left:38px' : f.nivel === 1 ? 'padding-left:22px' : '';
       const weight = (f.seccion || f.total) ? 'font-weight:600' : 'font-weight:400';
-      const lc = f.colorVal ? `color:${f.colorVal}` : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
+      const fsz = f.detalle ? 'font-size:9.5px' : '';
+      const lc = f.detalle ? 'color:var(--dim)' : f.colorVal ? `color:${f.colorVal}` : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
       const bgRow = f.seccion ? 'background:var(--s2)' : '';
       return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
-        <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
-        <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.colorVal) : (f.seccion ? '' : '<span style="color:var(--dim)">—</span>')}</td>
-        ${ant ? `<td style="padding:5px 8px;text-align:right;opacity:.65">${f.ant != null ? fmtM(f.ant) : (f.seccion ? '' : '<span style="color:var(--dim)">—</span>')}</td>` : ''}
+        <td style="padding:${f.detalle?'3px 8px':'5px 8px'};${indent};${weight};${fsz};${lc}">${f.detalle?'↳ ':''}${f.label}</td>
+        <td style="padding:${f.detalle?'3px 8px':'5px 8px'};text-align:right;${fsz}">${f.cur != null ? fmtM(f.cur, f.detalle ? 'var(--dim)' : f.colorVal) : (f.seccion ? '' : '<span style="color:var(--dim)">—</span>')}</td>
+        ${ant ? `<td style="padding:${f.detalle?'3px 8px':'5px 8px'};text-align:right;opacity:.65;${fsz}">${f.ant != null ? fmtM(f.ant) : (f.seccion ? '' : '<span style="color:var(--dim)">—</span>')}</td>` : ''}
       </tr>`;
     }).join('')}
     </tbody>
