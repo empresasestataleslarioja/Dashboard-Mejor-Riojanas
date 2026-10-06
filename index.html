@@ -34714,7 +34714,7 @@ function buildAnalisisHorizontal(b, bAnt) {
   }
   const cur  = _extractPatrimonialData(b);
   const ant  = _extractPatrimonialData(bAnt);
-  const filas = _patFilasShared(cur, ant);
+  const filas = _patFilasShared(cur, ant, b, bAnt, true);
 
   const fmtPct = (c, a) => {
     if (c == null || a == null || a === 0) return null;
@@ -34735,9 +34735,11 @@ function buildAnalisisHorizontal(b, bAnt) {
     ${filas.map(f => {
       if (f.separador) return `<tr><td colspan="2" style="height:6px;border-bottom:1px solid var(--bd)"></td></tr>`;
       const weight = (f.seccion || f.total) ? 'font-weight:600' : 'font-weight:400';
-      const lc = f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
+      const lc = f.detalle ? 'color:var(--dim)' : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
       const bgRow = f.seccion ? 'background:var(--s2)' : '';
-      const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+      const indent = f.detalle ? 'padding-left:38px' : f.nivel === 1 ? 'padding-left:22px' : '';
+      const fsz = f.detalle ? 'font-size:9.5px' : '';
+      const pad = f.detalle ? '3px 8px' : '5px 8px';
 
       if (f.seccion) {
         // Fila de sección: solo label, celda de variación vacía — mantiene alineación
@@ -34754,7 +34756,7 @@ function buildAnalisisHorizontal(b, bAnt) {
         const pos = pct >= 0;
         const c   = pos ? 'var(--pos)' : 'var(--neg)';
         const arrow = pos ? '▲' : '▼';
-        pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:11px">${arrow} ${Math.abs(pct).toFixed(2)}%</span>`;
+        pctHtml = `<span style="color:${c};font-family:var(--mono);font-size:${f.detalle?'9.5px':'11px'}">${arrow} ${Math.abs(pct).toFixed(2)}%</span>`;
         const barW = Math.min(Math.abs(pct), 100);
         barHtml = `<div style="margin-top:3px;height:4px;border-radius:2px;background:var(--bd2);overflow:hidden">
           <div style="height:100%;width:${barW}%;background:${c};border-radius:2px;transition:width .3s"></div>
@@ -34762,8 +34764,8 @@ function buildAnalisisHorizontal(b, bAnt) {
       }
 
       return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
-        <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
-        <td style="padding:5px 8px;text-align:right;min-width:90px">${pctHtml}${barHtml}</td>
+        <td style="padding:${pad};${indent};${weight};${fsz};${lc}">${f.detalle?'↳ ':''}${f.label}</td>
+        <td style="padding:${pad};text-align:right;min-width:90px;${fsz}">${pctHtml}${barHtml}</td>
       </tr>`;
     }).join('')}
     </tbody>
@@ -34773,7 +34775,7 @@ function buildAnalisisHorizontal(b, bAnt) {
 // ── ESP con columna de participación % ─────────────────────
 function buildESPConParticipacion(b, bAnt) {
   const cur   = _extractPatrimonialData(b);
-  const filas = _patFilasShared(cur, null);
+  const filas = _patFilasShared(cur, null, b, null, true);
   const fmt   = new Intl.NumberFormat('es-AR', { maximumFractionDigits:0 });
   const fmtM  = (v, color) => {
     if (v == null) return '<span style="color:var(--dim)">—</span>';
@@ -34811,19 +34813,21 @@ function buildESPConParticipacion(b, bAnt) {
     <tbody>
     ${filas.map(f => {
       if (f.separador) return `<tr><td colspan="${nCols}" style="height:5px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)"></td></tr>`;
-      const indent = f.nivel === 1 ? 'padding-left:22px' : '';
+      const indent = f.detalle ? 'padding-left:38px' : f.nivel === 1 ? 'padding-left:22px' : '';
       const weight = (f.seccion || f.total) ? 'font-weight:600' : 'font-weight:400';
-      const lc = f.colorVal ? `color:${f.colorVal}` : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
+      const lc = f.detalle ? 'color:var(--dim)' : f.colorVal ? `color:${f.colorVal}` : f.seccion ? 'color:var(--acc)' : f.total ? 'color:var(--text)' : 'color:var(--dim)';
       const bgRow = f.seccion ? 'background:var(--s2)' : f.total && f.colorVal === 'var(--pos)' ? 'background:var(--pos-lt)' : '';
+      const fsz = f.detalle ? 'font-size:9.5px' : '';
+      const pad = f.detalle ? '3px 8px' : '5px 8px';
       if (f.seccion) {
         return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
           <td colspan="${nCols}" style="padding:4px 8px;${weight};${lc}">${f.label}</td>
         </tr>`;
       }
-      const pctColor = f.colorVal === 'var(--pos)' ? 'var(--pos)' : f.colorVal === 'var(--neg)' ? 'var(--neg)' : 'var(--acc)';
+      const pctColor = f.detalle ? 'var(--dim)' : f.colorVal === 'var(--pos)' ? 'var(--pos)' : f.colorVal === 'var(--neg)' ? 'var(--neg)' : 'var(--acc)';
       return `<tr style="border-bottom:1px solid var(--bd2);${bgRow}">
-        <td style="padding:5px 8px;${indent};${weight};${lc}">${f.label}</td>
-        <td style="padding:5px 8px;text-align:right">${f.cur != null ? fmtM(f.cur, f.colorVal) : '<span style="color:var(--dim)">—</span>'}</td>
+        <td style="padding:${pad};${indent};${weight};${fsz};${lc}">${f.detalle?'↳ ':''}${f.label}</td>
+        <td style="padding:${pad};text-align:right;${fsz}">${f.cur != null ? fmtM(f.cur, f.detalle ? 'var(--dim)' : f.colorVal) : '<span style="color:var(--dim)">—</span>'}</td>
         ${fmtPart(f.cur, pctColor)}
       </tr>`;
     }).join('')}
