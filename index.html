@@ -36026,11 +36026,25 @@ function showBalanceResult() {
   const espLbl= document.getElementById('bal-esp-lbl');
   const erLbl = document.getElementById('bal-er-lbl');
 
-  // Buscar balance anterior de la misma empresa
+  // Historial completo de balances de la empresa (para los comparativos
+  // plurianuales, que sí muestran toda la serie disponible)
   const _balsEmpresa = Object.values(_balances)
-    .filter(bx => bx.empresa === b.empresa && bx !== b)
+    .filter(bx => _balancePerteneceAEmpresa(bx, b.empresa) && bx !== b)
     .sort((a, bx) => String(a.periodo).localeCompare(String(bx.periodo)));
-  const _bAnterior = _balsEmpresa.length > 0 ? _balsEmpresa[_balsEmpresa.length - 1] : null;
+
+  // Buscar el balance INMEDIATAMENTE anterior de la misma empresa — el
+  // comparativo (reexpresión IPC incluida) solo es válido entre años
+  // continuos: "anterior" es exactamente el año previo al que se está
+  // visualizando (la base), nunca un balance posterior ni uno con un salto
+  // de años. El código anterior tomaba el último de _balsEmpresa (ordenada
+  // ascendente) — si b no era el balance más reciente cargado, eso podía
+  // devolver un período POSTERIOR a b como si fuera el "anterior" (ej.
+  // viendo 2023 con un 2025 cargado pero sin 2024, mostraba "2023 vs 2025"
+  // como si 2025 fuera el previo).
+  const _curPeriodoY = _periodoYear(b.periodo);
+  const _bAnterior = _curPeriodoY != null
+    ? _balsEmpresa.find(bx => _periodoYear(bx.periodo) === _curPeriodoY - 1) || null
+    : null;
 
   const ahEl  = document.getElementById('bal-analisis-horizontal');
   const ahLbl = document.getElementById('bal-ah-lbl');
