@@ -34763,6 +34763,71 @@ function _extractPatrimonialData(b) {
   return { aC, aNC, aT, pC, pNC, pT, pN, tot };
 }
 
+// ── Emparejar rubros de una sección del ESP entre dos balances ──────
+// Las empresas no siempre usan el mismo texto para un rubro de un año al
+// otro (ej.: "Inversiones" → "Inversiones Financieras", "Cuentas por
+// Cobrar" → "Cuentas por Cobrar a Clientes en Moneda...", o directamente
+// un renombre total como "Deudas Comerciales" → "Proveedores de Bienes y
+// Servicios") — un emparejado por igualdad exacta de label deja esos
+// rubros sin comparativo (celda "—") aunque el balance anterior sí tenga
+// el valor, bajo otro nombre. Se intenta, en orden:
+//   1) Igualdad exacta normalizada (mayúsculas/acentos/puntuación).
+//   2) Coincidencia por prefijo de palabras completas: un label es
+//      prefijo del otro (cubre un label más detallado/calificado del
+//      mismo rubro, ej. "Inversiones" prefijo de "Inversiones
+//      Financieras") — un set de palabras sin exigir orden sería
+//      demasiado permisivo acá, porque términos genéricos del rubro
+//      financiero ("otros", "pasivos", "deudas") aparecen sueltos dentro
+//      de labels de rubros totalmente distintos.
+//   3) Posicional: SOLO si ambos años tienen exactamente la misma
+//      cantidad de rubros en esa sección, empareja por el mismo orden
+//      relativo dentro de la sección — cubre un renombre total sin
+//      relación léxica, asumiendo que la empresa mantiene el mismo orden
+//      de ítems de un año al otro (la hipótesis razonable cuando las
+//      cantidades coinciden exactamente).
+// Cada rubro del balance anterior se usa como máximo una vez.
+function _normRubroLbl(s) {
+  return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function _matchRubroAnterior(curRubros, antRubros) {
+  const usados = new Set();
+  const resultado = new Map();
+
+  curRubros.forEach(r => {
+    const idx = antRubros.findIndex((a, i) => !usados.has(i) && _normRubroLbl(a.lbl) === _normRubroLbl(r.lbl));
+    if (idx >= 0) { usados.add(idx); resultado.set(r, antRubros[idx]); }
+  });
+  // Coincidencia por PREFIJO de palabras completas (no por set de
+  // palabras sin orden): "Inversiones" es prefijo de "Inversiones
+  // Financieras"; "Cuentas por Cobrar" es prefijo de "Cuentas por Cobrar
+  // a Clientes en Moneda..." — cubre un label más detallado/calificado
+  // del MISMO rubro. Un set de palabras sin exigir orden/prefijo es
+  // demasiado permisivo acá: términos genéricos del rubro financiero
+  // ("otros", "pasivos", "deudas") aparecen sueltos dentro de labels de
+  // rubros totalmente distintos (ej. "Otros Pasivos" quedaría contenido,
+  // por palabras sueltas, dentro de "Préstamos y Otros Pasivos
+  // Financieros", que en realidad es un rubro distinto) — exigir que sea
+  // PREFIJO evita ese falso positivo.
+  curRubros.filter(r => !resultado.has(r)).forEach(r => {
+    const nr = _normRubroLbl(r.lbl);
+    if (!nr) return;
+    const idx = antRubros.findIndex((a, i) => {
+      if (usados.has(i)) return false;
+      const na = _normRubroLbl(a.lbl);
+      if (!na) return false;
+      return na === nr || na.startsWith(nr + ' ') || nr.startsWith(na + ' ');
+    });
+    if (idx >= 0) { usados.add(idx); resultado.set(r, antRubros[idx]); }
+  });
+  if (curRubros.length === antRubros.length) {
+    curRubros.forEach((r, i) => {
+      if (!resultado.has(r) && !usados.has(i) && antRubros[i]) { usados.add(i); resultado.set(r, antRubros[i]); }
+    });
+  }
+  return resultado;
+}
+
 // Definición compartida de filas — usada por ambas cards para garantizar alineación exacta
 // Apertura de rubros de una sección del ESP (activo_corriente,
 // activo_no_corriente, pasivo_corriente, pasivo_no_corriente,
@@ -34773,13 +34838,14 @@ function _extractPatrimonialData(b) {
 function _detalleSeccionEsp(b, bAnt, seccionKey) {
   const curRubros = (b?.estructura_esp || []).filter(r => r.seccion === seccionKey);
   if (!curRubros.length) return [];
-  const antRubros = bAnt?.estructura_esp || [];
+  const antRubros = (bAnt?.estructura_esp || []).filter(r => r.seccion === seccionKey);
+  const match = _matchRubroAnterior(curRubros, antRubros);
   return curRubros.map(r => ({
     label: r.lbl,
     nivel: 2,
     detalle: true,
     cur: r.val,
-    ant: (antRubros.find(a => a.seccion === seccionKey && a.lbl === r.lbl) || {}).val ?? null,
+    ant: match.get(r)?.val ?? null,
   }));
 }
 
