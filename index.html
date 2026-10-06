@@ -4345,6 +4345,20 @@ self.onmessage = async (e) => {
           <input type="file" id="file-bal" accept=".pdf" style="display:none" disabled
             onchange="loadBalanceArchivo(this.files[0])">
         </div>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+          <span style="font-size:9px;color:var(--dim);white-space:nowrap">o desde Google Drive:</span>
+          <input id="inp-drive-bal" type="text" placeholder="Link o ID de Drive del Excel (ESP/ER)…"
+            style="flex:1;max-width:320px;padding:7px 10px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:10px;border-radius:3px"
+            onkeydown="if(event.key==='Enter')importarBalanceDrive()">
+          <button onclick="importarBalanceDrive()"
+            style="padding:7px 14px;background:rgba(71,200,255,.08);border:1px solid #47e8ff55;
+            color:var(--acc);font-family:var(--mono);font-size:10px;border-radius:3px;cursor:pointer;white-space:nowrap"
+            title="Leer el balance Excel desde Google Drive usando el bridge configurado — mismo parser que la carga manual">
+            📂 Drive
+          </button>
+        </div>
+        <div id="imp-drive-bal-msg" style="font-size:9px;color:var(--dim);margin-top:6px;text-align:center"></div>
         <div id="bal-error-msg" style="display:none;max-width:520px;margin:14px auto 0"></div>
       </div>
 
@@ -11609,6 +11623,55 @@ function importarGeneralDrive() {
   const setMsg = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c || 'var(--dim)'; } };
   const raw = input ? input.value.trim() : '';
   _importarDriveGenerico(raw, setMsg, () => { if (input) input.value = ''; });
+}
+
+// ── Importar balance (Excel con ESP/ER) desde Google Drive ────────────
+// Mismo mecanismo que importarFlujoDrive()/_importarDriveGenerico(): el
+// bridge ya expone ?action=getFile&fileId=... y devuelve el archivo en
+// base64 — el navegador nunca le pega directo a Drive, así que no hay
+// problema de CORS. Se construye un File sintético con esos bytes y se
+// lo pasa a loadBalanceArchivo(), la misma función que usa la carga
+// manual — así hereda gratis el chequeo de archivo duplicado y el mismo
+// parser (parsearExcelBalance) que detecta empresa/período/cierre.
+function importarBalanceDrive() {
+  const input = document.getElementById('inp-drive-bal');
+  const msgEl = document.getElementById('imp-drive-bal-msg');
+  const setMsg = (t, c) => { if (msgEl) { msgEl.textContent = t; msgEl.style.color = c || 'var(--dim)'; } };
+
+  const raw = input ? input.value.trim() : '';
+  if (!raw) { setMsg('⚠ Ingresá el link o ID del archivo de Drive', 'var(--neg)'); return; }
+
+  const fileId = _extraerDriveId(raw);
+  if (!fileId) { setMsg('⚠ No se reconoció el link. Usá el link "Compartir" de Drive o el ID directo.', 'var(--neg)'); return; }
+
+  const bridgeUrl = (typeof _cloudUrl !== 'undefined' && _cloudUrl) ? _cloudUrl : null;
+  if (!bridgeUrl) { setMsg('⚠ Configurá el bridge en ⚙ Sheets primero.', 'var(--neg)'); return; }
+
+  setMsg('⏳ Descargando archivo desde Drive…', 'var(--dim)');
+
+  const url = bridgeUrl + '?action=getFile&fileId=' + encodeURIComponent(fileId);
+  fetch(url)
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) throw new Error(res.error || 'Error al leer el archivo de Drive');
+
+      const filename = res.filename || (fileId + '.xlsx');
+      const ext = filename.split('.').pop().toLowerCase();
+      if (ext !== 'xlsx' && ext !== 'xls') {
+        throw new Error('El archivo de Drive no es un Excel (.xlsx/.xls) — se esperaba el balance con el ESP y el ER.');
+      }
+
+      const bstr  = atob(res.data);
+      const bytes = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) bytes[i] = bstr.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const file = new File([blob], filename, { type: blob.type });
+
+      setMsg('✓ Archivo leído desde Drive: ' + filename, 'var(--pos)');
+      if (input) input.value = '';
+      loadBalanceArchivo(file);
+    })
+    .catch(err => setMsg('✗ ' + err.message, 'var(--neg)'));
 }
 
 // Acceso directo desde la topbar (botón "📂 Drive" junto a "📥 Importar") —
