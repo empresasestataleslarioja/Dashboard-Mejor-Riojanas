@@ -41504,6 +41504,31 @@ function applyCloudData(cloud, opts) {
         })(),
       };
       });
+
+      // Reconciliar borrados/depurados hechos desde OTRO dispositivo: hasta
+      // acá el merge es "agregar si falta, conservar si existe" — nunca
+      // "sacar si ya no está en Sheets". El tombstone de _delMapBal solo
+      // protege la eliminación hecha por ESTE MISMO dispositivo; una
+      // eliminación o fusión de duplicados hecha en otro dispositivo nunca
+      // llegaba acá, así que una pestaña con caché local vieja podía quedarse
+      // para siempre mostrando balances que ya no existen en Sheets (caso
+      // real reportado: en incógnito —sin nada local que proteger— la
+      // cantidad de balances coincide con Sheets; en una pestaña normal con
+      // caché vieja, no). Solo se hace si no hay balances locales sin
+      // publicar todavía (podrían ser justo los que "faltan" en esta vuelta
+      // porque el otro dispositivo nunca los vio) y si Sheets no devolvió
+      // una lista sospechosamente más chica que la local (señal de una
+      // respuesta parcial/rota del bridge, no de borrados reales).
+      if (!_seccionPendiente('balances')) {
+        const _keysCloud = new Set(cloud.balances.filter(r => r.empresa && r.periodo).map(r => r.empresa + '_' + r.periodo));
+        const _keysLocal = Object.keys(_balances);
+        const _soloLocal = _keysLocal.filter(k => !_keysCloud.has(k));
+        const _respuestaSospechosa = _keysLocal.length > 0 && _keysCloud.size < _keysLocal.length * 0.5;
+        if (_soloLocal.length && !_respuestaSospechosa) {
+          _soloLocal.forEach(k => delete _balances[k]);
+          console.log(`[Balances] ${_soloLocal.length} balance(s) ya no están en Sheets — se quitaron de esta pestaña:`, _soloLocal);
+        }
+      }
     } // fin else (restaurar desde Sheets)
   }
 
