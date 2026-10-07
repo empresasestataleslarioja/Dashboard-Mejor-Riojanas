@@ -1973,7 +1973,7 @@ self.onmessage = async (e) => {
 <main class="main">
   <div class="topbar">
     <!-- ══ TOPBAR — tres zonas sin superposición ══════════════ -->
-    <div class="topbar-row1" style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:0;padding:0 10px;height:42px">
+    <div class="topbar-row1" style="display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:0;padding:0 10px;height:42px">
 
       <!-- ZONA A: Título (ancho fijo al contenido) -->
       <div style="display:flex;align-items:center;gap:8px;padding-right:10px;border-right:1px solid var(--bd);flex-shrink:0">
@@ -2081,7 +2081,7 @@ self.onmessage = async (e) => {
 
         <div class="tba-sep"></div>
 
-        <!-- Estado: años · gap · save indicator · auto-sync · Sheets -->
+        <!-- Estado: años · gap -->
         <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
           <div id="meta-years" class="meta-tag hi" style="cursor:default">—</div>
           <div id="gap-badge" onclick="openGapModal()" title="Datos faltantes"
@@ -2089,18 +2089,28 @@ self.onmessage = async (e) => {
             color:#ff8c47;background:rgba(255,140,71,.08);font-size:8px;cursor:pointer;white-space:nowrap">
             ⚠ <span id="gap-count">0</span>
           </div>
-          <div id="save-indicator" style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap">—</div>
-          <button id="btn-autosync-toggle" onclick="_toggleAutoSync()"
-            title="Auto-sync activo"
-            style="padding:1px 5px;background:none;border:1px solid rgba(71,255,180,.3);
-            color:#1a9e68;font-family:var(--mono);font-size:8px;border-radius:3px;cursor:pointer">🔄</button>
-          <div id="cloud-status-txt-top" style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
-          <div id="storage-status" style="display:none;font-size:8px;font-family:var(--mono)"></div>
         </div>
 
       </div><!-- /zona B -->
 
-      <!-- ZONA C: Usuario (ancho fijo, nunca se superpone) -->
+      <!-- ZONA C: Sync (auto-sync · Sheets) + Usuario — ancho fijo, SIEMPRE
+           visible (nunca dentro del scroll horizontal de zona B) para que
+           pausar auto-sync y leer el estado de Sheets no dependa de
+           encontrar una barra con scroll sin indicador visible — bug real
+           reportado: en una ventana angosta, este estado quedaba empujado
+           fuera de pantalla por los botones de zona B. -->
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;padding-left:8px;border-left:1px solid var(--bd)">
+        <div id="save-indicator" style="font-size:9px;color:var(--dim);font-family:var(--mono);white-space:nowrap">—</div>
+        <button id="btn-autosync-toggle" onclick="_toggleAutoSync()"
+          title="Auto-sync activo — click para pausar"
+          style="padding:3px 7px;background:rgba(71,255,180,.1);border:1px solid rgba(71,255,180,.35);
+          color:#1a9e68;font-family:var(--mono);font-size:9.5px;font-weight:600;border-radius:3px;
+          cursor:pointer;white-space:nowrap;height:24px">🔄 Auto</button>
+        <div id="cloud-status-txt-top" style="font-size:9px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
+        <div id="storage-status" style="display:none;font-size:9px;font-family:var(--mono)"></div>
+      </div>
+
+      <!-- ZONA D: Usuario (ancho fijo, nunca se superpone) -->
       <div style="flex-shrink:0;padding-left:8px;border-left:1px solid var(--bd)">
         <button id="btn-user-fixed" onclick="toggleUserPanel()"
           title="Sesión y usuarios"
@@ -42735,8 +42745,10 @@ function _toggleAutoSync() {
   _autoSyncEnabled = !_autoSyncEnabled;
   const btn = document.getElementById('btn-autosync-toggle');
   if (btn) {
-    btn.textContent = _autoSyncEnabled ? '🔄 Auto' : '⏸ Auto';
-    btn.style.color = _autoSyncEnabled ? '#2ecc8a' : 'var(--dim)';
+    btn.textContent = _autoSyncEnabled ? '🔄 Auto' : '⏸ Pausado';
+    btn.style.color       = _autoSyncEnabled ? '#1a9e68' : '#ff8c47';
+    btn.style.background  = _autoSyncEnabled ? 'rgba(71,255,180,.1)' : 'rgba(255,140,71,.12)';
+    btn.style.borderColor = _autoSyncEnabled ? 'rgba(71,255,180,.35)' : 'rgba(255,140,71,.4)';
     btn.title = _autoSyncEnabled
       ? 'Auto-sync activo — click para pausar'
       : 'Auto-sync pausado — click para activar';
