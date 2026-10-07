@@ -42447,26 +42447,43 @@ function _saveDataToLocalCacheInmediato() {
     _er_detalle:   DATA.er || {},
     autoridades:   DATA.autoridades || [],
   };
-  try {
-    const snap = { ..._snapBase, _balances: _balancesLivianoParaCache(), savedAt: nowAR() };
-    localStorage.setItem(LS_KEY, JSON.stringify(snap));
-    actualizarIndicadorGuardado(snap.savedAt);
-    // Sheets es la fuente de verdad — disparar sync automático tras cada cambio
-    try { _dispararAutoSync(); } catch(e2) {}
-  } catch(e) {
-    if (e.name === 'QuotaExceededError') {
-      // Último recurso: ni siquiera la versión liviana de los balances
-      // entra — guardar el resto del dataset igual, sin balances, para no
-      // perder TODO lo demás (fact/sit/transferencias/etc. siguen
-      // disponibles offline aunque los balances no).
-      try {
-        const snapSinBalances = { ..._snapBase, _balances: [], savedAt: nowAR() };
-        localStorage.setItem(LS_KEY, JSON.stringify(snapSinBalances));
-        actualizarIndicadorGuardado(snapSinBalances.savedAt);
-      } catch(e2) {}
-      showStorageStatus('⚠ Almacenamiento local lleno — el navegador no tiene más espacio disponible (localStorage). Los datos se mantienen en memoria pero no se guardarán al cerrar la pestaña. Para liberar espacio: Configuración del sitio → Borrar datos del sitio, o exportá los datos antes de cerrar.', '#ff8c47');
+  // Recorte progresivo si no entra en la cuota de localStorage: cada nivel
+  // quita una sección más, de la más pesada/reconstruible desde Sheets a la
+  // más liviana. Antes esto era todo-o-nada (solo se probaba sin balances):
+  // si el verdadero peso extra venía de OTRA sección (transferencias con
+  // años de registros, o ER mensual detallado de varias empresas), el
+  // guardado completo igual fallaba y se perdía TODO (ni siquiera
+  // fact/sit/notas/config sobrevivían). Todas las secciones recortadas acá
+  // se reconstruyen solas en la próxima sincronización porque Sheets ya las
+  // tiene — no se pierde nada, solo no sobrevive el cierre de ESTA pestaña
+  // hasta el próximo sync.
+  const _nivelesRecorte = [
+    {},
+    { _balances: [] },
+    { _balances: [], transferencias: [] },
+    { _balances: [], transferencias: [], _er_mensual: {}, _er_detalle: {} },
+    { _balances: [], transferencias: [], _er_mensual: {}, _er_detalle: {}, _flujos: {}, _flujos_config: {} },
+  ];
+  for (let i = 0; i < _nivelesRecorte.length; i++) {
+    try {
+      const snap = { ..._snapBase, _balances: _balancesLivianoParaCache(), savedAt: nowAR(), ..._nivelesRecorte[i] };
+      localStorage.setItem(LS_KEY, JSON.stringify(snap));
+      actualizarIndicadorGuardado(snap.savedAt);
+      if (i === 0) {
+        // Sheets es la fuente de verdad — disparar sync automático tras cada cambio
+        try { _dispararAutoSync(); } catch(e2) {}
+      } else {
+        const recortado = Object.keys(_nivelesRecorte[i]).join(', ');
+        console.warn(`[LR] Cache local: se guardó recortando (${recortado}) por falta de espacio — se vuelve a bajar de Sheets en el próximo sync.`);
+        showStorageStatus('⚠ Almacenamiento local casi lleno — se guardó una versión recortada (algunas secciones se vuelven a descargar de Sheets al abrir). Para liberar espacio: Configuración del sitio → Borrar datos del sitio.', '#ff8c47');
+      }
+      return;
+    } catch(e) {
+      if (e.name !== 'QuotaExceededError') return; // otro tipo de error — no insistir
+      // si es el último nivel, caer al aviso de abajo; si no, probar el siguiente
     }
   }
+  showStorageStatus('⚠ Almacenamiento local lleno — el navegador no tiene más espacio disponible (localStorage). Los datos se mantienen en memoria pero no se guardarán al cerrar la pestaña. Para liberar espacio: Configuración del sitio → Borrar datos del sitio, o exportá los datos antes de cerrar.', '#ff8c47');
 }
 
 // _saveDataToLocalCacheInmediato() serializa TODO el dataset local (fact,
