@@ -40486,6 +40486,7 @@ async function syncSoloTransferencias() {
     alert('Configurá la URL de Google Sheets primero (⚙ Sheets).');
     return;
   }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
 
   const _transVacia2 = t => !t.beneficiario && !t.saf && !t.organismo && !t.importe;
   const transRows0 = (DATA.transferencias || []).filter(t => !_transVacia2(t));
@@ -40574,7 +40575,9 @@ async function syncSoloTransferencias() {
 // ── Funciones por módulo ─────────────────────────────────────────────
 
 async function syncSoloBalances() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
   if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
   const payload = buildCloudPayload();
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando balances…'; ind.style.color = '#47e8ff'; }
@@ -40587,7 +40590,9 @@ async function syncSoloBalances() {
 }
 
 async function syncSoloFlujos() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
   if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
   const payload = buildCloudPayload();
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando flujos…'; ind.style.color = '#47e8ff'; }
@@ -40600,7 +40605,9 @@ async function syncSoloFlujos() {
 }
 
 async function syncSoloPersonal() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
   if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
   const payload = buildCloudPayload();
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando personal…'; ind.style.color = '#47e8ff'; }
@@ -40655,24 +40662,30 @@ async function _chequearConflictoSync() {
   return null;
 }
 
-async function syncToCloud(nota) {
-  if (isReadonlyUser()) {
-    showStorageStatus('⚠ Usuario de solo lectura — sin permisos de escritura', '#ff8c47');
-    return;
-  }
-  if (!_cloudUrl) {
-    showStorageStatus('⚠ Configurá la URL de Sheets en ⚙ Sheets', '#ff8c47');
-    return;
-  }
-
-  // ── Guardia de conflicto multi-dispositivo ────────────────────────
-  // Antes de publicar (reemplaza secciones completas en Sheets), verificar
-  // que esta pestaña esté al día. Si otro dispositivo publicó después de
-  // la última vez que esta pestaña bajó datos, publicar ahora pisaría ese
-  // cambio con una copia local vieja — caso real reportado: una carga de
-  // ER mensual hecha desde un dispositivo fue pisada por el auto-sync de
-  // otro que todavía tenía la versión anterior en memoria.
-  const esAuto = nota === 'Auto-sync';
+// ── Guardia de conflicto multi-dispositivo — compartida por TODOS los
+// caminos de publicación ──────────────────────────────────────────
+// Antes de publicar (reemplaza secciones completas en Sheets), verificar
+// que esta pestaña esté al día. Si otro dispositivo publicó después de
+// la última vez que esta pestaña bajó datos, publicar ahora pisaría ese
+// cambio con una copia local vieja — caso real reportado: una carga de
+// ER mensual hecha desde un dispositivo fue pisada por el auto-sync de
+// otro que todavía tenía la versión anterior en memoria.
+//
+// Esta función (extraída de syncToCloud) es la MISMA que usan las
+// publicaciones por módulo (syncSoloBalances, syncSoloTransferencias,
+// syncSoloFlujos, syncSoloPersonal) — antes esos 4 caminos publicaban
+// directo, sin este chequeo en absoluto: un conflicto real no los
+// bloqueaba ni avisaba nada, simplemente pisaba Sheets en silencio. Caso
+// real reportado: "Publicar ahora" (syncToCloud, con el chequeo) marcaba
+// conflicto, pero "Publicar solo balances" (sin el chequeo) publicaba
+// igual sin preguntar — no porque resolviera el conflicto, sino porque
+// nunca lo detectaba.
+//
+// Devuelve true si está en condiciones de publicar (sin conflicto, o el
+// conflicto se resolvió solo, o el usuario eligió publicar igual);
+// false si hay que cancelar la publicación (el llamador debe retornar
+// sin publicar).
+async function _resolverConflictoAntesDePublicar(esAuto) {
   let conflicto = await _chequearConflictoSync();
 
   // ── Reintento automático (bajar, fusionar y reintentar) ───────────
@@ -40714,7 +40727,7 @@ async function syncToCloud(nota) {
         ind.style.color = '#ff8c47';
       }
       console.warn(`[Sync] Auto-sync cancelado — conflicto persiste tras reintentar: Sheets tiene datos más nuevos de ${quien} (${cuando}) que esta pestaña no vio.`);
-      return;
+      return false;
     }
     const seguir = confirm(
       `⚠ Hay cambios más recientes en Sheets\n\n` +
@@ -40725,10 +40738,25 @@ async function syncToCloud(nota) {
     );
     if (!seguir) {
       showStorageStatus('Publicación cancelada — actualizá la página para traer los cambios más recientes.', '#ff8c47');
-      return;
+      return false;
     }
     console.warn(`[Sync] Usuario eligió publicar igual pese al conflicto detectado (${quien}, ${cuando}).`);
   }
+  return true;
+}
+
+async function syncToCloud(nota) {
+  if (isReadonlyUser()) {
+    showStorageStatus('⚠ Usuario de solo lectura — sin permisos de escritura', '#ff8c47');
+    return;
+  }
+  if (!_cloudUrl) {
+    showStorageStatus('⚠ Configurá la URL de Sheets en ⚙ Sheets', '#ff8c47');
+    return;
+  }
+
+  const esAuto = nota === 'Auto-sync';
+  if (!(await _resolverConflictoAntesDePublicar(esAuto))) return;
 
   const btn = document.getElementById('btn-sync-write');
   if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
