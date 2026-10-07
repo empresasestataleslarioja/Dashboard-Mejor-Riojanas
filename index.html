@@ -42534,6 +42534,15 @@ function actualizarIndicadorGuardado(isoDate, extra) {
 if (typeof _autoSyncTimer === 'undefined')   var _autoSyncTimer = null;
 if (typeof AUTOSYNC_DELAY === 'undefined')   var AUTOSYNC_DELAY = 5000;
 if (typeof _autoSyncEnabled === 'undefined') var _autoSyncEnabled = true;
+// Se pone en true recién cuando termina la bajada inicial desde Sheets al
+// abrir el dashboard (o de entrada, si no hay bridge configurado — no hay
+// nada que esperar). Mientras sea false, _dispararAutoSync() no debe
+// publicar nada: reportado como bug real — distintos dispositivos
+// mostraban distintos balances cargados (algunos con duplicados y otros
+// sin ellos) porque un dispositivo podía llegar a publicar su caché local
+// ANTES de haber bajado la versión más reciente de Sheets, pisando ahí
+// cambios que otro dispositivo ya había publicado.
+if (typeof _syncInicialCompletado === 'undefined') var _syncInicialCompletado = false;
 
 function _toggleAutoSync() {
   _autoSyncEnabled = !_autoSyncEnabled;
@@ -42553,6 +42562,15 @@ function _dispararAutoSync() {
   if (typeof _autoSyncEnabled === 'undefined' || !_autoSyncEnabled) return;
   if (!_cloudUrl) return; // sin configuración no hay auto-sync
   if (isReadonlyUser()) return;
+  // Esperar a que termine la bajada inicial desde Sheets al abrir el
+  // dashboard antes de poder publicar nada — ver _syncInicialCompletado.
+  // Sin esto, cargar un balance (u otro cambio) en los primeros segundos
+  // podía disparar un auto-sync que subiera la caché local ANTES de bajar
+  // la versión más reciente de Sheets.
+  if (typeof _syncInicialCompletado !== 'undefined' && !_syncInicialCompletado) {
+    setTimeout(_dispararAutoSync, 500);
+    return;
+  }
   clearTimeout(_autoSyncTimer);
   _autoSyncTimer = setTimeout(async () => {
     // No sincronizar si hay diálogo de duplicados SIDIF pendiente
@@ -43161,19 +43179,33 @@ setTimeout(() => {
   try { _backfillOrganismoTransferencias(); _renderSafOrganismoEstado(); } catch(e) {}
   arrancar();
 
-  // Si Sheets está configurado, sincronizar automáticamente al abrir
-  // Sheets es la fuente de verdad — siempre prevalece sobre localStorage
+  // Si Sheets está configurado, sincronizar automáticamente al abrir —
+  // Sheets es la fuente de verdad, siempre prevalece sobre localStorage.
+  // Esta bajada es la PRIMERA función del dashboard al entrar: hasta que
+  // termine, _syncInicialCompletado queda en false y _dispararAutoSync()
+  // no publica nada (ver más abajo) — evita que la caché local de este
+  // dispositivo (potencialmente vieja, o con balances que otro
+  // dispositivo ya resolvió) pise Sheets antes de bajar la versión más
+  // reciente. Reportado como bug real: distintos dispositivos mostraban
+  // distintos balances cargados, algunos con duplicados y otros sin ellos.
   if (_cloudUrl) {
     const ind = document.getElementById('save-indicator');
     if (ind) { ind.textContent = '⟳ Actualizando desde Sheets…'; ind.style.color = '#47e8ff'; }
-    syncFromCloud(true).then(() => {
+    syncFromCloud(true, {}).then(() => {
+      _syncInicialCompletado = true;
+      rebuildActive();
       if (ind) { ind.textContent = '✓ Sincronizado con Sheets'; ind.style.color = '#47ffb4'; }
       setTimeout(() => { if (ind && ind.textContent.includes('Sincronizado')) ind.textContent = ''; }, 4000);
     }).catch(err => {
       console.warn('[LR] Auto-sync startup fallido:', err);
+      // Sin conexión: no bloquear el auto-sync para siempre — si se
+      // recupera la conexión más adelante, que pueda publicar normalmente.
+      _syncInicialCompletado = true;
       if (ind) { ind.textContent = '⚠ Sin conexión a Sheets — mostrando datos locales'; ind.style.color = '#ff8c47'; }
       setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
     });
+  } else {
+    _syncInicialCompletado = true; // sin bridge configurado, no hay nada que esperar
   }
 
   // Advertir al usuario si cierra/recarga con cambios reales sin publicar en Sheets
@@ -43211,12 +43243,6 @@ setTimeout(() => {
     }
   }
 
-  // SHEETS MANDA: al abrir, traer TODO desde Sheets (fuente de verdad)
-  if (_cloudUrl) {
-    syncFromCloud(true, {})
-      .then(() => { rebuildActive(); })
-      .catch(() => { console.log('[SYNC] Sin conexión al arrancar, usando caché local'); });
-  }
 }, 40);
 </script>
 <!-- GAP NOTIFICATION MODAL -->
