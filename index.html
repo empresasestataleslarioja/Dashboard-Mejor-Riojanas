@@ -40675,24 +40675,29 @@ async function syncToCloud(nota) {
   const esAuto = nota === 'Auto-sync';
   let conflicto = await _chequearConflictoSync();
 
-  // ── Reintento automático (auto-sync) ───────────────────────────────
-  // Antes, un conflicto en auto-sync cancelaba la publicación y dejaba el
-  // cambio local varado hasta que alguien notara el aviso y sincronizara a
-  // mano — la causa real detrás de varias pérdidas de datos reportadas en
-  // esta sesión (LRT, Cerdo de los Llanos, empresas fusionadas: el equipo
-  // trabaja en paralelo desde varios dispositivos, así que este choque es
-  // frecuente, no una excepción). Ahora, en vez de cancelar directo, se
-  // baja y fusiona lo nuevo de Sheets (mismo criterio "local prevalece
-  // para lo no publicado" que ya usa applyCloudData — _hayCambiosSinPublicar
-  // sigue en true en este punto, así que nada local se pierde en la bajada)
-  // y se reintenta UNA sola vez. Si el conflicto persiste incluso después
-  // (otra publicación ocurrió en el ínterin, o falló la bajada), se cae al
-  // comportamiento anterior: cancelar y avisar, sin reintentar en bucle.
-  if (conflicto && esAuto) {
+  // ── Reintento automático (bajar, fusionar y reintentar) ───────────
+  // Antes esto solo pasaba en auto-sync; la publicación MANUAL, ante un
+  // conflicto, iba directo a preguntarle al usuario "¿pisar igual?" —
+  // dependía de que alguien coordinara a mano con el resto del equipo
+  // (pausar auto-sync en todos los dispositivos, publicar, esperar que
+  // se estabilice, recién ahí pedir que actualicen), algo desgastante y
+  // frágil reportado como método de trabajo real. Ahora, apenas se
+  // detecta un conflicto — sea auto-sync o clic en "Publicar ahora" — se
+  // baja y fusiona primero lo nuevo de Sheets (mismo criterio "local
+  // prevalece para lo no publicado" que ya usa applyCloudData, con
+  // comparación POR HORA real entre balances — fecha_analisis_ms, no
+  // solo la fecha) y se reintenta la publicación una sola vez. La
+  // mayoría de los conflictos reales (dos dispositivos tocando empresas
+  // o secciones distintas, o el mismo balance en momentos distintos del
+  // mismo día) se resuelven solos, sin pedirle nada a nadie. Solo si el
+  // conflicto persiste incluso después de fusionar (choque genuino: el
+  // mismo campo modificado casi en simultáneo) se cae al comportamiento
+  // de abajo — cancelar en auto-sync, o preguntar en publicación manual.
+  if (conflicto) {
     const indPre = document.getElementById('save-indicator');
     if (indPre) { indPre.textContent = '⏳ Conflicto detectado — sincronizando antes de reintentar…'; indPre.style.color = '#47e8ff'; }
-    console.warn(`[Sync] Conflicto en auto-sync (${conflicto.updatedBy || 'otro dispositivo'}, ${conflicto.savedAt}) — bajando y fusionando antes de reintentar.`);
-    try { await syncFromCloud(true); } catch(e) { console.warn('[Sync] Falló la bajada previa al reintento de auto-sync:', e); }
+    console.warn(`[Sync] Conflicto detectado (${conflicto.updatedBy || 'otro dispositivo'}, ${conflicto.savedAt}) — bajando y fusionando antes de reintentar.`);
+    try { await syncFromCloud(true); } catch(e) { console.warn('[Sync] Falló la bajada previa al reintento:', e); }
     conflicto = await _chequearConflictoSync();
   }
 
