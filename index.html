@@ -41336,8 +41336,16 @@ function applyCloudData(cloud, opts) {
       cloud.balances.forEach(r => {
         if (!r.empresa || !r.periodo) return;
         const key = r.empresa + '_' + r.periodo;
-        // Si existe local más reciente, conservarlo; si Sheets es más reciente o no existe, tomar de Sheets
-        const _tsSheets = r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : 0;
+        // Si existe local más reciente, conservarlo; si Sheets es más reciente o no existe, tomar de Sheets.
+        // Preferir fecha_analisis_ms (timestamp completo, con hora) sobre
+        // fecha_analisis (solo fecha) — dos balances publicados el MISMO
+        // día son indistinguibles por fecha sola, así que comparar solo
+        // por fecha podía hacer "ganar" por empate al más viejo de los
+        // dos y pisar en Sheets la versión más nueva de otro dispositivo
+        // (bug real reportado: cargas de un dispositivo revertidas por el
+        // auto-sync de otro que ese mismo día tenía una copia más vieja).
+        const _tsSheets = r.fecha_analisis_ms ? parseInt(r.fecha_analisis_ms, 10)
+          : (r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : 0);
         // Eliminado localmente: respetar esa eliminación salvo que la fila de
         // Sheets sea genuinamente más nueva (se volvió a cargar ese balance
         // desde otro dispositivo después de borrarlo acá).
@@ -41385,7 +41393,12 @@ function applyCloudData(cloud, opts) {
         tipo:         r.tipo || '',
         tipo_empresa: r.tipo_empresa || 'estandar',
         metodo:       r.metodo || 'Sheets',
-        timestamp:    r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : Date.now(),
+        // Preferir fecha_analisis_ms (timestamp completo) — ver nota en
+        // _tsSheets más arriba: sin esto, el balance reconstruido quedaba
+        // con un timestamp sin hora (medianoche), perpetuando el empate
+        // por "mismo día" en la próxima comparación de este mismo balance.
+        timestamp:    r.fecha_analisis_ms ? parseInt(r.fecha_analisis_ms, 10)
+          : (r.fecha_analisis ? new Date(r.fecha_analisis).getTime() : Date.now()),
         alertas:      r.alertas ? r.alertas.split(' | ').filter(Boolean) : [],
         diagnostico:  r.diagnostico || '',
         textoRaw:     '',
@@ -42007,6 +42020,15 @@ function buildCloudPayload() {
       tipo_empresa:          b.tipo_empresa || 'estandar',
       metodo:                b.metodo     || '',
       fecha_analisis:        b.timestamp  ? new Date(b.timestamp).toISOString().slice(0,10) : '',
+      // Timestamp completo (milisegundos), además de fecha_analisis (solo
+      // fecha, sin hora) — fecha_analisis pierde toda precisión horaria,
+      // así que dos balances publicados el MISMO día (frecuente: el
+      // equipo trabaja en paralelo desde varios dispositivos) son
+      // indistinguibles por fecha para decidir cuál es más nuevo al
+      // bajar — el más viejo de los dos podía "ganar" por este empate y
+      // pisar en Sheets la versión más nueva del otro dispositivo. Ver
+      // _tsSheets en applyCloudData, que ahora prefiere este campo.
+      fecha_analisis_ms:     b.timestamp  || '',
       // Liquidez
       liquidez_corriente:    liq.liquidez_corriente    ?? '',
       liquidez_seca:         liq.liquidez_seca         ?? '',
