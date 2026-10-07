@@ -38120,6 +38120,20 @@ const LS_CFG_KEY  = 'lr_cloud_cfg_v1';        // configuración
 const CLOUD_URL_DEFAULT   = 'https://script.google.com/macros/s/AKfycbzzUFeOD9F7ElbnH0wAEDZzJcLaxc_OyUN8qDbIcUaSOn-QmmEXnz9Cp6RpoCX6t9KieQ/exec';
 const CLOUD_TOKEN_DEFAULT = 'LR2025token'; // mantenido por compatibilidad, ya no se valida
 
+// ── Marca de versión del código de sincronización ──────────────────
+// Se incrementa cada vez que cambia la lógica de publicación/conflicto
+// (guardia multi-dispositivo, comparación por hora, etc.) — NO es la
+// versión general del dashboard. Se agrega al "updatedBy" de cada
+// publicación (ver _updatedByConBuild) para que, si vuelve a pasar que
+// un dispositivo pisa Sheets, el aviso de conflicto muestre con qué
+// build publicó — así se puede confirmar directamente si ese
+// dispositivo todavía corre código viejo (sin estas protecciones) en
+// vez de tener que asumirlo.
+const SYNC_BUILD = '2026-10-07.5';
+function _updatedByConBuild() {
+  return (_sesionUsuarioActivo() || _cloudUser || 'cargador') + ' [build ' + SYNC_BUILD + ']';
+}
+
 // ── Configuración (URL del script + token) ───────────────────────
 let _cloudUrl   = '';
 let _cloudToken = '';
@@ -40535,7 +40549,7 @@ async function syncSoloTransferencias() {
     // los problemas de orden/timing entre lotes.
     setMsg(`⏳ Publicando ${total} transferencias…`);
     const payload = {
-      updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador',
+      updatedBy: _updatedByConBuild(),
       nota:      'Publicación de transferencias',
       data: {
         transferencias: transRows,
@@ -40582,7 +40596,7 @@ async function syncSoloBalances() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando balances…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros, balances_a_eliminar: payload.balances_a_eliminar } });
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación balances', data: { balances: payload.balances, balances_rubros: payload.balances_rubros, balances_a_eliminar: payload.balances_a_eliminar } });
     limpiarPendienteGuardar('balances');
     if (ind) { ind.textContent = '✓ Balances publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
@@ -40597,7 +40611,7 @@ async function syncSoloFlujos() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando flujos…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación flujos', data: { flujos: payload.flujos, flujos_config: payload.flujos_config, flujos_a_eliminar: payload.flujos_a_eliminar } });
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación flujos', data: { flujos: payload.flujos, flujos_config: payload.flujos_config, flujos_a_eliminar: payload.flujos_a_eliminar } });
     limpiarPendienteGuardar('flujos');
     if (ind) { ind.textContent = '✓ Flujos publicados'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
@@ -40612,7 +40626,7 @@ async function syncSoloPersonal() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando personal…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador', nota: 'Publicación personal', data: { personal: payload.personal } });
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación personal', data: { personal: payload.personal } });
     limpiarPendienteGuardar('personal');
     if (ind) { ind.textContent = '✓ Personal publicado'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
@@ -40839,7 +40853,7 @@ async function syncToCloud(nota) {
     const payload = {
       tab:       'all',
       nota:      nota || 'Actualización manual',
-      updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador',
+      updatedBy: _updatedByConBuild(),
       data:      restoData
     };
 
@@ -40917,7 +40931,7 @@ async function syncToCloud(nota) {
         _backupTransferenciasLocal('antes de sync-to-cloud');
         showStorageStatus(`⏳ Publicando ${transferencias.length.toLocaleString('es-AR')} transferencias…`, '#47e8ff');
         const tPayload = {
-          updatedBy: _sesionUsuarioActivo() || _cloudUser || 'cargador',
+          updatedBy: _updatedByConBuild(),
           nota:      'Transferencias',
           data: { transferencias: transferencias, _trans_modo: 'reemplazar' }
         };
