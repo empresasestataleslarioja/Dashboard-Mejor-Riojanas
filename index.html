@@ -32916,13 +32916,25 @@ function parsearExcelBalance(wb, XLSX) {
         }
         if (!labelRaw) continue;
         const lblL = labelRaw.toLowerCase().trim().replace(/\s+/g, ' ');
+        // Singularizar cada palabra ("ACTIVOS CORRIENTES" → "activo
+        // corriente") antes de comparar contra las keywords de
+        // SECCIONES_ESP, que están todas en singular — algunos balances
+        // (confirmado con uno real de Dripsa) titulan las secciones en
+        // plural ("ACTIVOS CORRIENTES", "PASIVOS CORRIENTES", "PASIVOS NO
+        // CORRIENTES") aunque la fila de cierre sea singular ("TOTAL
+        // ACTIVO CORRIENTE"); sin esto, el inicio de sección nunca se
+        // reconocía y SE PERDÍA TODO el detalle de rubros de esa sección
+        // (los totales agregados no se veían afectados porque sus propias
+        // listas de keywords ya incluían la variante en plural). Mismo
+        // criterio de singularización que ya usa _mismoNombreEmpresa().
+        const lblLSing = lblL.split(' ').map(w => (w.length > 3 && w.endsWith('s')) ? w.slice(0, -1) : w).join(' ');
 
-        const inicioMatch = seccionesPermitidas.find(s => s.inicio.some(k => lblL === k || lblL.startsWith(k + ' ') || lblL === k + ':'));
+        const inicioMatch = seccionesPermitidas.find(s => s.inicio.some(k => lblLSing === k || lblLSing.startsWith(k + ' ') || lblLSing === k + ':'));
         if (inicioMatch) { seccionLocal = inicioMatch.key; orden = 0; continue; }
 
         if (!seccionLocal) continue;
         const def = seccionesPermitidas.find(s => s.key === seccionLocal);
-        if (def.fin.some(k => lblL === k || lblL.includes(k))) { seccionLocal = null; continue; }
+        if (def.fin.some(k => lblLSing === k || lblLSing.includes(k))) { seccionLocal = null; continue; }
 
         // Valor: primer numérico (directo o por fórmula) en las columnas
         // siguientes a la del label, sin salir del rango del bloque.
@@ -32980,8 +32992,9 @@ function parsearExcelBalance(wb, XLSX) {
         const cell = ws[XLSX.utils.encode_cell({r, c})];
         if (typeof cell?.v !== 'string') continue;
         const l = cell.v.toLowerCase().trim().replace(/\s+/g, ' ');
-        if (colActivoLbl == null && (l === 'activo corriente' || l.startsWith('activo corriente '))) colActivoLbl = c;
-        if (colPasivoLbl == null && (l === 'pasivo corriente' || l.startsWith('pasivo corriente '))) colPasivoLbl = c;
+        const lSing = l.split(' ').map(w => (w.length > 3 && w.endsWith('s')) ? w.slice(0, -1) : w).join(' ');
+        if (colActivoLbl == null && (lSing === 'activo corriente' || lSing.startsWith('activo corriente '))) colActivoLbl = c;
+        if (colPasivoLbl == null && (lSing === 'pasivo corriente' || lSing.startsWith('pasivo corriente '))) colPasivoLbl = c;
       }
       if (colActivoLbl != null && colPasivoLbl != null) break busquedaSplit;
     }
