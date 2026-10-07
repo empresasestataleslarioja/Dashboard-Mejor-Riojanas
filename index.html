@@ -38134,6 +38134,34 @@ function _updatedByConBuild() {
   return (_sesionUsuarioActivo() || _cloudUser || 'cargador') + ' [build ' + SYNC_BUILD + ']';
 }
 
+// ── Detección de pestaña vieja / código desactualizado ──────────────
+// Caso real reportado: en incógnito (carga 100% nueva, sin nada en caché)
+// la lista de balances coincide con Sheets; en una pestaña normal del
+// mismo dispositivo, no. No es un conflicto de sincronización nuevo — es
+// una pestaña que quedó abierta desde antes de alguno de los fixes de
+// sync ya publicados y sigue corriendo ese código viejo en memoria
+// (nunca se refrescó), por lo que su lógica de fusión/conflicto no
+// incluye ninguna de las protecciones agregadas. Esto además explica
+// retroactivamente reportes previos de "otro dispositivo pisa Sheets":
+// pudo haber sido siempre esta misma causa. Para no depender de que cada
+// usuario se acuerde de recargar, se chequea periódicamente si el HTML
+// publicado en el servidor trae un SYNC_BUILD distinto al que esta
+// pestaña tiene cargado en memoria, y si es así se avisa.
+let _avisoVersionNuevaMostrado = false;
+async function _verificarVersionNueva() {
+  if (_avisoVersionNuevaMostrado) return;
+  try {
+    const resp = await fetch(location.href, { cache: 'no-store' });
+    if (!resp.ok) return;
+    const html = await resp.text();
+    const m = html.match(/const SYNC_BUILD = '([^']+)'/);
+    if (m && m[1] && m[1] !== SYNC_BUILD) {
+      _avisoVersionNuevaMostrado = true;
+      showStorageStatus('⚠ Hay una versión más nueva del dashboard. Recargá la página (F5) cuando puedas — esta pestaña está corriendo código viejo y puede generar inconsistencias con Sheets.', '#ff8c47');
+    }
+  } catch(e) { /* fetch puede fallar en file:// o sin red — se ignora */ }
+}
+
 // ── Configuración (URL del script + token) ───────────────────────
 let _cloudUrl   = '';
 let _cloudToken = '';
@@ -43315,6 +43343,12 @@ setTimeout(() => {
   } else {
     _syncInicialCompletado = true; // sin bridge configurado, no hay nada que esperar
   }
+
+  // Chequear versión del dashboard: primero a los 10s (no competir con la
+  // sincronización inicial) y después cada 10 minutos — ver
+  // _verificarVersionNueva más arriba.
+  setTimeout(_verificarVersionNueva, 10000);
+  setInterval(_verificarVersionNueva, 10 * 60 * 1000);
 
   // Advertir al usuario si cierra/recarga con cambios reales sin publicar en Sheets
   window.addEventListener('beforeunload', function(e) {
