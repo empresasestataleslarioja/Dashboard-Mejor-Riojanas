@@ -40384,6 +40384,7 @@ async function syncFromCloud(silent, opts) {
 
     const nEmps  = Object.keys(DATA.fact||{}).length;
     const nTrans = (DATA.transferencias||[]).length;
+    const nBal   = Object.keys(_balances||{}).length;
     // Avisar en pantalla si esta sincronización completó o reparó
     // automáticamente algún balance (ver _rellenarHuecosIndicadores /
     // _repararActivoPasivoNoCorrienteBalances) — antes solo quedaba en la
@@ -40398,9 +40399,16 @@ async function syncFromCloud(silent, opts) {
       if (_keysAfectadas.size) {
         _detalleBalancesFix = ` · ⚙ ${_keysAfectadas.size} balance${_keysAfectadas.size!==1?'s':''} corregido${_keysAfectadas.size!==1?'s':''} automáticamente (Activo/Pasivo No Corriente)`;
       }
+      // Visible en pantalla (no solo en consola) para poder confirmar en el
+      // momento, sin depender de que alguien abra las herramientas de
+      // desarrollador, que la reconciliación de balances desactualizados
+      // realmente corrió y qué hizo — ver nota en applyCloudData.
+      if (_resumenBal.eliminadosNoEnSheets && _resumenBal.eliminadosNoEnSheets.length) {
+        _detalleBalancesFix += ` · 🧹 ${_resumenBal.eliminadosNoEnSheets.length} balance${_resumenBal.eliminadosNoEnSheets.length!==1?'s':''} quitado${_resumenBal.eliminadosNoEnSheets.length!==1?'s':''} de esta pestaña (ya no estaban en Sheets)`;
+      }
     }
     mostrarResultadoSync(true, '↓ Datos actualizados desde Google Sheets',
-      `${nEmps} empresa${nEmps!==1?'s':''} · ${nTrans} transferencia${nTrans!==1?'s':''} · publicado el ${lastUpFmt}${_detalleBalancesFix}`);
+      `${nEmps} empresa${nEmps!==1?'s':''} · ${nTrans} transferencia${nTrans!==1?'s':''} · ${nBal} balance${nBal!==1?'s':''} · publicado el ${lastUpFmt}${_detalleBalancesFix}`);
 
     // Registrar en historial de importaciones
     const syncMeta = data.meta || {};
@@ -41403,7 +41411,7 @@ function applyCloudData(cloud, opts) {
   // Resumen de lo que esta corrida de applyCloudData completó/reparó en
   // balances automáticamente — para poder mostrárselo al usuario en pantalla
   // (ver syncFromCloud) en vez de que solo quede en la consola del navegador.
-  window._ultimoResumenBalances = { completadosDesdeCloud: [], reparadosNoCorriente: [] };
+  window._ultimoResumenBalances = { completadosDesdeCloud: [], reparadosNoCorriente: [], eliminadosNoEnSheets: [] };
   if ((!_solo || _solo === 'balances') && Array.isArray(cloud.balances)) {
     if (true) {
       // Merge: agregar desde Sheets los que no existen localmente; si existe local, conservarlo
@@ -41527,6 +41535,7 @@ function applyCloudData(cloud, opts) {
         if (_soloLocal.length && !_respuestaSospechosa) {
           _soloLocal.forEach(k => delete _balances[k]);
           console.log(`[Balances] ${_soloLocal.length} balance(s) ya no están en Sheets — se quitaron de esta pestaña:`, _soloLocal);
+          window._ultimoResumenBalances.eliminadosNoEnSheets = _soloLocal;
         }
       }
     } // fin else (restaurar desde Sheets)
