@@ -32842,12 +32842,20 @@ function parsearExcelBalance(wb, XLSX) {
 
     const g      = (...k) => buscarFilaMultiCol(ws, maxR, maxC, null, ...k);
     const gTotal = (...k) => buscarFilaMultiCol(ws, maxR, maxC, ['corriente'], ...k);
-    const _acR = g('total activo corriente','subtotal activo corriente','total activos corrientes');
-    const _pcR = g('total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes');
+    // "total del activo corriente" / "total del pasivo corriente", etc.
+    // — confirmado con un balance real de FOGAPLAR, que titula los
+    // subtotales de sección con "del" intercalado ("Total del Activo
+    // Corriente"), variante que ya se contemplaba para el TOTAL ACTIVO/
+    // TOTAL PASIVO generales (gTotal más abajo) pero no para estos 4
+    // subtotales de sección — sin esa variante, ninguna de las 3-4
+    // keywords matcheaba y el subtotal quedaba en null (mostrado como
+    // "—" en el ESP) pese a que el Excel sí lo tiene.
+    const _acR = g('total activo corriente','subtotal activo corriente','total activos corrientes','total del activo corriente');
+    const _pcR = g('total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes','total del pasivo corriente');
     const _atR = gTotal('total activo','total del activo','activo total');
-    const _ancR= g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total');
+    const _ancR= g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total','total del activo no corriente');
     const _ptR = gTotal('total pasivo','total del pasivo','pasivo total');
-    const _pncR= g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total');
+    const _pncR= g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total','total del pasivo no corriente');
     const _pnR = g('total patrimonio','patrimonio neto','total patrimonio neto');
     ind.liquidez.activo_corriente     = _acR.val;
     ind.liquidez.pasivo_corriente     = _pcR.val;
@@ -32888,13 +32896,13 @@ function parsearExcelBalance(wb, XLSX) {
     // de total/subtotal de cierre.
     const SECCIONES_ESP = [
       { key: 'activo_corriente',    inicio: ['activo corriente'],
-        fin: ['total activo corriente','subtotal activo corriente','total activos corrientes'] },
+        fin: ['total activo corriente','subtotal activo corriente','total activos corrientes','total del activo corriente'] },
       { key: 'activo_no_corriente', inicio: ['activo no corriente'],
-        fin: ['total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total'] },
+        fin: ['total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total','total del activo no corriente'] },
       { key: 'pasivo_corriente',    inicio: ['pasivo corriente'],
-        fin: ['total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes'] },
+        fin: ['total pasivo corriente','subtotal pasivo corriente','total pasivos corrientes','total del pasivo corriente'] },
       { key: 'pasivo_no_corriente', inicio: ['pasivo no corriente'],
-        fin: ['total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total'] },
+        fin: ['total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total','total del pasivo no corriente'] },
       { key: 'patrimonio_neto',     inicio: ['patrimonio neto','composición del patrimonio neto','composicion del patrimonio neto'],
         fin: ['total patrimonio neto','total del patrimonio neto','patrimonio neto total'] },
     ];
