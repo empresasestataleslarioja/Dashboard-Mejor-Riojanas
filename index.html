@@ -27781,27 +27781,35 @@ function eliminarSinAño() {
 
 // ── Deduplicar balances en memoria ────────────────────────────────
 // Conserva solo el más reciente por empresa+período
+// Deduplica balances con el MISMO matcheador difuso de nombres de
+// empresa que ya usa el resto del dashboard (_mismoNombreEmpresa) —
+// antes comparaba solo por minúsculas/espacios, así que dos balances del
+// mismo período cargados bajo variantes de razón social (ej. "AGROANDINA"
+// vs "AGROANDINA S.A.U.") quedaban como duplicados invisibles entre sí
+// para este chequeo, aunque fueran detectados correctamente como "la
+// misma empresa" en el resto de la app — y como esta función corre en
+// cada restauración desde el cache local, el duplicado sobrevivía
+// indefinidamente a cada recarga de página.
 function deduplicarBalances() {
-  const normEmp = e => (e||'').toLowerCase().trim();
-  const dedup = {};
-  let total = 0, eliminados = 0;
-  Object.entries(_balances).forEach(([k, b]) => {
+  const grupos = []; // [{ periodo, balance }]
+  let total = 0;
+  Object.values(_balances).forEach(b => {
     total++;
     if (!b.empresa || !b.periodo) return;
-    // Clave case-insensitive para detectar duplicados
-    const canon = normEmp(b.empresa) + '_' + b.periodo;
-    if (!dedup[canon] || (b.timestamp||0) > (dedup[canon].timestamp||0)) {
-      dedup[canon] = { ...b, _oldKey: k };
+    const periodo = String(b.periodo);
+    const grupo = grupos.find(g => g.periodo === periodo && _mismoNombreEmpresa(g.balance.empresa, b.empresa));
+    if (!grupo) {
+      grupos.push({ periodo, balance: b });
+    } else if ((b.timestamp||0) > (grupo.balance.timestamp||0)) {
+      grupo.balance = b; // conservar el más reciente (y su propia razón social)
     }
   });
-  // Reconstruir _balances con claves canónicas (empresa original + periodo, no lowercase)
   Object.keys(_balances).forEach(k => delete _balances[k]);
-  Object.entries(dedup).forEach(([, b]) => {
-    delete b._oldKey;
-    const finalKey = (b.empresa||'').trim() + '_' + b.periodo;
-    _balances[finalKey] = b;
+  grupos.forEach(({ periodo, balance }) => {
+    const finalKey = (balance.empresa||'').trim() + '_' + periodo;
+    _balances[finalKey] = balance;
   });
-  eliminados = total - Object.keys(_balances).length;
+  const eliminados = total - Object.keys(_balances).length;
   return { total, eliminados, restantes: Object.keys(_balances).length };
 }
 
@@ -39913,12 +39921,18 @@ document.addEventListener('click', function(e) {
 
 // ── Estado visual del indicador ──────────────────────────────────
 function updateCloudStatusBar(state, detail) {
+  // Si detail es un ISO (ej. savedAt de Sheets), formatearlo a fecha
+  // legible — antes esto solo se hacía para el badge del topbar; el
+  // texto del panel ⚙ Sheets (cloud-status-txt) mostraba el ISO crudo tal
+  // cual (ej. "2026-10-07T13:02:15.232Z" en vez de "07/10/2026 10:02").
+  const looksISO = !!detail && /^\d{4}-\d{2}-\d{2}/.test(detail);
+  const detailFmt = looksISO ? (fmtFechaAR(detail) || detail) : detail;
   const states = {
     unconfigured: { color:'#94a3b8', text:'Sin configurar'         },
     configured:   { color:'#ff8c47', text:'Configurado — sin sync' },
     syncing:      { color:'#e8ff47', text:'Sincronizando…'         },
-    ok:           { color:'#47ffb4', text: detail||'Sincronizado'  },
-    error:        { color:'#ff4766', text: detail||'Error de sync' },
+    ok:           { color:'#47ffb4', text: detailFmt||'Sincronizado'  },
+    error:        { color:'#ff4766', text: detailFmt||'Error de sync' },
   };
   const s = states[state] || states.unconfigured;
 
@@ -39946,11 +39960,7 @@ function updateCloudStatusBar(state, detail) {
   if (topTxt) {
     // Mostrar estado + fecha legible de última actualización
     if (state === 'ok' && detail) {
-      // detail puede ser un ISO string o un texto ya formateado
-      // Solo aplicar fmtFechaAR si parece un ISO (contiene T o tiene formato yyyy-mm-dd)
-      const looksISO = /^\d{4}-\d{2}-\d{2}/.test(detail);
-      const dStr = looksISO ? (fmtFechaAR(detail) || detail) : detail;
-      topTxt.textContent = `Sheets: ${dStr}`;
+      topTxt.textContent = `Sheets: ${detailFmt}`;
     } else if (state === 'syncing') {
       topTxt.textContent = '⏳ sincronizando…';
     } else if (state === 'error') {
@@ -42294,40 +42304,69 @@ function buildCloudPayload() {
            balances_a_eliminar: [...(typeof _getBalancesDel === 'function' ? _getBalancesDel() : new Set())] };
 }
 
+// Copia liviana de _balances para el cache local — SIN estructura_er ni
+// estructura_esp (la apertura de rubros completa, un objeto por rubro con
+// su propio val/valComp) ni textoRaw (dump de texto crudo del parser PDF
+// viejo, sin uso hoy). Son, por lejos, lo más pesado de cada balance, y
+// ya están completamente respaldados en Sheets (round-trip verificado) —
+// el cache local solo necesita los indicadores agregados para mostrar
+// algo de inmediato al abrir, no la apertura de rubros completa (que de
+// todos modos se vuelve a traer de Sheets segundos después). Sin este
+// recorte, un portafolio con muchas empresas y años —y ahora, apertura de
+// rubros por cada una— excede fácil la cuota de localStorage del
+// navegador, lo que hacía fallar el guardado local en silencio: reportado
+// como "recargué la página y no toma la info de Sheets" (el guardado
+// fallido podía dejar en el cache una versión vieja que después competía
+// por fecha con la de Sheets al reabrir).
+function _balancesLivianoParaCache() {
+  return Object.values(_balances || {}).map(b => {
+    const { estructura_er, estructura_esp, textoRaw, ...resto } = b;
+    return resto;
+  });
+}
+
 // ── Cache local (fallback sin conexión) ──────────────────────────
 // Escribe el snapshot ahora mismo, sin esperar el debounce — para los
 // caminos donde la pestaña puede cerrarse/ocultarse de inmediato después
 // (beforeunload, visibilitychange a "hidden") y no hay margen para esperar.
 function _saveDataToLocalCacheInmediato() {
+  const _snapBase = {
+    fact: DATA.fact, sit: DATA.sit, personal: DATA.personal,
+    totals_fact: DATA.totals_fact, totals_sup: DATA.totals_sup,
+    totals_def: DATA.totals_def, sup_count: DATA.sup_count,
+    def_count: DATA.def_count, pers_totals: DATA.pers_totals,
+    transferencias: DATA.transferencias || [],
+    notas:         DATA.notas || {},
+    institucional: DATA.institucional || {},
+    presupuesto:   DATA.presupuesto || {},
+    saf_organismo: DATA.saf_organismo || {},
+    importHistory: DATA.importHistory || [],
+    _rubros:       rubros || {},
+    _rubroList:    RUBRO_LIST ? [...RUBRO_LIST] : [],
+    _flujos:       DATA.flujos || {},
+    _flujos_config: DATA.flujos_config || {},
+    _chartTypeOverrides: chartTypeOverrides || {},
+    _er_mensual:   DATA.er_mensual || {},
+    _er_detalle:   DATA.er || {},
+    autoridades:   DATA.autoridades || [],
+  };
   try {
-    const snap = {
-      fact: DATA.fact, sit: DATA.sit, personal: DATA.personal,
-      totals_fact: DATA.totals_fact, totals_sup: DATA.totals_sup,
-      totals_def: DATA.totals_def, sup_count: DATA.sup_count,
-      def_count: DATA.def_count, pers_totals: DATA.pers_totals,
-      transferencias: DATA.transferencias || [],
-      notas:         DATA.notas || {},
-      institucional: DATA.institucional || {},
-      presupuesto:   DATA.presupuesto || {},
-      saf_organismo: DATA.saf_organismo || {},
-      importHistory: DATA.importHistory || [],
-      _balances:     Object.values(_balances || {}),
-      _rubros:       rubros || {},
-      _rubroList:    RUBRO_LIST ? [...RUBRO_LIST] : [],
-      _flujos:       DATA.flujos || {},
-      _flujos_config: DATA.flujos_config || {},
-      _chartTypeOverrides: chartTypeOverrides || {},
-      _er_mensual:   DATA.er_mensual || {},
-      _er_detalle:   DATA.er || {},
-      autoridades:   DATA.autoridades || [],
-      savedAt: nowAR()
-    };
+    const snap = { ..._snapBase, _balances: _balancesLivianoParaCache(), savedAt: nowAR() };
     localStorage.setItem(LS_KEY, JSON.stringify(snap));
     actualizarIndicadorGuardado(snap.savedAt);
     // Sheets es la fuente de verdad — disparar sync automático tras cada cambio
     try { _dispararAutoSync(); } catch(e2) {}
   } catch(e) {
     if (e.name === 'QuotaExceededError') {
+      // Último recurso: ni siquiera la versión liviana de los balances
+      // entra — guardar el resto del dataset igual, sin balances, para no
+      // perder TODO lo demás (fact/sit/transferencias/etc. siguen
+      // disponibles offline aunque los balances no).
+      try {
+        const snapSinBalances = { ..._snapBase, _balances: [], savedAt: nowAR() };
+        localStorage.setItem(LS_KEY, JSON.stringify(snapSinBalances));
+        actualizarIndicadorGuardado(snapSinBalances.savedAt);
+      } catch(e2) {}
       showStorageStatus('⚠ Almacenamiento local lleno — el navegador no tiene más espacio disponible (localStorage). Los datos se mantienen en memoria pero no se guardarán al cerrar la pestaña. Para liberar espacio: Configuración del sitio → Borrar datos del sitio, o exportá los datos antes de cerrar.', '#ff8c47');
     }
   }
