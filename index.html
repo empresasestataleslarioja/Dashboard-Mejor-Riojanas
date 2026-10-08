@@ -7511,9 +7511,23 @@ function _rptResultado() {
   const superavit = emps.filter(x=>x.v>0).reverse().slice(0,8).map(x=>({label:x.e, value:x.v}));
   const deficit   = emps.filter(x=>x.v<0).slice(0,8).map(x=>({label:x.e, value:x.v}));
 
+  // Empresas con 3+ años consecutivos en déficit — mismo cálculo que la
+  // campana de alertas (ver _empresasDeficit3Anios), mostrado directamente
+  // en el reporte para no depender de encontrar la campana en la topbar.
+  const _deficit3 = _empresasDeficit3Anios();
+  const deficit3Html = _deficit3.length
+    ? `<div style="margin:14px 0;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">
+        <div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ${_deficit3.length} empresa${_deficit3.length!==1?'s':''} con 3+ años consecutivos en déficit</div>
+        <div style="font-size:9.5px;color:#7a2a20;line-height:1.6">${_deficit3.join(' · ')}</div>
+      </div>`
+    : `<div style="margin:14px 0;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">
+        ✓ Ninguna empresa acumula 3 o más años consecutivos en déficit.
+      </div>`;
+
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Resultado Operativo', 'Superávit / Déficit · '+lastY)
     + charts
+    + deficit3Html
     + (deficit.length ? '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(deficit, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>' : '')
     + (superavit.length ? '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(superavit, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>' : '')
     + '<div class="st">Detalle por año (déficits primero)</div><div class="tw">'+tabla+'</div></div>'
@@ -7810,6 +7824,19 @@ function _rptPersonal(autoPrint) {
     _h2.push(_rptKpi2('Mayor empleador '+lastY, mayorEmp?.e||'—', (_persGetTotal(mayorEmp,lastY)||0)+' empleados', '#ba7517', ''));
     _h2.push(_rptKpi2('Mayor crecimiento', mayorCr?.e||'—', '▲ +'+((mayorCr?.g)||0).toFixed(2)+'% '+baseYear+'→'+lastY, '#534ab7', 'up'));
     _h2.push('</div>');
+
+    // Caídas de personal >20% entre años consecutivos — mismo cálculo que
+    // la campana de alertas (ver _caidasDePersonal), mostrado directamente
+    // en el reporte.
+    var _caidas = _caidasDePersonal();
+    _h2.push(_caidas.length
+      ? '<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
+        + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _caidas.length + ' caída' + (_caidas.length!==1?'s':'') + ' de personal mayor al 20% entre años consecutivos</div>'
+        + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _caidas.map(function(c){ return c.emp+' '+c.y0+'→'+c.y1+' ('+(c.pct*100).toFixed(1)+'%)'; }).join(' · ') + '</div>'
+        + '</div>'
+      : '<div style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
+        + '✓ Ninguna empresa tuvo una caída de personal mayor al 20% entre años consecutivos.</div>');
+
     _h2.push('<div class="st" id="sec_evol">Evolución nómina total del portafolio</div>');
     _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
     var _pngPersMulti = _rptCanvasPng('ch-p-multi');
@@ -9108,6 +9135,19 @@ function _rptTransferencias(autoPrint) {
   h.push('</div>');
   if (false) { // bloque eliminado — ya no hay sección separada de categorías
   }
+
+  // Transferencias que superan el 50% de la facturación de la empresa en
+  // el mismo año — mismo cálculo que la campana de alertas (ver
+  // _transferenciasExcesivas), mostrado directamente en el reporte.
+  var _excesivas = _transferenciasExcesivas();
+  var excesivasHtml = _excesivas.length
+    ? '<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
+      + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _excesivas.length + ' transferencia' + (_excesivas.length!==1?'s':'') + ' que superan el 50% de la facturación anual de la empresa</div>'
+      + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _excesivas.map(function(x){ return x.emp+' '+x.año+' ('+(x.pct*100).toFixed(0)+'%)'; }).join(' · ') + '</div>'
+      + '</div>'
+    : '<div style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
+      + '✓ Ninguna transferencia supera el 50% de la facturación anual de la empresa.</div>';
+  h.push(excesivasHtml);
 
   // Fila 1: Composición + SAF (con leyendas capturadas del DOM)
   h.push('<div class="r2" id="sec_composicion">');
@@ -31308,13 +31348,15 @@ function syncYearChips() {
 // ═══════════════════════════════════════════════════════════════
 //  MEJORA 4 — Alertas automáticas
 // ═══════════════════════════════════════════════════════════════
-function checkAlerts() {
-  const years = ys();
-  const alerts = [];
-  const allEmps = [...new Set([...Object.keys(DATA.fact), ...Object.keys(DATA.sit)])];
 
-  // Deficit 3+ años consecutivos
-  allEmps.forEach(e => {
+// Empresas con 3+ años consecutivos en déficit — usado tanto por
+// checkAlerts() (campana 🔔) como por el reporte de Resultado Operativo,
+// para no duplicar el mismo cálculo (mismo patrón que
+// _empresasActivasSinAutoridadVigente).
+function _empresasDeficit3Anios() {
+  const years = ys();
+  const allEmps = [...new Set([...Object.keys(DATA.fact), ...Object.keys(DATA.sit)])];
+  return allEmps.filter(e => {
     const sit = DATA.sit[e] || {};
     let streak = 0, maxStreak = 0;
     years.forEach(y => {
@@ -31322,25 +31364,50 @@ function checkAlerts() {
       if (v != null && v < 0) { streak++; maxStreak = Math.max(maxStreak, streak); }
       else streak = 0;
     });
-    if (maxStreak >= 3) alerts.push({ tipo:'deficit', msg: e + ': 3+ años consecutivos en déficit' });
-  });
+    return maxStreak >= 3;
+  }).sort((a,b) => a.localeCompare(b,'es'));
+}
 
-  // Transferencia > 50% de facturación
-  (DATA.transferencias || []).forEach(t => {
+// Transferencias que superan el 50% de la facturación de la empresa en el
+// mismo año — usado por checkAlerts() y por el reporte de Transferencias.
+function _transferenciasExcesivas() {
+  return (DATA.transferencias || []).map(t => {
     const emp = _resolverEmpresaTransferencia(t);
     const f = DATA.fact[emp]?.[t.año] || 0;
-    if (f > 0 && t.importe / f > 0.5)
-      alerts.push({ tipo:'dep', msg: emp + ' ' + t.año + ': transferencias >50% de la facturación' });
-  });
+    const pct = f > 0 ? t.importe / f : 0;
+    return { emp, año: t.año, importe: t.importe, facturacion: f, pct };
+  }).filter(x => x.facturacion > 0 && x.pct > 0.5)
+    .sort((a,b) => b.pct - a.pct);
+}
 
-  // Caída de personal > 20%
+// Caídas de personal mayores al 20% entre dos años consecutivos — usado
+// por checkAlerts() y por el reporte de Personal.
+function _caidasDePersonal() {
+  const yrs = ys().map(String);
+  const resultado = [];
   DATA.personal.forEach(d => {
-    const yrs = years.map(String);
     for (let i = 1; i < yrs.length; i++) {
       const prev = d.y[yrs[i-1]], cur = d.y[yrs[i]];
       if (prev > 5 && cur > 0 && (cur - prev) / prev < -0.2)
-        alerts.push({ tipo:'pers', msg: d.e + ': caída de personal >20% en ' + yrs[i-1] + '→' + yrs[i] });
+        resultado.push({ emp: d.e, y0: yrs[i-1], y1: yrs[i], prev, cur, pct: (cur-prev)/prev });
     }
+  });
+  return resultado;
+}
+
+function checkAlerts() {
+  const alerts = [];
+
+  _empresasDeficit3Anios().forEach(e => {
+    alerts.push({ tipo:'deficit', msg: e + ': 3+ años consecutivos en déficit' });
+  });
+
+  _transferenciasExcesivas().forEach(t => {
+    alerts.push({ tipo:'dep', msg: t.emp + ' ' + t.año + ': transferencias >50% de la facturación' });
+  });
+
+  _caidasDePersonal().forEach(c => {
+    alerts.push({ tipo:'pers', msg: c.emp + ': caída de personal >20% en ' + c.y0 + '→' + c.y1 });
   });
 
   // Empresas activas sin autoridades vigentes cargadas — pedido explícito:
