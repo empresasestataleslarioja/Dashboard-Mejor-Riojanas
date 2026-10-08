@@ -17714,12 +17714,15 @@ function guardarAutoridad() {
   if (!cargo) { alert('Ingresá el cargo.'); return; }
   if (hasta && desde && hasta < desde) { alert('La fecha "Hasta" no puede ser anterior a "Desde".'); return; }
 
-  const registro = { empresa, nombre, cargo, desde, hasta };
   const idx = idxRaw !== '' && idxRaw != null ? parseInt(idxRaw) : null;
-  if (idx != null && DATA.autoridades[idx]) DATA.autoridades[idx] = registro;
+  const existente = idx != null ? DATA.autoridades[idx] : null;
+  const registro = { empresa, nombre, cargo, desde, hasta, _id: existente ? existente._id : null, _ts: Date.now() };
+  _ensureAutoridadId(registro);
+  if (existente) DATA.autoridades[idx] = registro;
   else DATA.autoridades.push(registro);
 
   document.getElementById('autoridad-form').style.display = 'none';
+  saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
 }
@@ -17728,7 +17731,9 @@ function eliminarAutoridad(idx) {
   const a = DATA.autoridades[idx];
   if (!a) return;
   if (!confirm(`¿Eliminar el registro de ${a.nombre} (${a.cargo} — ${a.empresa})?`)) return;
+  _addAutoridadDel(_ensureAutoridadId(a));
   DATA.autoridades.splice(idx, 1);
+  saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
 }
@@ -17744,6 +17749,9 @@ function cerrarVigenciaAutoridad(idx) {
   if (!fecha) return;
   if (a.desde && fecha < a.desde) { alert('La fecha de cese no puede ser anterior a la fecha "Desde".'); return; }
   a.hasta = fecha;
+  _ensureAutoridadId(a);
+  a._ts = Date.now();
+  saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
 }
@@ -18000,12 +18008,17 @@ function importarAutoridades(file) {
             `y se van a reemplazar por los ${parsed.length} del archivo.\n\n¿Confirmás?`
           );
           if (!ok) return;
+          // Tumbar los registros borrados (con su id ya asignado si no
+          // tenían) para que la fusión con Sheets no los vuelva a traer.
+          DATA.autoridades.filter(a => empresasEnArchivo.has(a.empresa)).forEach(a => _addAutoridadDel(_ensureAutoridadId(a)));
           DATA.autoridades = DATA.autoridades.filter(a => !empresasEnArchivo.has(a.empresa));
           const vistos = new Set();
           parsed.forEach(p => {
             const k = [p.empresa, p.nombre, p.cargo, p.desde].join('|');
             if (vistos.has(k)) return; // el propio archivo trae la fila repetida
             vistos.add(k);
+            p._ts = Date.now();
+            _ensureAutoridadId(p);
             DATA.autoridades.push(p);
             importados++;
           });
@@ -18016,8 +18029,8 @@ function importarAutoridades(file) {
           parsed.forEach(p => {
             const existente = DATA.autoridades.find(a =>
               a.empresa === p.empresa && a.nombre === p.nombre && a.cargo === p.cargo && a.desde === p.desde);
-            if (existente) { existente.hasta = p.hasta; actualizados++; }
-            else { DATA.autoridades.push(p); importados++; }
+            if (existente) { existente.hasta = p.hasta; existente._ts = Date.now(); _ensureAutoridadId(existente); actualizados++; }
+            else { p._ts = Date.now(); _ensureAutoridadId(p); DATA.autoridades.push(p); importados++; }
           });
         }
 
@@ -27976,6 +27989,46 @@ function _removeBalancesDel(clave) {
     const list = raw.filter(x => x && x.clave !== clave);
     if (list.length !== raw.length) localStorage.setItem(_LS_BALANCES_DEL, JSON.stringify(list));
   } catch(e) {}
+}
+
+// ── Tumbas de registros de Autoridades eliminados (mismo patrón que
+// _LS_BALANCES_DEL) — necesario porque DATA.autoridades es una lista
+// plana de registros (varios por empresa), no un mapa por empresa: un
+// simple reemplazo total en cada sync hacía que un dispositivo con una
+// copia vieja (sin un alta/baja reciente de otro dispositivo) terminara
+// pisando esa copia vieja encima — reportado como falta de estabilidad en
+// Autoridades en Sheets. Cada registro lleva su propio id estable (_id)
+// y fecha de última edición (_ts, ver _ensureAutoridadId/guardarAutoridad)
+// para poder fusionar por registro en vez de reemplazar todo el array.
+const _LS_AUTORIDADES_DEL = 'lr_autoridades_deleted_v1';
+function _getAutoridadesDelMap() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_AUTORIDADES_DEL) || '[]');
+    const m = new Map();
+    raw.forEach(x => { if (x && x.id) m.set(x.id, parseInt(x.deletedAt) || 0); });
+    return m;
+  } catch(e) { return new Map(); }
+}
+function _addAutoridadDel(id) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_AUTORIDADES_DEL) || '[]');
+    const list = raw.filter(x => x && x.id !== id);
+    list.push({ id, deletedAt: Date.now() });
+    localStorage.setItem(_LS_AUTORIDADES_DEL, JSON.stringify(list));
+  } catch(e) {}
+}
+function _removeAutoridadDel(id) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(_LS_AUTORIDADES_DEL) || '[]');
+    const list = raw.filter(x => x && x.id !== id);
+    if (list.length !== raw.length) localStorage.setItem(_LS_AUTORIDADES_DEL, JSON.stringify(list));
+  } catch(e) {}
+}
+// Genera un id estable para un registro que todavía no tiene uno (datos
+// de antes de este fix) — se llama cada vez que se toca un registro.
+function _ensureAutoridadId(a) {
+  if (!a._id) a._id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  return a._id;
 }
 
 function limpiarDuplicadosTrans() {
@@ -40742,7 +40795,7 @@ async function restaurarDesdeSheets(modulo) {
   else if (modulo === 'balances') { _balances = {}; }
   else if (modulo === 'flujos') { DATA.flujos = {}; try { localStorage.removeItem('lr_flujos_sheets_snap'); localStorage.removeItem(_LS_FLUJOS_DEL); } catch(e) {} }
   else if (modulo === 'personal') { DATA.personal = []; DATA.pers_totals = {}; }
-  else if (modulo === 'autoridades') { DATA.autoridades = []; }
+  else if (modulo === 'autoridades') { DATA.autoridades = []; try { localStorage.removeItem(_LS_AUTORIDADES_DEL); } catch(e) {} }
   // Limpiar también la marca de "pendiente de publicar" de este módulo —
   // sin esto, una restauración explícita arreglaba esta vez puntual, pero
   // la próxima bajada automática volvía a quedar bloqueada por el mismo
@@ -42075,27 +42128,68 @@ function applyCloudData(cloud, opts) {
   // Nombre y Apellido se guardan unificados en un solo campo "nombre" — si
   // Sheets todavía trae filas del formato anterior (columna "apellido"
   // separada, de una publicación previa), se concatenan acá sin perder el dato.
-  // Reemplazo total sin ninguna protección — igual que personal: se omite si
-  // hay cambios locales sin publicar, para no perder una edición en curso.
-  // "|| _solo === 'autoridades'" fuerza la bajada igual cuando es una
-  // restauración explícita (restaurarDesdeSheets) — sin esto, un dispositivo
-  // con una edición de autoridades que nunca llegó a publicarse (ej. porque
-  // el auto-sync vino fallando por otro motivo) se quedaba para siempre sin
-  // ver el listado real de Sheets, sin ningún botón capaz de destrabarlo:
-  // a diferencia de balances/transferencias/personal/flujos, esta sección
-  // no tenía ninguna vía de escape al guardia de "pendiente". Bug real
-  // reportado: "un dispositivo no visualiza el listado de autoridades pero
-  // sí en modo incógnito" (que no tiene nada pendiente que lo bloquee).
-  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0 && (!_seccionPendiente('autoridades') || _solo === 'autoridades')) {
-    DATA.autoridades = cloud.autoridades
+  // Antes esto era un reemplazo total del array completo — la misma clase de
+  // bug ya corregida en Personal/Rubros: un dispositivo con una copia vieja
+  // (sin un alta/baja/edición reciente de otro dispositivo) terminaba
+  // pisándola igual en su próxima publicación. Reportado como "no tengo
+  // estabilidad en Sheets en Autoridades". Ahora se fusiona POR REGISTRO
+  // (por _id estable), igual principio que balances/transferencias: nunca
+  // se pierde una entrada local que Sheets no conozca todavía, una edición
+  // gana solo si es genuinamente más nueva (_ts), y una baja se respeta vía
+  // tumba salvo que la fila de Sheets sea más nueva que esa baja.
+  if (Array.isArray(cloud.autoridades)) {
+    const _delMapAut = _getAutoridadesDelMap();
+    const _autLocalPorId = {};
+    DATA.autoridades.forEach(a => { _autLocalPorId[_ensureAutoridadId(a)] = a; });
+
+    cloud.autoridades
       .filter(r => r.empresa && (r.nombre || r.apellido))
-      .map(r => ({
-        empresa: String(r.empresa),
-        nombre:  [String(r.nombre || '').trim(), String(r.apellido || '').trim()].filter(Boolean).join(' '),
-        cargo:   String(r.cargo || ''),
-        desde:   String(r.desde || ''),
-        hasta:   String(r.hasta || ''),
-      }));
+      .forEach(r => {
+        const id = String(r._id || '');
+        const tsCloud = parseInt(r._ts, 10) || 0;
+        const reg = {
+          empresa: String(r.empresa),
+          nombre:  [String(r.nombre || '').trim(), String(r.apellido || '').trim()].filter(Boolean).join(' '),
+          cargo:   String(r.cargo || ''),
+          desde:   String(r.desde || ''),
+          hasta:   String(r.hasta || ''),
+          _id: id || undefined,
+          _ts: tsCloud,
+        };
+        // Fila vieja de Sheets (publicada antes de este fix) sin _id —
+        // no hay con qué fusionarla por registro; se agrega tal cual solo
+        // si no hay ya un registro local equivalente (mismo criterio que
+        // usaba el modo "combinar" de importarAutoridades).
+        if (!id) {
+          const yaExiste = DATA.autoridades.some(a =>
+            a.empresa === reg.empresa && a.nombre === reg.nombre && a.cargo === reg.cargo && a.desde === reg.desde);
+          if (!yaExiste) { _ensureAutoridadId(reg); DATA.autoridades.push(reg); }
+          return;
+        }
+        if (_delMapAut.has(id)) {
+          const tsDel = _delMapAut.get(id) || 0;
+          if (tsCloud > tsDel) { _removeAutoridadDel(id); } else { return; } // respetar la baja local
+        }
+        const local = _autLocalPorId[id];
+        if (!local) { DATA.autoridades.push(reg); _autLocalPorId[id] = reg; return; }
+        if ((local._ts || 0) <= tsCloud) {
+          Object.assign(local, reg); // Sheets es igual o más nuevo — adoptar
+        } // si no, el registro local (más nuevo, sin publicar todavía) prevalece
+      });
+
+    // Tumbas publicadas por OTRO dispositivo — purgar el registro local
+    // correspondiente (si todavía no se enteró de esa baja) y adoptar la
+    // tumba, salvo que este dispositivo tenga una edición local más nueva
+    // que la baja (reapareció/se corrigió después de borrarla en otro lado).
+    (cloud.autoridades_a_eliminar || []).forEach(t => {
+      if (!t || !t.id) return;
+      const tsDel = parseInt(t.deleted_at, 10) || 0;
+      const idx = DATA.autoridades.findIndex(a => a._id === t.id);
+      if (idx >= 0 && (DATA.autoridades[idx]._ts || 0) > tsDel) return; // edición local más nueva: conservarla
+      if (idx >= 0) DATA.autoridades.splice(idx, 1);
+      const actual = _delMapAut.get(t.id) || 0;
+      if (tsDel > actual) _addAutoridadDel(t.id);
+    });
   }
 
   // ── Empresas eliminadas/fusionadas/renombradas ("tumbas") ──────────
@@ -42597,14 +42691,21 @@ function buildCloudPayload() {
 
   // autoridades: director/presidente, síndico, etc. por empresa, con historial
   // de vigencia (desde/hasta) — una fila por autoridad/período. Nombre y
-  // Apellido van unificados en un solo campo.
+  // Apellido van unificados en un solo campo. Cada fila lleva su propio id
+  // estable (_id) y fecha de última edición (_ts) para que applyCloudData
+  // pueda fusionar por registro en vez de reemplazar todo el array — ver
+  // nota ahí mismo.
   const autoridadesRows = (DATA.autoridades || []).map(a => ({
     empresa: a.empresa || '',
     nombre:  a.nombre  || '',
     cargo:   a.cargo   || '',
     desde:   a.desde   || '',
     hasta:   a.hasta   || '',
+    _id:     _ensureAutoridadId(a),
+    _ts:     a._ts || 0,
   }));
+  const autoridadesAEliminarRows = [...(typeof _getAutoridadesDelMap === 'function' ? _getAutoridadesDelMap().entries() : [])]
+    .map(([id, deletedAt]) => ({ id, deleted_at: deletedAt }));
 
   // empresas_eliminadas: "tumbas" de empresas borradas/fusionadas/renombradas.
   // El bridge las mergea por upsert (nunca se pierde una) y las usa para
@@ -42629,6 +42730,7 @@ function buildCloudPayload() {
            flujos: flujosRows, flujos_config: flujosConfigRows,
            mensual: mensualRows, er_mensual: erMensualRows,
            er_detalle: erDetalleRows, autoridades: autoridadesRows,
+           autoridades_a_eliminar: autoridadesAEliminarRows,
            empresas_eliminadas: empresasEliminadasRows,
            beneficiarios_excluidos: beneficiariosExcluidosRows,
            lr_users_extra: usersExtra, lr_readonly: readonlyExtra,
