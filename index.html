@@ -41339,6 +41339,27 @@ function applyCloudData(cloud, opts) {
       if (Object.keys(mObj).length > 0) persEntry.m = mObj;
       DATA.personal.push(persEntry);
     });
+    // Recordar el último valor real (no cero) visto en Sheets por
+    // empresa/año — usado en buildCloudPayload() para no publicar un 0 que
+    // en realidad es solo "este dispositivo nunca cargó este año", en vez
+    // de una baja real a 0 empleados. Bug real reportado: la dotación de
+    // 2025/2026 de varias empresas, ya cargada, volvió a 0 en Sheets y en
+    // el dashboard — el módulo "Personal" se publica siempre completo (sin
+    // ninguna protección por celda, a diferencia de fact/resultado/rubros,
+    // que ya la tienen), así que un dispositivo con una copia vieja (de
+    // antes de que esos años se cargaran en cualquier otro) terminaba
+    // pisando en Sheets, con sus propios ceros, el valor real que otro
+    // dispositivo ya había cargado.
+    try {
+      const snap = {};
+      DATA.personal.forEach(d => {
+        DATA.years.forEach(y => {
+          const v = _persGetTotal(d, String(y));
+          if (v) { (snap[d.e] = snap[d.e] || {})[String(y)] = v; }
+        });
+      });
+      localStorage.setItem('lr_personal_sheets_snap_v1', JSON.stringify(snap));
+    } catch(e) {}
   }
 
   // TRANSFERENCIAS: merge — agregar registros de Sheets que no existen localmente.
@@ -42077,12 +42098,20 @@ function buildCloudPayload() {
   // correcto guardado en el momento de la carga (_persGetTotal lo lee tal
   // cual), así que alcanza con escribirlo siempre — el detalle mensual
   // queda igual en las columnas YYYY_MM, ahora solo como referencia/auditoría.
+  // Último valor real (no cero) que esta pestaña vio en Sheets por
+  // empresa/año (ver nota en applyCloudData) — resguardo para no publicar
+  // un 0 que en realidad es solo "este dispositivo nunca cargó este año"
+  // encima de un valor real que otro dispositivo ya cargó y publicó.
+  let _persSheetsSnap = {};
+  try { _persSheetsSnap = JSON.parse(localStorage.getItem('lr_personal_sheets_snap_v1') || '{}'); } catch(e) {}
+
   const persRows = (DATA.personal || []).map(d => {
     const row = { empresa: d.e };
     years.forEach(y => {
       const yStr = String(y);
       const hasMeses = d.m && d.m[yStr] && d.m[yStr].some(v => v != null);
-      row[yStr] = _persGetTotal(d, yStr) || 0;
+      const vLocal = _persGetTotal(d, yStr) || 0;
+      row[yStr] = vLocal || (_persSheetsSnap[d.e]?.[yStr]) || 0;
       if (hasMeses) {
         d.m[yStr].forEach((v, i) => {
           row[yStr + '_' + String(i + 1).padStart(2, '0')] = v != null ? v : '';
