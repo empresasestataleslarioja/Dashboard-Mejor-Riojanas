@@ -41729,8 +41729,19 @@ function applyCloudData(cloud, opts) {
       return m ? `${m[1]}/${m[2]}` : s;
     };
 
+    // Ignorar cualquier fila de Sheets cuya empresa coincida con una tumba
+    // conocida (fusionada/eliminada/renombrada) — segunda línea de defensa
+    // además del fix en buildCloudPayload que ya evita volver a PUBLICAR
+    // estas filas: una fila resucitada que haya quedado pegada en Sheets de
+    // ANTES de ese fix (o por una edición manual directa de la planilla)
+    // también se ignora al bajar, en vez de revivir la empresa en esta
+    // pestaña con solo sincronizar.
+    const _tumbas = DATA.empresas_eliminadas || [];
+    const _esEmpresaTumbada = emp => _tumbas.some(t => _coincideEmpresaTumba(emp, t.empresa, t.fusionadaEn));
+
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.rubro) return;
+      if (_esEmpresaTumbada(r.empresa)) return;
       if (_seccionPendiente('rubros') && rubros[r.empresa]) return;
       // "Sin rubro" (empresa sin rubro asignado todavía) se guarda igual que
       // cualquier otro valor — antes se saltaba, así que una empresa que
@@ -41774,6 +41785,7 @@ function applyCloudData(cloud, opts) {
     // publicar; antes solo se aplicaba la baja, nunca la reactivación.
     cloud.rubros.forEach(r => {
       if (!r.empresa || !r.activo) return;
+      if (_esEmpresaTumbada(r.empresa)) return;
       if (_seccionPendiente('rubros') && empresasInactivas[r.empresa] !== undefined) return;
       if (r.activo === 'NO') empresasInactivas[r.empresa] = _soloFecha(r.fecha_inactiva) || true;
       else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
@@ -41786,6 +41798,7 @@ function applyCloudData(cloud, opts) {
     DATA.institucional = DATA.institucional || {};
     cloud.rubros.forEach(r => {
       if (!r.empresa || (!r.fecha_constitucion && !r.decreto && !r.actividad && !r.tipo_societario && !r.participacion_accionaria)) return;
+      if (_esEmpresaTumbada(r.empresa)) return;
       const actual = DATA.institucional[r.empresa];
       if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto || actual.actividad || actual.tipoSocietario || actual.participacionAccionaria)) return;
       DATA.institucional[r.empresa] = {
@@ -42315,11 +42328,22 @@ function buildCloudPayload() {
   // empresasInactivas/DATA.institucional cubre también las empresas
   // "Sin rubro" (no tienen entrada en `rubros`) que tengan alguno de esos
   // datos cargado, para que no se pierdan.
+  // Nunca volver a publicar una empresa ya fusionada/eliminada (tumba en
+  // DATA.empresas_eliminadas) aunque siga pegada en rubros/empresasInactivas/
+  // institucional de ESTE dispositivo — bug real reportado ("por vez número
+  // mil, vuelven a aparecer empresas que fusioné o puse inactivas"): el podado
+  // de esos stores locales (ver applyCloudData) se salta mientras haya
+  // cualquier cambio de rubros sin publicar en ESTE dispositivo, sin relación
+  // con la empresa fusionada — así que un dispositivo que fusionó/dio de baja
+  // una empresa hace tiempo, pero tenía otra edición de rubros pendiente sin
+  // publicar, terminaba resucitándola en Sheets apenas publicaba esa otra
+  // edición, porque esta función nunca filtraba contra las tumbas conocidas.
+  const _empresasTumbadas = new Set((DATA.empresas_eliminadas || []).map(t => t.empresa));
   const rubrosEmpresas = [...new Set([
     ...Object.keys(rubros || {}),
     ...Object.keys(empresasInactivas || {}),
     ...Object.keys(DATA.institucional || {}),
-  ])];
+  ])].filter(emp => !_empresasTumbadas.has(emp));
   const rubrosRows = rubrosEmpresas.map(emp => {
     const inst = DATA.institucional?.[emp] || {};
     return {
