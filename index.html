@@ -10635,6 +10635,7 @@ function toggleEmpresaInactiva(emp) {
     _marcarEmpresaMasterEditada(emp);
     try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
     buildRubros();
+    try { checkAlerts(); } catch(e) {}
   } else {
     _iniciarFechaInactiva(emp);
   }
@@ -10667,6 +10668,7 @@ function _confirmarFechaInactiva(emp, fecha) {
   _marcarEmpresaMasterEditada(emp);
   try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
   buildRubros();
+  try { checkAlerts(); } catch(e) {}
 }
 
 function filterRubroPanel(r) {
@@ -17771,6 +17773,7 @@ function guardarAutoridad() {
   saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
+  try { checkAlerts(); } catch(e) {}
 }
 
 function eliminarAutoridad(idx) {
@@ -17782,6 +17785,7 @@ function eliminarAutoridad(idx) {
   saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
+  try { checkAlerts(); } catch(e) {}
 }
 
 // Cierra la vigencia de una autoridad actual (hasta = hoy) sin borrar el
@@ -17800,6 +17804,7 @@ function cerrarVigenciaAutoridad(idx) {
   saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
   buildAutoridades();
+  try { checkAlerts(); } catch(e) {}
 }
 
 // ── Reporte imprimible de autoridades ────────────────────────────
@@ -31307,13 +31312,31 @@ function checkAlerts() {
     }
   });
 
+  // Empresas activas sin autoridades vigentes cargadas — pedido explícito:
+  // controlar que toda empresa activa tenga sus autoridades correspondientes,
+  // avisando cuál/cuáles no las tienen. Usa el mismo criterio de vigencia ya
+  // vinculado al estado activa/inactiva (ver _autoridadEsVigente): un cargo
+  // sin "hasta" de una empresa inactiva no cuenta como autoridad vigente.
+  if (typeof _autoridadEsVigente === 'function') {
+    const _hoyAut = new Date().toISOString().slice(0,10);
+    const _empresasConAutoridadVigente = new Set(
+      (DATA.autoridades || []).filter(a => _autoridadEsVigente(a, _hoyAut)).map(a => a.empresa)
+    );
+    Object.keys(rubros || {}).forEach(emp => {
+      if (empresasInactivas[emp]) return; // solo empresas activas
+      if (!_empresasConAutoridadVigente.has(emp)) {
+        alerts.push({ tipo:'autoridad', msg: emp + ': sin autoridades vigentes cargadas' });
+      }
+    });
+  }
+
   const badge    = document.getElementById('alerts-badge');
   const countLbl = document.getElementById('alerts-count-lbl');
   const panel    = document.getElementById('alerts-panel');
   if (!badge || !panel) return;
 
   const alertHTML = alerts.map(a => {
-    const color = a.tipo==='deficit'?'#ff4766':a.tipo==='dep'?'#ff8c47':'#e8ff47';
+    const color = a.tipo==='deficit'?'#ff4766':a.tipo==='dep'?'#ff8c47':a.tipo==='autoridad'?'#c447ff':'#e8ff47';
     return '<div style="padding:7px 10px;border-left:3px solid '+color+';margin-bottom:5px;font-size:9.5px;line-height:1.5;background:var(--s2);border-radius:0 3px 3px 0">'+a.msg+'</div>';
   }).join('');
 
