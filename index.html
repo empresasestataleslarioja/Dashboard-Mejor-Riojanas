@@ -40708,14 +40708,30 @@ async function syncSoloPersonal() {
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
 }
 
+// Cantidad de registros que quedaron en memoria para cada módulo tras una
+// bajada — se muestra en el indicador para poder confirmar en el momento,
+// sin herramientas de desarrollador, si realmente llegó algo de Sheets o
+// no (y así distinguir "Sheets no tiene nada" de "algo lo está bloqueando").
+function _conteoModulo(modulo) {
+  switch (modulo) {
+    case 'autoridades':    return (DATA.autoridades || []).length;
+    case 'personal':       return (DATA.personal || []).length;
+    case 'transferencias': return (DATA.transferencias || []).length;
+    case 'balances':       return Object.keys(_balances || {}).length;
+    case 'flujos':         return Object.keys(DATA.flujos || {}).length;
+    default: return null;
+  }
+}
+
 async function descargarSoloModulo(modulo) {
   if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⟳ Descargando ' + modulo + '…'; ind.style.color = '#47e8ff'; }
   try {
     await syncFromCloud(false, { soloModulo: modulo });
-    if (ind) { ind.textContent = '✓ ' + modulo + ' actualizado'; ind.style.color = '#47ffb4'; }
-    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+    const n = _conteoModulo(modulo);
+    if (ind) { ind.textContent = '✓ ' + modulo + ' actualizado' + (n != null ? ` (${n})` : ''); ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 6000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
 }
 
