@@ -10581,6 +10581,13 @@ function setRubro(emp, val, selEl) {
   selEl.title = val || 'Sin rubro';
   // autosave
   saveRubros();
+  // Marcar pendiente de publicar y disparar auto-sync — sin esto, este
+  // cambio directo del usuario no quedaba protegido contra ser pisado por
+  // una bajada de Sheets que corriera antes de la próxima publicación (ver
+  // _seccionPendiente en applyCloudData/buildCloudPayload), ni se publicaba
+  // solo: dependía de que alguna otra edición sin relación disparara el
+  // auto-sync para que este cambio viajara de rebote.
+  try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
 }
 
 // ── Marcar/desmarcar empresa como inactiva — puramente informativo dentro
@@ -10592,6 +10599,7 @@ function toggleEmpresaInactiva(emp) {
   if (empresasInactivas[emp]) {
     delete empresasInactivas[emp];
     saveRubros();
+    try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
     buildRubros();
   } else {
     _iniciarFechaInactiva(emp);
@@ -10622,6 +10630,7 @@ function _iniciarFechaInactiva(emp) {
 function _confirmarFechaInactiva(emp, fecha) {
   empresasInactivas[emp] = fecha || true;
   saveRubros();
+  try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
   buildRubros();
 }
 
@@ -41725,6 +41734,34 @@ function applyCloudData(cloud, opts) {
     // o corregir y esta todavía no bajó.
     try { localStorage.setItem('lr_rubros_sheets_snap_v1', JSON.stringify(cloud.rubros.map(r => r.empresa).filter(Boolean))); } catch(e) {}
 
+    // Recordar también el estado activo/inactivo + datos institucionales que
+    // Sheets tenía en esta bajada — buildCloudPayload() lo usa como
+    // resguardo definitivo: si esta pestaña no tiene ningún cambio propio
+    // sin publicar en "rubros"/"institucional" (_seccionPendiente), cualquier
+    // valor que esté a punto de publicar para esos campos tiene que coincidir
+    // con lo que Sheets ya tenía — si no coincide, es la firma de una caché
+    // local incompleta (nunca bajó ese dato), no de una acción real de un
+    // usuario, así que se descarta y se usa el de Sheets. Bug real reportado
+    // repetidas veces: empresas fusionadas/marcadas inactivas que "vuelven a
+    // aparecer" porque otra pestaña, sin saberlo, publicaba de nuevo su
+    // propio estado incompleto encima.
+    try {
+      const estado = {};
+      cloud.rubros.forEach(r => {
+        if (!r.empresa) return;
+        estado[r.empresa] = {
+          activo: r.activo || 'SI',
+          fecha_inactiva: r.fecha_inactiva || '',
+          fecha_constitucion: r.fecha_constitucion || '',
+          decreto: r.decreto || '',
+          actividad: r.actividad || '',
+          tipo_societario: r.tipo_societario || '',
+          participacion_accionaria: r.participacion_accionaria || '',
+        };
+      });
+      localStorage.setItem('lr_rubros_sheets_estado_v1', JSON.stringify(estado));
+    } catch(e) {}
+
     // Sheets puede devolver una celda de fecha (fecha_constitucion,
     // fecha_inactiva) como Date → ISO datetime completo (ej.
     // "2022-07-28T03:00:00.000Z") en vez del string plano "AAAA-MM-DD" que
@@ -42373,16 +42410,57 @@ function buildCloudPayload() {
     ...Object.keys(empresasInactivas || {}),
     ...Object.keys(DATA.institucional || {}),
   ])].filter(emp => !_empresasTumbadas.has(emp));
+  // Resguardo definitivo contra publicar un estado activo/inactivo o datos
+  // institucionales incompletos que esta pestaña nunca llegó a bajar (ver
+  // nota al guardar lr_rubros_sheets_estado_v1 en applyCloudData): sin
+  // ningún cambio propio sin publicar en la sección correspondiente, lo que
+  // se publica para esos campos tiene que coincidir con lo que Sheets ya
+  // tenía la última vez que se bajó — si este dispositivo nunca bajó el
+  // estado real de una empresa (p.ej. otra pestaña la marcó inactiva
+  // después de la última bajada de esta), no hay forma de que su valor
+  // local sea una acción real de ESTE usuario, así que se descarta a favor
+  // del último conocido de Sheets.
+  let _estadoSheets = {};
+  try { _estadoSheets = JSON.parse(localStorage.getItem('lr_rubros_sheets_estado_v1') || '{}'); } catch(e) {}
+  const _rubrosPendiente = _seccionPendiente('rubros');
+  const _institucionalPendiente = _seccionPendiente('institucional');
+
   const rubrosRows = rubrosEmpresas.map(emp => {
     const inst = DATA.institucional?.[emp] || {};
+    const prevEstado = _estadoSheets[emp];
+
+    let activo = empresasInactivas[emp] ? 'NO' : 'SI';
+    let fechaInactiva = typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '';
+    if (!_rubrosPendiente && prevEstado && prevEstado.activo !== activo) {
+      activo = prevEstado.activo;
+      fechaInactiva = prevEstado.fecha_inactiva || '';
+    }
+
+    let fechaConstitucion = inst.fechaConstitucion || '';
+    let decreto = inst.decreto || '';
+    let actividad = inst.actividad || '';
+    let tipoSocietario = inst.tipoSocietario || '';
+    let participacionAccionaria = inst.participacionAccionaria || '';
+    if (!_institucionalPendiente && prevEstado) {
+      const _instLocalVacio = !fechaConstitucion && !decreto && !actividad && !tipoSocietario && !participacionAccionaria;
+      const _instSheetsTenia = prevEstado.fecha_constitucion || prevEstado.decreto || prevEstado.actividad || prevEstado.tipo_societario || prevEstado.participacion_accionaria;
+      if (_instLocalVacio && _instSheetsTenia) {
+        fechaConstitucion = prevEstado.fecha_constitucion || '';
+        decreto = prevEstado.decreto || '';
+        actividad = prevEstado.actividad || '';
+        tipoSocietario = prevEstado.tipo_societario || '';
+        participacionAccionaria = prevEstado.participacion_accionaria || '';
+      }
+    }
+
     return {
-      empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo: empresasInactivas[emp] ? 'NO' : 'SI',
-      fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '',
-      fecha_constitucion: inst.fechaConstitucion || '',
-      decreto: inst.decreto || '',
-      actividad: inst.actividad || '',
-      tipo_societario: inst.tipoSocietario || '',
-      participacion_accionaria: inst.participacionAccionaria || '',
+      empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo,
+      fecha_inactiva: fechaInactiva,
+      fecha_constitucion: fechaConstitucion,
+      decreto: decreto,
+      actividad: actividad,
+      tipo_societario: tipoSocietario,
+      participacion_accionaria: participacionAccionaria,
     };
   });
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
