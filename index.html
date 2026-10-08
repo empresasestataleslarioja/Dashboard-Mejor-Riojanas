@@ -2065,15 +2065,12 @@ self.onmessage = async (e) => {
 
         <div class="tba-sep"></div>
 
-        <!-- Vista: alertas · filtros · pantalla completa -->
+        <!-- Vista: filtros · pantalla completa (la campana de alertas se
+             movió a zona C, siempre visible — ver nota ahí mismo: acá
+             adentro, en una ventana angosta, quedaba empujada fuera de
+             pantalla por los botones anteriores sin ninguna pista de que
+             había que scrollear para encontrarla). -->
         <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
-          <button class="tba-btn" id="alerts-badge" onclick="toggleAlertsPanel()"
-            title="Alertas" style="display:flex;align-items:center;gap:3px">
-            🔔<span id="alerts-count-lbl"
-              style="display:none;min-width:15px;height:15px;border-radius:8px;
-              background:#ff4766;color:#fff;font-size:8px;font-weight:700;
-              align-items:center;justify-content:center;padding:0 2px">0</span>
-          </button>
           <button class="tba-btn" id="btn-viz-panel" onclick="toggleVizPanel()"
             title="Filtros de visualización">◎ Filtros</button>
           <button class="tba-btn" onclick="enterPresMode()" title="Pantalla completa">⛶</button>
@@ -2100,6 +2097,13 @@ self.onmessage = async (e) => {
            reportado: en una ventana angosta, este estado quedaba empujado
            fuera de pantalla por los botones de zona B. -->
       <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;padding-left:8px;border-left:1px solid var(--bd)">
+        <button class="tba-btn" id="alerts-badge" onclick="toggleAlertsPanel()"
+          title="Alertas" style="display:flex;align-items:center;gap:3px">
+          🔔<span id="alerts-count-lbl"
+            style="display:none;min-width:15px;height:15px;border-radius:8px;
+            background:#ff4766;color:#fff;font-size:8px;font-weight:700;
+            align-items:center;justify-content:center;padding:0 2px">0</span>
+        </button>
         <div id="save-indicator" style="font-size:9px;color:var(--dim);font-family:var(--mono);white-space:nowrap">—</div>
         <button id="btn-autosync-toggle" onclick="_toggleAutoSync()"
           title="Auto-sync activo — click para pausar"
@@ -17609,6 +17613,19 @@ function _autoridadEsVigente(a, hoy) {
   return true;
 }
 
+// Empresas activas (no marcadas inactivas) que no tienen ninguna autoridad
+// vigente cargada — usado tanto por checkAlerts() (campana 🔔) como por el
+// reporte imprimible de Autoridades, para no duplicar el mismo cálculo.
+function _empresasActivasSinAutoridadVigente() {
+  const hoy = new Date().toISOString().slice(0,10);
+  const conAutoridad = new Set(
+    (DATA.autoridades || []).filter(a => _autoridadEsVigente(a, hoy)).map(a => a.empresa)
+  );
+  return Object.keys(rubros || {})
+    .filter(emp => !empresasInactivas[emp] && !conAutoridad.has(emp))
+    .sort((a,b) => a.localeCompare(b,'es'));
+}
+
 function buildAutoridades() {
   const tbl = document.getElementById('tbl-autoridades');
   const lbl = document.getElementById('autoridades-tabla-lbl');
@@ -17856,6 +17873,19 @@ function _rptAutoridades() {
     }).join('');
   }
 
+  // Empresas activas sin ninguna autoridad vigente cargada — pedido
+  // explícito: que el reporte muestre directamente cuáles faltan, sin
+  // depender de encontrar la campana de alertas en la topbar.
+  const _faltantes = _empresasActivasSinAutoridadVigente();
+  const faltantesHtml = _faltantes.length
+    ? `<div style="margin:14px 0;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">
+        <div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ${_faltantes.length} empresa${_faltantes.length!==1?'s':''} activa${_faltantes.length!==1?'s':''} sin autoridades vigentes cargadas</div>
+        <div style="font-size:9.5px;color:#7a2a20;line-height:1.6">${_faltantes.join(' · ')}</div>
+      </div>`
+    : `<div style="margin:14px 0;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">
+        ✓ Todas las empresas activas tienen al menos una autoridad vigente cargada.
+      </div>`;
+
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Autoridades</title>'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Autoridades', subt)
     + `<div class="kg3">
@@ -17863,6 +17893,7 @@ function _rptAutoridades() {
         ${_rptKpi('Empresas con autoridades', nEmpresas, selEmp ? selEmp : 'en el listado', '#0f6e56')}
         ${_rptKpi('Autoridades vigentes', nVigentes, 'a la fecha del reporte', '#534ab7')}
       </div>`
+    + faltantesHtml
     + `<div class="tw"><table><thead><tr>
         <th style="text-align:left">Nombre y Apellido</th><th style="text-align:left">Cargo</th>
         <th>Desde</th><th>Hasta</th>
@@ -31317,16 +31348,9 @@ function checkAlerts() {
   // avisando cuál/cuáles no las tienen. Usa el mismo criterio de vigencia ya
   // vinculado al estado activa/inactiva (ver _autoridadEsVigente): un cargo
   // sin "hasta" de una empresa inactiva no cuenta como autoridad vigente.
-  if (typeof _autoridadEsVigente === 'function') {
-    const _hoyAut = new Date().toISOString().slice(0,10);
-    const _empresasConAutoridadVigente = new Set(
-      (DATA.autoridades || []).filter(a => _autoridadEsVigente(a, _hoyAut)).map(a => a.empresa)
-    );
-    Object.keys(rubros || {}).forEach(emp => {
-      if (empresasInactivas[emp]) return; // solo empresas activas
-      if (!_empresasConAutoridadVigente.has(emp)) {
-        alerts.push({ tipo:'autoridad', msg: emp + ': sin autoridades vigentes cargadas' });
-      }
+  if (typeof _empresasActivasSinAutoridadVigente === 'function') {
+    _empresasActivasSinAutoridadVigente().forEach(emp => {
+      alerts.push({ tipo:'autoridad', msg: emp + ': sin autoridades vigentes cargadas' });
     });
   }
 
