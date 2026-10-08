@@ -6391,6 +6391,17 @@ var rubros = {}; // var evita Temporal Dead Zone en referencias tempranas
 // puramente informativo: no excluye a la empresa de facturación, resultado,
 // personal ni ningún otro módulo, solo se refleja en Empresas y rubros.
 var empresasInactivas = {};
+// Fecha real de la última edición del "maestro de empresa" (rubro, estado
+// activa/inactiva o datos institucionales) por empresa — reemplaza al
+// guardia de sección completa (_seccionPendiente('rubros')) que antes
+// protegía esto: ese guardia es TODO O NADA, así que editar el rubro de
+// UNA empresa desactivaba la protección para TODAS las demás en esa misma
+// publicación, dejando pasar el estado local (posiblemente viejo) de
+// cualquier otra — la causa real de que empresas fusionadas/inactivas
+// "sigan apareciendo" a pesar del fix anterior (ver guardarRubro/
+// toggleEmpresaInactiva/_confirmarFechaInactiva/_guardarInstitucional).
+// Mismo principio que ya se aplicó a Personal (d.yTs) y Autoridades (_ts).
+var empresaMasterTs = {};
 function loadRubros() {
   try {
     const saved = localStorage.getItem('lr_rubros_v4');
@@ -6400,6 +6411,10 @@ function loadRubros() {
     const savedInact = localStorage.getItem('lr_empresas_inactivas_v1');
     empresasInactivas = savedInact ? JSON.parse(savedInact) : {};
   } catch(e) { empresasInactivas = {}; }
+  try {
+    const savedTs = localStorage.getItem('lr_empresa_master_ts_v1');
+    empresaMasterTs = savedTs ? JSON.parse(savedTs) : {};
+  } catch(e) { empresaMasterTs = {}; }
   // Cargar lista de rubros personalizada si existe
   try {
     const savedList = localStorage.getItem('lr_rubro_list_v4');
@@ -10003,7 +10018,18 @@ const PER_EMPRESA_STORES = [
   { nombre: 'notas',         get: () => DATA.notas },
   { nombre: 'institucional', get: () => DATA.institucional },
   { nombre: 'presupuesto',   get: () => DATA.presupuesto },
+  { nombre: 'masterTs',      get: () => (typeof empresaMasterTs !== 'undefined' ? empresaMasterTs : null) },
 ];
+
+// Marca la fecha real de edición del maestro de esta empresa (rubro,
+// activa/inactiva o institucional) — llamar SIEMPRE junto con el cambio
+// real, nunca por separado, para que buildCloudPayload/applyCloudData
+// puedan fusionar por empresa en vez de por sección completa.
+function _marcarEmpresaMasterEditada(emp) {
+  if (!emp) return;
+  empresaMasterTs[emp] = Date.now();
+  try { localStorage.setItem('lr_empresa_master_ts_v1', JSON.stringify(empresaMasterTs)); } catch(e) {}
+}
 
 // Compara nombres de empresa tolerando las mismas variantes reales que ya
 // resuelve _mismoNombreEmpresa (acentos, sufijo legal SAU/SAPEM/SRL,
@@ -10593,6 +10619,7 @@ function setRubro(emp, val, selEl) {
   // _seccionPendiente en applyCloudData/buildCloudPayload), ni se publicaba
   // solo: dependía de que alguna otra edición sin relación disparara el
   // auto-sync para que este cambio viajara de rebote.
+  _marcarEmpresaMasterEditada(emp);
   try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
 }
 
@@ -10605,6 +10632,7 @@ function toggleEmpresaInactiva(emp) {
   if (empresasInactivas[emp]) {
     delete empresasInactivas[emp];
     saveRubros();
+    _marcarEmpresaMasterEditada(emp);
     try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
     buildRubros();
   } else {
@@ -10636,6 +10664,7 @@ function _iniciarFechaInactiva(emp) {
 function _confirmarFechaInactiva(emp, fecha) {
   empresasInactivas[emp] = fecha || true;
   saveRubros();
+  _marcarEmpresaMasterEditada(emp);
   try { saveDataToLocalCache(); marcarPendienteGuardar(['rubros']); } catch(e) {}
   buildRubros();
 }
@@ -19217,6 +19246,7 @@ function _guardarInstitucional(emp, fecha, decreto) {
   } else {
     delete DATA.institucional[emp];
   }
+  _marcarEmpresaMasterEditada(emp);
   saveDataToLocalCache();
   try { marcarPendienteGuardar(['institucional']); } catch(e) {}
 }
@@ -19301,6 +19331,7 @@ function _confirmarInstPopover() {
   } else {
     delete DATA.institucional[emp];
   }
+  _marcarEmpresaMasterEditada(emp);
   saveDataToLocalCache();
   try { marcarPendienteGuardar(['institucional']); } catch(e) {}
   pop.style.display = 'none';
@@ -41839,34 +41870,6 @@ function applyCloudData(cloud, opts) {
     // o corregir y esta todavía no bajó.
     try { localStorage.setItem('lr_rubros_sheets_snap_v1', JSON.stringify(cloud.rubros.map(r => r.empresa).filter(Boolean))); } catch(e) {}
 
-    // Recordar también el estado activo/inactivo + datos institucionales que
-    // Sheets tenía en esta bajada — buildCloudPayload() lo usa como
-    // resguardo definitivo: si esta pestaña no tiene ningún cambio propio
-    // sin publicar en "rubros"/"institucional" (_seccionPendiente), cualquier
-    // valor que esté a punto de publicar para esos campos tiene que coincidir
-    // con lo que Sheets ya tenía — si no coincide, es la firma de una caché
-    // local incompleta (nunca bajó ese dato), no de una acción real de un
-    // usuario, así que se descarta y se usa el de Sheets. Bug real reportado
-    // repetidas veces: empresas fusionadas/marcadas inactivas que "vuelven a
-    // aparecer" porque otra pestaña, sin saberlo, publicaba de nuevo su
-    // propio estado incompleto encima.
-    try {
-      const estado = {};
-      cloud.rubros.forEach(r => {
-        if (!r.empresa) return;
-        estado[r.empresa] = {
-          activo: r.activo || 'SI',
-          fecha_inactiva: r.fecha_inactiva || '',
-          fecha_constitucion: r.fecha_constitucion || '',
-          decreto: r.decreto || '',
-          actividad: r.actividad || '',
-          tipo_societario: r.tipo_societario || '',
-          participacion_accionaria: r.participacion_accionaria || '',
-        };
-      });
-      localStorage.setItem('lr_rubros_sheets_estado_v1', JSON.stringify(estado));
-    } catch(e) {}
-
     // Sheets puede devolver una celda de fecha (fecha_constitucion,
     // fecha_inactiva) como Date → ISO datetime completo (ej.
     // "2022-07-28T03:00:00.000Z") en vez del string plano "AAAA-MM-DD" que
@@ -41902,25 +41905,51 @@ function applyCloudData(cloud, opts) {
     const _tumbas = DATA.empresas_eliminadas || [];
     const _esEmpresaTumbada = emp => _tumbas.some(t => _coincideEmpresaTumba(emp, t.empresa, t.fusionadaEn));
 
+    // Fusión POR EMPRESA (no por sección completa): el guardia anterior
+    // (_seccionPendiente('rubros'), sección entera) tenía un defecto real —
+    // editar el rubro de UNA empresa marcaba pendiente TODA la sección,
+    // desprotegiendo el estado local (posiblemente viejo) de TODAS las
+    // demás empresas en esa misma publicación. Causa real confirmada de
+    // "siguen apareciendo empresas ya fusionadas y otras que son inactivas"
+    // a pesar del fix anterior. Ahora cada empresa compara su propia marca
+    // de tiempo real (empresaMasterTs, puesta en setRubro/
+    // toggleEmpresaInactiva/_confirmarFechaInactiva/_guardarInstitucional/
+    // _confirmarInstPopover) contra la que trae Sheets — mismo principio ya
+    // aplicado a Personal (d.yTs) y Autoridades (_ts).
     cloud.rubros.forEach(r => {
-      if (!r.empresa || !r.rubro) return;
+      if (!r.empresa) return;
       if (_esEmpresaTumbada(r.empresa)) return;
-      if (_seccionPendiente('rubros') && rubros[r.empresa]) return;
-      // "Sin rubro" (empresa sin rubro asignado todavía) se guarda igual que
-      // cualquier otro valor — antes se saltaba, así que una empresa que
-      // existía en Sheets SOLO como fila "Sin rubro" (sin facturación, sin
-      // resultado, sin dato institucional, activa) no quedaba en NINGÚN
-      // store local: no entraba a `rubros`, no estaba en empresasInactivas
-      // (por estar activa) ni en DATA.institucional (sin datos cargados) —
-      // quedaba invisible en Gestión de Empresas y Rubros y en la Ficha
-      // Institucional pese a existir como fila real en la planilla maestra
-      // (bug real reportado: duplicados activos tipo "VIVERO OESTE RIOJANO"
-      // / "VIVERO DEL OESTE RIOJANO" que no aparecían para poder fusionarlos).
-      // "Sin rubro" ya es un valor de primera clase en el editor (ver
-      // getRubro() y el <option> explícito en el selector de rubro), así
-      // que guardarlo tal cual es seguro.
-      rubros[r.empresa] = r.rubro;
+      const tsCloud = parseInt(r._ts, 10) || 0;
+      const tsLocal = empresaMasterTs[r.empresa] || 0;
+      if (tsLocal > tsCloud) return; // edición local más nueva, sin publicar todavía — conservarla
+
+      // Rubro — "Sin rubro" (empresa sin rubro asignado todavía) se guarda
+      // igual que cualquier otro valor: una empresa que existía en Sheets
+      // SOLO como fila "Sin rubro" (sin facturación, sin resultado, sin
+      // dato institucional, activa) no debe quedar invisible en Gestión de
+      // Empresas y Rubros ni en la Ficha Institucional.
+      if (r.rubro) rubros[r.empresa] = r.rubro;
+
+      // Estado activa/inactiva — tanto pasar a inactiva como REACTIVAR
+      // (Sheets trae 'SI' y esta pestaña todavía la tenía marcada
+      // inactiva) se aplican acá por igual.
+      if (r.activo === 'NO') empresasInactivas[r.empresa] = _soloFecha(r.fecha_inactiva) || true;
+      else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
+
+      // Datos institucionales.
+      if (r.fecha_constitucion || r.decreto || r.actividad || r.tipo_societario || r.participacion_accionaria) {
+        DATA.institucional = DATA.institucional || {};
+        DATA.institucional[r.empresa] = {
+          fechaConstitucion: _soloFecha(r.fecha_constitucion),
+          decreto:           _decretoLimpio(r.decreto),
+          actividad:         r.actividad || '',
+          tipoSocietario:            r.tipo_societario || '',
+          participacionAccionaria:   r.participacion_accionaria || '',
+        };
+      }
+      empresaMasterTs[r.empresa] = tsCloud;
     });
+
     // Podar empresas fantasma: el merge de arriba es upsert puro (nunca
     // borra) — si una empresa se renombró/fusionó editando la planilla de
     // Sheets DIRECTAMENTE (sin pasar por "Renombrar"/"Fusionar" del
@@ -41931,47 +41960,24 @@ function applyCloudData(cloud, opts) {
     // que ya no existen en ninguna fila de Sheets seguían apareciendo en
     // "Asignación de empresas por rubro". cloud.rubros es siempre la bajada
     // COMPLETA de la pestaña (nunca parcial, ver _solo más arriba no aplica
-    // acá), así que es seguro tratarla como autoritativa. Solo se poda
-    // cuando este dispositivo no tiene cambios de rubros sin publicar —
-    // podría ser justo una empresa nueva que el usuario acaba de cargar y
-    // todavía no llegó a Sheets.
-    if (!_seccionPendiente('rubros')) {
-      const _empresasEnSheetsRubros = new Set(cloud.rubros.map(r => r.empresa));
-      Object.keys(rubros).forEach(emp => { if (!_empresasEnSheetsRubros.has(emp)) delete rubros[emp]; });
-      Object.keys(empresasInactivas).forEach(emp => { if (!_empresasEnSheetsRubros.has(emp)) delete empresasInactivas[emp]; });
-    }
+    // acá), así que es seguro tratarla como autoritativa. Se protege cada
+    // empresa por su propia marca de tiempo — no se poda una que este
+    // dispositivo acaba de agregar/tocar y todavía no llegó a Sheets.
+    const _empresasEnSheetsRubros = new Set(cloud.rubros.map(r => r.empresa));
+    const _ahoraMs = Date.now();
+    Object.keys(rubros).forEach(emp => {
+      if (_empresasEnSheetsRubros.has(emp)) return;
+      if ((empresaMasterTs[emp] || 0) > 0 && _ahoraMs - (empresaMasterTs[emp] || 0) < 10 * 60 * 1000) return; // tocada hace menos de 10min — podría no haber llegado a publicarse todavía
+      delete rubros[emp];
+    });
+    Object.keys(empresasInactivas).forEach(emp => {
+      if (_empresasEnSheetsRubros.has(emp)) return;
+      if ((empresaMasterTs[emp] || 0) > 0 && _ahoraMs - (empresaMasterTs[emp] || 0) < 10 * 60 * 1000) return;
+      delete empresasInactivas[emp];
+    });
     try { localStorage.setItem('lr_rubros_v4', JSON.stringify(rubros)); } catch(e) {}
-
-    // Estado activa/inactiva — tanto pasar a inactiva como REACTIVAR (Sheets
-    // trae 'SI' y esta pestaña todavía la tenía marcada inactiva) tienen que
-    // poder llegar de otro dispositivo cuando no hay cambios propios sin
-    // publicar; antes solo se aplicaba la baja, nunca la reactivación.
-    cloud.rubros.forEach(r => {
-      if (!r.empresa || !r.activo) return;
-      if (_esEmpresaTumbada(r.empresa)) return;
-      if (_seccionPendiente('rubros') && empresasInactivas[r.empresa] !== undefined) return;
-      if (r.activo === 'NO') empresasInactivas[r.empresa] = _soloFecha(r.fecha_inactiva) || true;
-      else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
-    });
     try { localStorage.setItem('lr_empresas_inactivas_v1', JSON.stringify(empresasInactivas)); } catch(e) {}
-
-    // Datos institucionales (fecha de constitución, decreto de creación,
-    // actividad puntual que desarrolla) — viven en la misma pestaña "rubros"
-    // que el resto del maestro de empresas.
-    DATA.institucional = DATA.institucional || {};
-    cloud.rubros.forEach(r => {
-      if (!r.empresa || (!r.fecha_constitucion && !r.decreto && !r.actividad && !r.tipo_societario && !r.participacion_accionaria)) return;
-      if (_esEmpresaTumbada(r.empresa)) return;
-      const actual = DATA.institucional[r.empresa];
-      if (_seccionPendiente('institucional') && actual && (actual.fechaConstitucion || actual.decreto || actual.actividad || actual.tipoSocietario || actual.participacionAccionaria)) return;
-      DATA.institucional[r.empresa] = {
-        fechaConstitucion: _soloFecha(r.fecha_constitucion),
-        decreto:           _decretoLimpio(r.decreto),
-        actividad:         r.actividad || '',
-        tipoSocietario:            r.tipo_societario || '',
-        participacionAccionaria:   r.participacion_accionaria || '',
-      };
-    });
+    try { localStorage.setItem('lr_empresa_master_ts_v1', JSON.stringify(empresaMasterTs)); } catch(e) {}
   }
 
   // Restaurar lista de rubros personalizados
@@ -42564,57 +42570,26 @@ function buildCloudPayload() {
     ...Object.keys(empresasInactivas || {}),
     ...Object.keys(DATA.institucional || {}),
   ])].filter(emp => !_empresasTumbadas.has(emp));
-  // Resguardo definitivo contra publicar un estado activo/inactivo o datos
-  // institucionales incompletos que esta pestaña nunca llegó a bajar (ver
-  // nota al guardar lr_rubros_sheets_estado_v1 en applyCloudData): sin
-  // ningún cambio propio sin publicar en la sección correspondiente, lo que
-  // se publica para esos campos tiene que coincidir con lo que Sheets ya
-  // tenía la última vez que se bajó — si este dispositivo nunca bajó el
-  // estado real de una empresa (p.ej. otra pestaña la marcó inactiva
-  // después de la última bajada de esta), no hay forma de que su valor
-  // local sea una acción real de ESTE usuario, así que se descarta a favor
-  // del último conocido de Sheets.
-  let _estadoSheets = {};
-  try { _estadoSheets = JSON.parse(localStorage.getItem('lr_rubros_sheets_estado_v1') || '{}'); } catch(e) {}
-  const _rubrosPendiente = _seccionPendiente('rubros');
-  const _institucionalPendiente = _seccionPendiente('institucional');
-
+  // Cada fila lleva su propia marca de tiempo real (empresaMasterTs, puesta
+  // en setRubro/toggleEmpresaInactiva/_confirmarFechaInactiva/
+  // _guardarInstitucional/_confirmarInstPopover) — applyCloudData la usa
+  // para fusionar por empresa en vez de aceptar o descartar la sección
+  // entera (ver nota ahí mismo). Ya no hace falta ningún resguardo de
+  // "último valor conocido de Sheets" acá: alcanza con publicar el estado
+  // local tal cual, con su fecha real — quien lo reciba decide si es más
+  // nuevo que lo que ya tenía.
   const rubrosRows = rubrosEmpresas.map(emp => {
     const inst = DATA.institucional?.[emp] || {};
-    const prevEstado = _estadoSheets[emp];
-
-    let activo = empresasInactivas[emp] ? 'NO' : 'SI';
-    let fechaInactiva = typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '';
-    if (!_rubrosPendiente && prevEstado && prevEstado.activo !== activo) {
-      activo = prevEstado.activo;
-      fechaInactiva = prevEstado.fecha_inactiva || '';
-    }
-
-    let fechaConstitucion = inst.fechaConstitucion || '';
-    let decreto = inst.decreto || '';
-    let actividad = inst.actividad || '';
-    let tipoSocietario = inst.tipoSocietario || '';
-    let participacionAccionaria = inst.participacionAccionaria || '';
-    if (!_institucionalPendiente && prevEstado) {
-      const _instLocalVacio = !fechaConstitucion && !decreto && !actividad && !tipoSocietario && !participacionAccionaria;
-      const _instSheetsTenia = prevEstado.fecha_constitucion || prevEstado.decreto || prevEstado.actividad || prevEstado.tipo_societario || prevEstado.participacion_accionaria;
-      if (_instLocalVacio && _instSheetsTenia) {
-        fechaConstitucion = prevEstado.fecha_constitucion || '';
-        decreto = prevEstado.decreto || '';
-        actividad = prevEstado.actividad || '';
-        tipoSocietario = prevEstado.tipo_societario || '';
-        participacionAccionaria = prevEstado.participacion_accionaria || '';
-      }
-    }
-
     return {
-      empresa: emp, rubro: rubros[emp] || 'Sin rubro', activo,
-      fecha_inactiva: fechaInactiva,
-      fecha_constitucion: fechaConstitucion,
-      decreto: decreto,
-      actividad: actividad,
-      tipo_societario: tipoSocietario,
-      participacion_accionaria: participacionAccionaria,
+      empresa: emp, rubro: rubros[emp] || 'Sin rubro',
+      activo: empresasInactivas[emp] ? 'NO' : 'SI',
+      fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '',
+      fecha_constitucion: inst.fechaConstitucion || '',
+      decreto: inst.decreto || '',
+      actividad: inst.actividad || '',
+      tipo_societario: inst.tipoSocietario || '',
+      participacion_accionaria: inst.participacionAccionaria || '',
+      _ts: empresaMasterTs[emp] || 0,
     };
   });
   // Guardar también la lista de rubros personalizada (puede incluir rubros agregados)
