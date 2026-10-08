@@ -2332,6 +2332,12 @@ self.onmessage = async (e) => {
               <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('personal')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
               <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
             </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Autoridades</td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('autoridades')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="restaurarDesdeSheets('autoridades')" style="padding:2px 8px;font-size:8px;background:rgba(255,100,71,.1);border:1px solid #ff647155;color:var(--neg);border-radius:2px;cursor:pointer;font-family:var(--mono)">⟳</button></td>
+            </tr>
           </tbody>
         </table>
         <div style="font-size:8px;color:var(--dim);margin-top:6px;line-height:1.5">⟳ Restaurar: reemplaza datos locales con Sheets (pide confirmación)</div>
@@ -40700,12 +40706,18 @@ async function descargarSoloModulo(modulo) {
 }
 
 async function restaurarDesdeSheets(modulo) {
-  const nombres = { transferencias: 'Transferencias', balances: 'Balances', flujos: 'Flujos', personal: 'Personal' };
+  const nombres = { transferencias: 'Transferencias', balances: 'Balances', flujos: 'Flujos', personal: 'Personal', autoridades: 'Autoridades' };
   if (!confirm(`⚠ Restaurar ${nombres[modulo]||modulo} desde Sheets\n\nEsto reemplazará los registros locales de ${nombres[modulo]||modulo} con los de Sheets.\nLos datos locales no publicados se perderán.\n\n¿Confirmás?`)) return;
   if (modulo === 'transferencias') { DATA.transferencias = []; }
   else if (modulo === 'balances') { _balances = {}; }
   else if (modulo === 'flujos') { DATA.flujos = {}; try { localStorage.removeItem('lr_flujos_sheets_snap'); localStorage.removeItem(_LS_FLUJOS_DEL); } catch(e) {} }
   else if (modulo === 'personal') { DATA.personal = []; DATA.pers_totals = {}; }
+  else if (modulo === 'autoridades') { DATA.autoridades = []; }
+  // Limpiar también la marca de "pendiente de publicar" de este módulo —
+  // sin esto, una restauración explícita arreglaba esta vez puntual, pero
+  // la próxima bajada automática volvía a quedar bloqueada por el mismo
+  // guardia (ver nota en applyCloudData).
+  try { limpiarPendienteGuardar(modulo); } catch(e) {}
   saveDataToLocalCache();
   await descargarSoloModulo(modulo);
 }
@@ -42025,7 +42037,16 @@ function applyCloudData(cloud, opts) {
   // separada, de una publicación previa), se concatenan acá sin perder el dato.
   // Reemplazo total sin ninguna protección — igual que personal: se omite si
   // hay cambios locales sin publicar, para no perder una edición en curso.
-  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0 && !_seccionPendiente('autoridades')) {
+  // "|| _solo === 'autoridades'" fuerza la bajada igual cuando es una
+  // restauración explícita (restaurarDesdeSheets) — sin esto, un dispositivo
+  // con una edición de autoridades que nunca llegó a publicarse (ej. porque
+  // el auto-sync vino fallando por otro motivo) se quedaba para siempre sin
+  // ver el listado real de Sheets, sin ningún botón capaz de destrabarlo:
+  // a diferencia de balances/transferencias/personal/flujos, esta sección
+  // no tenía ninguna vía de escape al guardia de "pendiente". Bug real
+  // reportado: "un dispositivo no visualiza el listado de autoridades pero
+  // sí en modo incógnito" (que no tiene nada pendiente que lo bloquee).
+  if (Array.isArray(cloud.autoridades) && cloud.autoridades.length > 0 && (!_seccionPendiente('autoridades') || _solo === 'autoridades')) {
     DATA.autoridades = cloud.autoridades
       .filter(r => r.empresa && (r.nombre || r.apellido))
       .map(r => ({
