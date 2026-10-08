@@ -18444,16 +18444,26 @@ function guardarPersonalManual() {
   }
 
   // Guardar o actualizar (reusar existing_prev del cálculo de años)
+  // Marca de tiempo real por empresa/año (d.yTs) — usada en
+  // applyCloudData/buildCloudPayload para comparar POR CELDA contra lo que
+  // trae Sheets, en vez de un guardia "todo o nada" por sección: sin esto,
+  // una corrección real cargada a mano (ej. restaurando un backup) no tenía
+  // forma de demostrar que era más nueva que lo que otro dispositivo
+  // tuviera cacheado, y terminaba perdiéndose con el tiempo.
+  const ahora = Date.now();
   const existing = existing_prev;
   if (existing) {
+    if (!existing.yTs) existing.yTs = {};
     // Actualizar años: solo los que tienen valor en yData
     // Años con campo borrado (no en yData) → eliminarlos del registro
     años.forEach(function(y) {
       if (y in yData) {
         existing.y[y] = yData[y];
+        existing.yTs[y] = ahora;
       } else {
         // Campo borrado → eliminar el año del registro
         delete existing.y[y];
+        delete existing.yTs[y];
         if (existing.m) delete existing.m[y];
       }
     });
@@ -18463,7 +18473,9 @@ function guardarPersonalManual() {
       Object.assign(existing.m, mData);
     }
   } else {
-    const nuevo = { e: empresa, y: yData };
+    const yTs = {};
+    Object.keys(yData).forEach(function(y) { yTs[y] = ahora; });
+    const nuevo = { e: empresa, y: yData, yTs: yTs };
     if (Object.keys(mData).length) nuevo.m = mData;
     DATA.personal.push(nuevo);
   }
@@ -30973,11 +30985,13 @@ function applyImport() {
     // personal
     if (Object.keys(d.pers).length) {
       let pd = DATA.personal.find(x=>x.e===emp);
-      if (!pd) { pd={e:emp, y:{}}; DATA.personal.push(pd); }
+      if (!pd) { pd={e:emp, y:{}, yTs:{}}; DATA.personal.push(pd); }
+      if (!pd.yTs) pd.yTs = {};
       Object.entries(d.pers).forEach(([yr, val]) => {
         const old = pd.y[yr] ?? null;
         diffRows.push({ emp, tipo: isNew?'new':'upd', campo:'Personal', yr, old, nuevo: val });
         pd.y[String(yr)] = val;
+        pd.yTs[String(yr)] = Date.now();
       });
     }
   });
@@ -41312,21 +41326,32 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // personal: rows con columnas: empresa, 2020..2026 — reemplazo total, sin
-  // ninguna protección para ediciones locales sin publicar (a diferencia de
-  // fact/resultado/rubros): un simple "Actualizar" manual podía borrar
-  // trabajo en curso. Se omite durante una sincronización general si hay
-  // cambios propios sin publicar; la restauración explícita de este módulo
-  // (restaurarDesdeSheets, con confirmación del usuario) sigue funcionando
-  // igual porque pasa _solo==='personal'.
-  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length && !(_seccionPendiente('personal') && !_solo)) {
-    DATA.personal    = [];
-    DATA.pers_totals = {};
+  // personal: antes esto era un reemplazo total del array completo, con un
+  // solo guardia "todo o nada" (_seccionPendiente('personal')) — cualquier
+  // cambio pendiente, aunque fuera de OTRA empresa sin relación, bloqueaba
+  // la bajada de TODO el módulo; y a la inversa, sin nada pendiente, un
+  // dispositivo con una copia vieja terminaba pisando en Sheets, con sus
+  // propios ceros, un valor real que otro dispositivo ya había cargado y
+  // publicado (bug real reportado repetidas veces: dotación de años
+  // recientes que "vuelve a vaciarse con el tiempo" en Sheets). Ahora se
+  // compara POR CELDA (empresa+año) contra una marca de tiempo real
+  // (d.yTs, ver guardarPersonalManual) — igual principio que ya usan
+  // balances (fecha_analisis_ms) y la reconciliación de rubros: un valor
+  // solo puede ganar si es genuinamente más nuevo, nunca por ser distinto
+  // de cero ni por casualidad de qué dispositivo sincronizó último.
+  if ((!_solo || _solo === 'personal') && cloud.personal && cloud.personal.length) {
+    const _persPorNombre = {};
+    DATA.personal.forEach(d => { _persPorNombre[d.e] = d; });
+    const _empresasCloudPersonal = new Set();
+
     cloud.personal.forEach(row => {
       const emp = row.empresa;
       if (!emp) return;
-      const yObj = {};
-      const mObj = {};
+      _empresasCloudPersonal.add(emp);
+      let d = _persPorNombre[emp];
+      if (!d) { d = { e: emp, y: {}, yTs: {} }; DATA.personal.push(d); _persPorNombre[emp] = d; }
+      if (!d.yTs) d.yTs = {};
+
       DATA.years.forEach(y => {
         const yStr = String(y);
         // Leer meses primero
@@ -41338,49 +41363,48 @@ function applyCloudData(cloud, opts) {
           meses.push(vm != null && !isNaN(vm) ? vm : null);
           if (vm != null && !isNaN(vm)) tieneMeses = true;
         }
-        if (tieneMeses) mObj[yStr] = meses;
         // Total anual: la columna del año ya viene siempre completa desde
         // buildCloudPayload (incluso con detalle mensual cargado). El
         // fallback de acá es solo defensivo — filas viejas publicadas antes
         // de este fix, o una edición manual directa en Sheets que la dejó
         // vacía — y usa el ÚLTIMO mes cargado (dotación vigente), el mismo
         // criterio que ya usa guardarPersonalManual(), no un promedio.
-        let v = parseInt(row[yStr]);
-        if (isNaN(v) || row[yStr] === '') {
+        let vCloud = parseInt(row[yStr]);
+        if (isNaN(vCloud) || row[yStr] === '') {
           if (tieneMeses) {
             let ultimoMes = null;
             for (let i = 11; i >= 0; i--) { if (meses[i] != null) { ultimoMes = meses[i]; break; } }
-            v = ultimoMes != null ? ultimoMes : 0;
-          } else { v = 0; }
+            vCloud = ultimoMes != null ? ultimoMes : 0;
+          } else { vCloud = 0; }
         }
-        yObj[yStr] = v;
-        DATA.pers_totals[yStr] = (DATA.pers_totals[yStr] || 0) + v;
+        const tsCloud = parseInt(row[yStr + '_ts'], 10) || 0;
+        const tsLocal = d.yTs[yStr] || 0;
+        // Esta pestaña tiene, para esta celda puntual, una edición propia
+        // genuinamente más nueva que lo que trae Sheets (todavía sin
+        // publicar) — conservarla tal cual en vez de pisarla.
+        if (tsLocal > tsCloud) return;
+        d.y[yStr]   = vCloud;
+        d.yTs[yStr] = tsCloud;
+        if (tieneMeses) { d.m = d.m || {}; d.m[yStr] = meses; }
       });
-      const persEntry = { e: emp, y: yObj };
-      if (Object.keys(mObj).length > 0) persEntry.m = mObj;
-      DATA.personal.push(persEntry);
     });
-    // Recordar el último valor real (no cero) visto en Sheets por
-    // empresa/año — usado en buildCloudPayload() para no publicar un 0 que
-    // en realidad es solo "este dispositivo nunca cargó este año", en vez
-    // de una baja real a 0 empleados. Bug real reportado: la dotación de
-    // 2025/2026 de varias empresas, ya cargada, volvió a 0 en Sheets y en
-    // el dashboard — el módulo "Personal" se publica siempre completo (sin
-    // ninguna protección por celda, a diferencia de fact/resultado/rubros,
-    // que ya la tienen), así que un dispositivo con una copia vieja (de
-    // antes de que esos años se cargaran en cualquier otro) terminaba
-    // pisando en Sheets, con sus propios ceros, el valor real que otro
-    // dispositivo ya había cargado.
-    try {
-      const snap = {};
-      DATA.personal.forEach(d => {
-        DATA.years.forEach(y => {
-          const v = _persGetTotal(d, String(y));
-          if (v) { (snap[d.e] = snap[d.e] || {})[String(y)] = v; }
-        });
-      });
-      localStorage.setItem('lr_personal_sheets_snap_v1', JSON.stringify(snap));
-    } catch(e) {}
+
+    // Podar empresas que ya no están en Sheets (Sheets sigue siendo la
+    // fuente de verdad del LISTADO de empresas) — salvo que la respuesta
+    // venga sospechosamente más chica (bridge cortado a mitad de camino,
+    // no un borrado real) o que haya algo de "personal" sin publicar
+    // todavía en esta pestaña: podría ser justo una empresa nueva que el
+    // usuario acaba de cargar y que Sheets todavía no conoce.
+    const _respuestaSospechosaPersonal = DATA.personal.length > 0 && _empresasCloudPersonal.size < DATA.personal.length * 0.5;
+    if (!_respuestaSospechosaPersonal && !_seccionPendiente('personal')) {
+      DATA.personal = DATA.personal.filter(d => _empresasCloudPersonal.has(d.e));
+    }
+
+    DATA.pers_totals = {};
+    DATA.years.forEach(y => {
+      const yStr = String(y);
+      DATA.pers_totals[yStr] = DATA.personal.reduce((s, d) => s + _persGetTotal(d, yStr), 0);
+    });
   }
 
   // TRANSFERENCIAS: merge — agregar registros de Sheets que no existen localmente.
@@ -42156,20 +42180,19 @@ function buildCloudPayload() {
   // correcto guardado en el momento de la carga (_persGetTotal lo lee tal
   // cual), así que alcanza con escribirlo siempre — el detalle mensual
   // queda igual en las columnas YYYY_MM, ahora solo como referencia/auditoría.
-  // Último valor real (no cero) que esta pestaña vio en Sheets por
-  // empresa/año (ver nota en applyCloudData) — resguardo para no publicar
-  // un 0 que en realidad es solo "este dispositivo nunca cargó este año"
-  // encima de un valor real que otro dispositivo ya cargó y publicó.
-  let _persSheetsSnap = {};
-  try { _persSheetsSnap = JSON.parse(localStorage.getItem('lr_personal_sheets_snap_v1') || '{}'); } catch(e) {}
-
+  // Cada celda (empresa+año) viaja con su propia marca de tiempo real
+  // (d.yTs, puesta por guardarPersonalManual/importación — ver nota en
+  // applyCloudData) en vez de intentar adivinar si un 0 es una baja real o
+  // simplemente un año que este dispositivo nunca cargó: así, otro
+  // dispositivo puede comparar objetivamente cuál de las dos versiones es
+  // más nueva en vez de que gane la que publicó último por casualidad.
   const persRows = (DATA.personal || []).map(d => {
     const row = { empresa: d.e };
     years.forEach(y => {
       const yStr = String(y);
       const hasMeses = d.m && d.m[yStr] && d.m[yStr].some(v => v != null);
-      const vLocal = _persGetTotal(d, yStr) || 0;
-      row[yStr] = vLocal || (_persSheetsSnap[d.e]?.[yStr]) || 0;
+      row[yStr] = _persGetTotal(d, yStr) || 0;
+      row[yStr + '_ts'] = (d.yTs && d.yTs[yStr]) || 0;
       if (hasMeses) {
         d.m[yStr].forEach((v, i) => {
           row[yStr + '_' + String(i + 1).padStart(2, '0')] = v != null ? v : '';
