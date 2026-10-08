@@ -17596,6 +17596,17 @@ function _autoridadesEmpresaOptions() {
   return Object.keys(rubros || {}).sort();
 }
 
+// Una autoridad es vigente solo si su propio "hasta" no venció Y la
+// empresa sigue activa — si la empresa pasó a inactiva, sus cargos dejan
+// de contar como vigentes a partir de esa fecha aunque el registro de la
+// autoridad en sí nunca se haya cerrado a mano (pedido explícito: vincular
+// el listado de autoridades con el estado activa/inactiva de la empresa).
+function _autoridadEsVigente(a, hoy) {
+  if (a.hasta && a.hasta < hoy) return false;
+  if (empresasInactivas[a.empresa]) return false;
+  return true;
+}
+
 function buildAutoridades() {
   const tbl = document.getElementById('tbl-autoridades');
   const lbl = document.getElementById('autoridades-tabla-lbl');
@@ -17614,15 +17625,16 @@ function buildAutoridades() {
   const selEmp = selEl?.value || '';
   const verHistorial = document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy = new Date().toISOString().slice(0,10);
-  const esVigente = a => !a.hasta || a.hasta >= hoy;
+  const esVigente = a => _autoridadEsVigente(a, hoy);
 
   let filas = (DATA.autoridades || []).map((a, idx) => ({ ...a, _idx: idx }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
   if (!verHistorial) filas = filas.filter(esVigente);
 
   if (lbl) {
+    const empInactivaLbl = selEmp && empresasInactivas[selEmp] ? ' (empresa inactiva)' : '';
     lbl.textContent = selEmp
-      ? (verHistorial ? `${selEmp} — historial completo` : `${selEmp} — vigentes`)
+      ? (verHistorial ? `${selEmp} — historial completo` : `${selEmp} — vigentes`) + empInactivaLbl
       : (verHistorial ? 'todas las empresas — historial completo' : 'todas las empresas — vigentes');
   }
 
@@ -17645,7 +17657,9 @@ function buildAutoridades() {
     const vigente = esVigente(a);
     const hastaCell = a.hasta
       ? fmtFecha(a.hasta)
-      : `<span style="color:var(--pos);font-size:8.5px;font-weight:600">VIGENTE</span>`;
+      : vigente
+        ? `<span style="color:var(--pos);font-size:8.5px;font-weight:600">VIGENTE</span>`
+        : `<span style="color:var(--neg);font-size:8.5px;font-weight:600" title="La empresa está marcada como inactiva">— (empresa inactiva)</span>`;
     return `<tr>
       <td>${a.nombre || ''}</td>
       <td>${a.cargo || ''}</td>
@@ -17678,8 +17692,11 @@ function buildAutoridades() {
       let grupoHtml = '';
       if (a.empresa !== empresaActual) {
         empresaActual = a.empresa;
+        const badgeInactiva = empresasInactivas[empresaActual]
+          ? ' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA</span>'
+          : '';
         grupoHtml = `<tr class="autoridad-grupo-empresa">
-          <td colspan="5" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${empresaActual}</td>
+          <td colspan="5" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${empresaActual}${badgeInactiva}</td>
         </tr>`;
       }
       return grupoHtml + filaHtml(a);
@@ -17792,7 +17809,7 @@ function _rptAutoridades() {
   const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
   const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy         = new Date().toISOString().slice(0,10);
-  const esVigente   = a => !a.hasta || a.hasta >= hoy;
+  const esVigente   = a => _autoridadEsVigente(a, hoy);
   const fmtFecha    = f => f ? f.split('-').reverse().join('/') : '—';
 
   let filas = (DATA.autoridades || []).slice();
@@ -17813,7 +17830,7 @@ function _rptAutoridades() {
     <td>${a.nombre || ''}</td>
     <td style="text-align:left">${a.cargo || ''}</td>
     <td>${fmtFecha(a.desde)}</td>
-    <td>${a.hasta ? fmtFecha(a.hasta) : '<span style="color:#0f6e56;font-weight:700">VIGENTE</span>'}</td>
+    <td>${a.hasta ? fmtFecha(a.hasta) : (esVigente(a) ? '<span style="color:#0f6e56;font-weight:700">VIGENTE</span>' : '<span style="color:#c0392b;font-weight:700">— (empresa inactiva)</span>')}</td>
   </tr>`;
 
   let filasHtml;
@@ -17827,7 +17844,8 @@ function _rptAutoridades() {
       let grupo = '';
       if (a.empresa !== empresaActual) {
         empresaActual = a.empresa;
-        grupo = `<tr class="sr"><td colspan="4">${empresaActual}</td></tr>`;
+        const badge = empresasInactivas[empresaActual] ? ' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px">INACTIVA</span>' : '';
+        grupo = `<tr class="sr"><td colspan="4">${empresaActual}${badge}</td></tr>`;
       }
       return grupo + filaRpt(a);
     }).join('');
