@@ -17888,29 +17888,39 @@ function _rptAutoridades() {
   const subt = (selEmp || 'Todas las empresas') + ' · ' +
     (verHistorial ? 'historial completo' : 'autoridades vigentes');
 
-  const filaRpt = a => `<tr>
-    <td>${a.nombre || ''}</td>
-    <td style="text-align:left">${a.cargo || ''}</td>
-    <td>${fmtFecha(a.desde)}</td>
-    <td>${a.hasta ? fmtFecha(a.hasta) : (esVigente(a) ? '<span style="color:#0f6e56;font-weight:700">VIGENTE</span>' : '<span style="color:#c0392b;font-weight:700">— (empresa inactiva)</span>')}</td>
-  </tr>`;
+  // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
+  // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
+  const itemRpt = a => {
+    const estado = a.hasta
+      ? 'hasta ' + fmtFecha(a.hasta)
+      : (esVigente(a) ? '<span style="color:#0f6e56;font-weight:700">VIGENTE</span>' : '<span style="color:#c0392b;font-weight:700">— (empresa inactiva)</span>');
+    return `<div class="cardAut-row">
+      <span class="cardAut-n">${a.nombre || ''}</span>
+      <span class="cardAut-c">${a.cargo || ''} · desde ${fmtFecha(a.desde)} · ${estado}</span>
+    </div>`;
+  };
 
-  let filasHtml;
+  let cardsHtml;
   if (filas.length === 0) {
-    filasHtml = '<tr><td colspan="4" style="text-align:center;color:#888;padding:14px">Sin autoridades para mostrar.</td></tr>';
-  } else if (selEmp) {
-    filasHtml = filas.map(filaRpt).join('');
+    cardsHtml = '<div style="text-align:center;color:#888;padding:20px;border:.5px solid #ddd;border-radius:6px">Sin autoridades para mostrar.</div>';
   } else {
-    let empresaActual = null;
-    filasHtml = filas.map(a => {
-      let grupo = '';
-      if (a.empresa !== empresaActual) {
-        empresaActual = a.empresa;
-        const badge = empresasInactivas[empresaActual] ? ' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px">INACTIVA</span>' : '';
-        grupo = `<tr class="sr"><td colspan="4">${empresaActual}${badge}</td></tr>`;
+    const grupos = [];
+    let grupoActual = null;
+    filas.forEach(a => {
+      if (!grupoActual || grupoActual.empresa !== a.empresa) {
+        grupoActual = { empresa: a.empresa, items: [] };
+        grupos.push(grupoActual);
       }
-      return grupo + filaRpt(a);
+      grupoActual.items.push(a);
+    });
+    const cards = grupos.map(g => {
+      const badge = empresasInactivas[g.empresa] ? ' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;font-weight:700">INACTIVA</span>' : '';
+      return `<div class="cardAut">
+        <div class="cardAut-h">${g.empresa}${badge}</div>
+        <div class="cardAut-b">${g.items.map(itemRpt).join('')}</div>
+      </div>`;
     }).join('');
+    cardsHtml = `<div class="gridAut">${cards}</div>`;
   }
 
   // Empresas activas sin ninguna autoridad vigente cargada — pedido
@@ -17926,7 +17936,18 @@ function _rptAutoridades() {
         ✓ Todas las empresas activas tienen al menos una autoridad vigente cargada.
       </div>`;
 
-  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Autoridades</title>'+_rptCSS()+'</head><body><div class="pg">'
+  const cssCardsAut = `<style>
+    .gridAut{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;margin-bottom:12px}
+    .cardAut{border:.5px solid #ddd;border-radius:6px;background:#fff;page-break-inside:avoid}
+    .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif}
+    .cardAut-b{padding:4px 10px 6px}
+    .cardAut-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
+    .cardAut-row:last-child{border-bottom:none}
+    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;white-space:nowrap}
+    .cardAut-c{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;text-align:right;white-space:nowrap}
+  </style>`;
+
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Autoridades</title>'+_rptCSS()+cssCardsAut+'</head><body><div class="pg">'
     + _rptHeader('Autoridades', subt)
     + `<div class="kg3">
         ${_rptKpi('Registros listados', filas.length, verHistorial ? 'incluye historial' : 'vigentes', '#185fa5')}
@@ -17934,10 +17955,7 @@ function _rptAutoridades() {
         ${_rptKpi('Autoridades vigentes', nVigentes, 'a la fecha del reporte', '#534ab7')}
       </div>`
     + faltantesHtml
-    + `<div class="tw"><table><thead><tr>
-        <th style="text-align:left">Nombre y Apellido</th><th style="text-align:left">Cargo</th>
-        <th>Desde</th><th>Hasta</th>
-      </tr></thead><tbody>${filasHtml}</tbody></table></div>`
+    + cardsHtml
     + _rptFooter()
     + '</div></body></html>';
 
