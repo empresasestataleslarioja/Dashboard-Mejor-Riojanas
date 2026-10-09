@@ -3002,6 +3002,10 @@ self.onmessage = async (e) => {
           </div>
         </div>
 
+        <div id="autoridades-dup-warning" style="display:none;margin:0 16px 8px;padding:8px 10px;
+          background:rgba(255,71,102,.08);border:1px solid rgba(255,71,102,.35);border-radius:4px;
+          font-family:var(--mono);font-size:9px;color:var(--neg);line-height:1.5"></div>
+
         <div style="overflow:auto;max-height:340px">
           <table class="tbl" id="tbl-autoridades" style="font-size:9.5px"></table>
         </div>
@@ -17757,12 +17761,39 @@ function buildAutoridades() {
       : (verHistorial ? 'todas las empresas — historial completo' : 'todas las empresas — vigentes');
   }
 
-  // Ordenar: empresa (si es consolidado) → cargo → desde (más reciente primero)
+  // Ordenar: empresa (si es consolidado) → jerarquía del cargo (ver
+  // ORDEN_CARGOS_RPT_AUTORIDADES/_rangoCargoRpt, mismo orden pedido y ya
+  // usado en el reporte imprimible) → nombre.
   filas.sort((a,b) =>
     (a.empresa||'').localeCompare(b.empresa||'') ||
-    (a.cargo||'').localeCompare(b.cargo||'') ||
-    (b.desde||'').localeCompare(a.desde||'')
+    _rangoCargoRpt(a.cargo) - _rangoCargoRpt(b.cargo) ||
+    (a.nombre||'').localeCompare(b.nombre||'')
   );
+
+  // Advertir registros duplicados (mismo empresa+nombre+cargo+desde+hasta)
+  // directamente en el panel — mismo criterio que usa la limpieza
+  // automática en applyCloudData (_limpiarDuplicadosAutoridades), pero acá
+  // es solo un aviso visual: no borra nada por sí solo, para que el
+  // usuario vea el problema incluso si todavía no sincronizó.
+  const dupWarnEl = document.getElementById('autoridades-dup-warning');
+  if (dupWarnEl) {
+    const grupos = new Map();
+    (DATA.autoridades || []).forEach(a => {
+      const key = [a.empresa, a.nombre, a.cargo, a.desde, a.hasta]
+        .map(x => String(x || '').trim().toUpperCase()).join('|');
+      if (!grupos.has(key)) grupos.set(key, { n: 0, sample: a });
+      grupos.get(key).n++;
+    });
+    const duplicados = [...grupos.values()].filter(g => g.n > 1);
+    if (duplicados.length) {
+      dupWarnEl.style.display = '';
+      dupWarnEl.innerHTML = `⚠ ${duplicados.length} registro${duplicados.length!==1?'s':''} duplicado${duplicados.length!==1?'s':''} detectado${duplicados.length!==1?'s':''} — se van a limpiar solos en la próxima sincronización con Sheets:<br>`
+        + duplicados.map(d => `${d.sample.empresa} — ${d.sample.nombre} (${d.sample.cargo}) ×${d.n}`).join(' · ');
+    } else {
+      dupWarnEl.style.display = 'none';
+      dupWarnEl.innerHTML = '';
+    }
+  }
 
   const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—';
 
