@@ -10198,8 +10198,12 @@ function _renombrarEmpresa(from, to) {
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
     if (DATA[k] && DATA[k][from]) { DATA[k][to] = DATA[k][from]; delete DATA[k][from]; }
   });
-  // autoridades
-  (DATA.autoridades || []).forEach(a => { if (a.empresa === from) a.empresa = to; });
+  // autoridades — también se les pisa su propio _ts a "ahora": son
+  // registros que se fusionan por _id (ver applyCloudData), y sin esto
+  // una fila vieja de Sheets con el mismo _id y empresa=`from` (todavía
+  // no publicado este renombre) podía ganarle a la reasignación recién
+  // hecha y devolverla a `from`.
+  (DATA.autoridades || []).forEach(a => { if (a.empresa === from) { a.empresa = to; a._ts = Date.now(); } });
   // El nombre viejo no debe volver a existir como empresa aparte (protege
   // contra una pestaña desactualizada que todavía tenga `from` cargado) —
   // pero sin purgar nunca a `to`, aunque sea una variante de grafía de `from`.
@@ -10265,8 +10269,11 @@ function _fusionarEmpresas(from, to) {
     }
   });
   // autoridades — es un historial (varios registros por empresa): re-apuntar
-  // los del origen al destino, se conservan todos (no hay nada que "sumar")
-  (DATA.autoridades || []).forEach(a => { if (a.empresa === from) a.empresa = to; });
+  // los del origen al destino, se conservan todos (no hay nada que "sumar").
+  // Mismo motivo que en _renombrarEmpresa: pisar su propio _ts a "ahora"
+  // para que una fila vieja de Sheets con empresa=`from` no le gane a esta
+  // reasignación si todavía no se publicó.
+  (DATA.autoridades || []).forEach(a => { if (a.empresa === from) { a.empresa = to; a._ts = Date.now(); } });
   // Igual que en _renombrarEmpresa: `from` ya no debe existir como empresa
   // aparte, pero sin purgar nunca a `to` (ver _tombstoneEmpresa/_coincideEmpresaTumba) —
   // bug real reportado: fusionar "PUERTAS DE SOL" → "PUERTAS DEL SOL" (o
@@ -41496,15 +41503,25 @@ function applyCloudData(cloud, opts) {
   // Se leen y aplican ANTES que cualquier otra sección. El bridge ya
   // protege las escrituras futuras en Sheets contra una fila resucitada
   // (filtrarEliminadas del lado del servidor), pero eso no alcanza para
-  // OTRO dispositivo que ya tenía la empresa vieja cargada: fact/sit/
-  // personal se reconstruyen enteros desde Sheets más abajo (así que ahí
-  // se autocorrigen solos), pero rubros/notas/presupuesto/balances/
-  // autoridades se MERGEAN en vez de reemplazarse completos — sin
-  // aplicar la tumba acá, esa empresa vieja queda para siempre en la
-  // caché local de cualquier otro dispositivo (ej.: reaparece suelta en
-  // "Asignación de empresas por rubro" aunque en Sheets ya esté
-  // correctamente fusionada o borrada — bug real reportado por el
-  // usuario, notado recién en otra sesión/dispositivo más tarde).
+  // OTRO dispositivo que ya tenía la empresa vieja cargada, NI para ESTE
+  // MISMO dispositivo en la ventana entre fusionar/renombrar localmente y
+  // llegar a publicarlo: _resolverConflictoAntesDePublicar puede forzar un
+  // syncFromCloud() ANTES de ese publish (si detecta que Sheets tiene algo
+  // más nuevo de cualquier otra sección, no necesariamente relacionado) y
+  // esa bajada trae fact/sit/personal todavía con la fila vieja de `from`
+  // (porque el merge recién hecho en esta pestaña no llegó a Sheets
+  // todavía) — rubros/notas/presupuesto/balances/autoridades se MERGEAN
+  // por empresa (protegidos por su propio _ts), pero fact/sit/personal se
+  // RECONSTRUYEN ENTEROS desde lo que trae esta bajada (ver más abajo), así
+  // que sin filtrar la tumba ahí también, `from` resucitaba en fact/sit con
+  // sus valores viejos (sin la suma de la fusión) y volvía a aparecer en
+  // los reportes como "Sin rubro" — y esta misma pestaña, al reintentar el
+  // publish con ese estado ya corrompido, lo mandaba de nuevo a Sheets:
+  // bug real reportado como "fusiono y asigno rubro, impacta en Sheets pero
+  // a los segundos Sheets revierte el cambio". _esEmpresaTumbada queda
+  // declarada acá (no solo dentro del bloque de rubros, como antes) para
+  // que las reconstrucciones de fact/sit/personal, unas líneas más abajo,
+  // también puedan filtrar por ella.
   if (Array.isArray(cloud.empresas_eliminadas) && cloud.empresas_eliminadas.length) {
     DATA.empresas_eliminadas = DATA.empresas_eliminadas || [];
     const conocidas = new Set(DATA.empresas_eliminadas.map(t => t.empresa));
@@ -41516,6 +41533,8 @@ function applyCloudData(cloud, opts) {
       try { _purgarEmpresaDeData(t.empresa, fusionadaEn); } catch(e) {}
     });
   }
+  const _tumbas = DATA.empresas_eliminadas || [];
+  const _esEmpresaTumbada = emp => _tumbas.some(t => _coincideEmpresaTumba(emp, t.empresa, t.fusionadaEn));
 
   // ── Beneficiarios de Transferencias excluidos permanentemente ───────
   // Mismo motivo que arriba: si se excluyó un beneficiario desde otro
@@ -41552,7 +41571,7 @@ function applyCloudData(cloud, opts) {
     DATA.totals_fact = {};
     cloud.fact.forEach(row => {
       const emp = row.empresa;
-      if (!emp) return;
+      if (!emp || _esEmpresaTumbada(emp)) return;
       DATA.fact[emp] = {};
       DATA.years.forEach(y => {
         const yS = String(y);
@@ -41573,7 +41592,7 @@ function applyCloudData(cloud, opts) {
     DATA.sup_count  = {}; DATA.def_count  = {};
     cloud.resultado.forEach(row => {
       const emp = row.empresa;
-      if (!emp) return;
+      if (!emp || _esEmpresaTumbada(emp)) return;
       DATA.sit[emp] = {};
       DATA.years.forEach(y => {
         const yS = String(y);
@@ -41613,7 +41632,7 @@ function applyCloudData(cloud, opts) {
 
     cloud.personal.forEach(row => {
       const emp = row.empresa;
-      if (!emp) return;
+      if (!emp || _esEmpresaTumbada(emp)) return;
       _empresasCloudPersonal.add(emp);
       let d = _persPorNombre[emp];
       if (!d) { d = { e: emp, y: {}, yTs: {} }; DATA.personal.push(d); _persPorNombre[emp] = d; }
@@ -42068,9 +42087,8 @@ function applyCloudData(cloud, opts) {
     // estas filas: una fila resucitada que haya quedado pegada en Sheets de
     // ANTES de ese fix (o por una edición manual directa de la planilla)
     // también se ignora al bajar, en vez de revivir la empresa en esta
-    // pestaña con solo sincronizar.
-    const _tumbas = DATA.empresas_eliminadas || [];
-    const _esEmpresaTumbada = emp => _tumbas.some(t => _coincideEmpresaTumba(emp, t.empresa, t.fusionadaEn));
+    // pestaña con solo sincronizar. (_esEmpresaTumbada ya quedó declarada
+    // más arriba, junto con las tumbas — se reusa la misma acá.)
 
     // Fusión POR EMPRESA (no por sección completa): el guardia anterior
     // (_seccionPendiente('rubros'), sección entera) tenía un defecto real —
