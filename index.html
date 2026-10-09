@@ -2960,15 +2960,24 @@ self.onmessage = async (e) => {
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
               <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Cargo</label>
-              <input id="autoridad-form-cargo" type="text" placeholder="Director, Presidente, Síndico…" list="autoridad-cargo-list"
+              <select id="autoridad-form-cargo" onchange="_toggleAutoridadCargoOtro()"
                 style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
                 font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:160px">
-              <datalist id="autoridad-cargo-list">
-                <option value="Presidente"><option value="Vicepresidente">
-                <option value="Director"><option value="Director Suplente">
-                <option value="Síndico"><option value="Síndico Suplente">
-                <option value="Gerente General">
-              </datalist>
+                <option value="">Seleccionar…</option>
+                <option value="Presidente">Presidente</option>
+                <option value="Vicepresidente">Vicepresidente</option>
+                <option value="Director Titular">Director Titular</option>
+                <option value="Director">Director</option>
+                <option value="Secretario">Secretario</option>
+                <option value="Director Suplente">Director Suplente</option>
+                <option value="Síndico Titular">Síndico Titular</option>
+                <option value="Síndico">Síndico</option>
+                <option value="Síndico Suplente">Síndico Suplente</option>
+                <option value="__otro__">Otro (especificar)…</option>
+              </select>
+              <input id="autoridad-form-cargo-otro" type="text" placeholder="Especificar cargo…" style="display:none;margin-top:3px;
+                padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
+                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:160px">
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
               <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Desde</label>
@@ -17832,15 +17841,34 @@ function toggleAutoridadForm(idx) {
   const idxField    = document.getElementById('autoridad-form-idx');
   const nombreField = document.getElementById('autoridad-form-nombre');
   const cargoField  = document.getElementById('autoridad-form-cargo');
+  const cargoOtro   = document.getElementById('autoridad-form-cargo-otro');
   const desdeField  = document.getElementById('autoridad-form-desde');
   const hastaField  = document.getElementById('autoridad-form-hasta');
+
+  // El cargo pasó de texto libre a un desplegable con las opciones
+  // estándar (pedido explícito) + "Otro" para no perder cargos ya
+  // cargados con otra denominación (ej. "Gerente General") — si el valor
+  // no matchea ninguna opción, se selecciona "Otro" y se muestra el campo
+  // de texto con el valor real.
+  const _setCargoField = (valor) => {
+    const esConocido = valor && [...cargoField.options].some(o => o.value === valor);
+    if (esConocido) {
+      cargoField.value = valor;
+      cargoOtro.style.display = 'none';
+      cargoOtro.value = '';
+    } else {
+      cargoField.value = valor ? '__otro__' : '';
+      cargoOtro.style.display = valor ? '' : 'none';
+      cargoOtro.value = valor || '';
+    }
+  };
 
   if (idx != null && DATA.autoridades[idx]) {
     const a = DATA.autoridades[idx];
     idxField.value    = idx;
     if (selEmpForm) selEmpForm.value = a.empresa || '';
     nombreField.value = a.nombre || '';
-    cargoField.value  = a.cargo  || '';
+    _setCargoField(a.cargo || '');
     desdeField.value  = a.desde  || '';
     hastaField.value  = a.hasta  || '';
   } else {
@@ -17848,7 +17876,7 @@ function toggleAutoridadForm(idx) {
     const empActual = document.getElementById('sel-autoridades-emp')?.value || '';
     if (selEmpForm && empActual) selEmpForm.value = empActual;
     nombreField.value = '';
-    cargoField.value  = '';
+    _setCargoField('');
     desdeField.value  = '';
     hastaField.value  = '';
   }
@@ -17857,17 +17885,31 @@ function toggleAutoridadForm(idx) {
   nombreField.focus();
 }
 
+// Muestra/oculta el campo de texto libre cuando se elige "Otro" en el
+// desplegable de Cargo del formulario de Autoridades.
+function _toggleAutoridadCargoOtro() {
+  const cargoField = document.getElementById('autoridad-form-cargo');
+  const cargoOtro  = document.getElementById('autoridad-form-cargo-otro');
+  if (!cargoField || !cargoOtro) return;
+  const esOtro = cargoField.value === '__otro__';
+  cargoOtro.style.display = esOtro ? '' : 'none';
+  if (esOtro) cargoOtro.focus(); else cargoOtro.value = '';
+}
+
 function guardarAutoridad() {
   const idxRaw  = document.getElementById('autoridad-form-idx')?.value;
   const empresa = document.getElementById('autoridad-form-emp')?.value?.trim() || '';
   const nombre  = document.getElementById('autoridad-form-nombre')?.value?.trim() || '';
-  const cargo   = document.getElementById('autoridad-form-cargo')?.value?.trim() || '';
+  const cargoSel = document.getElementById('autoridad-form-cargo')?.value || '';
+  const cargo   = cargoSel === '__otro__'
+    ? (document.getElementById('autoridad-form-cargo-otro')?.value?.trim() || '')
+    : cargoSel;
   const desde   = document.getElementById('autoridad-form-desde')?.value || '';
   const hasta   = document.getElementById('autoridad-form-hasta')?.value || '';
 
   if (!empresa) { alert('Seleccioná la empresa.'); return; }
   if (!nombre) { alert('Ingresá el nombre y apellido.'); return; }
-  if (!cargo) { alert('Ingresá el cargo.'); return; }
+  if (!cargo) { alert('Seleccioná el cargo (o especificalo en "Otro").'); return; }
   if (hasta && desde && hasta < desde) { alert('La fecha "Hasta" no puede ser anterior a "Desde".'); return; }
 
   const idx = idxRaw !== '' && idxRaw != null ? parseInt(idxRaw) : null;
