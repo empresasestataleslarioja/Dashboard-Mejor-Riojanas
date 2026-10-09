@@ -28218,11 +28218,75 @@ function _removeAutoridadDel(id) {
     if (list.length !== raw.length) localStorage.setItem(_LS_AUTORIDADES_DEL, JSON.stringify(list));
   } catch(e) {}
 }
-// Genera un id estable para un registro que todavía no tiene uno (datos
-// de antes de este fix) — se llama cada vez que se toca un registro.
+// Hash determinístico de los campos que identifican a un registro de
+// autoridad — a propósito NO incluye `hasta` (ver _ensureAutoridadId: un
+// registro sigue siendo "el mismo" al cerrarle la vigencia, y el _id tiene
+// que mantenerse estable para que esa actualización se reconozca como tal
+// en vez de como un registro nuevo).
+function _hashAutoridad(a) {
+  const clave = [a.empresa, a.nombre, a.cargo, a.desde]
+    .map(x => String(x || '').trim().toUpperCase()).join('|');
+  let h = 0;
+  for (let i = 0; i < clave.length; i++) h = (h * 31 + clave.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+// Genera un id estable para un registro que todavía no tiene uno (datos de
+// antes de este fix) — se llama cada vez que se toca un registro.
+//
+// Determinístico (hash del contenido), NO aleatorio como antes
+// (Date.now()+Math.random()). Bug real reportado ("ahora tengo una
+// multiplicación de registro de autoridades", 3-4 copias idénticas de la
+// misma persona/cargo por empresa): un registro cargado sin _id (datos de
+// antes de este sistema) recibía un id AL AZAR la primera vez que
+// cualquier dispositivo lo tocaba — _autLocalPorId se reconstruye en cada
+// sync a partir de los registros locales (ver más abajo), así que dos
+// dispositivos con su propia copia local sin _id de la MISMA autoridad
+// real terminaban generándole cada uno un id distinto. applyCloudData
+// fusiona por _id, así que un id distinto es, para ese chequeo, un
+// registro distinto — nunca se reconciliaban, se iban acumulando una copia
+// más por cada dispositivo que sincronizaba. Con un id determinístico, el
+// mismo registro real calcula siempre el mismo _id sin importar qué
+// dispositivo lo toque, así que ya no se duplica de acá en más (la
+// limpieza de los duplicados ya generados por el bug viejo corre en
+// _limpiarDuplicadosAutoridades).
 function _ensureAutoridadId(a) {
-  if (!a._id) a._id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  if (!a._id) a._id = 'aut_' + _hashAutoridad(a);
   return a._id;
+}
+
+// Colapsa registros EXACTAMENTE duplicados (misma empresa+nombre+cargo+
+// desde+hasta) que quedaron con _id distintos por el bug de generación
+// aleatoria de _ensureAutoridadId (ver comentario ahí). Se conserva el de
+// _ts más reciente, se le fija el _id canónico (determinístico) y se
+// tumban los _id de las copias descartadas para que, aunque algún
+// dispositivo todavía no sincronizó y las vuelva a publicar, no resuciten.
+// Corre automáticamente en cada sync (ver applyCloudData) — el usuario no
+// tiene que hacer nada para que se autocorrija.
+function _limpiarDuplicadosAutoridades() {
+  if (!Array.isArray(DATA.autoridades) || DATA.autoridades.length < 2) return 0;
+  const grupos = new Map();
+  DATA.autoridades.forEach(a => {
+    const key = [a.empresa, a.nombre, a.cargo, a.desde, a.hasta]
+      .map(x => String(x || '').trim().toUpperCase()).join('|');
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(a);
+  });
+  let eliminados = 0;
+  const resultado = [];
+  grupos.forEach(lista => {
+    if (lista.length === 1) { resultado.push(lista[0]); return; }
+    lista.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+    const ganador = lista[0];
+    ganador._id = 'aut_' + _hashAutoridad(ganador);
+    resultado.push(ganador);
+    lista.slice(1).forEach(dup => {
+      if (dup._id && dup._id !== ganador._id) _addAutoridadDel(dup._id);
+      eliminados++;
+    });
+  });
+  if (eliminados) DATA.autoridades = resultado;
+  return eliminados;
 }
 
 function limpiarDuplicadosTrans() {
@@ -42408,6 +42472,20 @@ function applyCloudData(cloud, opts) {
       const actual = _delMapAut.get(t.id) || 0;
       if (tsDel > actual) _addAutoridadDel(t.id);
     });
+
+    // Autocorrección de los duplicados ya generados por el bug de _id
+    // aleatorio (ver _ensureAutoridadId) — corre en cada sync, sin
+    // depender de que el usuario haga nada.
+    try {
+      const _autDupEliminados = _limpiarDuplicadosAutoridades();
+      if (_autDupEliminados) {
+        console.log('[LR] Autoridades: ' + _autDupEliminados + ' registro(s) duplicado(s) eliminado(s) (mismo cargo/persona con _id distinto por el bug de generación aleatoria).');
+        // Publicar la limpieza — sin esto, los duplicados siguen en Sheets
+        // tal cual y cualquier otro dispositivo que sincronice los vuelve a
+        // bajar, deshaciendo la limpieza hecha acá.
+        try { marcarPendienteGuardar(['autoridades']); } catch(e) {}
+      }
+    } catch(e) {}
   }
 
   // ── Empresas eliminadas/fusionadas/renombradas ("tumbas") ──────────
