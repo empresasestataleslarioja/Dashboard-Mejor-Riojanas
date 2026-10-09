@@ -17918,20 +17918,36 @@ function cerrarVigenciaAutoridad(idx) {
 // ── Reporte imprimible de autoridades ────────────────────────────
 // Respeta el filtro de empresa y el toggle "Ver historial completo" que
 // estén activos en el panel al momento de generarlo.
+// Orden jerárquico de cargos para el reporte de Autoridades — pedido
+// explícito del usuario, no alfabético. Un cargo que no está en la lista
+// (variante de grafía no contemplada, o cargo nuevo) cae al final, después
+// de todos los listados, en vez de romper el orden de los demás.
+const ORDEN_CARGOS_RPT_AUTORIDADES = [
+  'PRESIDENTE','VICEPRESIDENTE','DIRECTOR TITULAR','DIRECTOR','SECRETARIO',
+  'DIRECTOR SUPLENTE','SINDICO TITULAR','SINDICO','SINDICO SUPLENTE',
+];
+function _rangoCargoRpt(cargo) {
+  const norm = String(cargo || '').trim().toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // sin acentos: "SÍNDICO" → "SINDICO"
+  const i = ORDEN_CARGOS_RPT_AUTORIDADES.indexOf(norm);
+  return i === -1 ? ORDEN_CARGOS_RPT_AUTORIDADES.length : i;
+}
+
 function _rptAutoridades() {
   const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
   const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy         = new Date().toISOString().slice(0,10);
   const esVigente   = a => _autoridadEsVigente(a, hoy);
-  const fmtFecha    = f => f ? f.split('-').reverse().join('/') : '—';
 
   let filas = (DATA.autoridades || []).slice();
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
   if (!verHistorial) filas = filas.filter(esVigente);
+  // Orden: empresa → jerarquía del cargo (ver ORDEN_CARGOS_RPT_AUTORIDADES)
+  // → nombre, a pedido explícito del usuario (antes era alfabético por cargo).
   filas.sort((a,b) =>
     (a.empresa||'').localeCompare(b.empresa||'') ||
-    (a.cargo||'').localeCompare(b.cargo||'') ||
-    (b.desde||'').localeCompare(a.desde||'')
+    _rangoCargoRpt(a.cargo) - _rangoCargoRpt(b.cargo) ||
+    (a.nombre||'').localeCompare(b.nombre||'')
   );
 
   const nEmpresas = new Set(filas.map(a => a.empresa)).size;
@@ -17941,15 +17957,11 @@ function _rptAutoridades() {
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
-  const itemRpt = a => {
-    const estado = a.hasta
-      ? 'hasta ' + fmtFecha(a.hasta)
-      : (esVigente(a) ? '<span style="color:#0f6e56;font-weight:700">VIGENTE</span>' : '<span style="color:#c0392b;font-weight:700">— (empresa inactiva)</span>');
-    return `<div class="cardAut-row">
+  // Pedido explícito: sin desde/hasta/VIGENTE — solo nombre y cargo.
+  const itemRpt = a => `<div class="cardAut-row">
       <span class="cardAut-n">${a.nombre || ''}</span>
-      <span class="cardAut-c">${a.cargo || ''} · desde ${fmtFecha(a.desde)} · ${estado}</span>
+      <span class="cardAut-c">${a.cargo || ''}</span>
     </div>`;
-  };
 
   let cardsHtml;
   if (filas.length === 0) {
