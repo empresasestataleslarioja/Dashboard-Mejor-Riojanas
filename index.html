@@ -10204,6 +10204,16 @@ function _renombrarEmpresa(from, to) {
   // contra una pestaña desactualizada que todavía tenga `from` cargado) —
   // pero sin purgar nunca a `to`, aunque sea una variante de grafía de `from`.
   _tombstoneEmpresa(from, to);
+  // `to` acaba de recibir un cambio real (su propio registro migró de
+  // nombre) — sin esto, empresaMasterTs[to] quedaba en lo que trajera
+  // _renombrarPerEmpresaStores de `from` (o directamente en 0 si ninguno
+  // de los dos se había tocado nunca), así que al publicar esta pestaña
+  // mandaba `to` con un _ts viejo/0 y cualquier otro dispositivo con un ts
+  // propio más nuevo para `to` (aunque fuera de una edición vieja) ganaba
+  // la comparación y descartaba el renombre recién hecho — bug real
+  // reportado: "Ficha Institucional" vuelve a mostrar la empresa ya
+  // renombrada/fusionada y pierde el rubro asignado.
+  _marcarEmpresaMasterEditada(to);
 }
 
 // Fusionar: suma datos de `from` en `to`, luego elimina `from`
@@ -10265,6 +10275,13 @@ function _fusionarEmpresas(from, to) {
   // como la misma empresa a propósito (esa es la razón por la que el
   // usuario los identificó como duplicados a fusionar).
   _tombstoneEmpresa(from, to);
+  // Mismo motivo que en _renombrarEmpresa: `to` recibió los datos de
+  // `from` (rubro/institucional si los tenía vacíos, personal/fact/sit
+  // sumados) y necesita su propio _ts "ahora" para que ese resultado
+  // gane al publicar, en vez de que _fusionarPerEmpresaStores arrastre
+  // el _ts viejo de `from` (o deje 0) y cualquier otro dispositivo lo
+  // pise de nuevo con su copia local sin fusionar.
+  _marcarEmpresaMasterEditada(to);
 }
 
 // Eliminar empresa completamente

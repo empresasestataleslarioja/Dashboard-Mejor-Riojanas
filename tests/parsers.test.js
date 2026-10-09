@@ -364,17 +364,20 @@ group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya e
   const srcPurgarStores    = extractFn(html, '_purgarPerEmpresaStores');
   const srcRenombrarStores = extractFn(html, '_renombrarPerEmpresaStores');
   const srcFusionarStores  = extractFn(html, '_fusionarPerEmpresaStores');
+  const srcMarcarEditada   = extractFn(html, '_marcarEmpresaMasterEditada');
   const factory = new Function(
-    'let rubros = {}; let empresasInactivas = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},empresas_eliminadas:[]}; let _balances = {};\n' +
+    'let rubros = {}; let empresasInactivas = {}; let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},empresas_eliminadas:[]}; let _balances = {}; let empresaMasterTs = {};\n' +
     'let confirmResult = true;\n' +
     'function confirm(msg){ return confirmResult; }\n' +
     'function saveRubros(){} function computeTotals(){} function saveDataToLocalCache(){}\n' +
     'function marcarPendienteGuardar(){} function populateSelects(){} function rebuildActive(){} function buildRubros(){}\n' +
+    'const localStorage = { setItem(){} };\n' +
     srcStoresConst + '\n' + srcMismoNombre + '\n' + srcCoincideTumba + '\n' +
     srcPurgarStores + '\n' + srcRenombrarStores + '\n' + srcFusionarStores + '\n' +
+    srcMarcarEditada + '\n' +
     srcTombstone + '\n' + srcRenombrar + '\n' + srcFusionar + '\n' + srcConfirmar + '\n' +
     'function setState(r,d,b){ rubros=r; DATA=d; _balances=b; }\n' +
-    'function getState(){ return { rubros, DATA, _balances }; }\n' +
+    'function getState(){ return { rubros, DATA, _balances, empresaMasterTs }; }\n' +
     'function setConfirmResult(v){ confirmResult = v; }\n' +
     'return { _confirmarRenombre, setState, getState, setConfirmResult };'
   );
@@ -401,6 +404,8 @@ group('_confirmarRenombre — unificar denominación (renombrar a un nombre ya e
     'conserva el rubro de la empresa elegida (no lo pisa con "Sin rubro" del nombre viejo)');
   assert(st._balances.b1.empresa === 'LA RIOJA TELECOMUNICACIONES',
     'los balances de la empresa vieja quedan re-vinculados al nombre elegido, no huérfanos');
+  assert((st.empresaMasterTs['LA RIOJA TELECOMUNICACIONES'] || 0) > 0,
+    'la unificación marca un _ts "ahora" para la empresa elegida — sin esto, al publicar quedaba con el _ts viejo (o 0) y otro dispositivo con un ts propio más nuevo descartaba la fusión recién hecha, haciendo reaparecer la empresa vieja y perder el rubro asignado');
 
   // Si el usuario cancela la confirmación, no debe tocar nada.
   setState(
@@ -1702,13 +1707,15 @@ group('autoridades — sigue el mismo criterio de migración que el resto de los
       extractFn(html, '_fusionarPerEmpresaStores'),
       extractFn(html, '_tombstoneEmpresa'),
       extractFn(html, '_purgarEmpresaDeData'),
+      extractFn(html, '_marcarEmpresaMasterEditada'),
       extractFn(html, '_renombrarEmpresa'),
       extractFn(html, '_fusionarEmpresas'),
       extractFn(html, '_eliminarEmpresa'),
     ].join('\n');
     const factory = new Function(
       'let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
-      'let rubros = {};\nlet empresasInactivas = {};\nlet _balances = {};\n' +
+      'let rubros = {};\nlet empresasInactivas = {};\nlet _balances = {};\nlet empresaMasterTs = {};\n' +
+      'const localStorage = { setItem(){} };\n' +
       src + '\n' +
       'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, getDATA: () => DATA };'
     );
@@ -1769,13 +1776,15 @@ group('_tombstoneEmpresa / _purgarEmpresaDeData — evita que una empresa borrad
       extractFn(html, '_fusionarPerEmpresaStores'),
       extractFn(html, '_tombstoneEmpresa'),
       extractFn(html, '_purgarEmpresaDeData'),
+      extractFn(html, '_marcarEmpresaMasterEditada'),
       extractFn(html, '_renombrarEmpresa'),
       extractFn(html, '_fusionarEmpresas'),
       extractFn(html, '_eliminarEmpresa'),
     ].join('\n');
     const factory = new Function(
       'let DATA = {fact:{},sit:{},personal:[],notas:{},institucional:{},presupuesto:{},fact_mensual:{},res_mensual:{},er_mensual:{},autoridades:[],empresas_eliminadas:[]};\n' +
-      'let rubros = {};\nlet empresasInactivas = {};\nlet _balances = {};\n' +
+      'let rubros = {};\nlet empresasInactivas = {};\nlet _balances = {};\nlet empresaMasterTs = {};\n' +
+      'const localStorage = { setItem(){} };\n' +
       src + '\n' +
       'return { _renombrarEmpresa, _fusionarEmpresas, _eliminarEmpresa, _purgarEmpresaDeData, getDATA: () => DATA };'
     );
