@@ -2915,6 +2915,10 @@ self.onmessage = async (e) => {
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
             <option value="">— Todas las empresas —</option>
           </select>
+          <input type="text" id="autoridades-busq-nombre" oninput="buildAutoridades()"
+            placeholder="🔎 Buscar por nombre…" title="Filtra por nombre y apellido — para revisar y corregir posibles errores de carga (duplicados, grafías distintas, etc.)"
+            style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;width:160px">
           <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto">
             <input type="checkbox" id="chk-autoridades-historial" onchange="buildAutoridades()">
             Ver historial completo
@@ -17750,15 +17754,31 @@ function buildAutoridades() {
   const hoy = new Date().toISOString().slice(0,10);
   const esVigente = a => _autoridadEsVigente(a, hoy);
 
+  // Búsqueda por nombre — pedido explícito, para poder controlar la carga
+  // de datos (nombres repetidos con alguna letra distinta, grafías
+  // inconsistentes, etc.) y acceder directamente a editar/corregir ese
+  // registro en vez de recorrer toda la tabla a mano. Sin distinguir
+  // mayúsculas/minúsculas ni acentos — mismo criterio usado en el resto
+  // del dashboard para buscar nombres de empresa/beneficiario.
+  const _normBusq = s => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const busqNombreRaw = document.getElementById('autoridades-busq-nombre')?.value || '';
+  const busqNombre = _normBusq(busqNombreRaw.trim());
+
   let filas = (DATA.autoridades || []).map((a, idx) => ({ ...a, _idx: idx }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
-  if (!verHistorial) filas = filas.filter(esVigente);
+  if (busqNombre) {
+    // Buscando por nombre se ignora el filtro de vigencia — el objetivo es
+    // encontrar TODOS los registros de esa persona (vigentes, cerrados o
+    // duplicados) para poder corregirlos, no solo los vigentes.
+    filas = filas.filter(a => _normBusq(a.nombre).includes(busqNombre));
+  } else if (!verHistorial) {
+    filas = filas.filter(esVigente);
+  }
 
   if (lbl) {
     const empInactivaLbl = selEmp && empresasInactivas[selEmp] ? ' (empresa inactiva)' : '';
-    lbl.textContent = selEmp
-      ? (verHistorial ? `${selEmp} — historial completo` : `${selEmp} — vigentes`) + empInactivaLbl
-      : (verHistorial ? 'todas las empresas — historial completo' : 'todas las empresas — vigentes');
+    const sufijo = busqNombre ? `búsqueda: "${busqNombreRaw.trim()}"` : (verHistorial ? 'historial completo' : 'vigentes');
+    lbl.textContent = (selEmp ? selEmp : 'todas las empresas') + ' — ' + sufijo + empInactivaLbl;
   }
 
   // Ordenar: empresa (si es consolidado) → jerarquía del cargo (ver
@@ -17798,8 +17818,10 @@ function buildAutoridades() {
   const fmtFecha = f => f ? f.split('-').reverse().join('/') : '—';
 
   if (filas.length === 0) {
-    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">
-      ${selEmp ? 'Sin autoridades cargadas para ' + selEmp + '.' : 'Sin autoridades cargadas.'}</td></tr>`;
+    const msgVacio = busqNombre
+      ? `Sin coincidencias para "${busqNombreRaw.trim()}"${selEmp ? ' en ' + selEmp : ''}.`
+      : (selEmp ? 'Sin autoridades cargadas para ' + selEmp + '.' : 'Sin autoridades cargadas.');
+    tbl.innerHTML = `<tr><td style="padding:14px;color:var(--dim);text-align:center">${msgVacio}</td></tr>`;
     return;
   }
 
