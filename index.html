@@ -18190,12 +18190,24 @@ function _rptAutoridades() {
     .cardAut-c{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;text-align:right;white-space:nowrap}
   </style>`;
 
+  // Tercera tarjeta: en modo "vigentes" (el default), "Registros listados"
+  // y "Autoridades vigentes" son siempre el mismo número — filas ya viene
+  // filtrada a solo vigentes más arriba, así que la distinción no aporta
+  // nada ahí. Esa tarjeta solo tiene sentido con "Ver historial completo"
+  // activo (ahí sí difiere: Registros listados incluye los cerrados). Sin
+  // historial, se muestra en su lugar el promedio de autoridades por
+  // empresa, un dato que antes no estaba.
+  const promedioPorEmpresa = nEmpresas ? (nVigentes / nEmpresas).toFixed(1) : '0';
+  const tercerKpi = verHistorial
+    ? _rptKpi('Autoridades vigentes', nVigentes, 'a la fecha del reporte', '#534ab7')
+    : _rptKpi('Promedio por empresa', promedioPorEmpresa, 'autoridades vigentes', '#534ab7');
+
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Autoridades</title>'+_rptCSS()+cssCardsAut+'</head><body><div class="pg">'
     + _rptHeader('Autoridades', subt)
     + `<div class="kg3">
         ${_rptKpi('Registros listados', filas.length, verHistorial ? 'incluye historial' : 'vigentes', '#185fa5')}
         ${_rptKpi('Empresas con autoridades', nEmpresas, selEmp ? selEmp : 'en el listado', '#0f6e56')}
-        ${_rptKpi('Autoridades vigentes', nVigentes, 'a la fecha del reporte', '#534ab7')}
+        ${tercerKpi}
       </div>`
     + faltantesHtml
     + cardsHtml
