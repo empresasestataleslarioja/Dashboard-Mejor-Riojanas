@@ -17805,10 +17805,28 @@ function buildAutoridades() {
       grupos.get(key).n++;
     });
     const duplicados = [...grupos.values()].filter(g => g.n > 1);
+
+    // Anomalías de jerarquía — pedido explícito: no puede haber dos o más
+    // Presidentes/Vicepresidentes vigentes en la misma empresa, ni la
+    // misma persona en dos cargos vigentes distintos a la vez.
+    const anomalias = typeof _detectarAnomaliasAutoridades === 'function' ? _detectarAnomaliasAutoridades() : [];
+
+    const bloques = [];
     if (duplicados.length) {
+      bloques.push(`⚠ ${duplicados.length} registro${duplicados.length!==1?'s':''} duplicado${duplicados.length!==1?'s':''} detectado${duplicados.length!==1?'s':''} — se van a limpiar solos en la próxima sincronización con Sheets:<br>`
+        + duplicados.map(d => `${d.sample.empresa} — ${d.sample.nombre} (${d.sample.cargo}) ×${d.n}`).join(' · '));
+    }
+    if (anomalias.length) {
+      bloques.push(`⚠ ${anomalias.length} inconsistencia${anomalias.length!==1?'s':''} de jerarquía detectada${anomalias.length!==1?'s':''}:<br>`
+        + anomalias.map(an => an.tipo === 'cargo_duplicado'
+          ? `${an.empresa}: ${an.personas.length} ${an.cargo}S vigentes (${an.personas.join(', ')})`
+          : `${an.empresa}: ${an.nombre} figura en ${an.cargos.length} cargos vigentes a la vez (${an.cargos.join(', ')})`
+        ).join(' · '));
+    }
+
+    if (bloques.length) {
       dupWarnEl.style.display = '';
-      dupWarnEl.innerHTML = `⚠ ${duplicados.length} registro${duplicados.length!==1?'s':''} duplicado${duplicados.length!==1?'s':''} detectado${duplicados.length!==1?'s':''} — se van a limpiar solos en la próxima sincronización con Sheets:<br>`
-        + duplicados.map(d => `${d.sample.empresa} — ${d.sample.nombre} (${d.sample.cargo}) ×${d.n}`).join(' · ');
+      dupWarnEl.innerHTML = bloques.join('<hr style="border:none;border-top:1px solid rgba(255,71,102,.25);margin:6px 0">');
     } else {
       dupWarnEl.style.display = 'none';
       dupWarnEl.innerHTML = '';
@@ -18029,11 +18047,70 @@ const ORDEN_CARGOS_RPT_AUTORIDADES = [
   'PRESIDENTE','VICEPRESIDENTE','DIRECTOR TITULAR','DIRECTOR','SECRETARIO',
   'DIRECTOR SUPLENTE','SINDICO TITULAR','SINDICO','SINDICO SUPLENTE',
 ];
+// Normaliza cargo/nombre para comparar sin distinguir mayúsculas/
+// minúsculas ni acentos — mismo criterio usado en toda la sección de
+// Autoridades (búsqueda, orden, limpieza de duplicados).
+function _normCargoAutoridad(cargo) {
+  return String(cargo || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function _normNombreAutoridad(nombre) {
+  return String(nombre || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function _rangoCargoRpt(cargo) {
-  const norm = String(cargo || '').trim().toUpperCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // sin acentos: "SÍNDICO" → "SINDICO"
+  const norm = _normCargoAutoridad(cargo); // sin acentos: "SÍNDICO" → "SINDICO"
   const i = ORDEN_CARGOS_RPT_AUTORIDADES.indexOf(norm);
   return i === -1 ? ORDEN_CARGOS_RPT_AUTORIDADES.length : i;
+}
+
+// Reglas de integridad jerárquica pedidas explícitamente:
+// 1) no puede haber más de un PRESIDENTE vigente por empresa, ni más de
+//    un VICEPRESIDENTE vigente por empresa.
+// 2) la misma persona no puede ocupar dos cargos distintos vigentes
+//    dentro de la misma empresa al mismo tiempo (ej. Presidente Y
+//    Director a la vez).
+// Solo mira autoridades VIGENTES (_autoridadEsVigente) — un cargo ya
+// cerrado no es una anomalía actual, aunque se superponga en el
+// historial con otro vigente.
+function _detectarAnomaliasAutoridades() {
+  const hoy = new Date().toISOString().slice(0,10);
+  const vigentes = (DATA.autoridades || []).filter(a => _autoridadEsVigente(a, hoy));
+  const porEmpresa = new Map();
+  vigentes.forEach(a => {
+    if (!porEmpresa.has(a.empresa)) porEmpresa.set(a.empresa, []);
+    porEmpresa.get(a.empresa).push(a);
+  });
+
+  const anomalias = [];
+  porEmpresa.forEach((lista, empresa) => {
+    ['PRESIDENTE', 'VICEPRESIDENTE'].forEach(cargoUnico => {
+      const conEseCargo = lista.filter(a => _normCargoAutoridad(a.cargo) === cargoUnico);
+      if (conEseCargo.length > 1) {
+        anomalias.push({
+          tipo: 'cargo_duplicado', empresa, cargo: cargoUnico,
+          personas: conEseCargo.map(a => a.nombre),
+        });
+      }
+    });
+
+    const porNombre = new Map();
+    lista.forEach(a => {
+      const key = _normNombreAutoridad(a.nombre);
+      if (!key) return;
+      if (!porNombre.has(key)) porNombre.set(key, []);
+      porNombre.get(key).push(a);
+    });
+    porNombre.forEach(regs => {
+      const cargosDistintos = [...new Set(regs.map(a => _normCargoAutoridad(a.cargo)))];
+      if (cargosDistintos.length > 1) {
+        anomalias.push({
+          tipo: 'persona_en_dos_cargos', empresa, nombre: regs[0].nombre,
+          cargos: regs.map(a => a.cargo),
+        });
+      }
+    });
+  });
+  return anomalias;
 }
 
 function _rptAutoridades() {
@@ -31669,13 +31746,25 @@ function checkAlerts() {
     });
   }
 
+  // Anomalías de jerarquía — pedido explícito: no puede haber dos o más
+  // Presidentes/Vicepresidentes vigentes en la misma empresa, ni la misma
+  // persona en dos cargos vigentes distintos dentro de la misma empresa.
+  if (typeof _detectarAnomaliasAutoridades === 'function') {
+    _detectarAnomaliasAutoridades().forEach(an => {
+      const msg = an.tipo === 'cargo_duplicado'
+        ? an.empresa + ': ' + an.personas.length + ' ' + an.cargo + 'S vigentes (' + an.personas.join(', ') + ')'
+        : an.empresa + ': ' + an.nombre + ' figura en ' + an.cargos.length + ' cargos vigentes a la vez (' + an.cargos.join(', ') + ')';
+      alerts.push({ tipo:'jerarquia', msg });
+    });
+  }
+
   const badge    = document.getElementById('alerts-badge');
   const countLbl = document.getElementById('alerts-count-lbl');
   const panel    = document.getElementById('alerts-panel');
   if (!badge || !panel) return;
 
   const alertHTML = alerts.map(a => {
-    const color = a.tipo==='deficit'?'#ff4766':a.tipo==='dep'?'#ff8c47':a.tipo==='autoridad'?'#c447ff':'#e8ff47';
+    const color = a.tipo==='deficit'?'#ff4766':a.tipo==='dep'?'#ff8c47':a.tipo==='autoridad'?'#c447ff':a.tipo==='jerarquia'?'#ff3d7f':'#e8ff47';
     return '<div style="padding:7px 10px;border-left:3px solid '+color+';margin-bottom:5px;font-size:9.5px;line-height:1.5;background:var(--s2);border-radius:0 3px 3px 0">'+a.msg+'</div>';
   }).join('');
 
