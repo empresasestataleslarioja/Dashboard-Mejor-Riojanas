@@ -2954,9 +2954,9 @@ self.onmessage = async (e) => {
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
               <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Nombre y Apellido</label>
-              <input id="autoridad-form-nombre" type="text" placeholder="Nombre y Apellido…"
+              <input id="autoridad-form-nombre" type="text" placeholder="NOMBRE Y APELLIDO…"
                 style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
-                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:200px">
+                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:200px;text-transform:uppercase">
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
               <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Cargo</label>
@@ -2964,20 +2964,20 @@ self.onmessage = async (e) => {
                 style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
                 font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:160px">
                 <option value="">Seleccionar…</option>
-                <option value="Presidente">Presidente</option>
-                <option value="Vicepresidente">Vicepresidente</option>
-                <option value="Director Titular">Director Titular</option>
-                <option value="Director">Director</option>
-                <option value="Secretario">Secretario</option>
-                <option value="Director Suplente">Director Suplente</option>
-                <option value="Síndico Titular">Síndico Titular</option>
-                <option value="Síndico">Síndico</option>
-                <option value="Síndico Suplente">Síndico Suplente</option>
-                <option value="__otro__">Otro (especificar)…</option>
+                <option value="PRESIDENTE">PRESIDENTE</option>
+                <option value="VICEPRESIDENTE">VICEPRESIDENTE</option>
+                <option value="DIRECTOR TITULAR">DIRECTOR TITULAR</option>
+                <option value="DIRECTOR">DIRECTOR</option>
+                <option value="SECRETARIO">SECRETARIO</option>
+                <option value="DIRECTOR SUPLENTE">DIRECTOR SUPLENTE</option>
+                <option value="SÍNDICO TITULAR">SÍNDICO TITULAR</option>
+                <option value="SÍNDICO">SÍNDICO</option>
+                <option value="SÍNDICO SUPLENTE">SÍNDICO SUPLENTE</option>
+                <option value="__otro__">OTRO (ESPECIFICAR)…</option>
               </select>
-              <input id="autoridad-form-cargo-otro" type="text" placeholder="Especificar cargo…" style="display:none;margin-top:3px;
+              <input id="autoridad-form-cargo-otro" type="text" placeholder="ESPECIFICAR CARGO…" style="display:none;margin-top:3px;
                 padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
-                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:160px">
+                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:160px;text-transform:uppercase">
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
               <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Desde</label>
@@ -17882,9 +17882,13 @@ function toggleAutoridadForm(idx) {
   // no matchea ninguna opción, se selecciona "Otro" y se muestra el campo
   // de texto con el valor real.
   const _setCargoField = (valor) => {
-    const esConocido = valor && [...cargoField.options].some(o => o.value === valor);
-    if (esConocido) {
-      cargoField.value = valor;
+    // Comparación sin distinguir mayúsculas/minúsculas: datos cargados
+    // antes de pasar el desplegable a mayúsculas (ej. "Presidente") tienen
+    // que seguir cayendo en su opción estándar, no en "Otro".
+    const valorNorm = String(valor || '').trim().toUpperCase();
+    const opcionReal = [...cargoField.options].find(o => o.value.toUpperCase() === valorNorm);
+    if (opcionReal) {
+      cargoField.value = opcionReal.value;
       cargoOtro.style.display = 'none';
       cargoOtro.value = '';
     } else {
@@ -17930,10 +17934,14 @@ function _toggleAutoridadCargoOtro() {
 function guardarAutoridad() {
   const idxRaw  = document.getElementById('autoridad-form-idx')?.value;
   const empresa = document.getElementById('autoridad-form-emp')?.value?.trim() || '';
-  const nombre  = document.getElementById('autoridad-form-nombre')?.value?.trim() || '';
+  // Nombre y Apellido se carga siempre en mayúsculas (pedido explícito) —
+  // el input ya lo muestra en mayúsculas mientras se escribe (text-transform
+  // visual), pero esto fuerza que el VALOR guardado también lo sea, no solo
+  // la apariencia.
+  const nombre  = (document.getElementById('autoridad-form-nombre')?.value?.trim() || '').toUpperCase();
   const cargoSel = document.getElementById('autoridad-form-cargo')?.value || '';
   const cargo   = cargoSel === '__otro__'
-    ? (document.getElementById('autoridad-form-cargo-otro')?.value?.trim() || '')
+    ? (document.getElementById('autoridad-form-cargo-otro')?.value?.trim() || '').toUpperCase()
     : cargoSel;
   const desde   = document.getElementById('autoridad-form-desde')?.value || '';
   const hasta   = document.getElementById('autoridad-form-hasta')?.value || '';
