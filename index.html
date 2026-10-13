@@ -2407,6 +2407,15 @@ self.onmessage = async (e) => {
     box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:300px;
     font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
 
+  <!-- Popover de observaciones por empresa (desde el editor de rubros) —
+       misma nota que "📝 Notas analíticas" del panel "Por Empresa"
+       (DATA.notas), para poder cargarla/verla sin salir de Gestión de
+       Empresas y Rubros. -->
+  <div id="rub-nota-popover" style="display:none;position:fixed;z-index:9000;
+    background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+    box-shadow:0 8px 28px rgba(0,0,0,.55);padding:14px 16px;width:300px;
+    font-family:var(--mono);font-size:8.5px;box-sizing:border-box"></div>
+
   <div id="viz-panel" style="display:none;position:fixed;top:52px;left:210px;right:0;
     background:var(--s1);border-bottom:2px solid var(--bd2);z-index:150;
     padding:10px 22px 12px;box-shadow:0 6px 20px rgba(0,0,0,.35)">
@@ -10556,6 +10565,7 @@ function buildRubros() {
     const selColor = RUBRO_COLORS[r] || RUBRO_COLORS['Sin rubro'];
     const inst = (DATA.institucional && DATA.institucional[emp]) || {};
     const tieneInst = !!(inst.fechaConstitucion || inst.decreto || inst.actividad || inst.tipoSocietario || inst.participacionAccionaria);
+    const tieneNota = !!(DATA.notas && DATA.notas[emp]);
     return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
         ondblclick="_iniciarRenombre('${emp}')"
@@ -10573,6 +10583,11 @@ function buildRubros() {
         border:1px solid ${tieneInst?'#47e8ff':'var(--bd2)'};
         color:${tieneInst?'#47e8ff':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
         title="${tieneInst?'Ver/editar datos institucionales (constitución, instrumento de creación, tipo societario, participación accionaria, actividad)':'Agregar datos institucionales (constitución, instrumento de creación, tipo societario, participación accionaria, actividad)'}">🏛</button>
+      <button onclick="mostrarNotaPopover(event,'${emp}')"
+        style="flex-shrink:0;width:20px;height:20px;padding:0;line-height:1;background:${tieneNota?'rgba(196,71,255,.1)':'none'};
+        border:1px solid ${tieneNota?'#c447ff':'var(--bd2)'};
+        color:${tieneNota?'#c447ff':'var(--dim)'};font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer"
+        title="${tieneNota?'Ver/editar observaciones de esta empresa':'Agregar una observación sobre esta empresa (situación particular, contexto, advertencias)'}">📝</button>
     </div>`;
   }).join('');
 }
@@ -19741,17 +19756,78 @@ function toggleEmpNotas() {
   if (btn) btn.textContent = editing ? '✎ Editar' : '✓ Listo';
 }
 
+// Guarda la observación de una empresa — compartido por el textarea del
+// panel "Por Empresa" (saveEmpNota) y el popover del editor de rubros
+// (_confirmarNotaPopover), ambos sobre el mismo DATA.notas[emp].
+function _guardarNotaEmpresa(emp, value) {
+  if (!emp) return;
+  DATA.notas[emp] = value.trim();
+  saveDataToLocalCache();
+  try { marcarPendienteGuardar(['notas']); } catch(e) {}
+}
+
 function saveEmpNota(value) {
   const emp = document.getElementById('sel-emp')?.value;
   if (!emp) return;
-  DATA.notas[emp] = value.trim();
+  _guardarNotaEmpresa(emp, value);
   const lbl = document.getElementById('emp-notas-lbl');
   if (lbl) lbl.textContent = value.trim() ? `${value.trim().length} chars — guardado` : '';
-  // Guardar en cache local inmediatamente
-  saveDataToLocalCache();
-  // Las notas también deben impactar Sheets (fuente de verdad)
-  try { marcarPendienteGuardar(['notas']); } catch(e) {}
 }
+
+// ── Popover de observaciones por empresa desde Gestión de Empresas y
+// Rubros — misma nota que "📝 Notas analíticas" del panel "Por Empresa",
+// para poder cargarla/revisarla sin cambiar de pantalla.
+function mostrarNotaPopover(evt, emp) {
+  const pop = document.getElementById('rub-nota-popover');
+  if (!pop) return;
+  const nota = (DATA.notas && DATA.notas[emp]) || '';
+  pop.dataset.emp = emp;
+  pop.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:9px;font-weight:600;color:var(--text);letter-spacing:.04em">📝 ${emp}</span>
+      <button onclick="event.stopPropagation();document.getElementById('rub-nota-popover').style.display='none'"
+        style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
+    </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:10px">
+      Observaciones (contexto, situación particular, advertencias)
+      <textarea id="nota-pop-texto" rows="5" placeholder="Ej: en proceso de fusión con..., litigio pendiente, cambio de autoridades en trámite…"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none;width:100%;box-sizing:border-box;resize:vertical">${nota.replace(/</g,'&lt;')}</textarea>
+    </label>
+    <button onclick="event.stopPropagation();_confirmarNotaPopover()"
+      style="width:100%;padding:6px;background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.4);
+      color:#c447ff;font-size:9px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:600">
+      Guardar</button>`;
+  pop.style.display = 'block';
+  const rc = evt.currentTarget.getBoundingClientRect();
+  let left = rc.left, top = rc.bottom + 6;
+  const pw = 300, ph = 220;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  if (top + ph > window.innerHeight - 10) top = Math.max(10, rc.top - ph - 6);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  evt.stopPropagation();
+  document.getElementById('nota-pop-texto')?.focus();
+}
+
+function _confirmarNotaPopover() {
+  const pop = document.getElementById('rub-nota-popover');
+  const emp = pop?.dataset.emp;
+  if (!emp) return;
+  const texto = document.getElementById('nota-pop-texto')?.value || '';
+  _guardarNotaEmpresa(emp, texto);
+  // Si el panel "Por Empresa" tiene esta misma empresa abierta, reflejar
+  // el cambio ahí también sin esperar a que se vuelva a abrir.
+  if (document.getElementById('sel-emp')?.value === emp) {
+    try { renderEmpNotas(emp); } catch(e) {}
+  }
+  pop.style.display = 'none';
+  buildRubros();
+}
+
+document.addEventListener('click', e => {
+  const p = document.getElementById('rub-nota-popover');
+  if (p && p.style.display !== 'none' && !p.contains(e.target)) p.style.display = 'none';
+});
 
 // Mostrar indicador de nota en tabla portafolio (tooltip)
 function getNotaBadge(emp) {
