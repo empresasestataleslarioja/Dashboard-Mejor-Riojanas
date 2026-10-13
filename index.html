@@ -7559,10 +7559,13 @@ function _rptEmpresasRubros() {
       // explícito: que se vea como columna propia en el reporte imprimible
       // de la Ficha Institucional, no solo como marcador.
       const notaInst = (DATA.notas && DATA.notas[e]) || '';
+      // Empresa en una sola línea (sin wrap) — pedido explícito; Actividad
+      // hasta 2 líneas con recorte (line-clamp) en vez de estirar la fila
+      // sin límite cuando el texto es largo.
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${societario}</td>
-        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;color:${notaInst?'#185fa5':'inherit'}">${notaInst ? notaInst.replace(/</g,'&lt;') : '—'}</td>
@@ -7571,12 +7574,12 @@ function _rptEmpresasRubros() {
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:12%">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:10%">Tipo Societario</th>
-          <th style="text-align:left;padding:5px 8px;width:24%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:16%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:12%">Tipo Societario</th>
+          <th style="text-align:left;padding:5px 8px;width:34%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:7%">Constitución</th>
-          <th style="text-align:left;padding:5px 8px;width:12%">Instrumento de creación</th>
-          <th style="text-align:left;padding:5px 8px;width:35%">Observación</th>
+          <th style="text-align:left;padding:5px 8px;width:14%">Instrumento de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:17%">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
