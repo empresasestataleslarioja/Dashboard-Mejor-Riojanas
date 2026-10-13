@@ -7554,8 +7554,15 @@ function _rptEmpresasRubros() {
         .filter(Boolean)
         .map((t,i) => i===0 ? t : `<span style="font-size:7pt;color:#777">${t}</span>`)
         .join('<br>') || '—';
+      // 📝 junto al nombre cuando hay una observación cargada (DATA.notas,
+      // la misma que el popover de este editor y "Notas analíticas" del
+      // panel Por Empresa) — pedido explícito: que se vea en el reporte
+      // imprimible de la Ficha Institucional, no solo en el dashboard. El
+      // texto completo va en la sección "Observaciones" al pie, para no
+      // ensanchar esta tabla con una columna más.
+      const tieneNotaInst = !!(DATA.notas && DATA.notas[e]);
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${tieneNotaInst?' <span style="color:#185fa5" title="Tiene una observación cargada — ver sección Observaciones">📝</span>':''}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${societario}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
@@ -7575,11 +7582,28 @@ function _rptEmpresasRubros() {
       </table>`;
   }).join('');
 
+  // Observaciones cargadas (DATA.notas) de las empresas listadas — mismo
+  // patrón que ya usa el reporte de Personal: una caja por empresa con el
+  // texto completo, solo para las que tienen algo cargado.
+  const empsConNotaInst = emprsFiltradas
+    .filter(e => (DATA.notas || {})[e])
+    .sort((a,b) => a.localeCompare(b,'es'));
+  const notasHtml = empsConNotaInst.length
+    ? `<div class="st" id="sec_notas">Observaciones</div>
+       <div style="margin-bottom:12px">${empsConNotaInst.map(e =>
+         `<div style="margin-bottom:8px;padding:10px 14px;border:1px solid #185fa555;background:#eef4fb;border-radius:4px">
+           <div style="font-weight:700;color:#185fa5;font-size:9.5px;margin-bottom:3px">📝 ${e}</div>
+           <div style="font-size:9.5px;color:#333;white-space:pre-wrap;line-height:1.5">${DATA.notas[e].replace(/</g,'&lt;')}</div>
+         </div>`
+       ).join('')}</div>`
+    : '';
+
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas · ${estadoFiltroLbl}`)
     + kpis
     + `<div class="st">Listado por rubro — ${emprsFiltradas.length} empresa${emprsFiltradas.length!==1?'s':''} (${estadoFiltroLbl})</div>`
     + (tablaRubros || '<div style="padding:16px;color:#888;font-size:9pt">No hay empresas que cumplan este filtro.</div>')
+    + notasHtml
     + _rptFooter() + '</div></body></html>';
 }
 
