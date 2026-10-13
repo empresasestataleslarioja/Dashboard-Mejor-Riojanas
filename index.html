@@ -6875,8 +6875,204 @@ function _rptCSS() {
   @page{margin:.7cm .7cm 1.2cm .7cm;size:A4 portrait}
   @media print{
     *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+    .rpt-rango-ctrl{display:none !important}
   }
-  </style>`;
+  </style>` + _rptRangoJS();
+}
+
+// ── Motor de filtro de año/período POR SECCIÓN, independiente entre
+// secciones del mismo reporte — se inyecta una sola vez acá porque TODOS
+// los _rptXXX() incluyen _rptCSS() en su <head>. Una sección marca su
+// título (".st"/"sec_XXX") con data-rango-kind ("filas": una fila por año
+// en la tabla/gráfico hermano siguiente, con data-year/data-val en cada
+// <tr>; "columnas": una tabla con una columna por año, data-year/data-val
+// en cada <th>/<td>; "ranking": un listado de barras armado con
+// _rptBarHRango, data-vals con el mapa año→valor completo de cada fila) y
+// data-rango-years con el listado de años disponibles para esa sección.
+// Agrega un control Desde/Hasta (o un único Año si data-rango-single) al
+// lado del título y recalcula en vivo, sin tocar el resto del reporte.
+function _rptRangoJS() {
+  return `<script>
+  (function(){
+    function fmtPct(n){ return (n==null || !isFinite(n)) ? '—' : (n>=0?'+':'')+n.toFixed(2)+'%'; }
+    function clsPct(n){ return (n==null || !isFinite(n)) ? '' : (n>=0?'up':'dn'); }
+
+    function findSibWith(anchor, selector){
+      var sib = anchor.nextElementSibling, guard = 0;
+      while (sib && !sib.querySelector(selector) && guard < 8) { sib = sib.nextElementSibling; guard++; }
+      return sib;
+    }
+
+    function buildCtrl(years, desde, hasta, single){
+      var ctrl = document.createElement('span');
+      ctrl.className = 'rpt-rango-ctrl';
+      ctrl.style.cssText = 'font-weight:400;text-transform:none;letter-spacing:0;font-size:7pt;color:#777;display:inline-flex;gap:4px;align-items:center;font-family:monospace;flex-shrink:0';
+      var selStyle = 'font-size:7pt;font-family:monospace;padding:1px 3px;border:1px solid #ccc;border-radius:2px;background:#fff;color:#333';
+      var selD = null;
+      if (!single) {
+        ctrl.appendChild(document.createTextNode('Desde'));
+        selD = document.createElement('select'); selD.style.cssText = selStyle;
+        years.forEach(function(y){ var o=document.createElement('option'); o.value=y; o.textContent=y; if(y===desde) o.selected=true; selD.appendChild(o); });
+        ctrl.appendChild(selD);
+        ctrl.appendChild(document.createTextNode('hasta'));
+      } else {
+        ctrl.appendChild(document.createTextNode('Año'));
+      }
+      var selH = document.createElement('select'); selH.style.cssText = selStyle;
+      years.forEach(function(y){ var o=document.createElement('option'); o.value=y; o.textContent=y; if(y===hasta) o.selected=true; selH.appendChild(o); });
+      ctrl.appendChild(selH);
+      return { ctrl: ctrl, selD: selD, selH: selH };
+    }
+
+    function aplicarFilas(sib, desde, hasta, years){
+      var i0 = years.indexOf(desde), i1 = years.indexOf(hasta);
+      var visibles = [];
+      sib.querySelectorAll('[data-year]').forEach(function(row){
+        var on = years.indexOf(row.dataset.year) >= i0 && years.indexOf(row.dataset.year) <= i1;
+        row.style.display = on ? '' : 'none';
+        if (on) visibles.push(row);
+      });
+      var baseVal = visibles.length ? parseFloat(visibles[0].dataset.val) : null;
+      visibles.forEach(function(row, i){
+        var v = parseFloat(row.dataset.val);
+        var prev = i>0 ? parseFloat(visibles[i-1].dataset.val) : null;
+        var tdInt = row.querySelector('.rpt-var-int'), tdBase = row.querySelector('.rpt-var-base');
+        if (tdInt) { var vi = (prev && v!=null) ? ((v-prev)/prev*100) : null; tdInt.textContent = fmtPct(vi); tdInt.className = 'rpt-var-int ' + clsPct(vi); }
+        if (tdBase) { var vb = (i>0 && baseVal) ? ((v-baseVal)/baseVal*100) : null; tdBase.textContent = i===0 ? '—' : fmtPct(vb); tdBase.className = 'rpt-var-base ' + (i===0?'':clsPct(vb)); }
+      });
+    }
+
+    function aplicarColumnas(sib, desde, hasta, years){
+      var i0 = years.indexOf(desde), i1 = years.indexOf(hasta);
+      sib.querySelectorAll('[data-year]').forEach(function(cell){
+        var idx = years.indexOf(cell.dataset.year);
+        cell.style.display = (idx>=i0 && idx<=i1) ? '' : 'none';
+      });
+      sib.querySelectorAll('tbody tr').forEach(function(row){
+        var celdas = Array.prototype.filter.call(row.querySelectorAll('[data-year]'), function(c){
+          return c.style.display !== 'none' && c.dataset.val !== '' && c.dataset.val != null;
+        });
+        var tdInt = row.querySelector('.rpt-var-int'), tdBase = row.querySelector('.rpt-var-base'), tdBaseYr = row.querySelector('.rpt-base-yr');
+        if (!celdas.length) {
+          if (tdInt) tdInt.textContent = '—';
+          if (tdBase) tdBase.textContent = '—';
+          if (tdBaseYr) tdBaseYr.textContent = '—';
+          return;
+        }
+        var first = celdas[0], last = celdas[celdas.length-1], prev = celdas.length>1 ? celdas[celdas.length-2] : null;
+        var vFirst = parseFloat(first.dataset.val), vLast = parseFloat(last.dataset.val), vPrev = prev ? parseFloat(prev.dataset.val) : null;
+        if (tdInt) { var vi = (prev && vLast!=null) ? ((vLast-vPrev)/vPrev*100) : null; tdInt.textContent = fmtPct(vi); tdInt.className = 'rpt-var-int ' + clsPct(vi); }
+        if (tdBase) { var vb = (celdas.length>1 && vFirst) ? ((vLast-vFirst)/vFirst*100) : null; tdBase.textContent = celdas.length>1 ? fmtPct(vb) : '—'; tdBase.className = 'rpt-var-base ' + (celdas.length>1?clsPct(vb):''); }
+        if (tdBaseYr) tdBaseYr.textContent = first.dataset.year || '—';
+      });
+    }
+
+    function barraSVG(w, h, pct, color){
+      var bw = Math.round(Math.max(pct,0.01) * w);
+      return '<svg width="100%" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none" style="display:block">'
+        + '<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="#e8e8e8" rx="2"/>'
+        + '<rect x="0" y="0" width="'+bw+'" height="'+h+'" fill="'+color+'" rx="2"/></svg>';
+    }
+
+    function aplicarRanking(sib, desde, hasta, modo, color, rawItems){
+      var items = rawItems.map(function(it){
+        var v0 = it.vals[desde], v1 = it.vals[hasta];
+        var g = (v0 && v1!=null) ? ((v1-v0)/v0*100) : null;
+        return { label: it.label, v0:v0, v1:v1, g:g };
+      });
+      if (modo === 'valor') items = items.filter(function(it){ return it.v1!=null; }).sort(function(a,b){ return (b.v1||0)-(a.v1||0); });
+      else items = items.filter(function(it){ return it.g!=null; }).sort(function(a,b){ return (b.g||0)-(a.g||0); });
+      items = items.slice(0,6);
+      if (!items.length) { sib.innerHTML = '<p style="color:#999;font-size:8pt;padding:4px">Sin datos</p>'; return; }
+      var maxV = Math.max.apply(null, items.map(function(it){ return modo==='valor' ? (it.v1||0) : Math.max(0,it.g||0); })) || 1;
+      sib.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:9pt">' + items.map(function(it){
+        var val = modo==='valor' ? it.v1 : it.g;
+        var fmt = modo==='valor' ? String(it.v1) : fmtPct(it.g);
+        var lbl = it.label.length>14 ? it.label.slice(0,13)+'…' : it.label;
+        var pct = Math.max((val||0)/maxV, 0.01);
+        return '<tr style="border:none">'
+          + '<td style="width:90px;white-space:nowrap;overflow:hidden;font-family:monospace;color:#555;padding:3px 6px 3px 0;border:none" title="'+it.label+'">'+lbl+'</td>'
+          + '<td style="padding:3px 0;border:none">'+barraSVG(300,14,pct,color)+'</td>'
+          + '<td style="width:62px;text-align:right;font-weight:600;font-family:monospace;color:#111;padding:3px 0 3px 6px;border:none">'+fmt+'</td>'
+          + '</tr>';
+      }).join('') + '</table>';
+    }
+
+    window._rptInitRangos = function(){
+      document.querySelectorAll('[data-rango-kind]').forEach(function(anchor){
+        try {
+          var kind = anchor.dataset.rangoKind;
+          var years = JSON.parse(anchor.dataset.rangoYears || '[]');
+          if (years.length < 2) return;
+          var desde = anchor.dataset.rangoDesde || years[0];
+          var hasta = anchor.dataset.rangoHasta || years[years.length-1];
+          var single = anchor.dataset.rangoSingle === 'true';
+          var modo = anchor.dataset.rangoModo || 'crecimiento';
+          var color = anchor.dataset.rangoColor || '#185fa5';
+          var selector = kind === 'ranking' ? '[data-vals]' : '[data-year]';
+          var sib = findSibWith(anchor, selector);
+          if (!sib) return;
+
+          var rawItems = null;
+          if (kind === 'ranking') {
+            rawItems = Array.prototype.map.call(sib.querySelectorAll('[data-vals]'), function(row){
+              var vals = {}; try { vals = JSON.parse(row.dataset.vals); } catch(e){}
+              return { label: row.dataset.label || '', vals: vals };
+            });
+          }
+
+          var built = buildCtrl(years, desde, hasta, single);
+          var txt = document.createElement('span');
+          txt.textContent = anchor.textContent;
+          anchor.textContent = '';
+          anchor.style.display = 'flex'; anchor.style.justifyContent = 'space-between'; anchor.style.alignItems = 'center'; anchor.style.gap = '10px';
+          anchor.appendChild(txt);
+          anchor.appendChild(built.ctrl);
+
+          function aplicar(){
+            var d = single ? built.selH.value : built.selD.value, h = built.selH.value;
+            if (years.indexOf(d) > years.indexOf(h)) { var t=d; d=h; h=t; }
+            if (kind === 'filas') aplicarFilas(sib, d, h, years);
+            else if (kind === 'columnas') aplicarColumnas(sib, d, h, years);
+            else if (kind === 'ranking') aplicarRanking(sib, d, h, modo, color, rawItems);
+          }
+          if (built.selD) built.selD.onchange = aplicar;
+          built.selH.onchange = aplicar;
+          aplicar();
+        } catch(e) { /* una sección con datos inesperados no debe romper el resto del reporte */ }
+      });
+    };
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', window._rptInitRangos);
+    else window._rptInitRangos();
+  })();
+  <\/script>`;
+}
+
+// Como _rptBarH, pero cada fila lleva el mapa año→valor completo
+// (data-vals) para que _rptRangoJS pueda recalcular el ranking cuando se
+// cambia el período, sin tener que volver a llamar a esta función.
+function _rptBarHRango(items, colorFn, modo) {
+  if (!items || !items.length) return '<p style="color:#999;font-size:8pt;padding:4px">Sin datos</p>';
+  var maxV = Math.max.apply(null, items.map(function(d){return d.v||0;})) || 1;
+  var W = 300; var H = 14;
+  return '<table style="width:100%;border-collapse:collapse;font-size:9pt">'
+    + items.map(function(d) {
+      var lbl = (d.l||'').length > 14 ? (d.l||'').slice(0,13)+'…' : (d.l||'');
+      var pct = Math.max(((d.v||0)/maxV), 0.01);
+      var col = typeof colorFn === 'function' ? colorFn(d) : (colorFn||'#185fa5');
+      var bw  = Math.round(pct * W);
+      return '<tr style="border:none" data-vals=\'' + JSON.stringify(d.vals||{}).replace(/'/g,'&#39;') + '\' data-label="' + (d.l||'').replace(/"/g,'&quot;') + '">'
+        + '<td style="width:90px;white-space:nowrap;overflow:hidden;font-family:monospace;color:#555;padding:3px 6px 3px 0;border:none" title="'+(d.l||'')+'">'+lbl+'</td>'
+        + '<td style="padding:3px 0;border:none">'
+        + '<svg width="100%" height="'+H+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="display:block">'
+        + '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#e8e8e8" rx="2"/>'
+        + '<rect x="0" y="0" width="'+bw+'" height="'+H+'" fill="'+col+'" rx="2"/>'
+        + '</svg>'
+        + '</td>'
+        + '<td style="width:62px;text-align:right;font-weight:600;font-family:monospace;color:#111;padding:3px 0 3px 6px;border:none">'+(d.fmt||d.v)+'</td>'
+        + '</tr>';
+    }).join('') + '</table>';
 }
 
 
@@ -7649,7 +7845,7 @@ function _rptPersonal(autoPrint) {
         var bw  = Math.round(pct * barrasSVG_W);
         var fw  = isL ? 700 : 400;
         var fc  = isL ? '#0f6e56' : '#111';
-        return '<tr style="border:none">'
+        return '<tr style="border:none" data-year="'+y+'" data-val="'+v+'">'
           + '<td style="width:44px;font-family:monospace;color:#555;text-align:right;padding:4px 10px 4px 0;border:none">'+y+'</td>'
           + '<td style="padding:2px 0;border:none">'
           + '<svg width="100%" height="'+barrasSVG_H+'" viewBox="0 0 '+barrasSVG_W+' '+barrasSVG_H+'" preserveAspectRatio="none" style="display:block">'
@@ -7670,11 +7866,11 @@ function _rptPersonal(autoPrint) {
       const ic = vInt===null?'':(parseFloat(vInt)>=0?'up':'dn');
       const bc = vBase2===null?'':(parseFloat(vBase2)>=0?'up':'dn');
       const isL = y===lastYEmp;
-      return `<tr${isL?' style="background:#f9f9f9"':''}>
+      return `<tr${isL?' style="background:#f9f9f9"':''} data-year="${y}" data-val="${v}">
         <td style="font-size:13pt">${y}${y===baseYearEmp?' <span style="font-size:8pt;color:#185fa5;font-weight:400">(base)</span>':''}</td>
         <td style="font-size:${isL?'18pt':'13pt'};font-weight:${isL?700:500};color:${isL?'#0f6e56':'#111'}">${v||'—'}</td>
-        <td class="${ic}">${vInt===null?'—':(parseFloat(vInt)>=0?'+':'')+vInt+'%'}</td>
-        <td class="${bc}">${vBase2===null?'—':(parseFloat(vBase2)>=0?'+':'')+vBase2+'%'}</td>
+        <td class="rpt-var-int ${ic}">${vInt===null?'—':(parseFloat(vInt)>=0?'+':'')+vInt+'%'}</td>
+        <td class="rpt-var-base ${bc}">${vBase2===null?'—':(parseFloat(vBase2)>=0?'+':'')+vBase2+'%'}</td>
       </tr>`;
     }).join('');
 
@@ -7720,9 +7916,9 @@ function _rptPersonal(autoPrint) {
       }
     }
 
-    _h.push('<div class="st" id="sec_evol">Evolución de plantilla '+baseYearEmp+'–'+lastYEmp+'</div>');
+    _h.push('<div class="st" id="sec_evol" data-rango-kind="filas" data-rango-years=\''+JSON.stringify(pYrsEmp)+'\'>Evolución de plantilla '+baseYearEmp+'–'+lastYEmp+'</div>');
     _h.push('<div class="cc" style="margin-bottom:12px">'+barras+'</div>');
-    _h.push('<div class="st" id="sec_tabla">Detalle por año</div>');
+    _h.push('<div class="st" id="sec_tabla" data-rango-kind="filas" data-rango-years=\''+JSON.stringify(pYrsEmp)+'\'>Detalle por año</div>');
     _h.push('<div class="tw"><table style="font-size:13pt">');
     _h.push('<thead><tr>'
       + '<th style="font-size:9pt">Año</th>'
@@ -7790,7 +7986,7 @@ function _rptPersonal(autoPrint) {
         var isL = y === lastY;
         var bg  = isL ? '#0f6e56' : '#185fa5';
         var bw  = Math.round(pct * totSVG_W);
-        return '<tr style="border:none">'
+        return '<tr style="border:none" data-year="'+y+'" data-val="'+v+'">'
           + '<td style="width:40px;font-family:monospace;color:#555;text-align:right;padding:3px 8px 3px 0;border:none">'+y+'</td>'
           + '<td style="padding:2px 0;border:none">'
           + '<svg width="100%" height="'+totSVG_H+'" viewBox="0 0 '+totSVG_W+' '+totSVG_H+'" preserveAspectRatio="none" style="display:block">'
@@ -7802,8 +7998,17 @@ function _rptPersonal(autoPrint) {
           + '</tr>';
       }).join('') + '</table>';
 
-    const topGrow = byGrowth.slice(0,6).map(function(d){return {l:d.e,v:Math.max(0,d.g),fmt:'+'+d.g.toFixed(2)+'%'};});
-    const topSize = bySize.slice(0,6).map(function(d){return {l:d.e,v:_persGetTotal(d,lastY)||0,fmt:String(_persGetTotal(d,lastY))};});
+    // vals = mapa año→empleados completo de cada empresa, para que el
+    // control Desde/Hasta de cada ranking pueda recalcular el período sin
+    // tener que volver a pasar por el servidor (ver _rptBarHRango).
+    const valsPorEmpresa = d => pYrs.reduce((acc,y)=>({...acc,[y]:_persGetTotal(d,y)||0}),{});
+    const topGrow = byGrowth.slice(0,6).map(function(gi){
+      const d = DATA.personal.find(x=>x.e===gi.e);
+      return {l:gi.e,v:Math.max(0,gi.g),fmt:'+'+gi.g.toFixed(2)+'%',vals:valsPorEmpresa(d)};
+    });
+    const topSize = bySize.slice(0,6).map(function(d){
+      return {l:d.e,v:_persGetTotal(d,lastY)||0,fmt:String(_persGetTotal(d,lastY)),vals:valsPorEmpresa(d)};
+    });
 
     // Tabla consolidada — VAR usa año base PROPIO de cada empresa
     const sorted = [...DATA.personal].sort((a,b)=>_persGetTotal(b,lastY)-_persGetTotal(a,lastY));
@@ -7823,23 +8028,23 @@ function _rptPersonal(autoPrint) {
       // % del total en último año disponible
       const pctTot   = totLast && vL ? (vL/totLast*100).toFixed(2)+'%' : '—';
       return `<tr><td>${d.e}</td>
-        ${pYrs.map(y=>`<td>${_persGetTotal(d,y)||'—'}</td>`).join('')}
+        ${pYrs.map(y=>`<td data-year="${y}" data-val="${_persGetTotal(d,y)||''}">${_persGetTotal(d,y)||'—'}</td>`).join('')}
         <td style="font-size:9pt;color:#555">${pctTot}</td>
-        <td>${baseCol}</td>
-        <td class="${ic}">${vi===null?'—':(parseFloat(vi)>=0?'+':'')+vi+'%'}</td>
-        <td class="${bc}">${vb===null?'—':(parseFloat(vb)>=0?'+':'')+vb+'%'}</td>
+        <td class="rpt-base-yr">${baseCol}</td>
+        <td class="rpt-var-int ${ic}">${vi===null?'—':(parseFloat(vi)>=0?'+':'')+vi+'%'}</td>
+        <td class="rpt-var-base ${bc}">${vb===null?'—':(parseFloat(vb)>=0?'+':'')+vb+'%'}</td>
       </tr>`;
     }).join('');
 
     const totRow = `<tr class="trf"><td>TOTAL PORTAFOLIO</td>
-      ${pYrs.map(y=>`<td>${(totals[y]||0).toLocaleString('es-AR')}</td>`).join('')}
+      ${pYrs.map(y=>`<td data-year="${y}" data-val="${totals[y]||''}">${(totals[y]||0).toLocaleString('es-AR')}</td>`).join('')}
       <td style="font-size:9pt">100%</td>
-      <td>${baseYear}</td>
-      <td class="${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
-      <td class="${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
+      <td class="rpt-base-yr">${baseYear}</td>
+      <td class="rpt-var-int ${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
+      <td class="rpt-var-base ${totLast>=totBase?'up':'dn'}">${pctStr(totLast,totBase)}</td>
     </tr>`;
 
-    const thYears = pYrs.map(y=>`<th>${y}</th>`).join('');
+    const thYears = pYrs.map(y=>`<th data-year="${y}">${y}</th>`).join('');
 
     var _h2 = [];
     _h2.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Personal</title>'+_rptCSS()+'</head><body><div class="pg">');
@@ -7888,15 +8093,15 @@ function _rptPersonal(autoPrint) {
         + '</div>');
     }
 
-    _h2.push('<div class="st" id="sec_evol">Evolución nómina total del portafolio</div>');
+    _h2.push('<div class="st" id="sec_evol" data-rango-kind="filas" data-rango-years=\''+JSON.stringify(pYrs)+'\'>Evolución nómina total del portafolio</div>');
     _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
     var _pngPersMulti = _rptCanvasPng('ch-p-multi');
     if (_pngPersMulti) _h2.push(_rptChartCard('Personal por empresa (multi-año)', 'empleados', _pngPersMulti));
     _h2.push('<div class="r2" id="sec_top">');
-    _h2.push('<div><div class="st">Top crecimiento '+baseYear+'→'+lastY+'</div><div class="cc">'+_rptBarH(topGrow,'#1d9e75')+'</div></div>');
-    _h2.push('<div><div class="st">Top empleadores '+lastY+'</div><div class="cc">'+_rptBarH(topSize,'#185fa5')+'</div></div>');
+    _h2.push('<div><div class="st" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(pYrs)+'\' data-rango-modo="crecimiento" data-rango-color="#1d9e75">Top crecimiento '+baseYear+'→'+lastY+'</div><div class="cc">'+_rptBarHRango(topGrow,'#1d9e75')+'</div></div>');
+    _h2.push('<div><div class="st" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(pYrs)+'\' data-rango-modo="valor" data-rango-single="true" data-rango-color="#185fa5">Top empleadores '+lastY+'</div><div class="cc">'+_rptBarHRango(topSize,'#185fa5')+'</div></div>');
     _h2.push('</div>');
-    _h2.push('<div class="st" id="sec_tabla">Detalle por empresa</div>');
+    _h2.push('<div class="st" id="sec_tabla" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(pYrs)+'\'>Detalle por empresa</div>');
     _h2.push('<div class="tw"><table>');
     _h2.push('<thead><tr><th style="width:22%">Empresa</th>'+thYears+'<th>% Total</th><th>Base</th><th>Var. interanual</th><th>Var. vs base propia</th></tr></thead>');
     _h2.push('<tbody>'+tablaRows+totRow+'</tbody></table></div>');
