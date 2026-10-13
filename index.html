@@ -7732,6 +7732,26 @@ function _rptPersonal(autoPrint) {
         <div style="font-weight:700;color:#185fa5;font-size:9.5px;margin-bottom:3px">📝 Observación</div>
         <div style="font-size:9.5px;color:#333;white-space:pre-wrap;line-height:1.5">${notaEmpPers.replace(/</g,'&lt;')}</div>
       </div>`);
+    } else {
+      // Sin observación cargada: recordar que conviene documentar el
+      // motivo cuando esta empresa tuvo una caída de personal >20% entre
+      // años consecutivos (_caidasDePersonal, cur>0) o directamente dejó
+      // de cargar dotación antes que el resto del portafolio
+      // (_empresasSinDatosUltimoAnio, cubre el caso de caer a cero) — en
+      // vez de dejar una baja grande de dotación sin ningún contexto.
+      const caidaEmpPers = _caidasDePersonal().find(c => c.emp === selEmp);
+      const sinDatosEmpPers = _empresasSinDatosUltimoAnio().find(x => x.emp === selEmp);
+      if (caidaEmpPers) {
+        _h.push(`<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">
+          <div style="font-weight:700;color:#c0392b;font-size:9.5px;margin-bottom:3px">⚠ Recordatorio</div>
+          <div style="font-size:9.5px;color:#7a2a20;line-height:1.5">Caída de personal mayor al 20% entre ${caidaEmpPers.y0} y ${caidaEmpPers.y1} (${(caidaEmpPers.pct*100).toFixed(1)}%) sin una observación cargada que explique el motivo (ej. una nómina que pasó a otra empresa). Agregá una desde "📝 Notas analíticas" o el editor de Empresas y Rubros.</div>
+        </div>`);
+      } else if (sinDatosEmpPers) {
+        _h.push(`<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">
+          <div style="font-weight:700;color:#c0392b;font-size:9.5px;margin-bottom:3px">⚠ Recordatorio</div>
+          <div style="font-size:9.5px;color:#7a2a20;line-height:1.5">Esta empresa no tiene dotación cargada para ${sinDatosEmpPers.lastYPortafolio} (su último año con datos es ${sinDatosEmpPers.ultimoAnio}, con ${sinDatosEmpPers.valor} empleados) — el resto del portafolio ya tiene datos de ${sinDatosEmpPers.lastYPortafolio}. Si el personal pasó a otra empresa o dejó de operar, documentalo en una observación desde "📝 Notas analíticas" o el editor de Empresas y Rubros.</div>
+        </div>`);
+      }
     }
 
     _h.push('<div class="st" id="sec_evol">Evolución de plantilla '+baseYearEmp+'–'+lastYEmp+'</div>');
@@ -7867,15 +7887,40 @@ function _rptPersonal(autoPrint) {
 
     // Caídas de personal >20% entre años consecutivos — mismo cálculo que
     // la campana de alertas (ver _caidasDePersonal), mostrado directamente
-    // en el reporte.
+    // en el reporte. Cada caída indica si ya tiene una observación cargada
+    // (ver DATA.notas — ej. una nómina que pasa de una empresa a otra) o
+    // si todavía no se documentó, a modo de recordatorio — pedido
+    // explícito: que el reporte señale cuando falta esa aclaración, en vez
+    // de dejar una caída grande sin contexto.
     var _caidas = _caidasDePersonal();
     _h2.push(_caidas.length
       ? '<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
         + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _caidas.length + ' caída' + (_caidas.length!==1?'s':'') + ' de personal mayor al 20% entre años consecutivos</div>'
-        + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _caidas.map(function(c){ return c.emp+' '+c.y0+'→'+c.y1+' ('+(c.pct*100).toFixed(1)+'%)'; }).join(' · ') + '</div>'
+        + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _caidas.map(function(c){
+            const tieneNota = !!(DATA.notas && DATA.notas[c.emp]);
+            return c.emp+' '+c.y0+'→'+c.y1+' ('+(c.pct*100).toFixed(1)+'%)'
+              + (tieneNota ? ' — ver observación' : ' — <b>sin observación cargada, revisar</b>');
+          }).join(' · ') + '</div>'
         + '</div>'
       : '<div style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
         + '✓ Ninguna empresa tuvo una caída de personal mayor al 20% entre años consecutivos.</div>');
+
+    // Empresas que dejaron de cargar dotación antes que el resto del
+    // portafolio (ver _empresasSinDatosUltimoAnio) — cubre el caso de caer
+    // a CERO, que _caidasDePersonal no detecta a propósito (para no
+    // confundirlo con "todavía no se cargó ese año"). Caso real: una
+    // nómina que pasa de una empresa a otra en determinado mes.
+    var _sinDatos = _empresasSinDatosUltimoAnio();
+    if (_sinDatos.length) {
+      _h2.push('<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
+        + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _sinDatos.length + ' empresa' + (_sinDatos.length!==1?'s':'') + ' sin dotación cargada para ' + (_sinDatos[0]?.lastYPortafolio||'') + '</div>'
+        + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _sinDatos.map(function(x){
+            const tieneNota = !!(DATA.notas && DATA.notas[x.emp]);
+            return x.emp+' (último dato '+x.ultimoAnio+': '+x.valor+' empleados)'
+              + (tieneNota ? ' — ver observación' : ' — <b>sin observación cargada, revisar</b>');
+          }).join(' · ') + '</div>'
+        + '</div>');
+    }
 
     _h2.push('<div class="st" id="sec_evol">Evolución nómina total del portafolio</div>');
     _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
@@ -31830,7 +31875,11 @@ function _transferenciasExcesivas() {
 }
 
 // Caídas de personal mayores al 20% entre dos años consecutivos — usado
-// por checkAlerts() y por el reporte de Personal.
+// por checkAlerts() y por el reporte de Personal. A propósito exige
+// cur > 0: un 0 puede ser "todavía no se cargó ese año" en vez de una
+// baja real, así que ese caso (caer a cero) NO lo detecta esta función
+// — ver _empresasSinDatosUltimoAnio, que sí lo cubre con un criterio más
+// seguro contra ese falso positivo.
 function _caidasDePersonal() {
   const yrs = ys().map(String);
   const resultado = [];
@@ -31840,6 +31889,38 @@ function _caidasDePersonal() {
       if (prev > 5 && cur > 0 && (cur - prev) / prev < -0.2)
         resultado.push({ emp: d.e, y0: yrs[i-1], y1: yrs[i], prev, cur, pct: (cur-prev)/prev });
     }
+  });
+  return resultado;
+}
+
+// Empresas activas cuyo último año con dotación cargada quedó antes que
+// el último año con el que ya cuenta el portafolio en general — señal de
+// que dejaron de reportar personal (ej. su nómina pasó a otra empresa, o
+// se dio de baja esa actividad) sin que quede documentado. Pedido
+// explícito del usuario (caso real: PARQUE EOLICO ARAUCO deja de cargar
+// dotación propia porque pasa a ARAUCO ENERGIA).
+//
+// A diferencia de _caidasDePersonal (que requiere cur>0 para no confundir
+// "cayó a cero" con "todavía no se cargó ese año"), acá el riesgo de ese
+// mismo falso positivo se evita comparando contra el ÚLTIMO AÑO QUE YA
+// TIENE DATOS EN ALGUNA OTRA EMPRESA del portafolio: si ninguna empresa
+// cargó un año todavía, ese año ni siquiera entra en la comparación — así
+// que una empresa recién no cargada (porque nadie cargó ese año aún) no
+// se confunde con una que genuinamente dejó de reportar mientras el resto
+// del portafolio sí sigue al día.
+function _empresasSinDatosUltimoAnio() {
+  const yrs = ys().map(String);
+  const lastYPortafolio = [...yrs].reverse().find(y => DATA.personal.some(d => _persGetTotal(d, y) > 0));
+  if (!lastYPortafolio) return [];
+  const resultado = [];
+  DATA.personal.forEach(d => {
+    if (empresasInactivas[d.e]) return; // ya está explicado por ese estado
+    const añosConDato = yrs.filter(y => _persGetTotal(d, y) > 0);
+    if (!añosConDato.length) return;
+    const ultimoAnio = añosConDato[añosConDato.length - 1];
+    if (ultimoAnio >= lastYPortafolio) return; // está al día con el resto del portafolio
+    const valor = _persGetTotal(d, ultimoAnio);
+    if (valor > 5) resultado.push({ emp: d.e, ultimoAnio, valor, lastYPortafolio });
   });
   return resultado;
 }
