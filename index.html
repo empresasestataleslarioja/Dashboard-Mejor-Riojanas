@@ -6974,25 +6974,33 @@ function _rptRangoJS() {
         + '<rect x="0" y="0" width="'+bw+'" height="'+h+'" fill="'+color+'" rx="2"/></svg>';
     }
 
-    function aplicarRanking(sib, desde, hasta, modo, color, rawItems){
+    function fmtMoney(v){ if (v==null) return '—'; var s=v<0?'−':''; return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR'); }
+
+    function aplicarRanking(sib, desde, hasta, modo, color, rawItems, fmtKind, topN){
+      var esValor = modo === 'valor' || modo === 'valor_asc';
       var items = rawItems.map(function(it){
         var v0 = it.vals[desde], v1 = it.vals[hasta];
         var g = (v0 && v1!=null) ? ((v1-v0)/v0*100) : null;
         return { label: it.label, v0:v0, v1:v1, g:g };
       });
-      if (modo === 'valor') items = items.filter(function(it){ return it.v1!=null; }).sort(function(a,b){ return (b.v1||0)-(a.v1||0); });
-      else items = items.filter(function(it){ return it.g!=null; }).sort(function(a,b){ return (b.g||0)-(a.g||0); });
-      items = items.slice(0,6);
+      if (esValor) {
+        items = items.filter(function(it){ return it.v1!=null; });
+        items.sort(function(a,b){ return modo==='valor_asc' ? (a.v1||0)-(b.v1||0) : (b.v1||0)-(a.v1||0); });
+      } else {
+        items = items.filter(function(it){ return it.g!=null; }).sort(function(a,b){ return (b.g||0)-(a.g||0); });
+      }
+      items = items.slice(0, topN||6);
       if (!items.length) { sib.innerHTML = '<p style="color:#999;font-size:8pt;padding:4px">Sin datos</p>'; return; }
-      var maxV = Math.max.apply(null, items.map(function(it){ return modo==='valor' ? (it.v1||0) : Math.max(0,it.g||0); })) || 1;
+      var maxV = Math.max.apply(null, items.map(function(it){ return esValor ? Math.abs(it.v1||0) : Math.max(0,it.g||0); })) || 1;
+      var colorFn = color === 'signo' ? function(v){ return (v||0)>=0 ? '#0f6e56' : '#c0392b'; } : function(){ return color; };
       sib.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:9pt">' + items.map(function(it){
-        var val = modo==='valor' ? it.v1 : it.g;
-        var fmt = modo==='valor' ? String(it.v1) : fmtPct(it.g);
+        var val = esValor ? it.v1 : it.g;
+        var fmt = esValor ? (fmtKind==='money' ? fmtMoney(it.v1) : String(it.v1)) : fmtPct(it.g);
         var lbl = it.label.length>14 ? it.label.slice(0,13)+'…' : it.label;
-        var pct = Math.max((val||0)/maxV, 0.01);
+        var pct = Math.max(Math.abs(val||0)/maxV, 0.01);
         return '<tr style="border:none">'
           + '<td style="width:90px;white-space:nowrap;overflow:hidden;font-family:monospace;color:#555;padding:3px 6px 3px 0;border:none" title="'+it.label+'">'+lbl+'</td>'
-          + '<td style="padding:3px 0;border:none">'+barraSVG(300,14,pct,color)+'</td>'
+          + '<td style="padding:3px 0;border:none">'+barraSVG(300,14,pct,colorFn(val))+'</td>'
           + '<td style="width:62px;text-align:right;font-weight:600;font-family:monospace;color:#111;padding:3px 0 3px 6px;border:none">'+fmt+'</td>'
           + '</tr>';
       }).join('') + '</table>';
@@ -7009,6 +7017,8 @@ function _rptRangoJS() {
           var single = anchor.dataset.rangoSingle === 'true';
           var modo = anchor.dataset.rangoModo || 'crecimiento';
           var color = anchor.dataset.rangoColor || '#185fa5';
+          var fmtKind = anchor.dataset.rangoFmt || 'int';
+          var topN = parseInt(anchor.dataset.rangoTopn || '6', 10);
           var selector = kind === 'ranking' ? '[data-vals]' : '[data-year]';
           var sib = findSibWith(anchor, selector);
           if (!sib) return;
@@ -7034,7 +7044,7 @@ function _rptRangoJS() {
             if (years.indexOf(d) > years.indexOf(h)) { var t=d; d=h; h=t; }
             if (kind === 'filas') aplicarFilas(sib, d, h, years);
             else if (kind === 'columnas') aplicarColumnas(sib, d, h, years);
-            else if (kind === 'ranking') aplicarRanking(sib, d, h, modo, color, rawItems);
+            else if (kind === 'ranking') aplicarRanking(sib, d, h, modo, color, rawItems, fmtKind, topN);
           }
           if (built.selD) built.selD.onchange = aplicar;
           built.selH.onchange = aplicar;
@@ -7054,13 +7064,14 @@ function _rptRangoJS() {
 // cambia el período, sin tener que volver a llamar a esta función.
 function _rptBarHRango(items, colorFn, modo) {
   if (!items || !items.length) return '<p style="color:#999;font-size:8pt;padding:4px">Sin datos</p>';
-  var maxV = Math.max.apply(null, items.map(function(d){return d.v||0;})) || 1;
+  var maxV = Math.max.apply(null, items.map(function(d){return Math.abs(d.v||0);})) || 1;
   var W = 300; var H = 14;
   return '<table style="width:100%;border-collapse:collapse;font-size:9pt">'
     + items.map(function(d) {
       var lbl = (d.l||'').length > 14 ? (d.l||'').slice(0,13)+'…' : (d.l||'');
-      var pct = Math.max(((d.v||0)/maxV), 0.01);
-      var col = typeof colorFn === 'function' ? colorFn(d) : (colorFn||'#185fa5');
+      var pct = Math.max((Math.abs(d.v||0)/maxV), 0.01);
+      var col = colorFn === 'signo' ? ((d.v||0)>=0?'#0f6e56':'#c0392b')
+        : typeof colorFn === 'function' ? colorFn(d) : (colorFn||'#185fa5');
       var bw  = Math.round(pct * W);
       return '<tr style="border:none" data-vals=\'' + JSON.stringify(d.vals||{}).replace(/'/g,'&#39;') + '\' data-label="' + (d.l||'').replace(/"/g,'&quot;') + '">'
         + '<td style="width:90px;white-space:nowrap;overflow:hidden;font-family:monospace;color:#555;padding:3px 6px 3px 0;border:none" title="'+(d.l||'')+'">'+lbl+'</td>'
@@ -7184,15 +7195,15 @@ function _rptResumen() {
   </div>`;
 
   // Tabla evolución consolidada por año
-  const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
-  const filaFact  = years.map(y=>`<td style="text-align:right">${fmt(DATA.totals_fact[y]||0)}</td>`).join('');
-  const filaSup   = years.map(y=>`<td style="text-align:right;color:#0f6e56">${fmt(DATA.totals_sup[y]||0)}</td>`).join('');
-  const filaDef   = years.map(y=>`<td style="text-align:right;color:#c0392b">${fmt(DATA.totals_def[y]||0)}</td>`).join('');
+  const ths = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
+  const filaFact  = years.map(y=>`<td style="text-align:right" data-year="${y}">${fmt(DATA.totals_fact[y]||0)}</td>`).join('');
+  const filaSup   = years.map(y=>`<td style="text-align:right;color:#0f6e56" data-year="${y}">${fmt(DATA.totals_sup[y]||0)}</td>`).join('');
+  const filaDef   = years.map(y=>`<td style="text-align:right;color:#c0392b" data-year="${y}">${fmt(DATA.totals_def[y]||0)}</td>`).join('');
   const filaRNeto = years.map(y=>{
     const v=(DATA.totals_sup[y]||0)+(DATA.totals_def[y]||0);
-    return `<td style="text-align:right;font-weight:700;color:${v>=0?'#0f6e56':'#c0392b'}">${fmt(v)}</td>`;
+    return `<td style="text-align:right;font-weight:700;color:${v>=0?'#0f6e56':'#c0392b'}" data-year="${y}">${fmt(v)}</td>`;
   }).join('');
-  const filaTrans = years.map(y=>`<td style="text-align:right;color:#1565c0">${transXanio[y]?fmt(transXanio[y]):'—'}</td>`).join('');
+  const filaTrans = years.map(y=>`<td style="text-align:right;color:#1565c0" data-year="${y}">${transXanio[y]?fmt(transXanio[y]):'—'}</td>`).join('');
 
   const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9.5pt;margin-top:8px">
     <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Concepto</th>${ths}</tr></thead>
@@ -7227,11 +7238,11 @@ function _rptResumen() {
     + _rptHeader('Resumen Ejecutivo', 'Empresas estatales de La Rioja · '+lastY)
     + kpis
     + chartsResumen
-    + '<div class="st">Evolución consolidada</div><div class="tw">'+tabla+'</div>'
-    + '<div class="st">Top 10 — facturación '+lastY+'</div><div class="tw">'
-    + _rptBarH(topFact.map(x=>({label:x.e, value:x.v})), ()=>'#185fa5') + '</div>'
-    + (topDef.length ? '<div class="st">Ranking resultado neto '+lastY+'</div><div class="tw">'
-    + _rptBarH(topDef.map(x=>({label:x.e, value:x.v, fmt:fmt(x.v)})), v=>v>=0?'#0f6e56':'#c0392b') + '</div>' : '')
+    + '<div class="st" id="sec_evoltabla" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Evolución consolidada</div><div class="tw">'+tabla+'</div>'
+    + '<div class="st" id="sec_topfact" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(years)+'\' data-rango-modo="valor" data-rango-single="true" data-rango-fmt="money" data-rango-topn="10" data-rango-color="#185fa5">Top 10 — facturación '+lastY+'</div><div class="tw">'
+    + _rptBarHRango(topFact.map(x=>({l:x.e, v:x.v, fmt:fmt(x.v), vals:DATA.fact[x.e]||{}})), '#185fa5') + '</div>'
+    + (topDef.length ? '<div class="st" id="sec_topdef" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(years)+'\' data-rango-modo="valor_asc" data-rango-single="true" data-rango-fmt="money" data-rango-topn="10" data-rango-color="signo">Ranking resultado neto '+lastY+'</div><div class="tw">'
+    + _rptBarHRango(topDef.map(x=>({l:x.e, v:x.v, fmt:fmt(x.v), vals:DATA.sit[x.e]||{}})), 'signo') + '</div>' : '')
     + _rptFooter()
     + '</div></body></html>';
 }
@@ -7252,10 +7263,10 @@ function _rptFacturacion() {
       const margen = f>0&&s!=null ? (s/f*100).toFixed(2)+'%' : '—';
       return _rptKpi(selEmp+' · '+y, fmt(f), 'Resultado: '+fmt(s)+(margen!=='—'?' · '+margen:''), s>0?'#0f6e56':s<0?'#c0392b':'#888');
     }).join('') + '</div>';
-    const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
-    const filaFact   = years.map(y=>`<td style="text-align:right">${fmt(fact[y]||0)}</td>`).join('');
-    const filaRes    = years.map(y=>`<td style="text-align:right;font-weight:700;color:${(sit[y]||0)<0?'#c0392b':'#0f6e56'}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
-    const filaMargen = years.map(y=>{ const f=fact[y]||0,s=sit[y]; const m=f>0&&s!=null?(s/f*100).toFixed(2)+'%':'—'; return `<td style="text-align:right;color:${(s||0)<0?'#c0392b':'#0f6e56'}">${m}</td>`; }).join('');
+    const ths = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
+    const filaFact   = years.map(y=>`<td style="text-align:right" data-year="${y}">${fmt(fact[y]||0)}</td>`).join('');
+    const filaRes    = years.map(y=>`<td style="text-align:right;font-weight:700;color:${(sit[y]||0)<0?'#c0392b':'#0f6e56'}" data-year="${y}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
+    const filaMargen = years.map(y=>{ const f=fact[y]||0,s=sit[y]; const m=f>0&&s!=null?(s/f*100).toFixed(2)+'%':'—'; return `<td style="text-align:right;color:${(s||0)<0?'#c0392b':'#0f6e56'}" data-year="${y}">${m}</td>`; }).join('');
     const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9.5pt">
       <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Concepto</th>${ths}</tr></thead>
       <tbody>
@@ -7273,7 +7284,7 @@ function _rptFacturacion() {
     return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
       + _rptHeader('Facturación', selEmp+' · '+years[0]+'–'+last)
       + kpis + charts
-      + '<div class="st">Detalle por año</div><div class="tw">'+tabla+'</div>'
+      + '<div class="st" id="sec_tabla" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Detalle por año</div><div class="tw">'+tabla+'</div>'
       + _rptFooter() + '</div></body></html>';
   }
 
@@ -7282,8 +7293,8 @@ function _rptFacturacion() {
   const kpis = '<div class="kg">' + years.map(y=>
     _rptKpi('Facturación '+y, fmt(DATA.totals_fact[y]||0), '', '#185fa5')
   ).join('') + '</div>';
-  const ths  = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
-  const filas = top10.map(([e,f])=>`<tr><td style="padding:3px 8px">${e}</td>${years.map(y=>`<td style="text-align:right">${fmt(f[y]||0)}</td>`).join('')}</tr>`).join('');
+  const ths  = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
+  const filas = top10.map(([e,f])=>`<tr><td style="padding:3px 8px">${e}</td>${years.map(y=>`<td style="text-align:right" data-year="${y}">${fmt(f[y]||0)}</td>`).join('')}</tr>`).join('');
   const tabla = `<table style="width:100%;border-collapse:collapse;font-size:9pt">
     <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Empresa</th>${ths}</tr></thead>
     <tbody>${filas}</tbody></table>`;
@@ -7298,9 +7309,9 @@ function _rptFacturacion() {
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
     + _rptHeader('Facturación', 'Consolidado Empresas Estatales · '+last)
     + kpis + charts
-    + '<div class="st">Top 10 por facturación '+last+'</div><div class="tw">'+tabla+'</div>'
-    + (sitRanking.length ? '<div class="st">Ranking resultado neto '+last+'</div><div class="tw">'
-      + _rptBarH(sitRanking.map(x=>({label:x.e,value:x.v})),v=>v>=0?'#0f6e56':'#c0392b')+'</div>' : '')
+    + '<div class="st" id="sec_top10" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Top 10 por facturación '+last+'</div><div class="tw">'+tabla+'</div>'
+    + (sitRanking.length ? '<div class="st" id="sec_sitranking" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(years)+'\' data-rango-modo="valor_asc" data-rango-single="true" data-rango-fmt="money" data-rango-topn="50" data-rango-color="signo">Ranking resultado neto '+last+'</div><div class="tw">'
+      + _rptBarHRango(sitRanking.map(x=>({l:x.e, v:x.v, fmt:fmt(x.v), vals:DATA.sit[x.e]||{}})), 'signo') + '</div>' : '')
     + _rptFooter() + '</div></body></html>';
 }
 
@@ -7358,10 +7369,10 @@ function _rptPortafolio() {
     e, tot: years.reduce((s,y)=>s+(DATA.fact[e]?.[y]||0),0),
     porAnio: years.map(y=>DATA.fact[e]?.[y]||0),
   })).filter(r=>r.tot>0).sort((a,b)=>b.tot-a.tot).slice(0,15);
-  const thsHist = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+  const thsHist = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
   const filasHist = histRows.map(r => `<tr>
     <td style="padding:3px 8px">${r.e}</td>
-    ${r.porAnio.map(v=>`<td style="text-align:right">${v>0?fmt(v):'—'}</td>`).join('')}
+    ${r.porAnio.map((v,i)=>`<td style="text-align:right" data-year="${years[i]}">${v>0?fmt(v):'—'}</td>`).join('')}
     <td style="text-align:right;font-weight:700">${fmt(r.tot)}</td>
   </tr>`).join('');
   const tablaHist = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
@@ -7372,7 +7383,7 @@ function _rptPortafolio() {
     + _rptHeader('Portafolio Consolidado', `Vista cruzada · ${refY}`)
     + kpis
     + '<div class="st">Vista cruzada — todas las empresas · '+refY+'</div><div class="tw">'+tablaCruzada+'</div>'
-    + '<div class="st">Serie histórica — top 15 por facturación total</div><div class="tw">'+tablaHist+'</div>'
+    + '<div class="st" id="sec_hist" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Serie histórica — top 15 por facturación total</div><div class="tw">'+tablaHist+'</div>'
     + _rptFooter() + '</div></body></html>';
 }
 
@@ -7579,9 +7590,9 @@ function _rptResultado() {
       return _rptKpi(selEmp+' · '+y, (s!=null&&s!==0?fmt(s):'N/D'), (m!==null?'Margen: '+m+'%':''), (s>0?'#0f6e56':s<0?'#c0392b':'#888'));
     }).join('') + '</div>';
 
-    const thsE = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
-    const filaFact = years.map(y=>`<td style="text-align:right">${fmt(fact[y]||0)}</td>`).join('');
-    const filaRes  = years.map(y=>`<td style="text-align:right;${(sit[y]||0)<0?'color:#c0392b':'color:#0f6e56'}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
+    const thsE = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
+    const filaFact = years.map(y=>`<td style="text-align:right" data-year="${y}">${fmt(fact[y]||0)}</td>`).join('');
+    const filaRes  = years.map(y=>`<td style="text-align:right;${(sit[y]||0)<0?'color:#c0392b':'color:#0f6e56'}" data-year="${y}">${sit[y]!=null?fmt(sit[y]):'—'}</td>`).join('');
     const tablaE = `<table style="width:100%;border-collapse:collapse;font-size:9pt">
       <thead><tr><th style="text-align:left">Concepto</th>${thsE}</tr></thead>
       <tbody><tr><td>Facturación</td>${filaFact}</tr><tr style="font-weight:700"><td>Resultado operativo</td>${filaRes}</tr></tbody></table>`;
@@ -7590,7 +7601,7 @@ function _rptResultado() {
       + _rptHeader('Resultado Operativo', selEmp+' · '+years[0]+'–'+years[years.length-1])
       + kpis
       + charts
-      + '<div class="st">Detalle por año</div><div class="tw">'+tablaE+'</div></div>'
+      + '<div class="st" id="sec_tabla" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Detalle por año</div><div class="tw">'+tablaE+'</div></div>'
       + _rptFooter()
       + '</div></body></html>';
   }
@@ -7621,7 +7632,7 @@ function _rptResultado() {
       const celdas = yearsAud.map(y => {
         const ok = tieneResultado(emp, y);
         if (ok) conDato++; else sinDato++;
-        return `<td style="text-align:center;color:${ok?'#0f6e56':'#c0392b'};font-weight:700">${ok?'✓':'✕'}</td>`;
+        return `<td style="text-align:center;color:${ok?'#0f6e56':'#c0392b'};font-weight:700" data-year="${y}">${ok?'✓':'✕'}</td>`;
       }).join('');
       const faltantes = yearsAud.filter(y => !tieneResultado(emp, y));
       const estado = faltantes.length === 0 ? 'completo' : `faltan ${faltantes.length}`;
@@ -7629,7 +7640,7 @@ function _rptResultado() {
     }).join('');
     const totalCeldas = conDato + sinDato;
     const cobertura = totalCeldas > 0 ? Math.round(conDato/totalCeldas*100) : 0;
-    const thsAud = yearsAud.map(y=>`<th style="text-align:center">${y}</th>`).join('');
+    const thsAud = yearsAud.map(y=>`<th style="text-align:center" data-year="${y}">${y}</th>`).join('');
     const tablaAud = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
       <thead><tr style="background:#f0f4ff"><th style="text-align:left;padding:5px 8px">Empresa</th>${thsAud}<th>Estado</th></tr></thead>
       <tbody>${filasAud}</tbody></table>`;
@@ -7641,7 +7652,7 @@ function _rptResultado() {
     return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
       + _rptHeader('Resultado Operativo — Auditoría de cobertura', (typeof _resAnioSel !== 'undefined' && _resAnioSel)?'Año '+_resAnioSel:years[0]+'–'+years[years.length-1])
       + kpisAud
-      + '<div class="st">Estado de resultados cargado por empresa y año — ✓ tiene resultado operativo · ✕ falta</div><div class="tw">'+tablaAud+'</div>'
+      + '<div class="st" id="sec_aud" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(yearsAud.map(String))+'\'>Estado de resultados cargado por empresa y año — ✓ tiene resultado operativo · ✕ falta</div><div class="tw">'+tablaAud+'</div>'
       + _rptFooter() + '</div></body></html>';
   }
 
@@ -7657,7 +7668,7 @@ function _rptResultado() {
       years.forEach(y => { totals[k][y] = erEmpsConDatos.reduce((s,e)=>s+(erResuelto[e]?.[y]?.[k]||0),0); });
     });
     const fmtER = v => { if (!v) return '—'; const s=v<0?'−':''; return s+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR'); };
-    const ths2 = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+    const ths2 = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
     const tablaER = `<table style="width:100%;border-collapse:collapse;font-size:8.5pt">
       <thead><tr><th style="text-align:left">Partida</th>${ths2}<th style="text-align:right">% ventas (${lastY})</th></tr></thead>
       <tbody>${ER_ORDER.map(k=>{
@@ -7668,7 +7679,7 @@ function _rptResultado() {
         const pct = ventas && totals[k]?.[lastY] != null ? (totals[k][lastY]/ventas*100).toFixed(2)+'%' : '—';
         const celdas = years.map(y=>{
           const v=totals[k]?.[y]; const col=v<0?'color:#c0392b':(isSep&&v>0?'color:#0f6e56':'');
-          return `<td style="text-align:right;${bg};${col}">${fmtER(v)}</td>`;
+          return `<td style="text-align:right;${bg};${col}" data-year="${y}">${fmtER(v)}</td>`;
         }).join('');
         return `<tr><td style="${bg}">${lblHtml}</td>${celdas}<td style="text-align:right;${bg};color:#555">${pct}</td></tr>`;
       }).join('')}</tbody></table>`;
@@ -7676,7 +7687,7 @@ function _rptResultado() {
     return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
       + _rptHeader('Estado de Resultados — Desglose', subtit)
       + charts
-      + '<div class="st">Estado de Resultados por partida</div><div class="tw">'+tablaER+'</div></div>'
+      + '<div class="st" id="sec_desglose" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Estado de Resultados por partida</div><div class="tw">'+tablaER+'</div></div>'
       + _rptFooter()
       + '</div></body></html>';
   }
@@ -7686,9 +7697,9 @@ function _rptResultado() {
     .filter(x=>x.v!=null)
     .sort((a,b)=>(a.v||0)-(b.v||0)); // déficits primero
 
-  const ths = years.map(y=>`<th style="text-align:right">${y}</th>`).join('');
+  const ths = years.map(y=>`<th style="text-align:right" data-year="${y}">${y}</th>`).join('');
   const filas = emps.map(x=>{
-    const celdas = x.serie.map(v=>`<td style="text-align:right;${v<0?'color:#c0392b':(v>0?'color:#0f6e56':'')}">${v!=null&&v!==0?fmt(v):'—'}</td>`).join('');
+    const celdas = x.serie.map((v,i)=>`<td style="text-align:right;${v<0?'color:#c0392b':(v>0?'color:#0f6e56':'')}" data-year="${years[i]}">${v!=null&&v!==0?fmt(v):'—'}</td>`).join('');
     return `<tr><td style="text-align:left">${x.e}</td>${celdas}</tr>`;
   }).join('');
 
@@ -7696,8 +7707,12 @@ function _rptResultado() {
     <thead><tr><th style="text-align:left">Empresa</th>${ths}</tr></thead>
     <tbody>${filas}</tbody></table>`;
 
-  const superavit = emps.filter(x=>x.v>0).reverse().slice(0,8).map(x=>({label:x.e, value:x.v}));
-  const deficit   = emps.filter(x=>x.v<0).slice(0,8).map(x=>({label:x.e, value:x.v}));
+  // vals = mapa año→resultado de cada empresa, tomado de la misma serie que
+  // ya se calculó para la tabla de arriba, para que el control Desde/Hasta
+  // de cada ranking pueda recalcularlo sin volver a consultar DATA.sit.
+  const valsSerie = x => years.reduce((acc,y,i)=>({...acc,[y]:x.serie[i]}),{});
+  const superavit = emps.filter(x=>x.v>0).reverse().slice(0,8).map(x=>({l:x.e, v:x.v, fmt:fmt(x.v), vals:valsSerie(x)}));
+  const deficit   = emps.filter(x=>x.v<0).slice(0,8).map(x=>({l:x.e, v:x.v, fmt:fmt(x.v), vals:valsSerie(x)}));
 
   // Empresas con 3+ años consecutivos en déficit — mismo cálculo que la
   // campana de alertas (ver _empresasDeficit3Anios), mostrado directamente
@@ -7716,9 +7731,9 @@ function _rptResultado() {
     + _rptHeader('Resultado Operativo', 'Superávit / Déficit · '+lastY)
     + charts
     + deficit3Html
-    + (deficit.length ? '<div class="st">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarH(deficit, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>' : '')
-    + (superavit.length ? '<div class="st">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarH(superavit, v=>v>=0?'#0f6e56':'#c0392b')+'</div></div>' : '')
-    + '<div class="st">Detalle por año (déficits primero)</div><div class="tw">'+tabla+'</div></div>'
+    + (deficit.length ? '<div class="st" id="sec_mayoresdef" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(years)+'\' data-rango-modo="valor_asc" data-rango-single="true" data-rango-fmt="money" data-rango-topn="8" data-rango-color="signo">Mayores déficit '+lastY+'</div><div class="tw">'+_rptBarHRango(deficit, 'signo')+'</div></div>' : '')
+    + (superavit.length ? '<div class="st" id="sec_mayoressup" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(years)+'\' data-rango-modo="valor" data-rango-single="true" data-rango-fmt="money" data-rango-topn="8" data-rango-color="signo">Mayores superávit '+lastY+'</div><div class="tw">'+_rptBarHRango(superavit, 'signo')+'</div></div>' : '')
+    + '<div class="st" id="sec_detdef" data-rango-kind="columnas" data-rango-years=\''+JSON.stringify(years)+'\'>Detalle por año (déficits primero)</div><div class="tw">'+tabla+'</div></div>'
     + _rptFooter()
     + '</div></body></html>';
 }
