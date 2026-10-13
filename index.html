@@ -6516,6 +6516,33 @@ function _cerrarVistaPrevia() {
   try { var blobUrl = overlay && overlay.dataset.blobUrl; if (blobUrl) URL.revokeObjectURL(blobUrl); } catch(e){}
 }
 
+// Oculta/muestra en vivo, sobre el iframe de la vista previa, las secciones
+// que el usuario destilda en "Secciones" — se llama desde el onchange de
+// cada checkbox y desde "Todas", así el cambio se ve al instante sin tener
+// que imprimir primero.
+function _rptAplicarFiltroSecciones() {
+  var ifrDoc = document.getElementById('_rpt_iframe') && document.getElementById('_rpt_iframe').contentDocument;
+  if (!ifrDoc) return;
+  var chks = document.querySelectorAll('.rpt-sec-chk');
+  if (!chks.length) return;
+  // Las secciones del reporte son divs hermanos en secuencia (el título
+  // ".st"/"sec_XXX" seguido de su contenido, sin un contenedor que los
+  // envuelva a ambos), así que para ocultar una sección hay que ocultar
+  // el ancla y todos los hermanos siguientes hasta la próxima ancla.
+  var anchorIds = Array.from(chks).map(function(c){ return c.dataset.secAnchor; });
+  chks.forEach(function(c) {
+    var el = ifrDoc.getElementById(c.dataset.secAnchor);
+    if (!el) return;
+    var show = c.checked ? '' : 'none';
+    el.style.display = show;
+    var sib = el.nextElementSibling;
+    while (sib && anchorIds.indexOf(sib.id) === -1) {
+      sib.style.display = show;
+      sib = sib.nextElementSibling;
+    }
+  });
+}
+
 function imprimirPanelActivo() {
   const panelActivo = document.querySelector('.panel.on')
     || [...document.querySelectorAll('.panel')].find(p => p.offsetParent !== null);
@@ -6583,85 +6610,22 @@ function imprimirPanelActivo() {
     var btnImprimir = document.createElement('button');
     btnImprimir.textContent = '🖨 Imprimir';
     btnImprimir.style.cssText = 'padding:5px 14px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer';
+    // Imprime exactamente lo que se ve en la vista previa — las casillas de
+    // "Secciones" ya ocultan/muestran en vivo sobre este mismo iframe (ver
+    // _rptAplicarFiltroSecciones), así que no hace falta volver a generar
+    // el reporte ni re-filtrar una copia aparte: lo que está tildado es lo
+    // que ya está visible acá mismo, y eso es lo que se manda a imprimir.
     btnImprimir.onclick = function() {
       var ifrDoc = document.getElementById('_rpt_iframe') && document.getElementById('_rpt_iframe').contentDocument;
-
-      // Obtener secciones seleccionadas
-      var chks = document.querySelectorAll('.rpt-sec-chk');
-      var todasMarcadas = true;
-      var secIds = [];
-      chks.forEach(function(c) {
-        if (c.checked) secIds.push(c.dataset.secAnchor);
-        else todasMarcadas = false;
-      });
-
-      // Si todas seleccionadas o no hay checkboxes → imprimir todo
-      if (todasMarcadas || secIds.length === 0) {
-        var blobUrl2 = document.getElementById('_rpt_overlay').dataset.blobUrl;
-        if (!blobUrl2) return;
-        var autoprintScript = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
-        // Regenerar con autoprint
-        var panelActivo3 = document.querySelector('.panel.on')
-          || [...document.querySelectorAll('.panel')].find(function(p){return p.offsetParent!==null;});
-        if (!panelActivo3) return;
-        var pid3 = panelActivo3.id.replace('panel-','');
-        var html3 = '';
-        try {
-          if      (pid3==='personal')       html3 = _rptPersonal();
-          else if (pid3==='balances')       html3 = _rptBalanceDesdeDOM();
-          else if (pid3==='transferencias') html3 = _rptTransferencias();
-          else if (pid3==='resumen')        html3 = _rptResumen();
-          else if (pid3==='facturacion')    html3 = _rptFacturacion();
-          else if (pid3==='resultado')      html3 = _rptResultado();
-          else if (pid3==='portafolio')     html3 = _rptPortafolio();
-          else if (pid3==='presupuesto')    html3 = _rptPresupuesto();
-          else if (pid3==='rubros')         html3 = _rptEmpresasRubros();
-          else if (pid3==='empresa')        html3 = _rptERMensual();
-          if (html3) html3 = html3.replace('</head>', autoprintScript+'</head>');
-        } catch(e3) { html3 = '<html><body><pre>'+String(e3)+'</pre></body></html>'; }
-        if (!html3) return;
-        var b3=new Blob([html3],{type:'text/html;charset=utf-8'});
-        var u3=URL.createObjectURL(b3);
-        var pw3=window.open(u3,'_blank');
-        if (!pw3) alert('Habilitá pop-ups.');
-        setTimeout(function(){URL.revokeObjectURL(u3);},15000);
-        return;
-      }
-
-      // Imprimir solo secciones seleccionadas — regenerar HTML filtrado
-      var blobUrl4 = document.getElementById('_rpt_overlay').dataset.blobUrl;
-      if (!blobUrl4) return;
-      // Leer el HTML actual del Blob (ya tiene IDs inyectados)
-      fetch(blobUrl4).then(function(res){ return res.text(); }).then(function(html4){
-        try {
-          var parser4 = new DOMParser();
-          var doc4 = parser4.parseFromString(html4, 'text/html');
-          // Ocultar secciones no seleccionadas
-          // Ocultar secciones no seleccionadas
-          // Para sec_ IDs en .st: ocultar el div padre (la sección completa)
-          // Para sec_ IDs en divs: ocultar directamente
-          doc4.querySelectorAll('[id^="sec_"],[id^="rpt_sec_"]').forEach(function(el) {
-            if (!secIds.includes(el.id)) return;
-            // Marcar para mantener visible
-            el.dataset._keep = '1';
-          });
-          doc4.querySelectorAll('[id^="sec_"],[id^="rpt_sec_"]').forEach(function(el) {
-            if (!el.dataset._keep) {
-              // Ocultar: si es .st, ocultar su sección padre completa
-              var toHide = el.classList.contains('st') ? (el.parentElement || el) : el;
-              toHide.style.display = 'none';
-            }
-          });
-          var ap = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
-          var fhtml = '<!DOCTYPE html>' + doc4.documentElement.outerHTML;
-          fhtml = fhtml.replace('</head>', ap + '</head>');
-          var b4 = new Blob([fhtml], {type:'text/html;charset=utf-8'});
-          var u4 = URL.createObjectURL(b4);
-          var pw4 = window.open(u4, '_blank');
-          if (!pw4) alert('Habilitá pop-ups.');
-          setTimeout(function(){ URL.revokeObjectURL(u4); }, 15000);
-        } catch(ef){ console.error(ef); }
-      });
+      if (!ifrDoc) return;
+      var ap = '<script>window.addEventListener("load",function(){setTimeout(function(){window.focus();window.print();},350);});<\/script>';
+      var fhtml = '<!DOCTYPE html>' + ifrDoc.documentElement.outerHTML;
+      fhtml = fhtml.replace('</head>', ap + '</head>');
+      var b = new Blob([fhtml], {type:'text/html;charset=utf-8'});
+      var u = URL.createObjectURL(b);
+      var pw = window.open(u, '_blank');
+      if (!pw) alert('Habilitá pop-ups.');
+      setTimeout(function(){ URL.revokeObjectURL(u); }, 15000);
     };
 
     var btnCerrar = document.createElement('button');
@@ -6779,6 +6743,7 @@ function imprimirPanelActivo() {
     chkAll.type='checkbox'; chkAll.checked=true; chkAll.id='_rpt_chk_all'; chkAll.style.cursor='pointer';
     chkAll.onchange = function(){
       wrap.querySelectorAll('.rpt-sec-chk').forEach(function(c){ c.checked = chkAll.checked; });
+      _rptAplicarFiltroSecciones();
     };
     lblAll.appendChild(chkAll);
     lblAll.appendChild(document.createTextNode('Todas'));
@@ -6797,6 +6762,7 @@ function imprimirPanelActivo() {
         var allOn  = Array.from(allChk).every(function(c){ return c.checked; });
         var chkAllEl = document.getElementById('_rpt_chk_all');
         if (chkAllEl) chkAllEl.checked = allOn;
+        _rptAplicarFiltroSecciones();
       };
       lbl.appendChild(chk);
       lbl.appendChild(document.createTextNode(sec.lbl));
