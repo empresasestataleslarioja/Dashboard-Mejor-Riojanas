@@ -8142,7 +8142,7 @@ function _rptPersonal(autoPrint) {
     _h2.push('<div class="st" id="sec_evol" data-rango-kind="filas" data-rango-years=\''+JSON.stringify(pYrs)+'\'>Evolución nómina total del portafolio</div>');
     _h2.push('<div class="cc" style="margin-bottom:12px">'+barrasTot+'</div>');
     var _pngPersMulti = _rptCanvasPng('ch-p-multi');
-    if (_pngPersMulti) _h2.push(_rptChartCard('Personal por empresa (multi-año)', 'empleados', _pngPersMulti));
+    if (_pngPersMulti) _h2.push('<div id="sec_chart_multi">'+_rptChartCard('Personal por empresa (multi-año)', 'empleados', _pngPersMulti)+'</div>');
     _h2.push('<div class="r2" id="sec_top">');
     _h2.push('<div><div class="st" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(pYrs)+'\' data-rango-modo="crecimiento" data-rango-color="#1d9e75">Top crecimiento '+baseYear+'→'+lastY+'</div><div class="cc">'+_rptBarHRango(topGrow,'#1d9e75')+'</div></div>');
     _h2.push('<div><div class="st" data-rango-kind="ranking" data-rango-years=\''+JSON.stringify(pYrs)+'\' data-rango-modo="valor" data-rango-single="true" data-rango-color="#185fa5">Top empleadores '+lastY+'</div><div class="cc">'+_rptBarHRango(topSize,'#185fa5')+'</div></div>');
