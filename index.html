@@ -6543,6 +6543,42 @@ function _rptAplicarFiltroSecciones() {
   });
 }
 
+// Detecta las secciones togglables de un reporte ya parseado (DOMParser) e
+// inyecta los ids que necesita _rptAplicarFiltroSecciones/_rptInitRangos,
+// en orden de preferencia: ids explícitos (sec_XXX, puestos a mano en los
+// _rptXXX() que generan HTML desde cero) → títulos ".st" sin id (mismo
+// caso, pero sin id explícito) → tarjetas ".card" con ".card-hd-title"
+// (reportes que clonan el panel en vivo — Balances, Flujo Individual —
+// donde título y contenido ya están juntos adentro de la misma tarjeta,
+// así que alcanza con taguearla entera). Devuelve [{anchor, lbl}].
+function _rptDetectarSecciones(doc) {
+  var secs = [];
+  doc.querySelectorAll('[id^="sec_"]').forEach(function(el) {
+    var txt = el.textContent.trim().replace(/[\n\r]+/g,' ').slice(0,30);
+    if (txt.length < 2) return;
+    secs.push({ anchor: el.id, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
+  });
+  if (!secs.length) {
+    doc.querySelectorAll('.st').forEach(function(el, i) {
+      var txt = el.textContent.trim();
+      if (txt.length < 2) return;
+      el.id = 'rpt_sec_' + i;
+      secs.push({ anchor: 'rpt_sec_' + i, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
+    });
+  }
+  if (!secs.length) {
+    doc.querySelectorAll('.card-hd-title').forEach(function(el, i) {
+      var card = el.closest('.card');
+      if (!card || card.id) return; // ya tagueada (ej. dos títulos en la misma tarjeta)
+      var txt = el.textContent.trim();
+      if (txt.length < 2) return;
+      card.id = 'rpt_sec_' + i;
+      secs.push({ anchor: 'rpt_sec_' + i, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
+    });
+  }
+  return secs;
+}
+
 function imprimirPanelActivo() {
   const panelActivo = document.querySelector('.panel.on')
     || [...document.querySelectorAll('.panel')].find(p => p.offsetParent !== null);
@@ -6652,22 +6688,7 @@ function imprimirPanelActivo() {
   try {
     var parser2 = new DOMParser();
     var rptDoc2 = parser2.parseFromString(reportHTML, 'text/html');
-    // Primero: secciones con ID explícito (sec_XXX)
-    rptDoc2.querySelectorAll('[id^="sec_"]').forEach(function(el) {
-      var txt = el.textContent.trim().replace(/[\n\r]+/g,' ').slice(0,30);
-      if (txt.length < 2) return;
-      rptSecs.push({ anchor: el.id, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
-    });
-    // Luego: .st sin ID previo
-    if (!rptSecs.length) {
-      var stEls2 = rptDoc2.querySelectorAll('.st');
-      stEls2.forEach(function(el, i) {
-        var txt = el.textContent.trim();
-        if (txt.length < 2) return;
-        el.id = 'rpt_sec_' + i;
-        rptSecs.push({ anchor: 'rpt_sec_' + i, lbl: txt.length > 24 ? txt.slice(0,22)+'…' : txt });
-      });
-    }
+    rptSecs = _rptDetectarSecciones(rptDoc2);
     // Rebuild HTML con IDs inyectados
     var rebuilt = '<!DOCTYPE html>' + rptDoc2.documentElement.outerHTML;
     if (rptSecs.length) reportHTML = rebuilt;
