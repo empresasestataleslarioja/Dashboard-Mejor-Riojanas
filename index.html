@@ -7720,6 +7720,20 @@ function _rptPersonal(autoPrint) {
     _h.push(_rptKpi('Nómina '+baseYearEmp+' (base)', vBase||'—', 'Año base de comparación', '#185fa5', ''));
     _h.push(_rptKpi('Crecimiento '+baseYearEmp+'→'+lastYEmp, vBase&&vLast?(((vLast-vBase)/vBase)*100).toFixed(2)+'%':'—', 'de '+vBase+' a '+vLast+' empleados', '#534ab7', vLast>=vBase?'up':'dn'));
     _h.push('</div>');
+
+    // Observación cargada para esta empresa (misma nota que "📝 Notas
+    // analíticas"/el popover de Gestión de Rubros, DATA.notas) — pedido
+    // explícito: que el reporte refleje situaciones particulares (ej.
+    // una nómina que pasa de una empresa a otra en determinado mes, para
+    // que no se lea como una duplicación entre ambas).
+    const notaEmpPers = (DATA.notas && DATA.notas[selEmp]) || '';
+    if (notaEmpPers) {
+      _h.push(`<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #185fa555;background:#eef4fb;border-radius:4px">
+        <div style="font-weight:700;color:#185fa5;font-size:9.5px;margin-bottom:3px">📝 Observación</div>
+        <div style="font-size:9.5px;color:#333;white-space:pre-wrap;line-height:1.5">${notaEmpPers.replace(/</g,'&lt;')}</div>
+      </div>`);
+    }
+
     _h.push('<div class="st" id="sec_evol">Evolución de plantilla '+baseYearEmp+'–'+lastYEmp+'</div>');
     _h.push('<div class="cc" style="margin-bottom:12px">'+barras+'</div>');
     _h.push('<div class="st" id="sec_tabla">Detalle por año</div>');
@@ -7875,6 +7889,25 @@ function _rptPersonal(autoPrint) {
     _h2.push('<div class="tw"><table>');
     _h2.push('<thead><tr><th style="width:22%">Empresa</th>'+thYears+'<th>% Total</th><th>Base</th><th>Var. interanual</th><th>Var. vs base propia</th></tr></thead>');
     _h2.push('<tbody>'+tablaRows+totRow+'</tbody></table></div>');
+
+    // Observaciones cargadas por empresa (DATA.notas) — pedido explícito:
+    // que el reporte refleje situaciones particulares (ej. una nómina que
+    // pasa de una empresa a otra en determinado mes), para que no se lean
+    // como una duplicación entre ambas al mirar la tabla de arriba.
+    const empsConNotaPers = DATA.personal
+      .map(d => d.e)
+      .filter(e => (DATA.notas || {})[e])
+      .sort((a,b) => a.localeCompare(b,'es'));
+    if (empsConNotaPers.length) {
+      _h2.push('<div class="st" id="sec_notas">Observaciones</div>');
+      _h2.push('<div style="margin-bottom:12px">' + empsConNotaPers.map(e =>
+        `<div style="margin-bottom:8px;padding:10px 14px;border:1px solid #185fa555;background:#eef4fb;border-radius:4px">
+          <div style="font-weight:700;color:#185fa5;font-size:9.5px;margin-bottom:3px">📝 ${e}</div>
+          <div style="font-size:9.5px;color:#333;white-space:pre-wrap;line-height:1.5">${DATA.notas[e].replace(/</g,'&lt;')}</div>
+        </div>`
+      ).join('') + '</div>');
+    }
+
     _h2.push(_rptFooter());
     _h2.push('</div></body></html>');
     return _h2.join('');
