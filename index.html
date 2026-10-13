@@ -8111,7 +8111,7 @@ function _rptPersonal(autoPrint) {
     // de dejar una caída grande sin contexto.
     var _caidas = _caidasDePersonal();
     _h2.push(_caidas.length
-      ? '<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
+      ? '<div id="sec_caidas" style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
         + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _caidas.length + ' caída' + (_caidas.length!==1?'s':'') + ' de personal mayor al 20% entre años consecutivos</div>'
         + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _caidas.map(function(c){
             const tieneNota = !!(DATA.notas && DATA.notas[c.emp]);
@@ -8119,7 +8119,7 @@ function _rptPersonal(autoPrint) {
               + (tieneNota ? ' — ver observación' : ' — <b>sin observación cargada, revisar</b>');
           }).join(' · ') + '</div>'
         + '</div>'
-      : '<div style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
+      : '<div id="sec_caidas" style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
         + '✓ Ninguna empresa tuvo una caída de personal mayor al 20% entre años consecutivos.</div>');
 
     // Empresas que dejaron de cargar dotación antes que el resto del
@@ -8129,7 +8129,7 @@ function _rptPersonal(autoPrint) {
     // nómina que pasa de una empresa a otra en determinado mes.
     var _sinDatos = _empresasSinDatosUltimoAnio();
     if (_sinDatos.length) {
-      _h2.push('<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
+      _h2.push('<div id="sec_sindatos" style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
         + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _sinDatos.length + ' empresa' + (_sinDatos.length!==1?'s':'') + ' sin dotación cargada para ' + (_sinDatos[0]?.lastYPortafolio||'') + '</div>'
         + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _sinDatos.map(function(x){
             const tieneNota = !!(DATA.notas && DATA.notas[x.emp]);
