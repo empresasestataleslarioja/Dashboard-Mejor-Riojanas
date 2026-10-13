@@ -18118,10 +18118,7 @@ function buildAutoridades() {
     }
     if (anomalias.length) {
       bloques.push(`⚠ ${anomalias.length} inconsistencia${anomalias.length!==1?'s':''} de jerarquía detectada${anomalias.length!==1?'s':''}:<br>`
-        + anomalias.map(an => an.tipo === 'cargo_duplicado'
-          ? `${an.empresa}: ${an.personas.length} ${an.cargo}S vigentes (${an.personas.join(', ')})`
-          : `${an.empresa}: ${an.nombre} figura en ${an.cargos.length} cargos vigentes a la vez (${an.cargos.join(', ')})`
-        ).join(' · '));
+        + anomalias.map(_msgAnomaliaAutoridad).join(' · '));
     }
 
     if (bloques.length) {
@@ -18393,6 +18390,15 @@ function _detectarAnomaliasAutoridades() {
       }
     });
 
+    // Cualquier nombre repetido entre las autoridades vigentes de la misma
+    // empresa es sospechoso — no solo cuando los cargos difieren (ej. Presidente
+    // y Director a la vez), sino también cuando es EL MISMO cargo repetido
+    // (caso real no detectado: JORGE ANTONIO QUINTERO duplicado en PARQUE
+    // EOLICO ARAUCO con el mismo cargo, que antes pasaba desapercibido
+    // porque solo se comparaban cargos distintos). La limpieza de
+    // duplicados EXACTOS (mismo empresa+nombre+cargo+desde+hasta) es un
+    // control aparte (_limpiarDuplicadosAutoridades) que no cubre este
+    // caso cuando desde/hasta difieren entre los registros repetidos.
     const porNombre = new Map();
     lista.forEach(a => {
       const key = _normNombreAutoridad(a.nombre);
@@ -18401,16 +18407,29 @@ function _detectarAnomaliasAutoridades() {
       porNombre.get(key).push(a);
     });
     porNombre.forEach(regs => {
+      if (regs.length < 2) return;
       const cargosDistintos = [...new Set(regs.map(a => _normCargoAutoridad(a.cargo)))];
-      if (cargosDistintos.length > 1) {
-        anomalias.push({
-          tipo: 'persona_en_dos_cargos', empresa, nombre: regs[0].nombre,
-          cargos: regs.map(a => a.cargo),
-        });
-      }
+      anomalias.push({
+        tipo: cargosDistintos.length > 1 ? 'persona_en_dos_cargos' : 'nombre_repetido',
+        empresa, nombre: regs[0].nombre,
+        cargos: regs.map(a => a.cargo),
+      });
     });
   });
   return anomalias;
+}
+
+// Texto de aviso para una anomalía de _detectarAnomaliasAutoridades —
+// centralizado para que el panel (autoridades-dup-warning) y la campana de
+// alertas muestren siempre el mismo mensaje.
+function _msgAnomaliaAutoridad(an) {
+  if (an.tipo === 'cargo_duplicado') {
+    return an.empresa + ': ' + an.personas.length + ' ' + an.cargo + 'S vigentes (' + an.personas.join(', ') + ')';
+  }
+  if (an.tipo === 'nombre_repetido') {
+    return an.empresa + ': ' + an.nombre + ' figura ' + an.cargos.length + ' veces como ' + an.cargos[0] + ' vigente — revisar si es un registro duplicado';
+  }
+  return an.empresa + ': ' + an.nombre + ' figura en ' + an.cargos.length + ' cargos vigentes a la vez (' + an.cargos.join(', ') + ')';
 }
 
 function _rptAutoridades() {
@@ -32163,10 +32182,7 @@ function checkAlerts() {
   // persona en dos cargos vigentes distintos dentro de la misma empresa.
   if (typeof _detectarAnomaliasAutoridades === 'function') {
     _detectarAnomaliasAutoridades().forEach(an => {
-      const msg = an.tipo === 'cargo_duplicado'
-        ? an.empresa + ': ' + an.personas.length + ' ' + an.cargo + 'S vigentes (' + an.personas.join(', ') + ')'
-        : an.empresa + ': ' + an.nombre + ' figura en ' + an.cargos.length + ' cargos vigentes a la vez (' + an.cargos.join(', ') + ')';
-      alerts.push({ tipo:'jerarquia', msg });
+      alerts.push({ tipo:'jerarquia', msg: _msgAnomaliaAutoridad(an) });
     });
   }
 
