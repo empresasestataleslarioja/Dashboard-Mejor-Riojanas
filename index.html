@@ -2356,6 +2356,9 @@ self.onmessage = async (e) => {
         <button onclick="abrirDiagnosticoAutoridades()" style="margin-top:6px;padding:4px 8px;font-size:8px;
           background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.4);color:#a855f7;border-radius:2px;
           cursor:pointer;font-family:var(--mono)">🔍 Diagnóstico de Autoridades (por qué Sheets y el dashboard no coinciden)</button>
+        <button onclick="abrirDiagnosticoAlmacenamiento()" style="margin-top:6px;padding:4px 8px;font-size:8px;
+          background:rgba(255,140,71,.08);border:1px solid rgba(255,140,71,.4);color:#ff8c47;border-radius:2px;
+          cursor:pointer;font-family:var(--mono)">🧹 Espacio de almacenamiento local (por si falla un guardado por cuota)</button>
       </div>
       <div id="cloud-last-update" style="display:none;margin-bottom:10px;font-size:8.5px;color:var(--dim);font-family:var(--mono)"></div>
       <!-- Config -->
@@ -41703,7 +41706,16 @@ function _backupTransferenciasLocal(motivo) {
     const slot = _LS_TRANS_BACKUP_SLOTS[ptr];
     localStorage.setItem(slot, JSON.stringify({ ts: new Date().toISOString(), motivo: motivo || '', rows }));
     localStorage.setItem(_LS_TRANS_BKP_PTR, String((ptr + 1) % n));
-  } catch(e) { console.warn('[LR] backup trans fallo:', e); }
+  } catch(e) {
+    console.warn('[LR] backup trans fallo:', e);
+    // No corta la publicación (que ya se mandó antes de llegar acá) — pero
+    // antes esto quedaba solo en la consola, invisible para quien no la
+    // revisa. Si falla por cuota, avisar en pantalla con una acción
+    // concreta (el diagnóstico de almacenamiento) en vez de dejarlo mudo.
+    if (e && e.name === 'QuotaExceededError') {
+      showStorageStatus('⚠ No se pudo guardar la copia de resguardo local de transferencias (almacenamiento casi lleno) — no afecta lo publicado en Sheets. Revisá "🧹 Espacio de almacenamiento local" en ⚙ Sheets.', '#ff8c47');
+    }
+  }
 }
 
 function _recuperarBackupTransferencias() {
@@ -42061,6 +42073,111 @@ async function abrirDiagnosticoAutoridades() {
 
 function closeDiagnosticoAutoridades() {
   const overlay = document.getElementById('diag-aut-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ── Diagnóstico de almacenamiento local (localStorage) ──────────────
+// Caso real reportado: al publicar, la consola mostraba "[LR] backup
+// trans fallo: QuotaExceededError" — _backupTransferenciasLocal (y el
+// cache local general, ver _saveDataToLocalCacheInmediato) empiezan a
+// fallar cuando el localStorage de este sitio está casi lleno. Buena
+// parte de ese espacio suele estar ocupado por claves de versiones viejas
+// del dashboard (de antes del cache actual, LS_KEY) que ya nadie lee pero
+// que nada borra solas — quedan pegadas ahí para siempre.
+const _LS_LEGACY_CANDIDATAS = [
+  { clave: 'lr_snapshot_v4',        motivo: 'Snapshot de una versión vieja del dashboard — ya no se lee en ningún lado.' },
+  { clave: 'lr_trans_backup_v4',    motivo: 'Copia de transferencias de la última vez que se usó "Borrar transferencias locales" — una vez reimportado, deja de servir.' },
+  { clave: 'lr_trans_backup_fecha', motivo: 'Fecha de esa copia.' },
+  { clave: 'lr_trans_v4',           motivo: 'Clave de una versión aún más vieja del dashboard.' },
+];
+
+function _medirLocalStorage() {
+  const claves = [];
+  let totalBytes = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    const v = localStorage.getItem(k) || '';
+    // UTF-16 ≈ 2 bytes/char — alcanza para comparar tamaños relativos entre claves.
+    const bytes = (k.length + v.length) * 2;
+    totalBytes += bytes;
+    claves.push({ clave: k, bytes });
+  }
+  claves.sort((a, b) => b.bytes - a.bytes);
+  return { claves, totalBytes };
+}
+
+function abrirDiagnosticoAlmacenamiento() {
+  const overlay = document.getElementById('diag-storage-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  _renderDiagnosticoAlmacenamiento();
+}
+
+function _renderDiagnosticoAlmacenamiento() {
+  const body = document.getElementById('diag-storage-body');
+  if (!body) return;
+  const { claves, totalBytes } = _medirLocalStorage();
+  const fmtKB = b => (b / 1024).toFixed(1) + ' KB';
+  const legacySet = new Set(_LS_LEGACY_CANDIDATAS.map(x => x.clave));
+  const legacyPresentes = _LS_LEGACY_CANDIDATAS.filter(x => localStorage.getItem(x.clave) != null);
+  const bytesLegacy = claves.filter(c => legacySet.has(c.clave)).reduce((s, c) => s + c.bytes, 0);
+
+  let html = '';
+  html += '<div style="display:flex;gap:10px;margin-bottom:14px">'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">En uso (este sitio)</div>'
+    + '<div style="font-size:18px;font-weight:700;color:var(--text)">' + fmtKB(totalBytes) + '</div></div>'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">Recuperable (datos viejos)</div>'
+    + '<div style="font-size:18px;font-weight:700;color:' + (bytesLegacy > 0 ? '#ff8c47' : '#0f6e56') + '">' + fmtKB(bytesLegacy) + '</div></div>'
+    + '</div>';
+
+  html += '<div style="font-size:9px;color:var(--dim);margin-bottom:10px;line-height:1.6">'
+    + 'Los navegadores limitan el almacenamiento local a unos pocos MB por sitio. Cuando se llena, el dashboard ya no puede '
+    + 'guardar la copia local de resguardo (el aviso "almacenamiento casi lleno/backup trans fallo") — no se pierde nada '
+    + 'publicado en Sheets, pero sí esa copia de este navegador hasta liberar espacio.</div>';
+
+  if (legacyPresentes.length) {
+    html += '<div style="font-weight:700;color:#ff8c47;font-size:10.5px;margin-bottom:6px">🧹 ' + legacyPresentes.length + ' clave(s) de versiones viejas, seguras de borrar</div>';
+    html += '<div style="margin-bottom:12px">' + legacyPresentes.map(x => {
+      const tam = claves.find(c => c.clave === x.clave);
+      return '<div style="padding:6px 8px;border-bottom:1px solid var(--bd);font-size:9px">'
+        + '<div style="display:flex;justify-content:space-between"><span style="color:var(--text);font-family:var(--mono)">' + x.clave + '</span>'
+        + '<span style="color:var(--dim)">' + (tam ? fmtKB(tam.bytes) : '—') + '</span></div>'
+        + '<div style="color:var(--dim);margin-top:2px">' + x.motivo + '</div></div>';
+    }).join('') + '</div>';
+    html += '<button onclick="gestionLiberarEspacioLocal()" style="padding:6px 14px;background:rgba(255,140,71,.1);border:1px solid #ff8c4755;'
+      + 'color:#ff8c47;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:10px;font-weight:600">🧹 Liberar espacio ahora</button>';
+  } else {
+    html += '<div style="padding:10px;border:1px solid #0f6e5655;background:#eafaf322;border-radius:4px;color:#0f6e56;margin-bottom:12px">'
+      + '✓ No hay datos viejos conocidos para liberar en este navegador.</div>';
+  }
+
+  html += '<div style="margin-top:14px;font-size:9px;color:var(--dim)">Las claves que más espacio ocupan hoy:</div>';
+  html += '<div style="margin-top:4px">' + claves.slice(0, 8).map(c => (
+    '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--bd);font-size:9px;font-family:var(--mono)">'
+    + '<span style="color:var(--text)">' + c.clave + (legacySet.has(c.clave) ? ' <span style="color:#ff8c47">(vieja)</span>' : '') + '</span>'
+    + '<span style="color:var(--dim)">' + fmtKB(c.bytes) + '</span></div>'
+  )).join('') + '</div>';
+
+  body.innerHTML = html;
+}
+
+// Borra las claves de _LS_LEGACY_CANDIDATAS presentes en este navegador —
+// nunca toca LS_KEY (el cache activo) ni ninguna otra clave en uso.
+function gestionLiberarEspacioLocal() {
+  const presentes = _LS_LEGACY_CANDIDATAS.filter(x => localStorage.getItem(x.clave) != null);
+  if (!presentes.length) return;
+  if (!confirm('¿Borrar ' + presentes.length + ' clave(s) de versiones viejas del almacenamiento local de este navegador?\n\n'
+    + presentes.map(x => '· ' + x.clave).join('\n')
+    + '\n\nNo afecta Google Sheets ni los datos actuales del dashboard — son copias de una versión anterior que ya no se usan.')) return;
+  presentes.forEach(x => { try { localStorage.removeItem(x.clave); } catch(e) {} });
+  _renderDiagnosticoAlmacenamiento();
+  showStorageStatus('✓ Se liberó espacio en el almacenamiento local de este navegador.', '#47ffb4');
+}
+
+function closeDiagnosticoAlmacenamiento() {
+  const overlay = document.getElementById('diag-storage-overlay');
   if (overlay) overlay.style.display = 'none';
 }
 
@@ -45034,6 +45151,20 @@ setTimeout(() => {
       <button onclick="closeDiagnosticoAutoridades()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
     </div>
     <div id="diag-aut-body" style="overflow-y:auto;padding:16px 18px;flex:1;font-size:10px;color:var(--text)"></div>
+  </div>
+</div>
+
+<!-- DIAGNÓSTICO DE ALMACENAMIENTO LOCAL (localStorage) -->
+<div id="diag-storage-overlay" onclick="if(event.target===this)closeDiagnosticoAlmacenamiento()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:4100;align-items:center;justify-content:center">
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:4px;width:620px;max-width:95vw;max-height:84vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd)">
+      <div>
+        <div style="font-size:13px;color:var(--text);font-weight:600">🧹 Espacio de almacenamiento local</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:3px;letter-spacing:.05em">localStorage de este navegador — no afecta lo publicado en Sheets</div>
+      </div>
+      <button onclick="closeDiagnosticoAlmacenamiento()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <div id="diag-storage-body" style="overflow-y:auto;padding:16px 18px;flex:1;font-size:10px;color:var(--text)"></div>
   </div>
 </div>
 
