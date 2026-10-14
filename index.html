@@ -2345,6 +2345,9 @@ self.onmessage = async (e) => {
           </tbody>
         </table>
         <div style="font-size:8px;color:var(--dim);margin-top:6px;line-height:1.5">⟳ Restaurar: reemplaza datos locales con Sheets (pide confirmación)</div>
+        <button onclick="abrirDiagnosticoAutoridades()" style="margin-top:6px;padding:4px 8px;font-size:8px;
+          background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.4);color:#a855f7;border-radius:2px;
+          cursor:pointer;font-family:var(--mono)">🔍 Diagnóstico de Autoridades (por qué Sheets y el dashboard no coinciden)</button>
       </div>
       <div id="cloud-last-update" style="display:none;margin-bottom:10px;font-size:8.5px;color:var(--dim);font-family:var(--mono)"></div>
       <!-- Config -->
@@ -18316,7 +18319,7 @@ function eliminarAutoridad(idx) {
   const a = DATA.autoridades[idx];
   if (!a) return;
   if (!confirm(`¿Eliminar el registro de ${a.nombre} (${a.cargo} — ${a.empresa})?`)) return;
-  _addAutoridadDel(_ensureAutoridadId(a));
+  _addAutoridadDel(_ensureAutoridadId(a), a, 'manual');
   DATA.autoridades.splice(idx, 1);
   saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
@@ -18738,7 +18741,7 @@ function importarAutoridades(file) {
           if (!ok) return;
           // Tumbar los registros borrados (con su id ya asignado si no
           // tenían) para que la fusión con Sheets no los vuelva a traer.
-          DATA.autoridades.filter(a => empresasEnArchivo.has(a.empresa)).forEach(a => _addAutoridadDel(_ensureAutoridadId(a)));
+          DATA.autoridades.filter(a => empresasEnArchivo.has(a.empresa)).forEach(a => _addAutoridadDel(_ensureAutoridadId(a), a, 'importacion'));
           DATA.autoridades = DATA.autoridades.filter(a => !empresasEnArchivo.has(a.empresa));
           const vistos = new Set();
           parsed.forEach(p => {
@@ -28800,13 +28803,31 @@ function _getAutoridadesDelMap() {
     return m;
   } catch(e) { return new Map(); }
 }
-function _addAutoridadDel(id) {
+// meta/origen son solo para el diagnóstico (abrirDiagnosticoAutoridades) —
+// no afectan la fusión, que sigue funcionando únicamente por id+fecha.
+function _addAutoridadDel(id, meta, origen) {
   try {
     const raw = JSON.parse(localStorage.getItem(_LS_AUTORIDADES_DEL) || '[]');
     const list = raw.filter(x => x && x.id !== id);
-    list.push({ id, deletedAt: Date.now() });
+    const entry = { id, deletedAt: Date.now() };
+    if (meta) {
+      entry.empresa = meta.empresa || '';
+      entry.nombre  = meta.nombre  || '';
+      entry.cargo   = meta.cargo   || '';
+      entry.desde   = meta.desde   || '';
+    }
+    if (origen) entry.origen = origen;
+    list.push(entry);
     localStorage.setItem(_LS_AUTORIDADES_DEL, JSON.stringify(list));
   } catch(e) {}
+}
+// Lista completa de tumbas con su metadata legible (empresa/nombre/cargo),
+// para el diagnóstico — _getAutoridadesDelMap() sigue siendo la versión
+// liviana (solo id→fecha) que usa la fusión en applyCloudData.
+function _getAutoridadesDelDetalle() {
+  try {
+    return JSON.parse(localStorage.getItem(_LS_AUTORIDADES_DEL) || '[]').filter(x => x && x.id);
+  } catch(e) { return []; }
 }
 function _removeAutoridadDel(id) {
   try {
@@ -28878,7 +28899,7 @@ function _limpiarDuplicadosAutoridades() {
     ganador._id = 'aut_' + _hashAutoridad(ganador);
     resultado.push(ganador);
     lista.slice(1).forEach(dup => {
-      if (dup._id && dup._id !== ganador._id) _addAutoridadDel(dup._id);
+      if (dup._id && dup._id !== ganador._id) _addAutoridadDel(dup._id, dup, 'duplicado_automatico');
       eliminados++;
     });
   });
@@ -41743,6 +41764,123 @@ async function restaurarDesdeSheets(modulo) {
   await descargarSoloModulo(modulo);
 }
 
+// ── Diagnóstico de Autoridades: Sheets vs. dashboard ───────────────
+// Explica por qué el total de autoridades en Sheets puede ser mayor al
+// del dashboard — caso reportado: 128 en Sheets, 121 en el panel, y
+// "Descargar" no achica la diferencia. Causa: una baja local (tumba en
+// _LS_AUTORIDADES_DEL) bloquea a propósito que Sheets resucite un
+// registro ya borrado en este dispositivo (ver nota en applyCloudData).
+// Esta función hace su propio fetch de solo lectura (no toca DATA ni
+// publica nada) y cruza las tumbas locales contra lo que Sheets tiene
+// HOY, para mostrar exactamente qué registros están bloqueados y por
+// qué se los borró (manual, importación, duplicado automático, u otro
+// dispositivo).
+const _DIAG_AUT_ORIGEN_LBL = {
+  manual: 'Borrado manual en este dispositivo',
+  importacion: 'Borrado al importar con "Reemplazar" en este dispositivo',
+  duplicado_automatico: 'Limpieza automática de duplicados (mismo registro con _id distinto)',
+  remoto: 'Baja publicada desde otro dispositivo',
+};
+
+async function abrirDiagnosticoAutoridades() {
+  const overlay = document.getElementById('diag-aut-overlay');
+  const body = document.getElementById('diag-aut-body');
+  if (!overlay || !body) return;
+  overlay.style.display = 'flex';
+  body.innerHTML = '<div style="color:var(--dim);padding:20px;text-align:center">⏳ Comparando Sheets con el dashboard…</div>';
+
+  if (!_cloudUrl) {
+    body.innerHTML = '<div style="color:var(--neg);padding:10px">⚠ Configurá la URL de Sheets primero (⚙ Sheets).</div>';
+    return;
+  }
+
+  let data;
+  try {
+    const resp = await fetch(_cloudUrl + (_cloudUrl.includes('?') ? '&' : '?') + 'tab=all&t=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    data = await resp.json();
+  } catch(e) {
+    body.innerHTML = '<div style="color:var(--neg);padding:10px">✗ No se pudo leer Sheets: ' + (e.message||e) + '</div>';
+    return;
+  }
+
+  const cloudAut = Array.isArray(data.autoridades) ? data.autoridades : [];
+  const cloudPorId = {};
+  cloudAut.forEach(r => { if (r._id) cloudPorId[r._id] = r; });
+
+  const tumbas = typeof _getAutoridadesDelDetalle === 'function' ? _getAutoridadesDelDetalle() : [];
+  const local = (DATA.autoridades || []).length;
+
+  // Para cada tumba local, ver si Sheets todavía tiene esa fila y si esa
+  // fila es lo bastante vieja como para seguir bloqueada (mismo criterio
+  // que usa applyCloudData: tsCloud > tsDel → se adoptaría igual).
+  const bloqueando = [];
+  const yaResueltas = [];
+  tumbas.forEach(t => {
+    const fila = cloudPorId[t.id];
+    if (!fila) { yaResueltas.push(t); return; }
+    const tsCloud = parseInt(fila._ts, 10) || 0;
+    if (tsCloud > (t.deletedAt || 0)) { yaResueltas.push(t); return; } // se adoptaría en el próximo Descargar
+    bloqueando.push(t);
+  });
+
+  const diff = cloudAut.length - local;
+  const fmtFecha = ts => { try { return new Date(ts).toLocaleString('es-AR'); } catch(e) { return '—'; } };
+
+  let html = '';
+  html += '<div style="display:flex;gap:10px;margin-bottom:14px">'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">En Sheets</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--text)">' + cloudAut.length + '</div></div>'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">En el dashboard</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--text)">' + local + '</div></div>'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">Diferencia</div>'
+    + '<div style="font-size:20px;font-weight:700;color:' + (diff!==0?'#c0392b':'#0f6e56') + '">' + diff + '</div></div>'
+    + '</div>';
+
+  if (diff === 0 && bloqueando.length === 0) {
+    html += '<div style="padding:10px;border:1px solid #0f6e5655;background:#eafaf322;border-radius:4px;color:#0f6e56">✓ Sheets y el dashboard tienen el mismo número de autoridades. No hay tumbas locales bloqueando nada.</div>';
+  } else {
+    if (bloqueando.length) {
+      html += '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:6px">⚠ ' + bloqueando.length + ' registro(s) en Sheets bloqueados por una baja local — "Descargar" no los va a traer</div>';
+      html += '<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:9px">'
+        + '<thead><tr style="border-bottom:1px solid var(--bd)">'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Empresa</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Nombre</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Cargo</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Borrado el</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Motivo de la baja</th>'
+        + '</tr></thead><tbody>'
+        + bloqueando.map(t => '<tr style="border-bottom:1px solid var(--bd)">'
+          + '<td style="padding:4px 6px">' + (t.empresa || '<span style="color:var(--dim)">—</span>') + '</td>'
+          + '<td style="padding:4px 6px">' + (t.nombre || '<span style="color:var(--dim)">—</span>') + '</td>'
+          + '<td style="padding:4px 6px">' + (t.cargo || '<span style="color:var(--dim)">—</span>') + '</td>'
+          + '<td style="padding:4px 6px;color:var(--dim)">' + fmtFecha(t.deletedAt) + '</td>'
+          + '<td style="padding:4px 6px">' + (_DIAG_AUT_ORIGEN_LBL[t.origen] || 'Sin registrar (baja de antes de este diagnóstico)') + '</td>'
+          + '</tr>').join('')
+        + '</tbody></table></div>';
+    }
+    if (yaResueltas.length) {
+      html += '<div style="font-size:9px;color:var(--dim)">✓ ' + yaResueltas.length + ' tumba(s) local(es) más que ya no afectan nada (Sheets ya no tiene esa fila, o la tiene con una versión más nueva que se adoptaría igual).</div>';
+    }
+    html += '<div style="margin-top:14px;padding:10px;border:1px solid var(--bd2);background:var(--s2);border-radius:4px;font-size:9px;color:var(--dim);line-height:1.6">'
+      + 'ℹ "Descargar" respeta a propósito una baja hecha en este dispositivo, para que una copia vieja de Sheets no la resucite. '
+      + 'Si estos registros SÍ deberían estar (la baja fue un error, o Sheets todavía no se limpió de un duplicado viejo), usá "⟳ Restaurar" — '
+      + 'eso borra las tumbas locales y vuelve a traer todo desde Sheets tal cual está. '
+      + 'Si en cambio la baja fue correcta, lo que falta es volver a <strong>publicar</strong> Autoridades para que Sheets también elimine esas filas.'
+      + '</div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function closeDiagnosticoAutoridades() {
+  const overlay = document.getElementById('diag-aut-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 // Chequea si Sheets tiene un savedAt más nuevo que el último que esta
 // pestaña vio — señal de que otro dispositivo/pestaña publicó algo que
 // todavía no se bajó acá. Devuelve el meta remoto ({savedAt,updatedBy,nota})
@@ -43110,9 +43248,10 @@ function applyCloudData(cloud, opts) {
       const tsDel = parseInt(t.deleted_at, 10) || 0;
       const idx = DATA.autoridades.findIndex(a => a._id === t.id);
       if (idx >= 0 && (DATA.autoridades[idx]._ts || 0) > tsDel) return; // edición local más nueva: conservarla
+      const metaRemota = idx >= 0 ? DATA.autoridades[idx] : null;
       if (idx >= 0) DATA.autoridades.splice(idx, 1);
       const actual = _delMapAut.get(t.id) || 0;
-      if (tsDel > actual) _addAutoridadDel(t.id);
+      if (tsDel > actual) _addAutoridadDel(t.id, metaRemota, 'remoto');
     });
 
     // Autocorrección de los duplicados ya generados por el bug de _id
@@ -44651,6 +44790,20 @@ setTimeout(() => {
 }, 40);
 </script>
 <!-- GAP NOTIFICATION MODAL -->
+<!-- DIAGNÓSTICO DE AUTORIDADES: Sheets vs. dashboard -->
+<div id="diag-aut-overlay" onclick="if(event.target===this)closeDiagnosticoAutoridades()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:4100;align-items:center;justify-content:center">
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:4px;width:720px;max-width:95vw;max-height:84vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd)">
+      <div>
+        <div style="font-size:13px;color:var(--text);font-weight:600">🔍 Diagnóstico de Autoridades</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:3px;letter-spacing:.05em">Por qué el total en Sheets puede diferir del total en el dashboard</div>
+      </div>
+      <button onclick="closeDiagnosticoAutoridades()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <div id="diag-aut-body" style="overflow-y:auto;padding:16px 18px;flex:1;font-size:10px;color:var(--text)"></div>
+  </div>
+</div>
+
 <div id="gap-overlay" onclick="if(event.target===this)closeGapModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:4000;align-items:center;justify-content:center">
   <div style="background:var(--s1);border:1px solid var(--bd);border-radius:4px;width:680px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd)">
