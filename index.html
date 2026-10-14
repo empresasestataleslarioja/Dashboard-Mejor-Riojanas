@@ -9559,6 +9559,69 @@ function _rptTransferencias(autoPrint) {
     h.push('</tbody></table></div></div>');
   }
 
+  // ── Empresas asistidas financieramente vs. no asistidas ───────────
+  // Pedido explícito: dos grupos que entre los dos sumen el total de
+  // empresas ACTIVAS del portafolio — mismo universo que Gestión de
+  // Empresas y Rubros (ver _rptEmpresasRubros: unión de rubros/fact/sit/
+  // personal, filtrando las marcadas inactivas). Grupo 1: reciben en este
+  // período (respeta el filtro de año del reporte, igual que el resto de
+  // esta pantalla) alguna transferencia clasificada "Gastos Operativos" o
+  // "Subsidios", resuelta por empresa con _beneficiarioCanonico — el mismo
+  // criterio que ya usa la tabla "Detalle de transferencias por empresa"
+  // de arriba, para que las cifras de ambas coincidan exactamente. Grupo
+  // 2: el resto de las activas, por decantación — nunca se calcula aparte,
+  // así que Grupo 1 + Grupo 2 = activas siempre, por construcción.
+  (function() {
+    var CATS_ASISTENCIA = ['Gastos Operativos', 'Subsidios'];
+    var allEmpsRpt = [...new Set([
+      ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
+      ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+      ...(DATA.personal || []).map(function(d){ return d.e; }),
+    ])];
+    var _inactRpt = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
+    var activasRpt = allEmpsRpt.filter(function(e){ return !_inactRpt[e]; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
+
+    var asistenciaPorEmpresa = {};
+    rows.forEach(function(r) {
+      if (CATS_ASISTENCIA.indexOf(r.categoria) === -1) return;
+      var emp = _beneficiarioCanonico(r.beneficiario);
+      if (!emp) return;
+      if (!asistenciaPorEmpresa[emp]) asistenciaPorEmpresa[emp] = { 'Gastos Operativos': 0, 'Subsidios': 0, total: 0 };
+      asistenciaPorEmpresa[emp][r.categoria] = (asistenciaPorEmpresa[emp][r.categoria] || 0) + (r.importe || 0);
+      asistenciaPorEmpresa[emp].total += (r.importe || 0);
+    });
+
+    var grupo1 = activasRpt.filter(function(e){ return asistenciaPorEmpresa[e]; })
+      .sort(function(a,b){ return asistenciaPorEmpresa[b].total - asistenciaPorEmpresa[a].total; });
+    var grupo2 = activasRpt.filter(function(e){ return !asistenciaPorEmpresa[e]; });
+
+    h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año '+añoFil+'</span></div>');
+    h.push('<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">');
+    h.push('<div class="kp"><div class="kl">Empresas activas</div><div class="kv">'+activasRpt.length+'</div><div class="ks">base: Gestión de Empresas y Rubros</div></div>');
+    h.push('<div class="kp"><div class="kl">Asistidas financieramente</div><div class="kv" style="color:#185fa5">'+grupo1.length+'</div><div class="ks">'+(activasRpt.length?(grupo1.length/activasRpt.length*100).toFixed(1):'0')+'% de las activas</div></div>');
+    h.push('<div class="kp"><div class="kl">No asistidas</div><div class="kv" style="color:#777">'+grupo2.length+'</div><div class="ks">'+(activasRpt.length?(grupo2.length/activasRpt.length*100).toFixed(1):'0')+'% de las activas</div></div>');
+    h.push('</div>');
+
+    h.push('<div style="font-size:9px;font-weight:700;color:#185fa5;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 1 — Asistidas financieramente ('+grupo1.length+')</div>');
+    if (grupo1.length) {
+      h.push('<div class="tw"><table><thead><tr><th>Empresa</th><th>Gastos Operativos</th><th>Subsidios</th><th>Total</th></tr></thead><tbody>');
+      grupo1.forEach(function(e) {
+        var d = asistenciaPorEmpresa[e];
+        h.push('<tr><td>'+e+'</td><td>'+(d['Gastos Operativos']?fM2(d['Gastos Operativos']):'—')+'</td><td>'+(d['Subsidios']?fM2(d['Subsidios']):'—')+'</td><td>'+fM2(d.total)+'</td></tr>');
+      });
+      h.push('</tbody></table></div>');
+    } else {
+      h.push('<p style="color:#999;font-size:8pt;padding:4px">Ninguna empresa activa recibió Gastos Operativos ni Subsidios en este período.</p>');
+    }
+
+    h.push('<div style="font-size:9px;font-weight:700;color:#777;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 2 — No asistidas, por decantación ('+grupo2.length+')</div>');
+    h.push(grupo2.length
+      ? '<div style="font-size:9pt;line-height:1.8;color:#333">'+grupo2.join(' · ')+'</div>'
+      : '<p style="color:#999;font-size:8pt;padding:4px">Todas las empresas activas están asistidas.</p>');
+    h.push('<div style="font-size:7.5pt;color:#999;margin-top:8px;font-family:monospace">Grupo 1 ('+grupo1.length+') + Grupo 2 ('+grupo2.length+') = '+(grupo1.length+grupo2.length)+' = '+activasRpt.length+' empresas activas</div>');
+    h.push('</div>');
+  })();
+
   // Evolución mensual: SOLO cuando hay un año específico elegido
   // (con todos los años mezclados, el gráfico mensual no es informativo)
   var hayAñoEspecifico = !!(_rptAño || (_transFiltros.año && _transFiltros.año.size === 1));
