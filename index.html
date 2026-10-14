@@ -3947,6 +3947,23 @@ self.onmessage = async (e) => {
       <!-- contenido dinámico -->
       <div id="trans-content" style="display:none">
 
+        <!-- Empresas asistidas financieramente (Gastos Operativos/Subsidios)
+             vs. no asistidas, por decantación, sobre el total de empresas
+             ACTIVAS del portafolio — mismo cálculo que la sección homónima
+             del reporte imprimible (_calcularAsistenciaFinanciera), para
+             que ambas coincidan siempre. Pedido explícito: visible también
+             en el panel activo (no solo en el PDF), los dos grupos uno al
+             lado del otro, y con interacción para ver de dónde sale cada
+             empresa del Grupo 1 (qué transferencias puntuales la ponen ahí)
+             y poder recategorizarlas ahí mismo si corresponde. -->
+        <div class="rowfull card" style="margin-bottom:12px">
+          <div class="card-hd">
+            <span class="card-hd-title">🏢 Empresas asistidas financieramente</span>
+            <span class="card-hd-unit">Gastos Operativos / Subsidios · click en una empresa del Grupo 1 para ver el detalle</span>
+          </div>
+          <div id="trans-asistencia-wrap"></div>
+        </div>
+
         <!-- fila superior: dona composición + barras por SAF -->
         <div class="row2" style="align-items:start">
           <div class="card" id="trans-donut-card" style="display:flex;flex-direction:column">
@@ -9560,40 +9577,15 @@ function _rptTransferencias(autoPrint) {
   }
 
   // ── Empresas asistidas financieramente vs. no asistidas ───────────
-  // Pedido explícito: dos grupos que entre los dos sumen el total de
-  // empresas ACTIVAS del portafolio — mismo universo que Gestión de
-  // Empresas y Rubros (ver _rptEmpresasRubros: unión de rubros/fact/sit/
-  // personal, filtrando las marcadas inactivas). Grupo 1: reciben en este
-  // período (respeta el filtro de año del reporte, igual que el resto de
-  // esta pantalla) alguna transferencia clasificada "Gastos Operativos" o
-  // "Subsidios", resuelta por empresa con _beneficiarioCanonico — el mismo
-  // criterio que ya usa la tabla "Detalle de transferencias por empresa"
-  // de arriba, para que las cifras de ambas coincidan exactamente. Grupo
-  // 2: el resto de las activas, por decantación — nunca se calcula aparte,
-  // así que Grupo 1 + Grupo 2 = activas siempre, por construcción.
+  // Mismo cálculo que el panel en pantalla (ver _calcularAsistenciaFinanciera,
+  // punto único de cálculo) — Grupo 1: reciben en este período (respeta el
+  // filtro de año del reporte, igual que el resto de esta pantalla) alguna
+  // transferencia clasificada "Gastos Operativos" o "Subsidios". Grupo 2:
+  // el resto de las empresas ACTIVAS del portafolio, por decantación —
+  // nunca se calcula aparte, así que Grupo 1 + Grupo 2 = activas siempre.
   (function() {
-    var CATS_ASISTENCIA = ['Gastos Operativos', 'Subsidios'];
-    var allEmpsRpt = [...new Set([
-      ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
-      ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
-      ...(DATA.personal || []).map(function(d){ return d.e; }),
-    ])];
-    var _inactRpt = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
-    var activasRpt = allEmpsRpt.filter(function(e){ return !_inactRpt[e]; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
-
-    var asistenciaPorEmpresa = {};
-    rows.forEach(function(r) {
-      if (CATS_ASISTENCIA.indexOf(r.categoria) === -1) return;
-      var emp = _beneficiarioCanonico(r.beneficiario);
-      if (!emp) return;
-      if (!asistenciaPorEmpresa[emp]) asistenciaPorEmpresa[emp] = { 'Gastos Operativos': 0, 'Subsidios': 0, total: 0 };
-      asistenciaPorEmpresa[emp][r.categoria] = (asistenciaPorEmpresa[emp][r.categoria] || 0) + (r.importe || 0);
-      asistenciaPorEmpresa[emp].total += (r.importe || 0);
-    });
-
-    var grupo1 = activasRpt.filter(function(e){ return asistenciaPorEmpresa[e]; })
-      .sort(function(a,b){ return asistenciaPorEmpresa[b].total - asistenciaPorEmpresa[a].total; });
-    var grupo2 = activasRpt.filter(function(e){ return !asistenciaPorEmpresa[e]; });
+    var _calc = _calcularAsistenciaFinanciera(rows);
+    var activasRpt = _calc.activas, asistenciaPorEmpresa = _calc.porEmpresa, grupo1 = _calc.grupo1, grupo2 = _calc.grupo2;
 
     h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año '+añoFil+'</span></div>');
     h.push('<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">');
@@ -10008,6 +10000,138 @@ function _beneficiarioCanonico(raw) {
 function _resolverEmpresaTransferencia(t) {
   return t.empresa || _beneficiarioCanonico(t.beneficiario) || '';
 }
+
+// ── Empresas asistidas financieramente (Gastos Operativos/Subsidios) vs.
+// no asistidas, por decantación ────────────────────────────────────
+// Punto único de cálculo — usado tanto por el panel en pantalla
+// (renderAsistenciaFinanciera) como por el reporte imprimible
+// (_rptTransferencias), para que ambos coincidan siempre. Grupo 1 + Grupo
+// 2 = el total de empresas ACTIVAS del portafolio (mismo universo que
+// Gestión de Empresas y Rubros: unión de rubros/fact/sit/personal,
+// filtrando las marcadas inactivas), siempre, por construcción: Grupo 2
+// nunca se calcula aparte, es literalmente "las activas que no están en
+// el Grupo 1".
+var CATS_ASISTENCIA_FINANCIERA = ['Gastos Operativos', 'Subsidios'];
+function _calcularAsistenciaFinanciera(rows) {
+  var allEmps = [...new Set([
+    ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
+    ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
+    ...(DATA.personal || []).map(function(d){ return d.e; }),
+  ])];
+  var _inact = (typeof empresasInactivas !== 'undefined' && empresasInactivas) ? empresasInactivas : {};
+  var activas = allEmps.filter(function(e){ return !_inact[e]; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
+
+  // Agrupa por empresa (mismo criterio que la tabla "Detalle de
+  // transferencias por empresa" del reporte: _beneficiarioCanonico) y
+  // conserva las filas originales de DATA.transferencias (no copias) para
+  // que, en el panel en pantalla, se pueda ubicar su índice real
+  // (DATA.transferencias.indexOf) y editar la categoría ahí mismo.
+  var porEmpresa = {};
+  (rows || []).forEach(function(r) {
+    if (CATS_ASISTENCIA_FINANCIERA.indexOf(r.categoria) === -1) return;
+    var emp = _beneficiarioCanonico(r.beneficiario);
+    if (!emp) return;
+    if (!porEmpresa[emp]) porEmpresa[emp] = { 'Gastos Operativos': 0, 'Subsidios': 0, total: 0, filas: [] };
+    porEmpresa[emp][r.categoria] = (porEmpresa[emp][r.categoria] || 0) + (r.importe || 0);
+    porEmpresa[emp].total += (r.importe || 0);
+    porEmpresa[emp].filas.push(r);
+  });
+
+  var grupo1 = activas.filter(function(e){ return porEmpresa[e]; })
+    .sort(function(a,b){ return porEmpresa[b].total - porEmpresa[a].total; });
+  var grupo2 = activas.filter(function(e){ return !porEmpresa[e]; });
+
+  return { activas: activas, porEmpresa: porEmpresa, grupo1: grupo1, grupo2: grupo2 };
+}
+
+// ── Panel en pantalla (no solo el reporte imprimible) ───────────────
+// Pedido explícito: visible en el panel activo de Transferencias, los dos
+// grupos uno al lado del otro (dos columnas), con interacción para
+// constatar de dónde sale cada empresa del Grupo 1 (click → expande las
+// transferencias puntuales que la clasifican como asistida) y poder
+// recategorizarlas ahí mismo (reusa cambiarCategoriaTrans, el mismo
+// mecanismo que ya existe en la tabla de detalle).
+function renderAsistenciaFinanciera() {
+  const wrap = document.getElementById('trans-asistencia-wrap');
+  if (!wrap) return;
+  const rows = typeof transFiltered === 'function' ? transFiltered() : [];
+  const { activas, porEmpresa, grupo1, grupo2 } = _calcularAsistenciaFinanciera(rows);
+  const fmt = v => '$ ' + Math.round(v || 0).toLocaleString('es-AR');
+
+  const filaGrupo1 = e => {
+    const d = porEmpresa[e];
+    const detId = 'asist-det-' + e.replace(/[^a-zA-Z0-9]/g, '_');
+    return `<div style="border-bottom:1px solid var(--bd)">
+      <div onclick="toggleDetalleAsistencia('${detId}')"
+        style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;cursor:pointer"
+        onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='transparent'">
+        <span style="font-size:9.5px;color:var(--text)">▸ ${e}</span>
+        <span style="font-size:9px;color:#185fa5;font-family:var(--mono)">${fmt(d.total)}</span>
+      </div>
+      <div id="${detId}" style="display:none;padding:4px 8px 8px 20px;background:var(--s2)">
+        ${d.filas.map(r => {
+          const idx = DATA.transferencias.indexOf(r);
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed var(--bd);font-size:8.5px">
+            <span style="color:var(--dim);min-width:55px;white-space:nowrap">${TRANS_MESES[r.mes]||'s/mes'} ${r.año||''}</span>
+            <span style="color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.saf||'')+' · '+(r.organismo||'')}">${r.saf||'—'} · ${r.organismo||'—'}</span>
+            <select onchange="cambiarCategoriaTrans(${idx}, this.value); renderAsistenciaFinanciera()"
+              title="Reclasificar esta transferencia"
+              style="background:var(--s1);border:1px solid var(--bd2);border-radius:2px;color:var(--text);
+              font-size:8px;font-family:var(--mono);padding:1px 2px">
+              ${TRANS_CATS.map(c => `<option value="${c}" ${c===r.categoria?'selected':''}>${c}</option>`).join('')}
+            </select>
+            <span style="font-family:var(--mono);color:var(--text);min-width:65px;text-align:right;white-space:nowrap">${fmt(r.importe)}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  };
+  const filaGrupo2 = e => `<div style="padding:5px 8px;border-bottom:1px solid var(--bd);font-size:9.5px;color:var(--text)">${e}</div>`;
+
+  wrap.innerHTML = `
+    <div style="display:flex;gap:7px;margin:8px 0">
+      <div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:8px;text-align:center">
+        <div style="font-size:7.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Empresas activas</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">${activas.length}</div>
+      </div>
+      <div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:8px;text-align:center">
+        <div style="font-size:7.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Asistidas</div>
+        <div style="font-size:16px;font-weight:700;color:#185fa5">${grupo1.length}</div>
+      </div>
+      <div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:8px;text-align:center">
+        <div style="font-size:7.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">No asistidas</div>
+        <div style="font-size:16px;font-weight:700;color:var(--dim)">${grupo2.length}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <div style="font-size:9px;font-weight:700;color:#185fa5;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">
+          Grupo 1 — Asistidas financieramente (${grupo1.length})
+        </div>
+        <div style="max-height:320px;overflow-y:auto;border:1px solid var(--bd);border-radius:4px">
+          ${grupo1.length ? grupo1.map(filaGrupo1).join('') : '<div style="padding:10px;font-size:9px;color:var(--dim)">Ninguna empresa activa recibió Gastos Operativos ni Subsidios en este período.</div>'}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:700;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">
+          Grupo 2 — No asistidas financieramente, por decantación (${grupo2.length})
+        </div>
+        <div style="max-height:320px;overflow-y:auto;border:1px solid var(--bd);border-radius:4px">
+          ${grupo2.length ? grupo2.map(filaGrupo2).join('') : '<div style="padding:10px;font-size:9px;color:var(--dim)">Todas las empresas activas están asistidas.</div>'}
+        </div>
+      </div>
+    </div>
+    <div style="font-size:7.5px;color:var(--dim);margin-top:6px;font-family:var(--mono)">
+      Grupo 1 (${grupo1.length}) + Grupo 2 (${grupo2.length}) = ${grupo1.length+grupo2.length} = ${activas.length} empresas activas
+    </div>`;
+}
+
+function toggleDetalleAsistencia(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
 function getRuboLabel(emp) {
   const r = getRubro(emp);
   return `<span class="rb ${RUBRO_CSS[r]}">${r}</span>`;
@@ -24804,6 +24928,12 @@ function buildTransferencias() {
 
   // ── Alerta de semanas / meses faltantes ─────────────────────
   _alertaTransCoberturaUpdate();
+
+  // Empresas asistidas financieramente vs. no asistidas — ver
+  // renderAsistenciaFinanciera/_calcularAsistenciaFinanciera. Se recalcula
+  // en cada rebuild del panel para reflejar los filtros activos (año,
+  // empresa, etc.), igual que los KPIs de arriba.
+  try { renderAsistenciaFinanciera(); } catch(e) {}
 
   // Contar registros sin año
   const sinAño = DATA.transferencias.filter(t => !t.año).length;
