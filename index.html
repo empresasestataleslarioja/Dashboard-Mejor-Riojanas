@@ -2111,7 +2111,6 @@ self.onmessage = async (e) => {
           color:#1a9e68;font-family:var(--mono);font-size:9.5px;font-weight:600;border-radius:3px;
           cursor:pointer;white-space:nowrap;height:24px">🔄 Auto</button>
         <div id="cloud-status-txt-top" style="font-size:9px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
-        <div id="storage-status" style="display:none;font-size:9px;font-family:var(--mono)"></div>
       </div>
 
       <!-- ZONA D: Usuario (ancho fijo, nunca se superpone) -->
@@ -2130,6 +2129,15 @@ self.onmessage = async (e) => {
       </div>
 
     </div><!-- /topbar-row1 -->
+
+    <!-- Avisos de guardado/sync largos (ej. "rubros omitido del sync…") —
+         en una fila propia de ancho completo, en vez de apretados adentro
+         de la zona C del topbar (ancho fijo, sin wrap): un mensaje largo
+         terminaba empujando/aplastando el resto de la barra en vez de
+         bajar de línea. Se muestra/oculta igual que antes (ver
+         showStorageStatus), solo cambió dónde vive en el layout. -->
+    <div id="storage-status" style="display:none;padding:5px 14px;font-size:9.5px;font-family:var(--mono);
+      line-height:1.5;white-space:normal;word-break:break-word;border-top:1px solid var(--bd)"></div>
 
     <!-- Panel flotante de usuario ─────────────────────────────── -->
     <div id="user-panel" style="display:none;position:fixed;top:44px;right:12px;
