@@ -10439,16 +10439,33 @@ function _marcarEmpresaMasterEditada(emp) {
 // esta tumba (ver _tombstoneEmpresa). Sin esto, tumbar "PUERTAS DE SOL"
 // purgaba también a "PUERTAS DEL SOL" (su propio destino de fusión) porque
 // _mismoNombreEmpresa las trata como la misma empresa a propósito.
-function _coincideEmpresaTumba(k, emp, excluir) {
+// `fechaTumba`: fecha en que se tumbó `emp` (ver _tombstoneEmpresa/
+// DATA.empresas_eliminadas). Si `k` tuvo una edición real DESPUÉS de esa
+// fecha (empresaMasterTs, la misma marca que ya protege rubros/
+// institucional/activa-inactiva), no se la considera una resucitación —
+// es un uso nuevo e intencional de un nombre que matchea por variante de
+// grafía con una tumba histórica no relacionada. Bug real reportado:
+// renombrar una empresa a "FEDERAL" la borraba en cada sync porque
+// matcheaba contra la tumba histórica "FEDERAL SE" (fusionada hacia OTRA
+// empresa, no hacia "FEDERAL") — sin esta fecha, cualquier nombre nuevo
+// que comparta la raíz con una tumba vieja quedaba inutilizable para
+// siempre, sin importar cuán reciente fuera la edición.
+function _coincideEmpresaTumba(k, emp, excluir, fechaTumba) {
   if (excluir && k === excluir) return false;
-  return k === emp || _mismoNombreEmpresa(k, emp);
+  if (!(k === emp || _mismoNombreEmpresa(k, emp))) return false;
+  if (fechaTumba) {
+    const tsEdit = (typeof empresaMasterTs !== 'undefined' && empresaMasterTs[k]) || 0;
+    const tsTumba = new Date(fechaTumba).getTime() || 0;
+    if (tsEdit > tsTumba) return false;
+  }
+  return true;
 }
 
-function _purgarPerEmpresaStores(emp, excluir) {
+function _purgarPerEmpresaStores(emp, excluir, fechaTumba) {
   PER_EMPRESA_STORES.forEach(({get}) => {
     const store = get();
     if (!store) return;
-    Object.keys(store).forEach(k => { if (_coincideEmpresaTumba(k, emp, excluir)) delete store[k]; });
+    Object.keys(store).forEach(k => { if (_coincideEmpresaTumba(k, emp, excluir, fechaTumba)) delete store[k]; });
   });
 }
 function _renombrarPerEmpresaStores(from, to) {
@@ -10471,19 +10488,19 @@ function _fusionarPerEmpresaStores(from, to) {
 // purgar resucitaciones detectadas vía tombstones en applyCloudData).
 // Compara con _coincideEmpresaTumba (tolera variantes de grafía), no con
 // igualdad estricta — ver comentario junto a esa función.
-function _purgarEmpresaDeData(emp, excluir) {
-  Object.keys(DATA.fact).forEach(k => { if (_coincideEmpresaTumba(k, emp, excluir)) delete DATA.fact[k]; });
-  Object.keys(DATA.sit).forEach(k  => { if (_coincideEmpresaTumba(k, emp, excluir)) delete DATA.sit[k]; });
-  DATA.personal = (DATA.personal || []).filter(d => !_coincideEmpresaTumba(d.e, emp, excluir));
-  _purgarPerEmpresaStores(emp, excluir);
+function _purgarEmpresaDeData(emp, excluir, fechaTumba) {
+  Object.keys(DATA.fact).forEach(k => { if (_coincideEmpresaTumba(k, emp, excluir, fechaTumba)) delete DATA.fact[k]; });
+  Object.keys(DATA.sit).forEach(k  => { if (_coincideEmpresaTumba(k, emp, excluir, fechaTumba)) delete DATA.sit[k]; });
+  DATA.personal = (DATA.personal || []).filter(d => !_coincideEmpresaTumba(d.e, emp, excluir, fechaTumba));
+  _purgarPerEmpresaStores(emp, excluir, fechaTumba);
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
     if (!DATA[k]) return;
-    Object.keys(DATA[k]).forEach(kk => { if (_coincideEmpresaTumba(kk, emp, excluir)) delete DATA[k][kk]; });
+    Object.keys(DATA[k]).forEach(kk => { if (_coincideEmpresaTumba(kk, emp, excluir, fechaTumba)) delete DATA[k][kk]; });
   });
   Object.keys(_balances || {}).forEach(key => {
-    if (_balances[key] && _coincideEmpresaTumba(_balances[key].empresa, emp, excluir)) delete _balances[key];
+    if (_balances[key] && _coincideEmpresaTumba(_balances[key].empresa, emp, excluir, fechaTumba)) delete _balances[key];
   });
-  DATA.autoridades = (DATA.autoridades || []).filter(a => !_coincideEmpresaTumba(a.empresa, emp, excluir));
+  DATA.autoridades = (DATA.autoridades || []).filter(a => !_coincideEmpresaTumba(a.empresa, emp, excluir, fechaTumba));
 }
 
 // ── Beneficiarios de Transferencias excluidos permanentemente ─────
@@ -42401,11 +42418,11 @@ function applyCloudData(cloud, opts) {
       conocidas.add(t.empresa);
       const fusionadaEn = t.fusionada_en || t.fusionadaEn || null;
       DATA.empresas_eliminadas.push({ empresa: t.empresa, fecha: t.fecha || '', fusionadaEn });
-      try { _purgarEmpresaDeData(t.empresa, fusionadaEn); } catch(e) {}
+      try { _purgarEmpresaDeData(t.empresa, fusionadaEn, t.fecha); } catch(e) {}
     });
   }
   const _tumbas = DATA.empresas_eliminadas || [];
-  const _esEmpresaTumbada = emp => _tumbas.some(t => _coincideEmpresaTumba(emp, t.empresa, t.fusionadaEn));
+  const _esEmpresaTumbada = emp => _tumbas.some(t => _coincideEmpresaTumba(emp, t.empresa, t.fusionadaEn, t.fecha));
 
   // ── Beneficiarios de Transferencias excluidos permanentemente ───────
   // Mismo motivo que arriba: si se excluyó un beneficiario desde otro
@@ -43284,7 +43301,7 @@ function applyCloudData(cloud, opts) {
       }
     });
   }
-  (DATA.empresas_eliminadas || []).forEach(t => _purgarEmpresaDeData(t.empresa, t.fusionadaEn));
+  (DATA.empresas_eliminadas || []).forEach(t => _purgarEmpresaDeData(t.empresa, t.fusionadaEn, t.fecha));
 
   // ── Beneficiarios de Transferencias excluidos permanentemente ──────
   // Mismo criterio de merge por unión que empresas_eliminadas — nunca se
