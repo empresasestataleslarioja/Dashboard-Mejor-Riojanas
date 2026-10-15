@@ -9578,16 +9578,26 @@ function _rptTransferencias(autoPrint) {
 
   // ── Empresas asistidas financieramente vs. no asistidas ───────────
   // Mismo cálculo que el panel en pantalla (ver _calcularAsistenciaFinanciera,
-  // punto único de cálculo) — Grupo 1: reciben en este período (respeta el
-  // filtro de año del reporte, igual que el resto de esta pantalla) alguna
-  // transferencia clasificada "Gastos Operativos" o "Subsidios". Grupo 2:
-  // el resto de las empresas ACTIVAS del portafolio, por decantación —
-  // nunca se calcula aparte, así que Grupo 1 + Grupo 2 = activas siempre.
+  // punto único de cálculo), y mismos años elegidos ahí (_asistFiltroAnios
+  // — selector propio de esta sección, independiente del filtro general de
+  // año del reporte) para que el PDF coincida exactamente con lo que se ve
+  // en pantalla. Si todavía no se abrió el panel en esta sesión (nunca se
+  // inicializó _asistFiltroAnios), se usan los años que ya tenga filtrados
+  // este reporte. Grupo 1: reciben en esos años alguna transferencia
+  // clasificada "Gastos Operativos" o "Subsidios". Grupo 2: el resto de
+  // las empresas ACTIVAS del portafolio — nunca se calcula aparte, así que
+  // Grupo 1 + Grupo 2 = activas siempre.
   (function() {
-    var _calc = _calcularAsistenciaFinanciera(rows);
+    var rowsAsistRpt = (typeof _asistFiltroAnios !== 'undefined' && _asistFiltroAnios)
+      ? (DATA.transferencias || []).filter(function(t){ return _asistFiltroAnios.has(t.año); })
+      : rows;
+    var añosAsistRpt = (typeof _asistFiltroAnios !== 'undefined' && _asistFiltroAnios)
+      ? [..._asistFiltroAnios].sort(function(a,b){ return a-b; }).join(', ')
+      : añoFil;
+    var _calc = _calcularAsistenciaFinanciera(rowsAsistRpt);
     var activasRpt = _calc.activas, asistenciaPorEmpresa = _calc.porEmpresa, grupo1 = _calc.grupo1, grupo2 = _calc.grupo2;
 
-    h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año '+añoFil+'</span></div>');
+    h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año(s) '+añosAsistRpt+'</span></div>');
     h.push('<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">');
     h.push('<div class="kp"><div class="kl">Empresas activas</div><div class="kv">'+activasRpt.length+'</div><div class="ks">base: Gestión de Empresas y Rubros</div></div>');
     h.push('<div class="kp"><div class="kl">Asistidas financieramente</div><div class="kv" style="color:#185fa5">'+grupo1.length+'</div><div class="ks">'+(activasRpt.length?(grupo1.length/activasRpt.length*100).toFixed(1):'0')+'% de las activas</div></div>');
@@ -10044,6 +10054,40 @@ function _calcularAsistenciaFinanciera(rows) {
   return { activas: activas, porEmpresa: porEmpresa, grupo1: grupo1, grupo2: grupo2 };
 }
 
+// Años elegidos específicamente para clasificar "Empresas asistidas
+// financieramente" — INDEPENDIENTE del filtro general de año del panel
+// (ese sigue afectando KPIs/gráficos/tabla como siempre). Pedido
+// explícito: la clasificación no puede quedar fija mirando "alguna vez en
+// toda la historia" — tiene que poder acotarse a la situación puntual de
+// un año o de varios años elegidos. Por default arranca en el último año
+// con datos (null = todavía no se inicializó; se resuelve la primera vez
+// que se renderiza el panel, ver renderAsistenciaFinanciera).
+var _asistFiltroAnios = null;
+
+function _asistAñosDisponibles() {
+  return [...new Set((DATA.transferencias || []).map(function(t){ return t.año; }).filter(Boolean))]
+    .sort(function(a, b){ return a - b; });
+}
+
+function toggleAsistAño(y) {
+  if (!_asistFiltroAnios) _asistFiltroAnios = new Set();
+  if (_asistFiltroAnios.has(y)) {
+    if (_asistFiltroAnios.size > 1) _asistFiltroAnios.delete(y); // nunca dejar la selección vacía
+  } else {
+    _asistFiltroAnios.add(y);
+  }
+  renderAsistenciaFinanciera();
+}
+function _asistSetAñosUltimo() {
+  const disp = _asistAñosDisponibles();
+  _asistFiltroAnios = new Set(disp.length ? [disp[disp.length - 1]] : []);
+  renderAsistenciaFinanciera();
+}
+function _asistSetAñosTodos() {
+  _asistFiltroAnios = new Set(_asistAñosDisponibles());
+  renderAsistenciaFinanciera();
+}
+
 // ── Panel en pantalla (no solo el reporte imprimible) ───────────────
 // Pedido explícito: visible en el panel activo de Transferencias, los dos
 // grupos uno al lado del otro (dos columnas), con interacción para
@@ -10054,9 +10098,20 @@ function _calcularAsistenciaFinanciera(rows) {
 function renderAsistenciaFinanciera() {
   const wrap = document.getElementById('trans-asistencia-wrap');
   if (!wrap) return;
-  const rows = typeof transFiltered === 'function' ? transFiltered() : [];
+  const añosDisp = _asistAñosDisponibles();
+  if (!_asistFiltroAnios) _asistFiltroAnios = new Set(añosDisp.length ? [añosDisp[añosDisp.length - 1]] : []);
+  const rows = (DATA.transferencias || []).filter(t => _asistFiltroAnios.has(t.año));
   const { activas, porEmpresa, grupo1, grupo2 } = _calcularAsistenciaFinanciera(rows);
   const fmt = v => '$ ' + Math.round(v || 0).toLocaleString('es-AR');
+
+  const añosSel = [..._asistFiltroAnios].sort((a,b)=>a-b);
+  const chipsAnios = añosDisp.map(y => {
+    const on = _asistFiltroAnios.has(y);
+    return `<span onclick="toggleAsistAño(${y})" style="padding:3px 9px;border-radius:3px;font-size:9px;
+      font-family:var(--mono);cursor:pointer;white-space:nowrap;
+      background:${on?'rgba(24,95,165,.15)':'var(--s2)'};border:1px solid ${on?'#185fa5':'var(--bd2)'};
+      color:${on?'#185fa5':'var(--dim)'}">${y}</span>`;
+  }).join('');
 
   const filaGrupo1 = e => {
     const d = porEmpresa[e];
@@ -10089,6 +10144,15 @@ function renderAsistenciaFinanciera() {
   const filaGrupo2 = e => `<div style="padding:5px 8px;border-bottom:1px solid var(--bd);font-size:9.5px;color:var(--text)">${e}</div>`;
 
   wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+      <span style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">Año(s):</span>
+      ${chipsAnios}
+      <button onclick="_asistSetAñosUltimo()" style="padding:3px 8px;border-radius:3px;font-size:8.5px;
+        font-family:var(--mono);cursor:pointer;background:transparent;border:1px solid var(--bd2);color:var(--dim)">Último año</button>
+      <button onclick="_asistSetAñosTodos()" style="padding:3px 8px;border-radius:3px;font-size:8.5px;
+        font-family:var(--mono);cursor:pointer;background:transparent;border:1px solid var(--bd2);color:var(--dim)">Todos</button>
+      <span style="font-size:8px;color:var(--dim);margin-left:auto">La clasificación de abajo usa solo ${añosSel.length>1?'estos años':'este año'}: ${añosSel.join(', ')||'—'}</span>
+    </div>
     <div style="display:flex;gap:7px;margin:8px 0">
       <div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:8px;text-align:center">
         <div style="font-size:7.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em">Empresas activas</div>
