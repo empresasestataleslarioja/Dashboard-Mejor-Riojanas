@@ -9611,7 +9611,9 @@ function _rptTransferencias(autoPrint) {
       h.push('<div class="tw"><table><thead><tr><th>Empresa</th><th>Gastos Operativos</th><th>Subsidios</th><th>Total</th><th>Meses/año</th></tr></thead><tbody>');
       grupo1.forEach(function(e) {
         var d = asistenciaPorEmpresa[e];
-        var mesesTxt = _calc.añosEval.map(function(y){ return y+': '+((_calc.mesesPorEmpresaAño[e]&&_calc.mesesPorEmpresaAño[e][y])?_calc.mesesPorEmpresaAño[e][y].size:0)+'/12'; }).join(' · ');
+        var mesesTxt = d.heredadoDe
+          ? 'subsidiaria de '+d.heredadoDe
+          : _calc.añosEval.map(function(y){ return y+': '+((_calc.mesesPorEmpresaAño[e]&&_calc.mesesPorEmpresaAño[e][y])?_calc.mesesPorEmpresaAño[e][y].size:0)+'/12'; }).join(' · ');
         h.push('<tr><td>'+e+'</td><td>'+(d['Gastos Operativos']?fM2(d['Gastos Operativos']):'—')+'</td><td>'+(d['Subsidios']?fM2(d['Subsidios']):'—')+'</td><td>'+fM2(d.total)+'</td><td style="font-size:7.5pt">'+mesesTxt+'</td></tr>');
       });
       h.push('</tbody></table></div>');
@@ -9621,7 +9623,10 @@ function _rptTransferencias(autoPrint) {
 
     h.push('<div style="font-size:9px;font-weight:700;color:#777;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 2 — No asistidas financieramente ('+grupo2.length+')</div>');
     h.push(grupo2.length
-      ? '<div style="font-size:9pt;line-height:1.8;color:#333">'+grupo2.join(' · ')+'</div>'
+      ? '<div style="font-size:9pt;line-height:1.8;color:#333">'+grupo2.map(function(e){
+          var hd = asistenciaPorEmpresa[e] && asistenciaPorEmpresa[e].heredadoDe;
+          return hd ? e+' (subsidiaria de '+hd+')' : e;
+        }).join(' · ')+'</div>'
       : '<p style="color:#999;font-size:8pt;padding:4px">Todas las empresas activas están asistidas.</p>');
     h.push('<div style="font-size:7.5pt;color:#999;margin-top:8px;font-family:monospace">Grupo 1 ('+grupo1.length+') + Grupo 2 ('+grupo2.length+') = '+(grupo1.length+grupo2.length)+' = '+activasRpt.length+' empresas activas</div>');
     h.push('</div>');
@@ -10035,6 +10040,36 @@ function _resolverEmpresaTransferencia(t) {
 // elegidos; si falla en uno solo, la empresa no cuenta como asistida.
 var CATS_ASISTENCIA_FINANCIERA = ['Gastos Operativos', 'Subsidios'];
 var MESES_MIN_ASISTENCIA = 6;
+
+// Empresas que, a los fines de esta clasificación ÚNICAMENTE, deben
+// ubicarse en el mismo grupo que otra empresa "madre" en vez de evaluarse
+// por sus propias transferencias — pedido explícito: "Vivero San
+// Gabriel" es subsidiaria de "Vivero del Oeste Riojano" y tiene que
+// quedar en el grupo de ésta (asistida o no asistida), sin importar lo
+// que digan sus propias transferencias. Comparación tolerante
+// (_mismoNombreEmpresa) para no depender de que el nombre esté escrito
+// exactamente igual en rubros/portafolio.
+var ASISTENCIA_SUBSIDIARIAS = [
+  { subsidiaria: 'VIVERO SAN GABRIEL', madre: 'VIVERO DEL OESTE RIOJANO' },
+];
+
+// Aplica las herencias de ASISTENCIA_SUBSIDIARIAS sobre un Set de
+// empresas "en grupo 1" (muta `enGrupo1` in-place). Si alguna de las dos
+// (subsidiaria o madre) no está activa/no existe en este portafolio, esa
+// relación simplemente no se aplica. `porEmpresa` se completa con una
+// entrada vacía + `heredadoDe` para que la subsidiaria no rompa el
+// detalle en pantalla cuando entra al Grupo 1 sin transferencias propias.
+function _aplicarSubsidiariasAsistencia(activas, enGrupo1, porEmpresa) {
+  ASISTENCIA_SUBSIDIARIAS.forEach(function(rel) {
+    var subEmp = activas.find(function(e){ return _mismoNombreEmpresa(e, rel.subsidiaria); });
+    var madreEmp = activas.find(function(e){ return _mismoNombreEmpresa(e, rel.madre); });
+    if (!subEmp || !madreEmp || subEmp === madreEmp) return;
+    if (!porEmpresa[subEmp]) porEmpresa[subEmp] = { 'Gastos Operativos': 0, 'Subsidios': 0, total: 0, filas: [] };
+    porEmpresa[subEmp].heredadoDe = madreEmp;
+    if (enGrupo1.has(madreEmp)) enGrupo1.add(subEmp); else enGrupo1.delete(subEmp);
+  });
+}
+
 function _calcularAsistenciaFinanciera(rows, añosSeleccionados) {
   var allEmps = [...new Set([
     ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
@@ -10079,9 +10114,12 @@ function _calcularAsistenciaFinanciera(rows, añosSeleccionados) {
     return añosEval.every(function(y){ return _mesesEnAño(emp, y) >= MESES_MIN_ASISTENCIA; });
   }
 
-  var grupo1 = activas.filter(function(e){ return porEmpresa[e] && _cumpleContinuidad(e); })
-    .sort(function(a,b){ return porEmpresa[b].total - porEmpresa[a].total; });
-  var grupo2 = activas.filter(function(e){ return !(porEmpresa[e] && _cumpleContinuidad(e)); });
+  var enGrupo1 = new Set(activas.filter(function(e){ return porEmpresa[e] && _cumpleContinuidad(e); }));
+  _aplicarSubsidiariasAsistencia(activas, enGrupo1, porEmpresa);
+
+  var grupo1 = activas.filter(function(e){ return enGrupo1.has(e); })
+    .sort(function(a,b){ return (porEmpresa[b]?porEmpresa[b].total:0) - (porEmpresa[a]?porEmpresa[a].total:0); });
+  var grupo2 = activas.filter(function(e){ return !enGrupo1.has(e); });
 
   return { activas: activas, porEmpresa: porEmpresa, grupo1: grupo1, grupo2: grupo2, mesesPorEmpresaAño: mesesPorEmpresaAño, añosEval: añosEval };
 }
@@ -10153,10 +10191,11 @@ function renderAsistenciaFinanciera() {
       <div onclick="toggleDetalleAsistencia('${detId}')"
         style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;cursor:pointer"
         onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='transparent'">
-        <span style="font-size:9.5px;color:var(--text)">▸ ${e}</span>
+        <span style="font-size:9.5px;color:var(--text)">▸ ${e}${d.heredadoDe?' <span style="color:var(--dim);font-size:8px">(subsidiaria)</span>':''}</span>
         <span style="font-size:9px;color:#185fa5;font-family:var(--mono)">${fmt(d.total)}</span>
       </div>
       <div id="${detId}" style="display:none;padding:4px 8px 8px 20px;background:var(--s2)">
+        ${d.heredadoDe ? `<div style="font-size:8px;color:#185fa5;margin-bottom:4px">↳ Clasificada igual que "${d.heredadoDe}" por ser su subsidiaria — no depende de sus propias transferencias.</div>` : ''}
         <div style="font-size:8px;color:var(--dim);margin-bottom:4px">
           ${añosEval.map(y => `${y}: ${mesesEnAño(e,y)}/12 meses con transferencias`).join(' · ')}
         </div>
@@ -10177,7 +10216,13 @@ function renderAsistenciaFinanciera() {
       </div>
     </div>`;
   };
-  const filaGrupo2 = e => `<div style="padding:5px 8px;border-bottom:1px solid var(--bd);font-size:9.5px;color:var(--text)">${e}</div>`;
+  const filaGrupo2 = e => {
+    const heredadoDe = porEmpresa[e]?.heredadoDe;
+    return `<div style="padding:5px 8px;border-bottom:1px solid var(--bd);font-size:9.5px;color:var(--text)"
+      ${heredadoDe ? `title="Clasificada igual que &quot;${heredadoDe}&quot; por ser su subsidiaria"` : ''}>
+      ${e}${heredadoDe ? ' <span style="color:var(--dim);font-size:8px">(subsidiaria de '+heredadoDe+')</span>' : ''}
+    </div>`;
+  };
 
   wrap.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
