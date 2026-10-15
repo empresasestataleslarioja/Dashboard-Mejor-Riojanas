@@ -9591,10 +9591,11 @@ function _rptTransferencias(autoPrint) {
     var rowsAsistRpt = (typeof _asistFiltroAnios !== 'undefined' && _asistFiltroAnios)
       ? (DATA.transferencias || []).filter(function(t){ return _asistFiltroAnios.has(t.año); })
       : rows;
-    var añosAsistRpt = (typeof _asistFiltroAnios !== 'undefined' && _asistFiltroAnios)
-      ? [..._asistFiltroAnios].sort(function(a,b){ return a-b; }).join(', ')
-      : añoFil;
-    var _calc = _calcularAsistenciaFinanciera(rowsAsistRpt);
+    var añosSetAsistRpt = (typeof _asistFiltroAnios !== 'undefined' && _asistFiltroAnios)
+      ? _asistFiltroAnios
+      : new Set(rowsAsistRpt.map(function(t){ return t.año; }).filter(Boolean));
+    var añosAsistRpt = [...añosSetAsistRpt].sort(function(a,b){ return a-b; }).join(', ') || añoFil;
+    var _calc = _calcularAsistenciaFinanciera(rowsAsistRpt, añosSetAsistRpt);
     var activasRpt = _calc.activas, asistenciaPorEmpresa = _calc.porEmpresa, grupo1 = _calc.grupo1, grupo2 = _calc.grupo2;
 
     h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año(s) '+añosAsistRpt+'</span></div>');
@@ -9605,15 +9606,17 @@ function _rptTransferencias(autoPrint) {
     h.push('</div>');
 
     h.push('<div style="font-size:9px;font-weight:700;color:#185fa5;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 1 — Asistidas financieramente ('+grupo1.length+')</div>');
+    h.push('<div style="font-size:7.5pt;color:#888;margin-bottom:4px">Requiere al menos '+MESES_MIN_ASISTENCIA+' de 12 meses con transferencias en cada año listado — una transferencia aislada en pocos meses no alcanza.</div>');
     if (grupo1.length) {
-      h.push('<div class="tw"><table><thead><tr><th>Empresa</th><th>Gastos Operativos</th><th>Subsidios</th><th>Total</th></tr></thead><tbody>');
+      h.push('<div class="tw"><table><thead><tr><th>Empresa</th><th>Gastos Operativos</th><th>Subsidios</th><th>Total</th><th>Meses/año</th></tr></thead><tbody>');
       grupo1.forEach(function(e) {
         var d = asistenciaPorEmpresa[e];
-        h.push('<tr><td>'+e+'</td><td>'+(d['Gastos Operativos']?fM2(d['Gastos Operativos']):'—')+'</td><td>'+(d['Subsidios']?fM2(d['Subsidios']):'—')+'</td><td>'+fM2(d.total)+'</td></tr>');
+        var mesesTxt = _calc.añosEval.map(function(y){ return y+': '+((_calc.mesesPorEmpresaAño[e]&&_calc.mesesPorEmpresaAño[e][y])?_calc.mesesPorEmpresaAño[e][y].size:0)+'/12'; }).join(' · ');
+        h.push('<tr><td>'+e+'</td><td>'+(d['Gastos Operativos']?fM2(d['Gastos Operativos']):'—')+'</td><td>'+(d['Subsidios']?fM2(d['Subsidios']):'—')+'</td><td>'+fM2(d.total)+'</td><td style="font-size:7.5pt">'+mesesTxt+'</td></tr>');
       });
       h.push('</tbody></table></div>');
     } else {
-      h.push('<p style="color:#999;font-size:8pt;padding:4px">Ninguna empresa activa recibió Gastos Operativos ni Subsidios en este período.</p>');
+      h.push('<p style="color:#999;font-size:8pt;padding:4px">Ninguna empresa activa cumple el mínimo de meses con Gastos Operativos/Subsidios en este período.</p>');
     }
 
     h.push('<div style="font-size:9px;font-weight:700;color:#777;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 2 — No asistidas financieramente ('+grupo2.length+')</div>');
@@ -10012,7 +10015,7 @@ function _resolverEmpresaTransferencia(t) {
 }
 
 // ── Empresas asistidas financieramente (Gastos Operativos/Subsidios) vs.
-// no asistidas, por decantación ────────────────────────────────────
+// no asistidas ──────────────────────────────────────────────────────
 // Punto único de cálculo — usado tanto por el panel en pantalla
 // (renderAsistenciaFinanciera) como por el reporte imprimible
 // (_rptTransferencias), para que ambos coincidan siempre. Grupo 1 + Grupo
@@ -10021,8 +10024,18 @@ function _resolverEmpresaTransferencia(t) {
 // filtrando las marcadas inactivas), siempre, por construcción: Grupo 2
 // nunca se calcula aparte, es literalmente "las activas que no están en
 // el Grupo 1".
+//
+// Criterio de "asistida" — pedido explícito: NO alcanza con una sola
+// transferencia aislada en un solo mes del año; tiene que haber
+// continuidad. Umbral acordado: al menos MESES_MIN_ASISTENCIA (6, la
+// mitad del año) meses DISTINTOS con alguna transferencia de Gastos
+// Operativos/Subsidios, y ese umbral se evalúa POR AÑO por separado (no
+// sumando meses entre años) — si se eligen varios años a la vez (ver
+// _asistFiltroAnios), tiene que cumplirse en CADA uno de los años
+// elegidos; si falla en uno solo, la empresa no cuenta como asistida.
 var CATS_ASISTENCIA_FINANCIERA = ['Gastos Operativos', 'Subsidios'];
-function _calcularAsistenciaFinanciera(rows) {
+var MESES_MIN_ASISTENCIA = 6;
+function _calcularAsistenciaFinanciera(rows, añosSeleccionados) {
   var allEmps = [...new Set([
     ...Object.keys(typeof rubros !== 'undefined' ? rubros : {}),
     ...Object.keys(DATA.fact || {}), ...Object.keys(DATA.sit || {}),
@@ -10035,8 +10048,11 @@ function _calcularAsistenciaFinanciera(rows) {
   // transferencias por empresa" del reporte: _beneficiarioCanonico) y
   // conserva las filas originales de DATA.transferencias (no copias) para
   // que, en el panel en pantalla, se pueda ubicar su índice real
-  // (DATA.transferencias.indexOf) y editar la categoría ahí mismo.
+  // (DATA.transferencias.indexOf) y editar la categoría ahí mismo. En
+  // paralelo arma mesesPorEmpresaAño (emp → año → Set de meses distintos)
+  // para el umbral de continuidad.
   var porEmpresa = {};
+  var mesesPorEmpresaAño = {};
   (rows || []).forEach(function(r) {
     if (CATS_ASISTENCIA_FINANCIERA.indexOf(r.categoria) === -1) return;
     var emp = _beneficiarioCanonico(r.beneficiario);
@@ -10045,13 +10061,29 @@ function _calcularAsistenciaFinanciera(rows) {
     porEmpresa[emp][r.categoria] = (porEmpresa[emp][r.categoria] || 0) + (r.importe || 0);
     porEmpresa[emp].total += (r.importe || 0);
     porEmpresa[emp].filas.push(r);
+
+    if (!mesesPorEmpresaAño[emp]) mesesPorEmpresaAño[emp] = {};
+    if (!mesesPorEmpresaAño[emp][r.año]) mesesPorEmpresaAño[emp][r.año] = new Set();
+    if (r.mes) mesesPorEmpresaAño[emp][r.año].add(r.mes);
   });
 
-  var grupo1 = activas.filter(function(e){ return porEmpresa[e]; })
-    .sort(function(a,b){ return porEmpresa[b].total - porEmpresa[a].total; });
-  var grupo2 = activas.filter(function(e){ return !porEmpresa[e]; });
+  var añosEval = (añosSeleccionados && añosSeleccionados.size)
+    ? [...añosSeleccionados]
+    : [...new Set((rows || []).map(function(r){ return r.año; }).filter(Boolean))];
 
-  return { activas: activas, porEmpresa: porEmpresa, grupo1: grupo1, grupo2: grupo2 };
+  function _mesesEnAño(emp, y) {
+    return (mesesPorEmpresaAño[emp] && mesesPorEmpresaAño[emp][y]) ? mesesPorEmpresaAño[emp][y].size : 0;
+  }
+  function _cumpleContinuidad(emp) {
+    if (!añosEval.length) return false;
+    return añosEval.every(function(y){ return _mesesEnAño(emp, y) >= MESES_MIN_ASISTENCIA; });
+  }
+
+  var grupo1 = activas.filter(function(e){ return porEmpresa[e] && _cumpleContinuidad(e); })
+    .sort(function(a,b){ return porEmpresa[b].total - porEmpresa[a].total; });
+  var grupo2 = activas.filter(function(e){ return !(porEmpresa[e] && _cumpleContinuidad(e)); });
+
+  return { activas: activas, porEmpresa: porEmpresa, grupo1: grupo1, grupo2: grupo2, mesesPorEmpresaAño: mesesPorEmpresaAño, añosEval: añosEval };
 }
 
 // Años elegidos específicamente para clasificar "Empresas asistidas
@@ -10101,8 +10133,9 @@ function renderAsistenciaFinanciera() {
   const añosDisp = _asistAñosDisponibles();
   if (!_asistFiltroAnios) _asistFiltroAnios = new Set(añosDisp.length ? [añosDisp[añosDisp.length - 1]] : []);
   const rows = (DATA.transferencias || []).filter(t => _asistFiltroAnios.has(t.año));
-  const { activas, porEmpresa, grupo1, grupo2 } = _calcularAsistenciaFinanciera(rows);
+  const { activas, porEmpresa, grupo1, grupo2, mesesPorEmpresaAño, añosEval } = _calcularAsistenciaFinanciera(rows, _asistFiltroAnios);
   const fmt = v => '$ ' + Math.round(v || 0).toLocaleString('es-AR');
+  const mesesEnAño = (e, y) => (mesesPorEmpresaAño[e] && mesesPorEmpresaAño[e][y]) ? mesesPorEmpresaAño[e][y].size : 0;
 
   const añosSel = [..._asistFiltroAnios].sort((a,b)=>a-b);
   const chipsAnios = añosDisp.map(y => {
@@ -10124,6 +10157,9 @@ function renderAsistenciaFinanciera() {
         <span style="font-size:9px;color:#185fa5;font-family:var(--mono)">${fmt(d.total)}</span>
       </div>
       <div id="${detId}" style="display:none;padding:4px 8px 8px 20px;background:var(--s2)">
+        <div style="font-size:8px;color:var(--dim);margin-bottom:4px">
+          ${añosEval.map(y => `${y}: ${mesesEnAño(e,y)}/12 meses con transferencias`).join(' · ')}
+        </div>
         ${d.filas.map(r => {
           const idx = DATA.transferencias.indexOf(r);
           return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed var(--bd);font-size:8.5px">
@@ -10151,7 +10187,7 @@ function renderAsistenciaFinanciera() {
         font-family:var(--mono);cursor:pointer;background:transparent;border:1px solid var(--bd2);color:var(--dim)">Último año</button>
       <button onclick="_asistSetAñosTodos()" style="padding:3px 8px;border-radius:3px;font-size:8.5px;
         font-family:var(--mono);cursor:pointer;background:transparent;border:1px solid var(--bd2);color:var(--dim)">Todos</button>
-      <span style="font-size:8px;color:var(--dim);margin-left:auto">La clasificación de abajo usa solo ${añosSel.length>1?'estos años':'este año'}: ${añosSel.join(', ')||'—'}</span>
+      <span style="font-size:8px;color:var(--dim);margin-left:auto">Asistida = al menos ${MESES_MIN_ASISTENCIA}/12 meses con transferencias en ${añosSel.length>1?'TODOS estos años':'este año'}: ${añosSel.join(', ')||'—'}</span>
     </div>
     <div style="display:flex;gap:7px;margin:8px 0">
       <div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:8px;text-align:center">
