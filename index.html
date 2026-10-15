@@ -9523,11 +9523,11 @@ function _rptTransferencias(autoPrint) {
   // _transferenciasExcesivas), mostrado directamente en el reporte.
   var _excesivas = _transferenciasExcesivas();
   var excesivasHtml = _excesivas.length
-    ? '<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
+    ? '<div id="sec_excesivas" style="margin:0 0 12px;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">'
       + '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ' + _excesivas.length + ' transferencia' + (_excesivas.length!==1?'s':'') + ' que superan el 50% de la facturación anual de la empresa</div>'
       + '<div style="font-size:9.5px;color:#7a2a20;line-height:1.6">' + _excesivas.map(function(x){ return x.emp+' '+x.año+' ('+(x.pct*100).toFixed(0)+'%)'; }).join(' · ') + '</div>'
       + '</div>'
-    : '<div style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
+    : '<div id="sec_excesivas" style="margin:0 0 12px;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">'
       + '✓ Ninguna transferencia supera el 50% de la facturación anual de la empresa.</div>';
   h.push(excesivasHtml);
 
