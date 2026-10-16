@@ -3959,7 +3959,7 @@ self.onmessage = async (e) => {
         <div class="rowfull card" style="margin-bottom:12px">
           <div class="card-hd">
             <span class="card-hd-title">🏢 Empresas asistidas financieramente</span>
-            <span class="card-hd-unit">Gastos Operativos / Subsidios · click en una empresa del Grupo 1 para ver el detalle</span>
+            <span class="card-hd-unit">Gastos Operativos / Subsidios · click en una empresa para ver el detalle</span>
           </div>
           <div id="trans-asistencia-wrap"></div>
         </div>
@@ -10175,6 +10175,21 @@ function renderAsistenciaFinanciera() {
   const fmt = v => '$ ' + Math.round(v || 0).toLocaleString('es-AR');
   const mesesEnAño = (e, y) => (mesesPorEmpresaAño[e] && mesesPorEmpresaAño[e][y]) ? mesesPorEmpresaAño[e][y].size : 0;
 
+  // Para el Grupo 2 — pedido explícito: "no asistida financieramente" no
+  // significa necesariamente "sin ninguna transferencia", solo que no
+  // tiene (o no con suficiente continuidad) Gastos Operativos/Subsidios.
+  // Agrupa, en el mismo período elegido, las transferencias de CUALQUIER
+  // OTRA categoría, para poder constatarlo con un clic — y reclasificarlas
+  // ahí mismo si en realidad correspondían a Gastos Operativos/Subsidios.
+  const otrasPorEmpresa = {};
+  rows.forEach(r => {
+    if (CATS_ASISTENCIA_FINANCIERA.indexOf(r.categoria) !== -1) return;
+    const emp = _beneficiarioCanonico(r.beneficiario);
+    if (!emp) return;
+    if (!otrasPorEmpresa[emp]) otrasPorEmpresa[emp] = [];
+    otrasPorEmpresa[emp].push(r);
+  });
+
   const añosSel = [..._asistFiltroAnios].sort((a,b)=>a-b);
   const chipsAnios = añosDisp.map(y => {
     const on = _asistFiltroAnios.has(y);
@@ -10218,9 +10233,40 @@ function renderAsistenciaFinanciera() {
   };
   const filaGrupo2 = e => {
     const heredadoDe = porEmpresa[e]?.heredadoDe;
-    return `<div style="padding:5px 8px;border-bottom:1px solid var(--bd);font-size:9.5px;color:var(--text)"
-      ${heredadoDe ? `title="Clasificada igual que &quot;${heredadoDe}&quot; por ser su subsidiaria"` : ''}>
-      ${e}${heredadoDe ? ' <span style="color:var(--dim);font-size:8px">(subsidiaria de '+heredadoDe+')</span>' : ''}
+    const otras = otrasPorEmpresa[e] || [];
+    const d = porEmpresa[e]; // puede existir igual (Gastos Operativos/Subsidios sin continuidad suficiente)
+    const detId = 'asist2-det-' + e.replace(/[^a-zA-Z0-9]/g, '_');
+    return `<div style="border-bottom:1px solid var(--bd)">
+      <div onclick="toggleDetalleAsistencia('${detId}')"
+        style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;cursor:pointer"
+        onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='transparent'"
+        ${heredadoDe ? `title="Clasificada igual que &quot;${heredadoDe}&quot; por ser su subsidiaria"` : ''}>
+        <span style="font-size:9.5px;color:var(--text)">▸ ${e}${heredadoDe ? ' <span style="color:var(--dim);font-size:8px">(subsidiaria de '+heredadoDe+')</span>' : ''}</span>
+        <span style="font-size:8px;color:var(--dim);font-family:var(--mono)">${otras.length ? otras.length+' transf. de otra categoría' : 'sin otras transferencias'}</span>
+      </div>
+      <div id="${detId}" style="display:none;padding:4px 8px 8px 20px;background:var(--s2)">
+        ${heredadoDe ? `<div style="font-size:8px;color:var(--dim);margin-bottom:4px">↳ Clasificada igual que "${heredadoDe}" por ser su subsidiaria.</div>` : ''}
+        <div style="font-size:8px;color:var(--dim);margin-bottom:4px">
+          ${d ? añosEval.map(y => `${y}: ${mesesEnAño(e,y)}/12 meses con Gastos Operativos/Subsidios`).join(' · ')
+              : 'Sin transferencias de Gastos Operativos/Subsidios en el período elegido.'}
+        </div>
+        <div style="font-size:8px;color:#777;margin:4px 0 2px;text-transform:uppercase;letter-spacing:.04em">Otras clasificaciones (${otras.length})</div>
+        ${otras.length ? otras.map(r => {
+          const idx = DATA.transferencias.indexOf(r);
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px dashed var(--bd);font-size:8.5px">
+            <span style="color:var(--dim);min-width:55px;white-space:nowrap">${TRANS_MESES[r.mes]||'s/mes'} ${r.año||''}</span>
+            <span style="color:#777;min-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.categoria||'Sin Clasificar'}</span>
+            <span style="color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.saf||'')+' · '+(r.organismo||'')}">${r.saf||'—'} · ${r.organismo||'—'}</span>
+            <select onchange="cambiarCategoriaTrans(${idx}, this.value); renderAsistenciaFinanciera()"
+              title="Reclasificar esta transferencia"
+              style="background:var(--s1);border:1px solid var(--bd2);border-radius:2px;color:var(--text);
+              font-size:8px;font-family:var(--mono);padding:1px 2px">
+              ${TRANS_CATS.map(c => `<option value="${c}" ${c===r.categoria?'selected':''}>${c}</option>`).join('')}
+            </select>
+            <span style="font-family:var(--mono);color:var(--text);min-width:65px;text-align:right;white-space:nowrap">${fmt(r.importe)}</span>
+          </div>`;
+        }).join('') : '<div style="font-size:8.5px;color:var(--dim)">Sin transferencias de otra clasificación en el período elegido.</div>'}
+      </div>
     </div>`;
   };
 
