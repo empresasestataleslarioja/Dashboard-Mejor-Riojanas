@@ -18598,7 +18598,11 @@ function _autoridadesEmpresaOptions() {
 // el listado de autoridades con el estado activa/inactiva de la empresa).
 function _autoridadEsVigente(a, hoy) {
   if (a.hasta && a.hasta < hoy) return false;
-  if (empresasInactivas[a.empresa]) return false;
+  // Comparación tolerante (ver _nombreCanonicoAutoridad): una autoridad
+  // cargada como "LAR RENOVABLES SA" debe heredar el estado activa/inactiva
+  // de "LAR RENOVABLES" (su nombre correcto en el portafolio), no quedar
+  // sin vincular por una comparación exacta de claves.
+  if (empresasInactivas[_nombreCanonicoAutoridad(a.empresa)]) return false;
   return true;
 }
 
@@ -18608,7 +18612,7 @@ function _autoridadEsVigente(a, hoy) {
 function _empresasActivasSinAutoridadVigente() {
   const hoy = new Date().toISOString().slice(0,10);
   const conAutoridad = new Set(
-    (DATA.autoridades || []).filter(a => _autoridadEsVigente(a, hoy)).map(a => a.empresa)
+    (DATA.autoridades || []).filter(a => _autoridadEsVigente(a, hoy)).map(a => _nombreCanonicoAutoridad(a.empresa))
   );
   return Object.keys(rubros || {})
     .filter(emp => !empresasInactivas[emp] && !conAutoridad.has(emp))
@@ -18645,7 +18649,13 @@ function buildAutoridades() {
   const busqNombreRaw = document.getElementById('autoridades-busq-nombre')?.value || '';
   const busqNombre = _normBusq(busqNombreRaw.trim());
 
-  let filas = (DATA.autoridades || []).map((a, idx) => ({ ...a, _idx: idx }));
+  // El nombre de empresa se normaliza al que figura en el portafolio (ver
+  // _nombreCanonicoAutoridad) antes de filtrar/agrupar — una autoridad
+  // cargada como "LAR RENOVABLES SA" debe vincularse y mostrarse como "LAR
+  // RENOVABLES" (su nombre correcto), y heredar su estado activa/inactiva,
+  // en vez de quedar "huérfana" por una comparación exacta de claves. El
+  // registro real en DATA.autoridades (accedido por _idx) no se toca.
+  let filas = (DATA.autoridades || []).map((a, idx) => ({ ...a, _idx: idx, empresa: _nombreCanonicoAutoridad(a.empresa) }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
   if (busqNombre) {
     // Buscando por nombre se ignora el filtro de vigencia — el objetivo es
@@ -19019,7 +19029,11 @@ function _rptAutoridades() {
   const hoy         = new Date().toISOString().slice(0,10);
   const esVigente   = a => _autoridadEsVigente(a, hoy);
 
-  let filas = (DATA.autoridades || []).slice();
+  // Igual que en buildAutoridades: normalizar al nombre de portafolio antes
+  // de filtrar/agrupar, para que una autoridad cargada como "LAR RENOVABLES
+  // SA" se muestre y agrupe como "LAR RENOVABLES" (su nombre correcto) y
+  // herede su estado activa/inactiva.
+  let filas = (DATA.autoridades || []).map(a => ({ ...a, empresa: _nombreCanonicoAutoridad(a.empresa) }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
   if (!verHistorial) filas = filas.filter(esVigente);
   // Orden: empresa → jerarquía del cargo (ver ORDEN_CARGOS_RPT_AUTORIDADES)
@@ -21414,7 +21428,7 @@ function _informeEjecutivoRender(emp) {
   // Informe Ejecutivo pese a ser justo el tipo de dato de portada que un
   // informe institucional debería mostrar.
   const inst = DATA.institucional?.[emp] || {};
-  const autEmp = (DATA.autoridades || []).filter(a => a.empresa === emp);
+  const autEmp = (DATA.autoridades || []).filter(a => _autoridadPerteneceAEmpresa(a, emp));
   const autVigente = autEmp.find(a => !a.hasta) ||
     autEmp.slice().sort((a,b) => String(b.desde||'').localeCompare(String(a.desde||'')))[0] || null;
   const notaEmp = DATA.notas?.[emp] || '';
@@ -26145,6 +26159,27 @@ function _mismoNombreEmpresa(a, b) {
 function _balancePerteneceAEmpresa(b, emp) {
   if (!b || !emp) return false;
   return _mismoNombreEmpresa(b.empresa, emp) || _mismoNombreEmpresa(b.vinculada, emp);
+}
+
+// ── ¿Esta autoridad pertenece a esta empresa del portafolio? ──────────
+// Mismo problema y mismo criterio que _balancePerteneceAEmpresa: una
+// autoridad cargada bajo una variante de grafía (ej. "LAR RENOVABLES SA"
+// en vez de "LAR RENOVABLES", el nombre correcto que figura en el
+// portafolio) quedaba "huérfana" — no aparecía vinculada a esa empresa en
+// el selector de Autoridades, no heredaba su estado activa/inactiva, y no
+// se mostraba en el Informe Ejecutivo — porque todas esas comparaciones
+// eran exactas (a.empresa === emp).
+function _autoridadPerteneceAEmpresa(a, emp) {
+  if (!a || !emp) return false;
+  return _mismoNombreEmpresa(a.empresa, emp);
+}
+
+// Nombre tal como figura en el portafolio (rubros) para una autoridad
+// cargada bajo cualquier variante de grafía — si ninguna empresa del
+// portafolio coincide, se devuelve el nombre tal cual está cargado.
+function _nombreCanonicoAutoridad(empresaAutoridad) {
+  const match = Object.keys(rubros || {}).find(e => _mismoNombreEmpresa(e, empresaAutoridad));
+  return match || empresaAutoridad;
 }
 
 // ── Gap detection ───────────────────────────────────────────
