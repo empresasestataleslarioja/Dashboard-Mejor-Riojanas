@@ -6699,6 +6699,9 @@ function imprimirPanelActivo() {
       + '<select id="_rpt_estado_filtro" style="display:none;padding:3px 8px;font-size:8pt;font-family:monospace;background:#222;color:#ddd;border:1px solid #444;border-radius:3px;cursor:pointer">'
       + '<option value="todas">Todas</option><option value="activas">Solo activas</option><option value="inactivas">Solo inactivas</option>'
       + '</select>'
+      + '<label id="_rpt_ocultar_montos_lbl" style="display:none;align-items:center;gap:4px;color:#555;font-size:8pt;font-family:monospace;cursor:pointer" title="Oculta importes y detalle operativo del cuadro de Empresas asistidas financieramente, para poder compartirlo sin datos sensibles">'
+      + '<input type="checkbox" id="_rpt_chk_ocultar_montos" style="cursor:pointer">Ocultar montos'
+      + '</label>'
       + '<span style="color:#555;font-size:8pt;font-family:monospace">Secciones:</span>'
       + '<div id="_rpt_chk_wrap" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'
       + '<div style="display:flex;gap:8px" id="_rpt_bar_btns"></div>'
@@ -6800,6 +6803,31 @@ function imprimirPanelActivo() {
           selEstado._wired = true;
           selEstado.onchange = function() {
             window._rptEstadoFiltro = this.value;
+            if (typeof imprimirPanelActivo === 'function') {
+              var ov = document.getElementById('_rpt_overlay');
+              if (ov) ov.style.display = 'none';
+              imprimirPanelActivo();
+            }
+          };
+        }
+      }
+    }
+    // Checkbox "Ocultar montos" — solo tiene sentido en el reporte de
+    // Transferencias (donde vive el cuadro de Empresas asistidas
+    // financieramente); se oculta en el resto. Permite compartir ese
+    // cuadro (quién está asistido y quién no) sin exponer importes ni el
+    // detalle operativo que lo acompaña — ver sec_asistencia en _rptTransferencias().
+    var chkOcultarMontos = document.getElementById('_rpt_chk_ocultar_montos');
+    var lblOcultarMontos = document.getElementById('_rpt_ocultar_montos_lbl');
+    if (chkOcultarMontos && lblOcultarMontos) {
+      var esTransferencias = (typeof panelId !== 'undefined' && panelId === 'transferencias');
+      lblOcultarMontos.style.display = esTransferencias ? 'flex' : 'none';
+      if (esTransferencias) {
+        chkOcultarMontos.checked = !!window._rptOcultarMontosAsistencia;
+        if (!chkOcultarMontos._wired) {
+          chkOcultarMontos._wired = true;
+          chkOcultarMontos.onchange = function() {
+            window._rptOcultarMontosAsistencia = chkOcultarMontos.checked;
             if (typeof imprimirPanelActivo === 'function') {
               var ov = document.getElementById('_rpt_overlay');
               if (ov) ov.style.display = 'none';
@@ -9605,36 +9633,78 @@ function _rptTransferencias(autoPrint) {
     var _calc = _calcularAsistenciaFinanciera(rowsAsistRpt, añoSetAsistRpt);
     var activasRpt = _calc.activas, asistenciaPorEmpresa = _calc.porEmpresa, grupo1 = _calc.grupo1, grupo2 = _calc.grupo2;
 
-    h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año '+añosAsistRpt+'</span></div>');
+    // Mismas "otras categorías" por empresa que el panel (ver otrasPorEmpresa
+    // dentro de renderAsistenciaFinanciera) — para que el Grupo 2 impreso
+    // muestre el mismo indicador de "X transf. de otra categoría" que se ve
+    // en pantalla sin necesidad de hacer clic.
+    var otrasPorEmpresaRpt = {};
+    rowsAsistRpt.forEach(function(r) {
+      if (CATS_ASISTENCIA_FINANCIERA.indexOf(r.categoria) !== -1) return;
+      var emp = _beneficiarioCanonico(r.beneficiario);
+      if (!emp) return;
+      otrasPorEmpresaRpt[emp] = (otrasPorEmpresaRpt[emp] || 0) + 1;
+    });
+
+    // Vista "sin montos" — pedido explícito: poder compartir este cuadro
+    // (quién está asistido y quién no) sin exponer importes ni el detalle
+    // operativo que los acompaña (meses/año, cantidad de otras
+    // transferencias). Se controla desde la barra de la vista previa
+    // (checkbox "Ocultar montos", solo visible en el reporte de
+    // Transferencias) — ver imprimirPanelActivo().
+    var ocultarMontos = !!(typeof window !== 'undefined' && window._rptOcultarMontosAsistencia);
+
+    h.push('<div class="chart-card" id="sec_asistencia"><div class="chart-title">Empresas asistidas financieramente (Gastos Operativos / Subsidios) <span class="chart-unit">año '+añosAsistRpt+(ocultarMontos?' · sin montos':'')+'</span></div>');
     h.push('<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">');
     h.push('<div class="kp"><div class="kl">Empresas activas</div><div class="kv">'+activasRpt.length+'</div><div class="ks">base: Gestión de Empresas y Rubros</div></div>');
     h.push('<div class="kp"><div class="kl">Asistidas financieramente</div><div class="kv" style="color:#185fa5">'+grupo1.length+'</div><div class="ks">'+(activasRpt.length?(grupo1.length/activasRpt.length*100).toFixed(1):'0')+'% de las activas</div></div>');
     h.push('<div class="kp"><div class="kl">No asistidas</div><div class="kv" style="color:#777">'+grupo2.length+'</div><div class="ks">'+(activasRpt.length?(grupo2.length/activasRpt.length*100).toFixed(1):'0')+'% de las activas</div></div>');
     h.push('</div>');
+    h.push('<div style="font-size:7.5pt;color:#888;margin:8px 0">Asistida = al menos '+MESES_MIN_ASISTENCIA+'/12 meses con transferencias en el año elegido — una transferencia aislada en pocos meses no alcanza.'+(ocultarMontos?' Vista sin montos: se omiten importes y el detalle operativo.':'')+'</div>');
 
-    h.push('<div style="font-size:9px;font-weight:700;color:#185fa5;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 1 — Asistidas financieramente ('+grupo1.length+')</div>');
-    h.push('<div style="font-size:7.5pt;color:#888;margin-bottom:4px">Requiere al menos '+MESES_MIN_ASISTENCIA+' de 12 meses con transferencias en cada año listado — una transferencia aislada en pocos meses no alcanza.</div>');
+    // Mismo layout de dos columnas lado a lado que el panel en pantalla
+    // (ver renderAsistenciaFinanciera) — cada empresa como una fila dentro
+    // de su columna, en vez de la tabla/lista separada que tenía antes esta
+    // versión impresa.
+    h.push('<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">');
+
+    h.push('<div><div style="font-size:9px;font-weight:700;color:#185fa5;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Grupo 1 — Asistidas financieramente ('+grupo1.length+')</div>');
+    h.push('<div style="border:.5px solid #ccc;border-radius:4px">');
     if (grupo1.length) {
-      h.push('<div class="tw"><table><thead><tr><th>Empresa</th><th>Gastos Operativos</th><th>Subsidios</th><th>Total</th><th>Meses/año</th></tr></thead><tbody>');
-      grupo1.forEach(function(e) {
+      grupo1.forEach(function(e, i) {
         var d = asistenciaPorEmpresa[e];
         var mesesTxt = d.heredadoDe
           ? 'subsidiaria de '+d.heredadoDe
           : _calc.añosEval.map(function(y){ return y+': '+((_calc.mesesPorEmpresaAño[e]&&_calc.mesesPorEmpresaAño[e][y])?_calc.mesesPorEmpresaAño[e][y].size:0)+'/12'; }).join(' · ');
-        h.push('<tr><td>'+e+'</td><td>'+(d['Gastos Operativos']?fM2(d['Gastos Operativos']):'—')+'</td><td>'+(d['Subsidios']?fM2(d['Subsidios']):'—')+'</td><td>'+fM2(d.total)+'</td><td style="font-size:7.5pt">'+mesesTxt+'</td></tr>');
+        h.push('<div style="padding:5px 8px'+(i<grupo1.length-1?';border-bottom:.5px solid #eee':'')+'">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px">'
+          + '<span style="font-size:9pt;color:#222">'+e+(d.heredadoDe?' <span style="color:#888;font-size:7.5pt">(subsidiaria)</span>':'')+'</span>'
+          + (ocultarMontos ? '' : '<span style="font-size:8.5pt;color:#185fa5;font-family:monospace;white-space:nowrap">'+fM2(d.total)+'</span>')
+          + '</div>'
+          + (ocultarMontos ? '' : '<div style="font-size:7.5pt;color:#999;margin-top:2px">'+mesesTxt+'</div>')
+          + '</div>');
       });
-      h.push('</tbody></table></div>');
     } else {
-      h.push('<p style="color:#999;font-size:8pt;padding:4px">Ninguna empresa activa cumple el mínimo de meses con Gastos Operativos/Subsidios en este período.</p>');
+      h.push('<div style="padding:10px;font-size:8.5pt;color:#999">Ninguna empresa activa cumple el mínimo de meses con Gastos Operativos/Subsidios en este período.</div>');
     }
+    h.push('</div></div>');
 
-    h.push('<div style="font-size:9px;font-weight:700;color:#777;margin:12px 0 4px;text-transform:uppercase;letter-spacing:.06em">Grupo 2 — No asistidas financieramente ('+grupo2.length+')</div>');
-    h.push(grupo2.length
-      ? '<div style="font-size:9pt;line-height:1.8;color:#333">'+grupo2.map(function(e){
-          var hd = asistenciaPorEmpresa[e] && asistenciaPorEmpresa[e].heredadoDe;
-          return hd ? e+' (subsidiaria de '+hd+')' : e;
-        }).join(' · ')+'</div>'
-      : '<p style="color:#999;font-size:8pt;padding:4px">Todas las empresas activas están asistidas.</p>');
+    h.push('<div><div style="font-size:9px;font-weight:700;color:#777;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Grupo 2 — No asistidas financieramente ('+grupo2.length+')</div>');
+    h.push('<div style="border:.5px solid #ccc;border-radius:4px">');
+    if (grupo2.length) {
+      grupo2.forEach(function(e, i) {
+        var hd = asistenciaPorEmpresa[e] && asistenciaPorEmpresa[e].heredadoDe;
+        var otrasTxt = otrasPorEmpresaRpt[e] ? otrasPorEmpresaRpt[e]+' transf. de otra categoría' : 'sin otras transferencias';
+        h.push('<div style="padding:5px 8px;display:flex;justify-content:space-between;gap:8px'+(i<grupo2.length-1?';border-bottom:.5px solid #eee':'')+'">'
+          + '<span style="font-size:9pt;color:#222">'+e+(hd?' <span style="color:#888;font-size:7.5pt">(subsidiaria de '+hd+')</span>':'')+'</span>'
+          + (ocultarMontos ? '' : '<span style="font-size:7.5pt;color:#999;font-family:monospace;white-space:nowrap">'+otrasTxt+'</span>')
+          + '</div>');
+      });
+    } else {
+      h.push('<div style="padding:10px;font-size:8.5pt;color:#999">Todas las empresas activas están asistidas.</div>');
+    }
+    h.push('</div></div>');
+
+    h.push('</div>'); // cierra grid de 2 columnas
     h.push('<div style="font-size:7.5pt;color:#999;margin-top:8px;font-family:monospace">Grupo 1 ('+grupo1.length+') + Grupo 2 ('+grupo2.length+') = '+(grupo1.length+grupo2.length)+' = '+activasRpt.length+' empresas activas</div>');
     h.push('</div>');
   })();
