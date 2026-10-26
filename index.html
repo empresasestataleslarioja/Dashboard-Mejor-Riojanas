@@ -3322,7 +3322,17 @@ self.onmessage = async (e) => {
       <div class="rowfull card" style="margin-top:12px">
         <div class="card-hd">
           <span class="card-hd-title">Ficha Institucional de Empresas</span>
-          <span style="display:flex;gap:6px;align-items:center">
+          <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <label class="tba-btn tba-btn-file" title="Importar Excel/CSV con columnas Empresa | CUIT — asigna el CUIT a cada empresa que coincida con el portafolio. Reutilizable: volver a importar actualiza, no duplica."
+              style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
+              background:rgba(71,232,255,.08);border:1px solid rgba(71,232,255,.3);color:var(--acc);
+              font-family:var(--mono);border-radius:3px;cursor:pointer">
+              📥 Importar CUIT
+              <input type="file" accept=".xlsx,.xls,.csv"
+                style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
+                onchange="importarCuit(this.files[0]);this.value=''">
+            </label>
+            <span id="rub-cuit-import-msg" style="font-size:9px;color:var(--dim)"></span>
             <button id="rub-save-btn" onclick="saveRubros()" style="padding:4px 10px;background:var(--s2);border:1px solid var(--bd2);color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer;transition:all .12s" onmouseenter="this.style.color='var(--pos)';this.style.borderColor='var(--pos)'" onmouseleave="this.style.color='var(--dim)';this.style.borderColor='var(--bd2)'">✓ Guardar</button>
             <button onclick="resetRubros()" style="padding:4px 10px;background:var(--s2);border:1px solid var(--bd2);color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:2px;cursor:pointer;transition:all .12s" onmouseenter="this.style.color='var(--neg)';this.style.borderColor='var(--neg)'" onmouseleave="this.style.color='var(--dim)';this.style.borderColor='var(--bd2)'">↺ Restablecer</button>
             <span id="rub-save-status" style="font-size:9px;color:var(--dim)"></span>
@@ -7653,6 +7663,7 @@ function _rptEmpresasRubros() {
       // sin límite cuando el texto es largo.
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${societario}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word"><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${inst.actividad || '—'}</div></td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
@@ -7663,12 +7674,13 @@ function _rptEmpresasRubros() {
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:16%">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:12%">Tipo Societario</th>
-          <th style="text-align:left;padding:5px 8px;width:34%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:15%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:9%">CUIT</th>
+          <th style="text-align:left;padding:5px 8px;width:11%">Tipo Societario</th>
+          <th style="text-align:left;padding:5px 8px;width:28%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:7%">Constitución</th>
           <th style="text-align:left;padding:5px 8px;width:14%">Instrumento de creación</th>
-          <th style="text-align:left;padding:5px 8px;width:17%">Observaciones</th>
+          <th style="text-align:left;padding:5px 8px;width:16%">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
@@ -7929,11 +7941,13 @@ function _rptERMensual() {
   const subt = emp + (anioFiltro ? ' \u00b7 Ejercicio '+anioFiltro : '');
   const inst = DATA.institucional?.[emp] || {};
   const fmtFechaInst = iso => { const [y,m,d] = (iso||'').split('-'); return (y&&m&&d) ? `${d}/${m}/${y}` : ''; };
-  const instLine = (inst.fechaConstitucion || inst.decreto)
+  const instLine = (inst.cuit || inst.fechaConstitucion || inst.decreto)
     ? `<div style="font-size:8.5pt;color:#555;margin:-8px 0 12px">`
-      + (inst.fechaConstitucion ? `Constituci\u00f3n: ${fmtFechaInst(inst.fechaConstitucion)}` : '')
-      + (inst.fechaConstitucion && inst.decreto ? ' &middot; ' : '')
-      + (inst.decreto ? `Decreto de creaci\u00f3n: ${inst.decreto}` : '')
+      + [
+          inst.cuit ? `CUIT: ${inst.cuit}` : '',
+          inst.fechaConstitucion ? `Constituci\u00f3n: ${fmtFechaInst(inst.fechaConstitucion)}` : '',
+          inst.decreto ? `Decreto de creaci\u00f3n: ${inst.decreto}` : '',
+        ].filter(Boolean).join(' &middot; ')
       + `</div>`
     : '';
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
@@ -11500,7 +11514,7 @@ function buildRubros() {
     const fechaCorta = fechaInact ? (([y,m,d]) => `${d}/${m}/${y}`)(fechaInact.split('-')) : '';
     const selColor = RUBRO_COLORS[r] || RUBRO_COLORS['Sin rubro'];
     const inst = (DATA.institucional && DATA.institucional[emp]) || {};
-    const tieneInst = !!(inst.fechaConstitucion || inst.decreto || inst.actividad || inst.tipoSocietario || inst.participacionAccionaria);
+    const tieneInst = !!(inst.fechaConstitucion || inst.decreto || inst.actividad || inst.tipoSocietario || inst.participacionAccionaria || inst.cuit);
     const tieneNota = !!(DATA.notas && DATA.notas[emp]);
     return `<div class="rub-row" id="rubrow-${empId}" data-emp="${emp}" style="${inactiva?'opacity:.55':''}">
       <span class="rub-name" id="rubname-${empId}" title="${emp}"
@@ -19286,6 +19300,89 @@ function _matchEmpresaAutoridad(nombreRaw, portafolio) {
   return (typeof _matchEmpresaPortafolio === 'function' ? _matchEmpresaPortafolio(nombreRaw, portafolio) : '') || '';
 }
 
+// ── Importar CUIT desde Excel/CSV (carga general, reutilizable) ──────
+// Formato esperado: dos columnas, Empresa | CUIT, en cualquier orden y con
+// o sin fila de encabezado ("EMPRESA"/"CUIT"/"CUIL") — el archivo real que
+// motivó esto no trae encabezado, solo una fila en blanco al principio, así
+// que si no se detecta un encabezado reconocible se asume directamente
+// columna A = empresa, columna B = CUIT. Pensado para poder reimportar en
+// el futuro (correcciones, altas nuevas) sin volver a tocar el código: cada
+// importación simplemente pisa el CUIT de las empresas que coincidan, sin
+// afectar el resto de los datos institucionales ya cargados (fecha de
+// constitución, decreto, etc. — mismo principio que _guardarInstitucional).
+function importarCuit(file) {
+  if (!file) return;
+  const msg = document.getElementById('rub-cuit-import-msg');
+  const setMsg = (txt, color) => { if (msg) { msg.textContent = txt; msg.style.color = color || 'var(--dim)'; } };
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+
+      let cols = null, rows = null;
+      for (const sn of wb.SheetNames) {
+        const wsRows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+        if (!wsRows.length) continue;
+        let headerRow = -1;
+        for (let i = 0; i < Math.min(5, wsRows.length); i++) {
+          const hdrs = wsRows[i].map(c => String(c).trim().toUpperCase());
+          const iEmp  = hdrs.findIndex(h => /EMPRESA/.test(h));
+          const iCuit = hdrs.findIndex(h => /CUIT|CUIL/.test(h));
+          if (iEmp >= 0 && iCuit >= 0) { headerRow = i; cols = { empresa: iEmp, cuit: iCuit }; break; }
+        }
+        if (cols) { rows = wsRows.slice(headerRow + 1); break; }
+        // Sin encabezado reconocible: columna A = empresa, columna B = CUIT
+        // — solo si la hoja tiene al menos una fila con algo en esas celdas.
+        if (wsRows.some(r => String(r[0] || '').trim() && String(r[1] || '').trim())) {
+          cols = { empresa: 0, cuit: 1 };
+          rows = wsRows;
+          break;
+        }
+      }
+      if (!cols) throw new Error('No se encontraron columnas de Empresa/CUIT en ninguna hoja del archivo.');
+
+      const portafolio = Object.keys(rubros || {});
+      const noReconocidas = [];
+      const formatoInvalido = [];
+      let actualizadas = 0;
+
+      rows.forEach(row => {
+        const empresaCruda = String(row[cols.empresa] || '').trim();
+        const cuitCrudo = String(row[cols.cuit] || '').trim();
+        if (!empresaCruda || !cuitCrudo) return;
+
+        const empresa = _matchEmpresaAutoridad(empresaCruda, portafolio);
+        if (!empresa) { noReconocidas.push(empresaCruda); return; }
+
+        const cuit = _formatearCuit(cuitCrudo);
+        if (!_cuitTieneFormatoValido(cuit)) formatoInvalido.push(`${empresa} (${cuitCrudo})`);
+
+        DATA.institucional = DATA.institucional || {};
+        DATA.institucional[empresa] = { ...(DATA.institucional[empresa] || {}), cuit };
+        _marcarEmpresaMasterEditada(empresa);
+        actualizadas++;
+      });
+
+      if (!actualizadas) {
+        throw new Error('No se actualizó ninguna empresa — revisá que las columnas Empresa/CUIT tengan datos y que los nombres coincidan con el portafolio.');
+      }
+
+      saveDataToLocalCache();
+      try { marcarPendienteGuardar(['institucional']); } catch(e) {}
+      buildRubros();
+
+      let texto = `✓ CUIT actualizado en ${actualizadas} empresa${actualizadas!==1?'s':''}`;
+      if (formatoInvalido.length) texto += ` · ⚠ ${formatoInvalido.length} con formato raro (revisar): ${formatoInvalido.join(', ')}`;
+      if (noReconocidas.length) texto += ` · ✗ ${noReconocidas.length} no reconocida${noReconocidas.length!==1?'s':''} (no coinciden con ninguna empresa del portafolio): ${noReconocidas.join(', ')}`;
+      setMsg(texto, noReconocidas.length || formatoInvalido.length ? '#ff8c47' : 'var(--pos)');
+    } catch(err) {
+      setMsg('✗ Error al importar: ' + err.message, 'var(--neg)');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 function importarAutoridades(file) {
   if (!file) return;
   const msg = document.getElementById('pers-import-msg');
@@ -20594,7 +20691,7 @@ function _guardarInstitucional(emp, fecha, decreto) {
   DATA.institucional = DATA.institucional || {};
   const existing = DATA.institucional[emp] || {};
   const merged = { ...existing, fechaConstitucion: fecha, decreto };
-  const tieneAlgo = merged.fechaConstitucion || merged.decreto || merged.actividad || merged.tipoSocietario || merged.participacionAccionaria;
+  const tieneAlgo = merged.fechaConstitucion || merged.decreto || merged.actividad || merged.tipoSocietario || merged.participacionAccionaria || merged.cuit;
   if (tieneAlgo) {
     DATA.institucional[emp] = merged;
   } else {
@@ -20605,12 +20702,34 @@ function _guardarInstitucional(emp, fecha, decreto) {
   try { marcarPendienteGuardar(['institucional']); } catch(e) {}
 }
 
+// ── CUIT ────────────────────────────────────────────────────────
+// Normaliza a dígitos puros (sin guiones/espacios) — para comparar,
+// deduplicar o guardar un valor canónico independiente de cómo se tipeó.
+function _normalizarCuit(v) {
+  return String(v || '').replace(/\D/g, '');
+}
+// Formatea en vivo mientras se tipea: XX-XXXXXXXX-X (2-8-1 dígitos). Tolera
+// que el usuario pegue el CUIT con o sin guiones/espacios — siempre
+// reconstruye el formato estándar a partir de los dígitos.
+function _formatearCuit(v) {
+  const d = _normalizarCuit(v).slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 10) return d.slice(0, 2) + '-' + d.slice(2);
+  return d.slice(0, 2) + '-' + d.slice(2, 10) + '-' + d.slice(10);
+}
+// true si tiene los 11 dígitos esperados (2-8-1) — no valida el dígito
+// verificador, solo la forma, que alcanza para detectar errores de tipeo
+// o celdas mal leídas del Excel sin rechazar CUITs reales por exceso de celo.
+function _cuitTieneFormatoValido(v) {
+  return _normalizarCuit(v).length === 11;
+}
+
 // ── Popover único de datos institucionales (desde el editor de rubros) ──
-// Un solo botón/popover para los 5 campos institucionales de la empresa:
-// fecha de constitución, instrumento de creación, tipo societario, detalle
-// de participación accionaria y actividad puntual que desarrolla. Antes
-// eran dos botones/popovers separados (🏛 y 📋); se unifican para no seguir
-// agregando un ícono por campo a la fila.
+// Un solo botón/popover para los 6 campos institucionales de la empresa:
+// CUIT, fecha de constitución, instrumento de creación, tipo societario,
+// detalle de participación accionaria y actividad puntual que desarrolla.
+// Antes eran dos botones/popovers separados (🏛 y 📋); se unifican para no
+// seguir agregando un ícono por campo a la fila.
 function mostrarInstPopover(evt, emp) {
   const pop = document.getElementById('rub-inst-popover');
   if (!pop) return;
@@ -20622,6 +20741,14 @@ function mostrarInstPopover(evt, emp) {
       <button onclick="event.stopPropagation();document.getElementById('rub-inst-popover').style.display='none'"
         style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0 2px">✕</button>
     </div>
+    <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:8px">
+      CUIT
+      <input type="text" id="inst-pop-cuit" value="${(info.cuit||'').replace(/"/g,'&quot;')}"
+        placeholder="Ej: 30-71796820-0" maxlength="13"
+        oninput="this.value = _formatearCuit(this.value)"
+        style="padding:5px 8px;background:var(--s3);border:1px solid var(--bd2);color:var(--text);
+        font-family:var(--mono);font-size:10px;border-radius:3px;outline:none">
+    </label>
     <label style="display:flex;flex-direction:column;gap:4px;font-size:8px;color:var(--dim);margin-bottom:8px">
       Fecha de constitución
       <input type="date" id="inst-pop-fecha" value="${info.fechaConstitucion||''}"
@@ -20673,6 +20800,7 @@ function _confirmarInstPopover() {
   const emp = pop?.dataset.emp;
   if (!emp) return;
   const campos = {
+    cuit: (document.getElementById('inst-pop-cuit')?.value || '').trim(),
     fechaConstitucion: document.getElementById('inst-pop-fecha')?.value || '',
     decreto: (document.getElementById('inst-pop-decreto')?.value || '').trim(),
     tipoSocietario: (document.getElementById('inst-pop-tipo')?.value || '').trim(),
@@ -21553,6 +21681,7 @@ function _informeEjecutivoRender(emp) {
 
   // ── Franja institucional: constitución, autoridad vigente y notas ───────────
   const institChips = [
+    inst.cuit ? `<strong>CUIT:</strong> ${inst.cuit}` : null,
     (inst.fechaConstitucion || inst.decreto)
       ? `<strong>Constitución:</strong> ${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}${inst.decreto ? ' (Decreto ' + inst.decreto + ')' : ''}`
       : null,
@@ -43846,9 +43975,10 @@ function applyCloudData(cloud, opts) {
       else if (r.activo === 'SI') delete empresasInactivas[r.empresa];
 
       // Datos institucionales.
-      if (r.fecha_constitucion || r.decreto || r.actividad || r.tipo_societario || r.participacion_accionaria) {
+      if (r.cuit || r.fecha_constitucion || r.decreto || r.actividad || r.tipo_societario || r.participacion_accionaria) {
         DATA.institucional = DATA.institucional || {};
         DATA.institucional[r.empresa] = {
+          cuit:              r.cuit || '',
           fechaConstitucion: _soloFecha(r.fecha_constitucion),
           decreto:           _decretoLimpio(r.decreto),
           actividad:         r.actividad || '',
@@ -44508,6 +44638,7 @@ function buildCloudPayload() {
       empresa: emp, rubro: rubros[emp] || 'Sin rubro',
       activo: empresasInactivas[emp] ? 'NO' : 'SI',
       fecha_inactiva: typeof empresasInactivas[emp] === 'string' ? empresasInactivas[emp] : '',
+      cuit: inst.cuit || '',
       fecha_constitucion: inst.fechaConstitucion || '',
       decreto: inst.decreto || '',
       actividad: inst.actividad || '',
