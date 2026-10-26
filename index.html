@@ -2350,6 +2350,18 @@ self.onmessage = async (e) => {
               <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('autoridades')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
               <td style="padding:3px 4px;text-align:center"><button onclick="restaurarDesdeSheets('autoridades')" style="padding:2px 8px;font-size:8px;background:rgba(255,100,71,.1);border:1px solid #ff647155;color:var(--neg);border-radius:2px;cursor:pointer;font-family:var(--mono)">⟳</button></td>
             </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Observaciones</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloNotas()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('notas')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Rubros / Ficha Institucional</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloRubros()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('rubros')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
           </tbody>
         </table>
         <div style="font-size:8px;color:var(--dim);margin-top:6px;line-height:1.5">⟳ Restaurar: reemplaza datos locales con Sheets (pide confirmación)</div>
@@ -42563,6 +42575,49 @@ async function syncSoloAutoridades() {
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
 }
 
+// Mismo problema y mismo fix que Autoridades: Observaciones (DATA.notas)
+// tampoco tenía un botón de publicación propio — saveEmpNota()/
+// _confirmarNotaPopover() (ambas vía _guardarNotaEmpresa) solo guardan
+// local (marcarPendienteGuardar(['notas'])), nunca publican. Caso real
+// reportado: "no me ha tomado cambios en la columna de OBSERVACIONES" —
+// el cambio nunca salió de ese dispositivo porque la única forma de
+// publicarlo era "Publicar Todo".
+async function syncSoloNotas() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando observaciones…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación observaciones', data: { notas: payload.notas } });
+    limpiarPendienteGuardar('notas');
+    if (ind) { ind.textContent = '✓ Observaciones publicadas'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+// Mismo problema, misma clase de bug: Rubros/Ficha Institucional (rubro
+// asignado, activa/inactiva, y los datos institucionales — CUIT, fecha de
+// constitución, decreto, tipo societario, participación accionaria,
+// actividad) tampoco tenía botón de publicación propio. saveRubros() (el
+// "✓ Guardar" de la Ficha Institucional), toggleEmpresaInactiva(),
+// _confirmarInstPopover() y la importación de CUIT solo guardan local.
+async function syncSoloRubros() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando rubros…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación rubros', data: { rubros: payload.rubros, rubros_lista: payload.rubros_lista } });
+    limpiarPendienteGuardar('rubros');
+    if (ind) { ind.textContent = '✓ Rubros publicados'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
 // Cantidad de registros que quedaron en memoria para cada módulo tras una
 // bajada — se muestra en el indicador para poder confirmar en el momento,
 // sin herramientas de desarrollador, si realmente llegó algo de Sheets o
@@ -42574,6 +42629,8 @@ function _conteoModulo(modulo) {
     case 'transferencias': return (DATA.transferencias || []).length;
     case 'balances':       return Object.keys(_balances || {}).length;
     case 'flujos':         return Object.keys(DATA.flujos || {}).length;
+    case 'notas':          return Object.keys(DATA.notas || {}).length;
+    case 'rubros':         return Object.keys(rubros || {}).length;
     default: return null;
   }
 }
