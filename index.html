@@ -2351,13 +2351,7 @@ self.onmessage = async (e) => {
               <td style="padding:3px 4px;text-align:center"><button onclick="restaurarDesdeSheets('autoridades')" style="padding:2px 8px;font-size:8px;background:rgba(255,100,71,.1);border:1px solid #ff647155;color:var(--neg);border-radius:2px;cursor:pointer;font-family:var(--mono)">⟳</button></td>
             </tr>
             <tr>
-              <td style="padding:3px 4px;color:var(--text)">Observaciones</td>
-              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloNotas()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
-              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('notas')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
-              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
-            </tr>
-            <tr>
-              <td style="padding:3px 4px;color:var(--text)">Rubros / Ficha Institucional</td>
+              <td style="padding:3px 4px;color:var(--text)" title="Incluye Observaciones — viajan como columna de esta misma fila, no por separado">Rubros / Ficha Institucional / Observaciones</td>
               <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloRubros()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
               <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('rubros')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
               <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
@@ -20867,12 +20861,20 @@ function toggleEmpNotas() {
 
 // Guarda la observación de una empresa — compartido por el textarea del
 // panel "Por Empresa" (saveEmpNota) y el popover del editor de rubros
-// (_confirmarNotaPopover), ambos sobre el mismo DATA.notas[emp].
+// (_confirmarNotaPopover), ambos sobre el mismo DATA.notas[emp]. Marca
+// pendiente la sección "rubros" (no "notas"): la Observación viaja como
+// columna de esa misma fila al publicar (ver buildCloudPayload/
+// applyCloudData), así que necesita el mismo _ts real por empresa
+// (empresaMasterTs) que ya usan rubro/CUIT/institucional — sin
+// _marcarEmpresaMasterEditada acá, una Observación nueva viajaría con un
+// _ts viejo/0 y podía perderse si llegaba a bajar algo de Sheets antes de
+// publicarla.
 function _guardarNotaEmpresa(emp, value) {
   if (!emp) return;
   DATA.notas[emp] = value.trim();
+  _marcarEmpresaMasterEditada(emp);
   saveDataToLocalCache();
-  try { marcarPendienteGuardar(['notas']); } catch(e) {}
+  try { marcarPendienteGuardar(['rubros']); } catch(e) {}
 }
 
 function saveEmpNota(value) {
@@ -42575,30 +42577,15 @@ async function syncSoloAutoridades() {
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
 }
 
-// Mismo problema y mismo fix que Autoridades: Observaciones (DATA.notas)
-// tampoco tenía un botón de publicación propio — saveEmpNota()/
-// _confirmarNotaPopover() (ambas vía _guardarNotaEmpresa) solo guardan
-// local (marcarPendienteGuardar(['notas'])), nunca publican. Caso real
-// reportado: "no me ha tomado cambios en la columna de OBSERVACIONES" —
-// el cambio nunca salió de ese dispositivo porque la única forma de
-// publicarlo era "Publicar Todo".
-async function syncSoloNotas() {
-  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
-  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
-  if (!(await _resolverConflictoAntesDePublicar(false))) return;
-  const payload = buildCloudPayload();
-  const ind = document.getElementById('save-indicator');
-  if (ind) { ind.textContent = '⏳ Publicando observaciones…'; ind.style.color = '#47e8ff'; }
-  try {
-    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación observaciones', data: { notas: payload.notas } });
-    limpiarPendienteGuardar('notas');
-    if (ind) { ind.textContent = '✓ Observaciones publicadas'; ind.style.color = '#47ffb4'; }
-    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
-  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
-}
+// Observaciones (DATA.notas) ya NO se publica por separado — pedido
+// explícito: viaja como columna ("observaciones") dentro de la misma fila
+// de "rubros" en vez de una pestaña "notas" aparte (ver buildCloudPayload/
+// applyCloudData). Publicarla es publicar Rubros — ver syncSoloRubros()
+// más abajo. (syncSoloNotas() existió brevemente; se retira para no dejar
+// un botón que escriba a una pestaña ya retirada.)
 
 // Mismo problema, misma clase de bug: Rubros/Ficha Institucional (rubro
-// asignado, activa/inactiva, y los datos institucionales — CUIT, fecha de
+// asignado, activa/inactiva, Observaciones, y los datos institucionales — CUIT, fecha de
 // constitución, decreto, tipo societario, participación accionaria,
 // actividad) tampoco tenía botón de publicación propio. saveRubros() (el
 // "✓ Guardar" de la Ficha Institucional), toggleEmpresaInactiva(),
@@ -43648,11 +43635,13 @@ function applyCloudData(cloud, opts) {
     DATA.years.sort();
   }
 
-  // notas — Sheets manda salvo que ESTE dispositivo tenga un cambio propio
-  // sin publicar todavía para esa empresa (mismo criterio que rubros): antes
-  // solo se completaba si estaba vacío localmente, así que una nota
-  // actualizada y publicada desde otro dispositivo nunca llegaba si ya
-  // había cualquier nota (aunque fuera vieja) cacheada acá.
+  // notas — SOLO respaldo de migración: Observaciones pasó a viajar como
+  // columna ("observaciones") dentro de la fila de "rubros" (ver ese bloque
+  // más abajo, con protección por _ts real en vez del guardia de sección
+  // completa de acá). Esta pestaña vieja ya no se publica, pero se sigue
+  // leyendo por si quedó algo ahí de antes de este cambio — se adopta una
+  // sola vez, hasta que esa empresa se vuelva a publicar con la columna
+  // nueva (momento en el que el bloque de "rubros" pasa a mandar).
   if (cloud.notas && cloud.notas.length) {
     DATA.notas = DATA.notas || {};
     cloud.notas.forEach(r => {
@@ -44042,6 +44031,21 @@ function applyCloudData(cloud, opts) {
           tipoSocietario:            r.tipo_societario || '',
           participacionAccionaria:   r.participacion_accionaria || '',
         };
+      }
+
+      // Observaciones — pedido explícito: viajan como columna propia de
+      // esta misma fila ("observaciones") en vez de una pestaña "notas"
+      // aparte. "undefined" (la columna todavía no existe en Sheets,
+      // porque esta fila no se volvió a publicar desde este cambio) se
+      // distingue de "" (se publicó vacía a propósito, o sea se borró):
+      // solo el segundo caso debe limpiar la nota local — el primero no
+      // debe tocarla, para no perder lo que ya haya traído la lectura de
+      // la vieja pestaña "notas" más abajo (respaldo de migración) hasta
+      // que esta fila se vuelva a publicar con la columna nueva.
+      if (r.observaciones !== undefined && r.observaciones !== null) {
+        DATA.notas = DATA.notas || {};
+        if (r.observaciones === '') delete DATA.notas[r.empresa];
+        else DATA.notas[r.empresa] = r.observaciones;
       }
       empresaMasterTs[r.empresa] = tsCloud;
     });
@@ -44452,10 +44456,12 @@ function buildCloudPayload() {
     _hoja:        t._hoja        || '',
   }));
 
-  // notas: array de { empresa, nota }
-  const notasRows = Object.entries(DATA.notas || {})
-    .filter(([,v]) => v && v.trim())
-    .map(([emp, nota]) => ({ empresa: emp, nota }));
+  // notas (Observaciones): pedido explícito — en vez de una pestaña aparte
+  // ("notas"), viajan como una columna más ("observaciones") dentro de la
+  // misma fila de "rubros" (ver rubrosRows más abajo). Ya no se arma un
+  // array separado acá; applyCloudData conserva, solo como respaldo de
+  // migración, la lectura de la vieja pestaña "notas" por si quedó algo
+  // publicado ahí antes de este cambio.
 
   // presupuesto
   const presRows = Object.entries(DATA.presupuesto || {}).flatMap(([emp, años]) =>
@@ -44680,6 +44686,7 @@ function buildCloudPayload() {
     ...Object.keys(rubros || {}),
     ...Object.keys(empresasInactivas || {}),
     ...Object.keys(DATA.institucional || {}),
+    ...Object.keys(DATA.notas || {}),
   ])].filter(emp => !_empresasTumbadas.has(emp));
   // Cada fila lleva su propia marca de tiempo real (empresaMasterTs, puesta
   // en setRubro/toggleEmpresaInactiva/_confirmarFechaInactiva/
@@ -44701,6 +44708,9 @@ function buildCloudPayload() {
       actividad: inst.actividad || '',
       tipo_societario: inst.tipoSocietario || '',
       participacion_accionaria: inst.participacionAccionaria || '',
+      // Observaciones — pedido explícito: columna propia de esta misma fila
+      // en vez de una pestaña "notas" aparte (ver nota en applyCloudData).
+      observaciones: (DATA.notas && DATA.notas[emp]) || '',
       _ts: empresaMasterTs[emp] || 0,
     };
   });
@@ -44826,7 +44836,7 @@ function buildCloudPayload() {
   }));
 
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
-           notas: notasRows, presupuesto: presRows, balances: balRows,
+           presupuesto: presRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
            flujos: flujosRows, flujos_config: flujosConfigRows,
            mensual: mensualRows, er_mensual: erMensualRows,
