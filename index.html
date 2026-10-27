@@ -12187,7 +12187,31 @@ function parsearFlujoExcel(wb, XLSX) {
     ({á:'a',é:'e',í:'i',ó:'o',ú:'u'}[c]||c));
   // Busca por keywords explícitos; si no, primera hoja; como último recurso hoja con nombre de mes
   // (hoja-mes solo si el archivo tiene UNA sola hoja, para no confundir archivos multi-hoja)
+  // Señal de contenido, más confiable que el nombre de la hoja: si alguna
+  // trae literalmente "FLUJO DE CAJA" en sus primeras celdas, es ESA la
+  // hoja con el resumen real — caso real: Bodega Aminga, donde la hoja
+  // con los datos está nombrada "Presentacion SI (2)" (coincide con
+  // SKIP_APOYOS más abajo, pensado para ignorar hojas de tapa/portada sin
+  // datos) y el resto de las hojas del archivo son planillas de apoyo
+  // (Honorarios, MO Temporario/Permanente, Requerimientos…) que, sin este
+  // chequeo, terminaban eligiéndose igual por no matchear ningún keyword
+  // de SKIP_APOYOS por culpa de typos en sus propios nombres ("MO
+  // Temproario", "Requerimeintos") — el resultado era un flujo armado con
+  // basura (valores sin sentido) desde una hoja de apoyo equivocada.
+  const _snConFlujoDeCaja = wb.SheetNames.find(sn => {
+    const ws0 = wb.Sheets[sn];
+    if (!ws0) return false;
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 4; c++) {
+        const v = ws0[XLSX.utils.encode_cell({r, c})]?.v;
+        if (typeof v === 'string' && /FLUJO\s+DE\s+CAJA/i.test(v)) return true;
+      }
+    }
+    return false;
+  });
+
   const findSheet = (...kws) => {
+    if (_snConFlujoDeCaja) return _snConFlujoDeCaja;
     const byKw = wb.SheetNames.find(sn => kws.some(kw => _snNorm(sn).includes(kw)));
     if (byKw) return byKw;
     // Si hay solo una hoja, usarla directamente
@@ -12468,6 +12492,18 @@ function parsearFlujoExcel(wb, XLSX) {
     if (colLabel < 0) colLabel = 0; // último fallback col A
   }
 
+  // Si el header mezcla meses reales (ENERO..DICIEMBRE) con una columna de
+  // TOTAL del cuatrimestre/trimestre en la MISMA fila (ej. "Jan-26".."Apr-26"
+  // seguidas de "1º Cuatrimestre 2026") — caso real: Bodega Aminga — esa
+  // columna de agregado normaliza igual que un período propio ("1°CUAT",
+  // ver normHeader) y quedaba en colM como si fuera un quinto mes. Tratarla
+  // como un período más duplica cada total que recorre "meses" (la suma de
+  // los 4 meses reales se contaba una SEGUNDA vez, vía esa misma columna
+  // que ya es esa suma) — necesidad_fondos terminaba exactamente al doble.
+  Object.keys(colM).forEach(per => {
+    if (!MESES_ES.includes(per) && Object.keys(colM).some(p2 => MESES_ES.includes(p2))) delete colM[per];
+  });
+
   const meses = Object.keys(colM); // meses detectados
 
   // Si no encontramos colTotal, usar la columna inmediatamente después del último mes
@@ -12566,6 +12602,20 @@ function parsearFlujoExcel(wb, XLSX) {
     if (lUP === 'EGRESOS')  { _seccion = 'egreso';  continue; }
     // Saltar otras filas de sección
     if (lUP === 'RESUMEN' || lUP === 'DETALLE') continue;
+    // Saltar encabezados de columna repetidos a mitad de hoja (algunos
+    // archivos arman varios cuadros apilados en la misma pestaña, cada uno
+    // con su propia fila "Concepto,Ene,Feb,…" — caso real: Bodega Aminga,
+    // con un cuadro de Ingresos y otro de Egresos en la misma hoja) — sin
+    // esto, esa fila se leía como un rubro más (con valores basura,
+    // producto de intentar parsear como número el propio encabezado de mes
+    // repetido en las columnas siguientes).
+    if (lUP === 'CONCEPTO' || lUP === 'RUBRO') continue;
+    // Cortar antes de un cuadro de "destino de los fondos" (a qué se
+    // aplicó lo solicitado) — es una redistribución del mismo total ya
+    // contado en Ingresos/Egresos, no egresos nuevos; seguir leyendo de
+    // acá en más duplicaría conceptos (algunos con la MISMA etiqueta que
+    // uno ya leído arriba, ej. "Gastos Salarial", pero otro valor).
+    if (/DESTINO\s+DE\s+LOS\s+FONDOS/.test(lUP)) break;
     // Saltar filas sin valor en colTotal ni en meses — pero antes detectar headers de sección
     {
       const valTotalPre = getNum(r, colTotal);
