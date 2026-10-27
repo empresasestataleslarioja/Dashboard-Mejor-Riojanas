@@ -2386,6 +2386,9 @@ self.onmessage = async (e) => {
         <button onclick="abrirDiagnosticoAutoridades()" style="margin-top:6px;padding:4px 8px;font-size:8px;
           background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.4);color:#a855f7;border-radius:2px;
           cursor:pointer;font-family:var(--mono)">🔍 Diagnóstico de Autoridades (por qué Sheets y el dashboard no coinciden)</button>
+        <button onclick="abrirDiagnosticoFlujos()" style="margin-top:6px;padding:4px 8px;font-size:8px;
+          background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.4);color:#a855f7;border-radius:2px;
+          cursor:pointer;font-family:var(--mono)">🔍 Diagnóstico de Flujos (por qué Sheets y el dashboard no coinciden)</button>
         <button onclick="abrirDiagnosticoAlmacenamiento()" style="margin-top:6px;padding:4px 8px;font-size:8px;
           background:rgba(255,140,71,.08);border:1px solid rgba(255,140,71,.4);color:#ff8c47;border-radius:2px;
           cursor:pointer;font-family:var(--mono)">🧹 Espacio de almacenamiento local (por si falla un guardado por cuota)</button>
@@ -42875,6 +42878,114 @@ function closeDiagnosticoAutoridades() {
   if (overlay) overlay.style.display = 'none';
 }
 
+// ── Diagnóstico de Flujos: Sheets vs. dashboard ────────────────────
+// Mismo caso que Autoridades (ver arriba) pero para Flujos de Fondos:
+// una baja local (tumba en _LS_FLUJOS_DEL) bloquea a propósito que
+// Sheets resucite un flujo ya borrado en este dispositivo. A diferencia
+// de Autoridades, acá solo hay un origen posible (_eliminarFlujo, borrado
+// manual desde el panel de Flujos) — no hace falta un mapa de motivos.
+async function abrirDiagnosticoFlujos() {
+  const overlay = document.getElementById('diag-flu-overlay');
+  const body = document.getElementById('diag-flu-body');
+  if (!overlay || !body) return;
+  overlay.style.display = 'flex';
+  body.innerHTML = '<div style="color:var(--dim);padding:20px;text-align:center">⏳ Comparando Sheets con el dashboard…</div>';
+
+  if (!_cloudUrl) {
+    body.innerHTML = '<div style="color:var(--neg);padding:10px">⚠ Configurá la URL de Sheets primero (⚙ Sheets).</div>';
+    return;
+  }
+
+  let data;
+  try {
+    const resp = await fetch(_cloudUrl + (_cloudUrl.includes('?') ? '&' : '?') + 'tab=all&t=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    data = await resp.json();
+  } catch(e) {
+    body.innerHTML = '<div style="color:var(--neg);padding:10px">✗ No se pudo leer Sheets: ' + (e.message||e) + '</div>';
+    return;
+  }
+
+  const cloudFlu = Array.isArray(data.flujos) ? data.flujos : [];
+  const cloudPorClave = {};
+  cloudFlu.forEach(f => {
+    if (!f.empresa || !f.periodo) return;
+    const clave = f.clave || _claveFlujo(f.empresa, f.periodo, f.tipo || 'proyectado');
+    cloudPorClave[clave] = f;
+  });
+
+  const tumbas = typeof _getFlujosDelMap === 'function' ? _getFlujosDelMap() : new Map();
+  const local = Object.keys(DATA.flujos || {}).length;
+
+  // Para cada tumba local, ver si Sheets todavía tiene esa fila y si esa
+  // fila es lo bastante vieja como para seguir bloqueada (mismo criterio
+  // que usa applyCloudData: tsCloud > tsDeleted → se adoptaría igual).
+  const bloqueando = [];
+  const yaResueltas = [];
+  tumbas.forEach((deletedAt, clave) => {
+    const fila = cloudPorClave[clave];
+    if (!fila) { yaResueltas.push({ clave, deletedAt }); return; }
+    const tsCloud = parseInt(fila.timestamp, 10) || 0;
+    if (tsCloud > (deletedAt || 0)) { yaResueltas.push({ clave, deletedAt, fila }); return; } // se adoptaría en el próximo Descargar
+    bloqueando.push({ clave, deletedAt, fila });
+  });
+
+  const diff = cloudFlu.length - local;
+  const fmtFecha = ts => { try { return new Date(ts).toLocaleString('es-AR'); } catch(e) { return '—'; } };
+
+  let html = '';
+  html += '<div style="display:flex;gap:10px;margin-bottom:14px">'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">En Sheets</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--text)">' + cloudFlu.length + '</div></div>'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">En el dashboard</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--text)">' + local + '</div></div>'
+    + '<div style="flex:1;background:var(--s2);border:1px solid var(--bd2);border-radius:4px;padding:10px;text-align:center">'
+    + '<div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em">Diferencia</div>'
+    + '<div style="font-size:20px;font-weight:700;color:' + (diff!==0?'#c0392b':'#0f6e56') + '">' + diff + '</div></div>'
+    + '</div>';
+
+  if (diff === 0 && bloqueando.length === 0) {
+    html += '<div style="padding:10px;border:1px solid #0f6e5655;background:#eafaf322;border-radius:4px;color:#0f6e56">✓ Sheets y el dashboard tienen el mismo número de flujos. No hay tumbas locales bloqueando nada.</div>';
+  } else {
+    if (bloqueando.length) {
+      html += '<div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:6px">⚠ ' + bloqueando.length + ' registro(s) en Sheets bloqueados por una baja local — "Descargar" no los va a traer</div>';
+      html += '<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:9px">'
+        + '<thead><tr style="border-bottom:1px solid var(--bd)">'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Empresa</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Período</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Tipo</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Borrado el</th>'
+        + '<th style="text-align:left;padding:4px 6px;color:var(--dim)">Motivo de la baja</th>'
+        + '</tr></thead><tbody>'
+        + bloqueando.map(b => '<tr style="border-bottom:1px solid var(--bd)">'
+          + '<td style="padding:4px 6px">' + (b.fila?.empresa || '<span style="color:var(--dim)">—</span>') + '</td>'
+          + '<td style="padding:4px 6px">' + (b.fila?.periodo || '<span style="color:var(--dim)">—</span>') + '</td>'
+          + '<td style="padding:4px 6px">' + (b.fila?.tipo || '<span style="color:var(--dim)">—</span>') + '</td>'
+          + '<td style="padding:4px 6px;color:var(--dim)">' + fmtFecha(b.deletedAt) + '</td>'
+          + '<td style="padding:4px 6px">Borrado manual en este dispositivo</td>'
+          + '</tr>').join('')
+        + '</tbody></table></div>';
+    }
+    if (yaResueltas.length) {
+      html += '<div style="font-size:9px;color:var(--dim)">✓ ' + yaResueltas.length + ' tumba(s) local(es) más que ya no afectan nada (Sheets ya no tiene esa fila, o la tiene con una versión más nueva que se adoptaría igual).</div>';
+    }
+    html += '<div style="margin-top:14px;padding:10px;border:1px solid var(--bd2);background:var(--s2);border-radius:4px;font-size:9px;color:var(--dim);line-height:1.6">'
+      + 'ℹ "Descargar" respeta a propósito una baja hecha en este dispositivo, para que una copia vieja de Sheets no la resucite. '
+      + 'Si estos registros SÍ deberían estar (la baja fue un error), volvé a cargarlos desde el panel de Flujos. '
+      + 'Si en cambio la baja fue correcta, lo que falta es volver a <strong>publicar</strong> Flujos para que Sheets también elimine esas filas.'
+      + '</div>';
+  }
+
+  body.innerHTML = html;
+}
+
+function closeDiagnosticoFlujos() {
+  const overlay = document.getElementById('diag-flu-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 // ── Diagnóstico de almacenamiento local (localStorage) ──────────────
 // Caso real reportado: al publicar, la consola mostraba "[LR] backup
 // trans fallo: QuotaExceededError" — _backupTransferenciasLocal (y el
@@ -46004,6 +46115,19 @@ setTimeout(() => {
       <button onclick="closeDiagnosticoAutoridades()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
     </div>
     <div id="diag-aut-body" style="overflow-y:auto;padding:16px 18px;flex:1;font-size:10px;color:var(--text)"></div>
+  </div>
+</div>
+<!-- DIAGNÓSTICO DE FLUJOS: Sheets vs. dashboard -->
+<div id="diag-flu-overlay" onclick="if(event.target===this)closeDiagnosticoFlujos()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:4100;align-items:center;justify-content:center">
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:4px;width:720px;max-width:95vw;max-height:84vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd)">
+      <div>
+        <div style="font-size:13px;color:var(--text);font-weight:600">🔍 Diagnóstico de Flujos</div>
+        <div style="font-size:9px;color:var(--dim);margin-top:3px;letter-spacing:.05em">Por qué el total en Sheets puede diferir del total en el dashboard</div>
+      </div>
+      <button onclick="closeDiagnosticoFlujos()" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <div id="diag-flu-body" style="overflow-y:auto;padding:16px 18px;flex:1;font-size:10px;color:var(--text)"></div>
   </div>
 </div>
 
