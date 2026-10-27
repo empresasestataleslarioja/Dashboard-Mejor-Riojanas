@@ -31478,6 +31478,127 @@ function tryParseERIngresosEgresosFlat(wb, fname) {
   return null;
 }
 
+// ── Parser de ER "flat con meses abreviados en texto" (una sola columna
+// de rótulo genérico — ej. "Ingresos/Egresos" — seguida de meses como
+// texto "ene-26","feb-26"… en vez de fecha de Excel; cada concepto es una
+// fila suelta, muchas veces en 0/vacío — típico de una planilla plantilla
+// con rubros predefinidos que no todos se usan — y cierra en una fila
+// "Resultado del Ejercicio" con el total real. Distinto del formato de
+// Aguas Riojanas 2024 (tryParseERNotasResumenMensual: meses como fecha,
+// precedido de notas numeradas) — caso real: Aguas Riojanas (ARSAU) 2026.
+function tryParseERFlatMesesTexto(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim() !== '') {
+      const n = parseFloat(v.replace(/\./g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+  const MESES_ABR3 = {ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,SET:9,OCT:10,NOV:11,DIC:12};
+  const _mesAbrTxt = v => {
+    if (typeof v !== 'string') return null;
+    const m = v.trim().toUpperCase().match(/^([A-Z]{3})[.\-\/]\s*(\d{2}|\d{4})$/);
+    if (!m || !MESES_ABR3[m[1]]) return null;
+    let anio = parseInt(m[2], 10);
+    if (anio < 100) anio += 2000;
+    return { anio, mes: MESES_ABR3[m[1]] };
+  };
+  const _clasif = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ');
+    if (!t) return null;
+    if (/^VENTAS\s+NETAS/.test(t)) return { cpt:'ventas' };
+    if (/^COSTO\s+DE\s+VENTAS?$/.test(t)) return { cpt:'costo' };
+    if (/^UTILIDAD\s+BRUTA$/.test(t)) return { cpt:'utilBruta' };
+    if (/^GASTOS?\s+FINANCIEROS?$/.test(t)) return { cpt:'gastoFinanciero' };
+    if (/^GASTOS?\s+DE\s+ADMINISTRACI[OÓ]N/.test(t)) return { cpt:'gastoAdm' };
+    if (/^GASTOS?\s+DE\s+COMERCIALIZACI[OÓ]N/.test(t)) return { cpt:'gastoCom' };
+    if (/^GASTOS?\s+(DE\s+)?OPERATIVOS?$/.test(t)) return { cpt:'gastoOper' };
+    if (/^GASTOS?\s+FISCALES$/.test(t)) return { cpt:'gastoOper' };
+    if (/^GASTOS?\s+BANCARIOS$/.test(t)) return { cpt:'gastoFinanciero' };
+    if (/^GASTOS?\s+DE\s+PRODUCCI[OÓ]N$/.test(t)) return { cpt:'gastoOper' };
+    if (/^GASTOS?\s+DE\s+OBRAS?$/.test(t)) return { cpt:'gastoOper' };
+    if (/^OTROS\s+GASTOS$/.test(t)) return { cpt:'otrosGastos' };
+    if (/^OTROS\s+INGRESOS$/.test(t)) return { cpt:'otrosIngresos' };
+    if (/^OTROS\s+EGRESOS$/.test(t)) return { cpt:'otrosGastos' };
+    if (/^INGRESOS\s+POR\s+OBRAS?$/.test(t)) return { cpt:'otrosIngresos' };
+    if (/^SUBSI?SIDIOS\s+RECIBIDOS$/.test(t)) return { cpt:'otrosIngresos' };
+    if (/^RESULTADO\s+OPERATIVO$/.test(t)) return { cpt:'resOperativo' };
+    if (/^AMORTIZACIONES?$/.test(t)) return { cpt:'gastoOper' };
+    if (/^INGRESOS\s+FINANCIEROS$/.test(t)) return { cpt:'resFinanciero' };
+    if (/^RECPAM$/.test(t)) return { cpt:'resFinanciero' };
+    if (/^RESULTADOS?\s+DE\s+INVERSIONES/.test(t)) return { cpt:'resFinanciero' };
+    if (/^RESULTADO\s+DEL\s+EJERCICIO$/.test(t)) return { cpt:'resEjercicio', esTotal:true };
+    return null;
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 10) continue;
+
+    let filaHdr = -1, colMeses = [];
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const cols = [];
+      for (let c = 1; c < rows[i].length; c++) {
+        const f = _mesAbrTxt(rows[i][c]);
+        if (f) cols.push({ col:c, anio:f.anio, mes:f.mes });
+      }
+      if (cols.length >= 3) { filaHdr = i; colMeses = cols; break; }
+    }
+    if (filaHdr < 0) continue;
+
+    const anioCount = {};
+    colMeses.forEach(({anio}) => { anioCount[anio] = (anioCount[anio]||0)+1; });
+    const anio = Object.entries(anioCount).sort((a,b)=>b[1]-a[1])[0][0];
+
+    const filas = [];
+    let filaTotal = null;
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const lbl = String(rows[i][0] || '').trim();
+      if (!lbl) continue;
+      const cl = _clasif(lbl);
+      if (!cl) continue;
+      const valores = {};
+      colMeses.forEach(({ col, mes }) => {
+        const v = _num(rows[i][col]);
+        if (v != null && v !== 0) valores[mes] = v;
+      });
+      if (Object.keys(valores).length === 0) continue;
+      if (cl.esTotal) { filaTotal = { lbl, valores }; continue; }
+      filas.push({ lbl, conceptoStd: cl.cpt, valores });
+    }
+    if (!filaTotal) continue;
+
+    // Validar contra "Resultado del Ejercicio": solo se acepta el archivo
+    // si la suma de los rubros de base (sin los subtotales utilBruta/
+    // resOperativo/resAntesImp, ya incluidos en los rubros que los
+    // componen) reconstruye exacto el resultado reportado.
+    const rubros = filas.filter(f => !['utilBruta','resOperativo','resAntesImp'].includes(f.conceptoStd));
+    const meses = Object.keys(filaTotal.valores).map(Number);
+    let reconcilia = meses.length > 0;
+    for (const m of meses) {
+      const suma = rubros.reduce((s, f) => s + (f.valores[m] || 0), 0);
+      const ref = filaTotal.valores[m];
+      const tol = Math.max(Math.abs(ref) * 0.0005, 5);
+      if (Math.abs(suma - ref) > tol) { reconcilia = false; break; }
+    }
+    if (!reconcilia) continue;
+
+    filas.push({ lbl: filaTotal.lbl, conceptoStd: 'resEjercicio', valores: filaTotal.valores });
+
+    let empresa = fname.replace(/\.xlsx?$/i,'')
+      .replace(/[_\-]+/g,' ')
+      .replace(/\b(ERP?|ESTADO\s+DE\s+RD?O?S?|ESTADO\s+DE\s+RESULTADOS?|\d{4})\b/gi,'')
+      .replace(/\s+/g,' ').trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    return { empresa, anio: String(anio), filas, hoja: sn, mesesCount: colMeses.length };
+  }
+  return null;
+}
+
 // ── Parser de ER "Anexo mensual" (planilla contable formal con columna de
 // referencia a Anexo — ING/Costo/Adm/Com/OIO/Financ/Ganan — y meses como
 // columnas de fecha, con una fila de subtotal por cada nivel del estado de
@@ -32587,6 +32708,17 @@ function handleImportWorkbook(wb, fname) {
   if (erFlatResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erFlatResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER "flat con meses abreviados en texto" (ene-26,
+  // feb-26…, rótulo genérico de columna — caso real: Aguas Riojanas
+  // (ARSAU) 2026) ──
+  const erFlatTxtResult = tryParseERFlatMesesTexto(wb, fname);
+  console.log('[LR] tryParseERFlatMesesTexto:', erFlatTxtResult ? erFlatTxtResult.empresa+' '+erFlatTxtResult.filas.length+' conceptos' : 'null');
+  if (erFlatTxtResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erFlatTxtResult, fname);
     return;
   }
 
