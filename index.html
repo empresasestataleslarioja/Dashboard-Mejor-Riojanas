@@ -42830,6 +42830,18 @@ async function syncSoloFactResultado() {
 // Mismo problema: ER Mensual (estados de resultados provisorios) y su
 // detalle de partidas (er_detalle) tampoco tenían botón propio — viajan
 // siempre juntos en los mismos guardados.
+//
+// También incluye fact/resultado/mensual: _aplicarERColumnas() (aplicar
+// un Excel de ER mensual) deriva y actualiza esos tres ADEMÁS de
+// er_mensual/er_detalle (ver marcarPendienteGuardar(['fact','resultado',
+// 'mensual','er_mensual'])), y "_seccionPendiente" vive solo en memoria —
+// no sobrevive un F5. Caso real: se publicaba ER Mensual (quedaba bien en
+// Sheets), pero fact/resultado/mensual seguían sin publicar; al recargar,
+// la sincronización automática al abrir bajaba de Sheets los valores
+// viejos de fact/resultado para esa empresa/año y los pisaba, sin que la
+// protección de "cambios sin publicar" (ya perdida por el reload)
+// pudiera evitarlo — Facturación/Resultado quedaban en 0 pese a que el ER
+// Mensual sí se había guardado.
 async function syncSoloERMensual() {
   if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
   if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
@@ -42838,8 +42850,11 @@ async function syncSoloERMensual() {
   const ind = document.getElementById('save-indicator');
   if (ind) { ind.textContent = '⏳ Publicando ER mensual…'; ind.style.color = '#47e8ff'; }
   try {
-    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación ER mensual', data: { er_mensual: payload.er_mensual, er_detalle: payload.er_detalle } });
-    limpiarPendienteGuardar(['er_mensual','er_detalle']);
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación ER mensual', data: {
+      er_mensual: payload.er_mensual, er_detalle: payload.er_detalle,
+      fact: payload.fact, resultado: payload.resultado, mensual: payload.mensual,
+    } });
+    limpiarPendienteGuardar(['er_mensual','er_detalle','fact','resultado','mensual']);
     if (ind) { ind.textContent = '✓ ER Mensual publicado'; ind.style.color = '#47ffb4'; }
     setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
