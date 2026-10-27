@@ -34713,6 +34713,23 @@ function parsearExcelBalance(wb, XLSX) {
         const yaExiste = estructura_er.some(e => e.fila === r2 + 1);
         if (yaExiste) continue;
         if (!ES_TOTAL_LBL.test(lbl2)) continue;
+        // ES_TOTAL_LBL también matchea ítems de línea que arrancan con
+        // "Resultado" pero NO son un subtotal que sume las filas de
+        // arriba — ej. "Resultado por Tenencia", "Resultados
+        // Financieros" (RECPAM es su propio rubro aparte). Si uno de
+        // estos queda en blanco un período, reconstruirlo como si fuera
+        // un subtotal faltante es incorrecto: la suma de las filas
+        // previas desde el último subtotal real termina coincidiendo,
+        // por pura aritmética, con el valor del SIGUIENTE subtotal real
+        // (porque ese ítem en blanco vale $0 ese período) — caso real:
+        // Aguas Riojanas, balance 2025, "Resultado por Tenencia" vacío
+        // terminaba mostrando el valor de "Resultado antes del Impuesto
+        // a las Ganancias". Un blanco acá es simplemente $0, no un
+        // subtotal a reconstruir.
+        const lbl2L = lbl2.toLowerCase();
+        const esLineaNoSubtotal = ['resultado_financiero', 'resultado_tenencia'].some(k =>
+          MAP_RUBROS[k].some(p => lbl2L.includes(p.toLowerCase())));
+        if (esLineaNoSubtotal) continue;
         // Agregar como placeholder para calcular
         estructura_er.push({
           lbl: lbl2, labelOriginal: lbl2raw, key: null,
