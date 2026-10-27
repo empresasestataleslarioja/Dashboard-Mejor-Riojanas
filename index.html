@@ -2321,6 +2321,12 @@ self.onmessage = async (e) => {
               <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
             </tr>
             <tr>
+              <td style="padding:3px 4px;color:var(--text)">Facturación / Resultado</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloFactResultado()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('fact')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
+            <tr>
               <td style="padding:3px 4px;color:var(--text)">Transferencias</td>
               <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloTransferencias()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
               <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('transferencias')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
@@ -2354,6 +2360,24 @@ self.onmessage = async (e) => {
               <td style="padding:3px 4px;color:var(--text)" title="Incluye Observaciones — viajan como columna de esta misma fila, no por separado">Rubros / Ficha Institucional / Observaciones</td>
               <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloRubros()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
               <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('rubros')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">ER Mensual</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloERMensual()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('er_mensual')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)">Presupuesto</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloPresupuesto()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('presupuesto')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
+              <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 4px;color:var(--text)" title="Requiere que el bridge reconozca una hoja nueva 'inflacion' del lado del servidor">Inflación</td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="syncSoloInflacion()" style="padding:2px 8px;font-size:8px;background:rgba(71,255,180,.1);border:1px solid #2ecc8a55;color:#1a9e68;border-radius:2px;cursor:pointer;font-family:var(--mono)">↑</button></td>
+              <td style="padding:3px 4px;text-align:center"><button onclick="descargarSoloModulo('inflacion')" style="padding:2px 8px;font-size:8px;background:rgba(71,200,255,.1);border:1px solid #47e8ff55;color:var(--acc);border-radius:2px;cursor:pointer;font-family:var(--mono)">↓</button></td>
               <td style="padding:3px 4px;text-align:center"><span style="color:var(--dim)">—</span></td>
             </tr>
           </tbody>
@@ -42605,6 +42629,85 @@ async function syncSoloRubros() {
   } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
 }
 
+// Mismo problema, misma clase de bug que Autoridades/Observaciones/Rubros:
+// Facturación y Resultado (los datos financieros más editados del
+// dashboard) tampoco tenían botón de publicación propio — la edición
+// celda por celda solo guarda local (marcarPendienteGuardar(['fact']) /
+// (['resultado'])), nunca publica. Se incluye "mensual" (apertura
+// mensual de ambos) porque viaja siempre junto con ellos en los mismos
+// guardados (ver marcarPendienteGuardar(['fact','resultado','mensual',...])).
+async function syncSoloFactResultado() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando facturación/resultado…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación facturación/resultado', data: { fact: payload.fact, resultado: payload.resultado, mensual: payload.mensual } });
+    limpiarPendienteGuardar(['fact','resultado','mensual']);
+    if (ind) { ind.textContent = '✓ Facturación/Resultado publicados'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+// Mismo problema: ER Mensual (estados de resultados provisorios) y su
+// detalle de partidas (er_detalle) tampoco tenían botón propio — viajan
+// siempre juntos en los mismos guardados.
+async function syncSoloERMensual() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando ER mensual…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación ER mensual', data: { er_mensual: payload.er_mensual, er_detalle: payload.er_detalle } });
+    limpiarPendienteGuardar(['er_mensual','er_detalle']);
+    if (ind) { ind.textContent = '✓ ER Mensual publicado'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+// Mismo problema: Presupuesto tampoco tenía botón propio.
+async function syncSoloPresupuesto() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando presupuesto…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación presupuesto', data: { presupuesto: payload.presupuesto } });
+    limpiarPendienteGuardar('presupuesto');
+    if (ind) { ind.textContent = '✓ Presupuesto publicado'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
+// Distinto de los anteriores: Inflación no solo no tenía botón propio —
+// no viajaba a Sheets bajo NINGUNA circunstancia, ni con "Publicar Todo"
+// (ver nota en buildCloudPayload/applyCloudData). Este botón también
+// cubre ese caso general, ya que ahora sí forma parte del payload.
+// Requiere que el bridge reconozca una hoja nueva "inflacion" — si el
+// Apps Script en vivo todavía no la tiene, esta publicación puede no
+// escribir nada hasta que se agregue ese soporte del lado del servidor
+// (mismo tipo de verificación que hicimos para "rubros").
+async function syncSoloInflacion() {
+  if (isReadonlyUser()) { alert('Usuario de solo lectura.'); return; }
+  if (!_cloudUrl) { alert('Configurá la URL de Sheets primero.'); return; }
+  if (!(await _resolverConflictoAntesDePublicar(false))) return;
+  const payload = buildCloudPayload();
+  const ind = document.getElementById('save-indicator');
+  if (ind) { ind.textContent = '⏳ Publicando inflación…'; ind.style.color = '#47e8ff'; }
+  try {
+    await postViaForm(_cloudUrl, { updatedBy: _updatedByConBuild(), nota: 'Publicación inflación', data: { inflacion: payload.inflacion } });
+    limpiarPendienteGuardar('inflacion');
+    if (ind) { ind.textContent = '✓ Inflación publicada'; ind.style.color = '#47ffb4'; }
+    setTimeout(() => { if (ind) ind.textContent = ''; }, 4000);
+  } catch(e) { if (ind) { ind.textContent = '✗ Error: ' + e.message; ind.style.color = 'var(--neg)'; } }
+}
+
 // Cantidad de registros que quedaron en memoria para cada módulo tras una
 // bajada — se muestra en el indicador para poder confirmar en el momento,
 // sin herramientas de desarrollador, si realmente llegó algo de Sheets o
@@ -42618,6 +42721,10 @@ function _conteoModulo(modulo) {
     case 'flujos':         return Object.keys(DATA.flujos || {}).length;
     case 'notas':          return Object.keys(DATA.notas || {}).length;
     case 'rubros':         return Object.keys(rubros || {}).length;
+    case 'fact':           return Object.keys(DATA.fact || {}).length;
+    case 'er_mensual':     return Object.keys(DATA.er_mensual || {}).length;
+    case 'presupuesto':    return Object.keys(DATA.presupuesto || {}).length;
+    case 'inflacion':      return (INFL.mensual[2026] || []).filter(v => v != null).length;
     default: return null;
   }
 }
@@ -43668,6 +43775,25 @@ function applyCloudData(cloud, opts) {
     });
   }
 
+  // inflación — mismo criterio que presupuesto (Sheets manda salvo que
+  // este dispositivo tenga un cambio propio sin publicar todavía). Antes
+  // no existía ningún bloque de bajada para esta sección porque nunca
+  // viajaba a Sheets en absoluto (ver nota en buildCloudPayload).
+  if (Array.isArray(cloud.inflacion) && cloud.inflacion.length) {
+    cloud.inflacion.forEach(r => {
+      const anio = parseInt(r.anio, 10);
+      if (!anio) return;
+      if (_seccionPendiente('inflacion') && (INFL.mensual[anio] || []).some(v => v != null)) return;
+      try {
+        const mensual = JSON.parse(r.mensual_json || '[]');
+        if (!Array.isArray(mensual)) return;
+        INFL.mensual[anio] = mensual;
+        if (r.anual !== '' && r.anual != null && !isNaN(parseFloat(r.anual))) INFL.anual[anio] = parseFloat(r.anual);
+        try { localStorage.setItem('lr_infl_' + anio, JSON.stringify({ mensual: INFL.mensual[anio], anual: INFL.anual[anio] })); } catch(e) {}
+      } catch(e) {}
+    });
+  }
+
   // balances PDF: MERGE — solo agregar/actualizar desde Sheets, nunca eliminar locales
   // Resumen de lo que esta corrida de applyCloudData completó/reparó en
   // balances automáticamente — para poder mostrárselo al usuario en pantalla
@@ -44468,6 +44594,16 @@ function buildCloudPayload() {
     Object.entries(años).map(([año, val]) => ({ empresa: emp, año, presupuesto: val }))
   );
 
+  // inflación — hasta ahora NUNCA viajaba a Sheets, bajo ninguna
+  // circunstancia (ni siquiera con "Publicar Todo"): se cargaba y guardaba
+  // solo en localStorage de ese navegador (lr_infl_2026), así que la
+  // inflación mensual cargada en un dispositivo no existía para ningún
+  // otro. Solo el año en curso (2026) es editable desde el dashboard — los
+  // años anteriores son constantes históricas del código fuente.
+  const inflacionRows = (INFL.mensual[2026] || []).some(v => v != null)
+    ? [{ anio: 2026, mensual_json: JSON.stringify(INFL.mensual[2026]), anual: INFL.anual[2026] ?? '' }]
+    : [];
+
   // balances PDF analizados — deduplicar por empresa_periodo antes de serializar
   const _balsDedup = {};
   Object.values(_balances || {}).forEach(b => {
@@ -44836,7 +44972,7 @@ function buildCloudPayload() {
   }));
 
   return { fact: factRows, resultado: resRows, personal: persRows, transferencias: transRows,
-           presupuesto: presRows, balances: balRows,
+           presupuesto: presRows, inflacion: inflacionRows, balances: balRows,
            balances_rubros: balRubrosRows, rubros: rubrosRows, rubros_lista: rubroListaRows,
            flujos: flujosRows, flujos_config: flujosConfigRows,
            mensual: mensualRows, er_mensual: erMensualRows,
