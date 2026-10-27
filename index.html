@@ -30561,6 +30561,116 @@ function tryParseERColumnasMeses(wb, fname) {
   return null;
 }
 
+// ── Parser de ER mensual "cuadro resumen final" con notas numeradas arriba
+// (NOTA 3.11, 3.12…) y, más abajo en la misma pestaña, una fila "Estado de
+// resultado" con los 12 meses como fecha (serial de Excel, día 1 de cada
+// mes) seguida de los rubros ya en la convención de signo del dashboard
+// (ventas positivo, costos/gastos negativo — a diferencia del parser de
+// "libro mayor" de arriba, acá NO hace falta invertir nada). Se valida
+// contra la fila "GANANCIA (PERDIDA) DEL EJERCICIO" — caso real: Aguas
+// Riojanas (ARSAU).
+function tryParseERNotasResumenMensual(wb, fname) {
+  const _num = v => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && v.trim() !== '') {
+      const n = parseFloat(v.replace(/\./g,'').replace(',','.'));
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  };
+  // Excel guarda fechas como serial (días desde 1899-12-30); 25569 son los
+  // días hasta 1970-01-01 — mismo cálculo que usa el resto del importador.
+  const _fechaSerie = v => {
+    if (typeof v !== 'number') return null;
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if (isNaN(d.getTime())) return null;
+    return { anio: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate() };
+  };
+  const _clasif = (lbl) => {
+    const t = String(lbl || '').toUpperCase().trim().replace(/\s+/g,' ').replace(/\([^)]*\)/g,'').trim();
+    if (!t) return null;
+    if (/^VENTAS\s+NETAS/.test(t)) return { cpt:'ventas' };
+    if (/^COSTO\s+DE\s+(LOS\s+)?SERVICIOS?\s+VENDIDOS?/.test(t)) return { cpt:'costo' };
+    if (/^UTILIDAD\s+BRUTA$/.test(t)) return { cpt:'utilBruta' };
+    if (/^GASTOS?\s+DE\s+ADMINISTRACI[OÓ]N/.test(t)) return { cpt:'gastoAdm' };
+    if (/^GASTOS?\s+DE\s+COMERCIALIZACI[OÓ]N/.test(t)) return { cpt:'gastoCom' };
+    if (/^EGRESO\s+POR\s+OBRAS?$/.test(t)) return { cpt:'gastoOper' };
+    if (/^OTROS\s+INGRESOS?$/.test(t)) return { cpt:'otrosIngresos' };
+    if (/^INGRESOS?\s+POR\s+OBRAS?\s+Y\s+SUBSIDIOS?$/.test(t)) return { cpt:'otrosIngresos' };
+    if (/^RDOS?\.?\s+FINANCIEROS?$/.test(t) || /^RESULTADOS?\s+FINANCIEROS?$/.test(t)) return { cpt:'resFinanciero' };
+    if (/^RECPAM$/.test(t)) return { cpt:'resFinanciero' };
+    if (/^IMPUESTO\s+A\s+LAS?\s+GANANCIAS?$/.test(t)) return { cpt:'impuesto' };
+    // El contenido entre paréntesis (ej. "(PERDIDA)") ya se eliminó arriba
+    // al normalizar — acá solo puede quedar "GANANCIA  DEL EJERCICIO".
+    if (/^GANANCIA\s+DEL\s+EJERCICIO$/.test(t)) return { cpt:'resEjercicio', esTotal:true };
+    return null;
+  };
+
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true });
+    if (rows.length < 10) continue;
+
+    let filaHdr = -1, colMeses = [], anio = null;
+    for (let i = 0; i < rows.length; i++) {
+      const c0 = String(rows[i][0] || '').trim().toUpperCase();
+      if (!/^ESTADO\s+DE\s+RESULTADOS?$/.test(c0)) continue;
+      const cols = [];
+      for (let c = 1; c < rows[i].length; c++) {
+        const f = _fechaSerie(rows[i][c]);
+        if (f && f.dia === 1) cols.push({ col:c, anio:f.anio, mes:f.mes });
+      }
+      if (cols.length >= 3) { filaHdr = i; colMeses = cols; anio = String(cols[0].anio); break; }
+    }
+    if (filaHdr < 0) continue;
+
+    const filas = [];
+    let filaTotal = null;
+    for (let i = filaHdr + 1; i < rows.length; i++) {
+      const lbl = String(rows[i][0] || '').trim();
+      if (!lbl) continue;
+      const cl = _clasif(lbl);
+      if (!cl) continue;
+      const valores = {};
+      colMeses.forEach(({ col, mes }) => {
+        const v = _num(rows[i][col]);
+        if (v != null && v !== 0) valores[mes] = v;
+      });
+      if (Object.keys(valores).length === 0) continue;
+      if (cl.esTotal) { filaTotal = { lbl, valores }; continue; }
+      filas.push({ lbl, conceptoStd: cl.cpt, valores });
+    }
+    if (!filaTotal) continue;
+
+    // Validar contra "GANANCIA (PERDIDA) DEL EJERCICIO": solo se acepta el
+    // archivo si la suma de los rubros de base (sin los subtotales
+    // utilBruta/resOperativo/resAntesImp, que ya están incluidos en los
+    // rubros que los componen) reconstruye exacto el resultado reportado.
+    const rubros = filas.filter(f => !['utilBruta','resOperativo','resAntesImp'].includes(f.conceptoStd));
+    const meses = Object.keys(filaTotal.valores).map(Number);
+    let reconcilia = meses.length > 0;
+    for (const m of meses) {
+      const suma = rubros.reduce((s, f) => s + (f.valores[m] || 0), 0);
+      const ref = filaTotal.valores[m];
+      const tol = Math.max(Math.abs(ref) * 0.0005, 5);
+      if (Math.abs(suma - ref) > tol) { reconcilia = false; break; }
+    }
+    if (!reconcilia) continue;
+
+    filas.push({ lbl: filaTotal.lbl, conceptoStd: 'resEjercicio', valores: filaTotal.valores });
+
+    let empresa = fname.replace(/\.xlsx?$/i,'')
+      .replace(/[_\-]+/g,' ')
+      .replace(/\b(ERP|ESTADO\s+DE\s+RD?O?S?|ESTADO\s+DE\s+RESULTADOS?|\d{4})\b/gi,'')
+      .replace(/\s+/g,' ').trim().toUpperCase();
+    if (!empresa) empresa = 'SIN NOMBRE';
+
+    return { empresa, anio, filas, hoja: sn, mesesCount: colMeses.length };
+  }
+  return null;
+}
+
 // ── Parser de ER en formato "libro mayor" / balance de sumas y saldos ──
 // Exportación contable con encabezado "Cuentas | Cuenta | <meses...>", donde
 // cada rubro trae una fila de sección (código + nombre), el detalle de
@@ -32401,6 +32511,17 @@ function handleImportWorkbook(wb, fname) {
   if (erColResult) {
     if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
     _mostrarPreviewERColumnas(erColResult, fname);
+    return;
+  }
+
+  // ── Intentar parser de ER mensual "cuadro resumen final" con notas
+  // numeradas arriba y fila "Estado de resultado" con meses como fecha —
+  // caso real: Aguas Riojanas (ARSAU) ──
+  const erNotasResumenResult = tryParseERNotasResumenMensual(wb, fname);
+  console.log('[LR] tryParseERNotasResumenMensual:', erNotasResumenResult ? erNotasResumenResult.empresa+' '+erNotasResumenResult.filas.length+' conceptos' : 'null');
+  if (erNotasResumenResult) {
+    if (currentPanel !== 'importar') showPanel('importar', document.querySelector('[onclick*=importar]'));
+    _mostrarPreviewERColumnas(erNotasResumenResult, fname);
     return;
   }
 
