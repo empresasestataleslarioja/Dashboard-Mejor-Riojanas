@@ -34885,7 +34885,17 @@ function parsearExcelBalance(wb, XLSX) {
     const _ancR= g('total activo no corriente','subtotal activo no corriente','total activos no corrientes','activo no corriente total','total del activo no corriente');
     const _ptR = gTotal('total pasivo','total del pasivo','pasivo total');
     const _pncR= g('total pasivo no corriente','subtotal pasivo no corriente','total pasivos no corrientes','pasivo no corriente total','total del pasivo no corriente');
-    const _pnR = g('total patrimonio','patrimonio neto','total patrimonio neto');
+    // Excluir filas que mencionan "pasivo" junto con "patrimonio neto" —
+    // necesario porque algunos balances exponen un renglón combinado
+    // "TOTAL PASIVO MÁS PATRIMONIO NETO" / "TOTAL PASIVO + PATRIMONIO
+    // NETO" (la verificación de que Activo = Pasivo + PN), que también
+    // contiene el texto "patrimonio neto" — sin esta exclusión, ese
+    // renglón combinado (que vale lo mismo que el Total Activo) se
+    // confundía con el Patrimonio Neto real, duplicando el Activo en vez
+    // de mostrar Activo − Pasivo. Caso real: Aguas Riojanas, balance 2025
+    // (el PN real está en una fila aparte, "Según estado respectivo").
+    const _pnR = buscarFilaMultiCol(ws, maxR, maxC, ['pasivo'],
+      'total patrimonio','patrimonio neto','total patrimonio neto','estado respectivo');
     ind.liquidez.activo_corriente     = _acR.val;
     ind.liquidez.pasivo_corriente     = _pcR.val;
     ind.solvencia.activo_total        = _atR.val;
