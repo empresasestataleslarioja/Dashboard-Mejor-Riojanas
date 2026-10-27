@@ -996,7 +996,13 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
 /* ═══ RESPONSIVE MOBILE ════════════════════════════════════ */
 @media (max-width: 768px) {
   /* ── Layout base ── */
-  .layout { flex-direction: column; }
+  /* El contenedor fila/columna real es <body> (display:flex;
+     flex-direction:row en la regla base) — no una clase ".layout", que
+     no existe en el HTML. Con el selector viejo, body se quedaba en
+     flex-direction:row también en celular, así que el sidebar (forzado
+     a width:100% más abajo) ocupaba todo el ancho de esa fila y el
+     contenido principal quedaba empujado fuera de la pantalla. */
+  body { flex-direction: column; }
 
   /* ── Sidebar → barra horizontal scrolleable ── */
   .sidebar {
@@ -1006,7 +1012,10 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
     scrollbar-width:none; -webkit-overflow-scrolling:touch;
   }
   .sidebar::-webkit-scrollbar { display:none; }
-  .sidebar > .logo-area { display:none; }
+  /* El bloque de marca es <div class="brand" id="sidebar-brand">, no
+     ".logo-area" (clase que tampoco existe) — sin este fix, el logo
+     institucional nunca se ocultaba y ocupaba casi toda la barra. */
+  .sidebar > .brand { display:none; }
   .nav { display:flex; flex-direction:row; flex-wrap:nowrap; gap:2px; padding:0; }
   .nav-item {
     padding:6px 10px; font-size:10px; border-radius:3px;
@@ -1032,8 +1041,12 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
 
   /* ── KPI strips ── */
   .kpi-strip { grid-template-columns:repeat(2,1fr) !important; gap:6px; }
-  .kpi-band { flex-wrap:wrap; }
-  .kpi-band-item { min-width:calc(50% - 1px); border-bottom:1px solid var(--bd); }
+  /* !important: la regla base .kpi-band (más abajo en el archivo, misma
+     especificidad) viene DESPUÉS en el CSS y sin esto gana ella, dejando
+     siempre nowrap — la tira de KPIs quedaba apretada en una sola fila
+     con cada valor cortado por elipsis en vez de pasar a varias líneas. */
+  .kpi-band { flex-wrap:wrap !important; }
+  .kpi-band-item { min-width:calc(50% - 1px) !important; border-bottom:1px solid var(--bd); }
   .kpi { padding:10px 12px; }
   .kpi-value { font-size:22px !important; }
 
@@ -1952,7 +1965,7 @@ self.onmessage = async (e) => {
   <div class="yr-block" style="display:none"><!-- chips moved to topbar --></div>
 
   <!-- Leyenda institucional inferior -->
-  <div style="padding:12px 14px 14px;border-top:1px solid var(--bd);margin-top:auto">
+  <div class="nav-footer" style="padding:12px 14px 14px;border-top:1px solid var(--bd);margin-top:auto">
     <div style="font-size:7.5px;font-family:var(--mono);text-transform:uppercase;
       letter-spacing:.12em;line-height:1.7;color:#fff">
       SECRETARIA DE<br>
@@ -5894,7 +5907,9 @@ document.addEventListener('DOMContentLoaded', checkAuth);
   #tbl-flujos-lista { display:table !important; }
 
   /* ── Layout ─────────────────────────────────────────────────────── */
-  .layout      { display:block !important; padding:0 !important; }
+  /* Mismo caso que en el media de mobile: el contenedor real es <body>,
+     no una clase ".layout" (no existe en el HTML). */
+  body         { display:block !important; padding:0 !important; }
   .scroll-area { padding:0 !important; overflow:visible !important;
                  height:auto !important; max-height:none !important; }
   .panel       { display:none !important; }
