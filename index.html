@@ -12746,6 +12746,68 @@ function parsearFlujoExcel(wb, XLSX) {
 
   if (!rubros.length) return null;
 
+  // ── POST-PROC: detectar sub-encabezados de categoría sin "TOTAL/SUBTOTAL"
+  // en el label (ej. "Gastos Salarial" usado dos veces con significados
+  // distintos en el mismo archivo, "Deuda Exigible de Corto Plazo",
+  // "Inversiones") — cada uno trae su propio detalle indentado debajo que
+  // ya suma exactamente ese valor. Sin marcarlos esTotal, la vista del
+  // flujo los contaba como un concepto más Y TAMBIÉN sumaba su propio
+  // detalle por separado, duplicando Total Egresos — caso real: Bodega
+  // Aminga (Total Egresos casi al doble del real). Se detecta por
+  // aritmética, no por palabra clave: si la suma de las filas siguientes
+  // (sin importar su tipo — el detalle puede incluir a su vez un
+  // sub-subtotal ya reconocido, ej. "Total Sueldos Permanentes") iguala
+  // este valor antes de pasarse, es un sub-encabezado.
+  for (let i = 0; i < rubros.length; i++) {
+    const r = rubros[i];
+    if (r.esTotal || (r.tipo !== 'egreso' && r.tipo !== 'ingreso')) continue;
+    if (r.actual == null || r.actual === 0) continue;
+    const objetivo = Math.abs(r.actual);
+    let suma = 0;
+    for (let j = i + 1; j < Math.min(i + 15, rubros.length); j++) {
+      suma += Math.abs(rubros[j].actual || 0);
+      if (Math.abs(suma - objetivo) <= Math.max(objetivo * 0.0005, 1)) {
+        r.esTotal = true;
+        r.nivel = 0;
+        break;
+      }
+      if (suma > objetivo * 1.0005 + 1) break; // ya no puede cuadrar sumando más
+    }
+  }
+
+  // ── POST-PROC: "sub-totales" intermedios sin detalle propio (ej. "Total
+  // Sueldos Permanentes" dentro del grupo "Gastos Salarial") — el label
+  // empieza con "Total" así que el detector genérico de arriba los marca
+  // tipo='total'/esTotal=true, igual que "TOTAL EGRESOS"/"TOTAL
+  // INGRESOS", pero en realidad son un concepto más del grupo que los
+  // contiene (sin ninguna fila indentada debajo que sume de vuelta a su
+  // valor). Si quedan con tipo='total', ni se muestran en el detalle ni
+  // su monto se suma en ningún lado (los subtotales mensuales del pie de
+  // la tabla — Egresos, Resultado Neto — recorren solo tipo='egreso', no
+  // tipo='total') — caso real: Bodega Aminga, Egresos mensuales ~20% por
+  // debajo del real. Se identifican por descarte: no son el total general
+  // de la sección (key 'total_ingresos'/'total_egresos') y no tienen
+  // filas propias que sumen de vuelta a su valor (mismo chequeo
+  // aritmético de arriba) — se reclasifican como un concepto más del
+  // grupo vecino.
+  rubros.forEach((r2, idx) => {
+    if (r2.tipo !== 'total') return;
+    if (r2.key === 'total_ingresos' || r2.key === 'total_egresos') return;
+    if (r2.actual == null || r2.actual === 0) return;
+    const objetivo = Math.abs(r2.actual);
+    let suma = 0, tieneDetallePropio = false;
+    for (let j = idx + 1; j < Math.min(idx + 15, rubros.length); j++) {
+      suma += Math.abs(rubros[j].actual || 0);
+      if (Math.abs(suma - objetivo) <= Math.max(objetivo * 0.0005, 1)) { tieneDetallePropio = true; break; }
+      if (suma > objetivo * 1.0005 + 1) break;
+    }
+    if (tieneDetallePropio) return; // es un sub-encabezado genuino — dejarlo como está
+    const vecino = (rubros[idx + 1] && (rubros[idx + 1].tipo === 'egreso' || rubros[idx + 1].tipo === 'ingreso')) ? rubros[idx + 1]
+      : (rubros[idx - 1] && (rubros[idx - 1].tipo === 'egreso' || rubros[idx - 1].tipo === 'ingreso')) ? rubros[idx - 1]
+      : null;
+    if (vecino) { r2.tipo = vecino.tipo; r2.esTotal = false; r2.nivel = 1; }
+  });
+
   // ── POST-PROC: corregir signo en resultado cuando egresos > ingresos ──
   {
     const sumIng = rubros.filter(r2=>r2.tipo==='ingreso'&&!r2.esTotal).reduce((s,r2)=>s+(r2.actual||0),0);
@@ -14210,12 +14272,19 @@ function _flujoIngTotal(f) {
 
 function _flujoEgrTotal(f) {
   if (!f) return null;
-  // Usar el ÚLTIMO rubro tipo='total': el grand total siempre cierra la lista de egresos
-  // (los intermedios como SUBTOTAL APORTES y TOTAL GASTOS OPERATIVOS van antes)
+  // Prioridad 1: label explícito "TOTAL EGRESOS" — más confiable que "el
+  // último rubro tipo='total'" cuando hay OTRO total menor después del
+  // total real (ej. "Total de Gastos Bancarios", que cierra el cálculo
+  // de fondos a solicitar recién después de TOTAL EGRESOS) — caso real:
+  // Bodega Aminga, donde ese total menor terminaba siendo tomado como si
+  // fuera el total de egresos (una cifra ínfima en vez de la real).
+  const porLabel = (f.rubros||[]).find(r2 => /TOTAL\s*(DE\s*)?EGR/i.test(r2.label||''));
+  // Prioridad 2: el ÚLTIMO rubro tipo='total' (el grand total suele cerrar
+  // la lista de egresos — los intermedios como SUBTOTAL APORTES y TOTAL
+  // GASTOS OPERATIVOS van antes).
   const totRows = (f.rubros||[]).filter(r2 => r2.tipo === 'total');
-  const r = totRows.length ? totRows[totRows.length - 1]
-          : (f.rubros||[]).find(r2 => /TOTAL\s*(DE\s*)?EGR/i.test(r2.label||''))
-          ?? (f.rubros||[]).find(r2 => r2.tipo === 'egreso' && r2.esTotal);
+  const r = porLabel ?? (totRows.length ? totRows[totRows.length - 1]
+          : (f.rubros||[]).find(r2 => r2.tipo === 'egreso' && r2.esTotal));
   // Fallback: sumar conceptos de egreso excluyendo totalizadores intermedios
   if (!r) {
     const egrRows = (f.rubros||[]).filter(r2 => {
