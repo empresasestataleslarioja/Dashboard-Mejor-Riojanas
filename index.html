@@ -7707,16 +7707,21 @@ function _rptEmpresasRubros() {
       // de la Ficha Institucional, no solo como marcador.
       const notaInst = (DATA.notas && DATA.notas[e]) || '';
       // Empresa: el nombre NUNCA debe cortarse — pedido explícito (antes
-      // white-space:nowrap + text-overflow:ellipsis con una columna angosta
-      // (15%) recortaba nombres largos como "BODEGA Y FINCAS DE AMINGA" o
-      // "CERDO DE LOS LLANOS" a "...D" / "...LLAN..." tanto en la vista
-      // previa como al imprimir). Ahora el nombre envuelve a una 2ª línea
-      // si hace falta (igual que ya se permite para Actividad/Observaciones)
-      // en vez de perder caracteres, y la columna se ensanchó (15%→22%,
-      // restado de Actividad e Instrumento de creación) para que la
-      // mayoría de los nombres reales entren en una sola línea de todos
-      // modos. El badge INACTIVA conserva su propio nowrap para no
-      // partirse a la mitad si cae en el límite de línea.
+      // white-space:nowrap + text-overflow:ellipsis recortaba nombres
+      // largos como "BODEGA Y FINCAS DE AMINGA" o "CERDO DE LOS LLANOS" a
+      // "...D" / "...LLAN..." tanto en la vista previa como al imprimir).
+      // El nombre envuelve a una 2ª línea si hace falta (igual que ya se
+      // permite para Actividad/Observaciones) en vez de perder caracteres.
+      // El badge INACTIVA conserva su propio nowrap para no partirse a la
+      // mitad si cae en el límite de línea.
+      //
+      // Constitución (7%) era más angosta que su propio encabezado
+      // ("CONSTITUCIÓN" no entraba en una línea y se solapaba visualmente
+      // con "Instrumento de creación", la columna siguiente — pedido
+      // explícito con captura). Se le restó ancho a Actividad (22%→16%,
+      // su contenido igual se corta a 2 líneas con line-clamp más abajo,
+      // así que no pierde legibilidad) para dárselo a Constitución
+      // (7%→13%) sin tocar Empresa/CUIT, que ya estaban bien.
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
@@ -7733,8 +7738,8 @@ function _rptEmpresasRubros() {
           <th style="text-align:left;padding:5px 8px;width:22%">Empresa</th>
           <th style="text-align:left;padding:5px 8px;width:9%">CUIT</th>
           <th style="text-align:left;padding:5px 8px;width:10%">Tipo Societario</th>
-          <th style="text-align:left;padding:5px 8px;width:22%">Actividad</th>
-          <th style="text-align:left;padding:5px 8px;width:7%">Constitución</th>
+          <th style="text-align:left;padding:5px 8px;width:16%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:13%">Constitución</th>
           <th style="text-align:left;padding:5px 8px;width:13%">Instrumento de creación</th>
           <th style="text-align:left;padding:5px 8px;width:17%">Observaciones</th>
         </tr></thead>
