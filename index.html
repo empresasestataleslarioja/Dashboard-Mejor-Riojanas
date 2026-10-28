@@ -12808,6 +12808,45 @@ function parsearFlujoExcel(wb, XLSX) {
     if (vecino) { r2.tipo = vecino.tipo; r2.esTotal = false; r2.nivel = 1; }
   });
 
+  // ── POST-PROC: la fila de Imp. Créd/Déb (ej. "Total de Gastos
+  // Bancarios") empieza con "Total", así que el detector genérico la
+  // marca tipo='total'/esTotal=true igual que un totalizador de egresos —
+  // eso la excluye de TODOS los `!r.esTotal && _esImpCredDeb(...)` que usa
+  // el resto del dashboard para ubicarla (pie de tabla, comparativos,
+  // reportes), así que el impuesto a créditos/débitos queda afuera del
+  // cálculo en vez de impactar en el resultado neto — instrucción
+  // explícita del usuario: "el total de Gastos Bancarios representaría el
+  // impuesto a los créditos y débitos por tanto deben impactar en DBG" —
+  // caso real: Bodega Aminga. Se recategoriza como un ajuste de resultado
+  // (mismo trato que el 1,2% estimado), nunca como total de egresos.
+  rubros.forEach(r2 => {
+    if (_esImpCredDeb(r2.label)) { r2.esTotal = false; r2.tipo = 'resultado'; r2.nivel = 1; }
+  });
+
+  // ── POST-PROC: si existe una fila explícita de Imp. Créd/Déb, el
+  // resultado final correcto es el ÚLTIMO totalizador tipo resultado que
+  // aparece DESPUÉS de ella (ej. "TOTAL A SOLICITAR", ya con el impuesto
+  // descontado) — no el primero que menciona FONDOS/NECESIDAD (ej.
+  // "SUBTOTAL DE FONDOS A REQUERIR", previo al impuesto, que de otro modo
+  // se toma como si fuera el resultado final). El que queda sin la key se
+  // reclasifica como 'subtotal_resultado' (subtotal pre-impuesto) para no
+  // perder su lugar en la tabla — caso real: Bodega Aminga, donde
+  // "SUBTOTAL DE FONDOS A REQUERIR" (-95.426.265,85) y "Total de Gastos
+  // Bancarios" (-1.145.115,19) suman exactamente "TOTAL A SOLICITAR"
+  // (-96.571.381,04).
+  {
+    const idxImp = rubros.findIndex(r2 => _esImpCredDeb(r2.label));
+    if (idxImp >= 0) {
+      const posteriores = rubros.filter((r2, idx) => idx > idxImp && r2.tipo === 'resultado' &&
+        (r2.key === 'necesidad_fondos' || r2.key === 'subtotal_resultado') && r2.actual != null);
+      if (posteriores.length) {
+        const final = posteriores[posteriores.length - 1];
+        rubros.forEach(r2 => { if (r2 !== final && r2.key === 'necesidad_fondos') r2.key = 'subtotal_resultado'; });
+        final.key = 'necesidad_fondos';
+      }
+    }
+  }
+
   // ── POST-PROC: corregir signo en resultado cuando egresos > ingresos ──
   {
     const sumIng = rubros.filter(r2=>r2.tipo==='ingreso'&&!r2.esTotal).reduce((s,r2)=>s+(r2.actual||0),0);
