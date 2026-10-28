@@ -11931,19 +11931,40 @@ function _aplicarPerfilEmpresa(res) {
     'total':       { tipo:'total',   esTotal:true,  nivel:0 },
     'resultado':   { tipo:'resultado',esTotal:true, nivel:0 },
   };
+  // Una fila de Imp. Créd/Déb (ej. "Total de Gastos Bancarios") nunca debe
+  // quedar esTotal:true, sin importar qué diga un perfil guardado — ver
+  // _forzarNoTotalImpCD más abajo.
   const rubrosConPerfil = res.rubros.map(function(r) {
     const lUP = r.label.toUpperCase().trim();
     const tipoVal = mappings[lUP];
     if (!tipoVal) return r;
     // Soportar formato nuevo (tipo val) y formato viejo (std key como egreso_personal)
     const dec = TIPO_DEC[tipoVal];
-    if (dec) return Object.assign({}, r, dec, { _tipoConfirmado: true });
+    if (dec) return _forzarNoTotalImpCD(Object.assign({}, r, dec, { _tipoConfirmado: true }));
     // Formato viejo: mapear std key a tipo
     const std = FLUJO_RUBROS_STD.find(function(s){ return s.key === tipoVal; });
-    if (std) return Object.assign({}, r, { tipo: std.tipo, esTotal: std.tipo==='total'||std.tipo==='resultado', nivel: (std.tipo==='egreso'||std.tipo==='ingreso')&&!std.key.startsWith('total')?1:0, _tipoConfirmado: true });
+    if (std) return _forzarNoTotalImpCD(Object.assign({}, r, { tipo: std.tipo, esTotal: std.tipo==='total'||std.tipo==='resultado', nivel: (std.tipo==='egreso'||std.tipo==='ingreso')&&!std.key.startsWith('total')?1:0, _tipoConfirmado: true }));
     return r;
   });
   return Object.assign({}, res, { rubros: rubrosConPerfil, _perfilAplicado: key });
+}
+
+// Invariante que ni un perfil guardado ni el wizard de mapeo pueden
+// violar: una fila de Imp. Créd/Déb (ej. "Total de Gastos Bancarios")
+// tiene que quedar esTotal:false SIEMPRE, porque los ~13 call sites del
+// dashboard que la ubican (pie de la tabla de flujo, comparativos,
+// reportes) filtran exactamente por `!r.esTotal && _esImpCredDeb(label)`.
+// El combo "Resultado / Superávit / Fondos" del wizard/perfil es una
+// única opción que no distingue esto (TIPO_DEC['resultado'] siempre pone
+// esTotal:true) — un perfil guardado ANTES de que existiera esta
+// distinción (o una elección manual en el wizard) deja esa fila
+// esTotal:true otra vez en cada reimportación, aunque parsearFlujoExcel
+// la haya detectado bien al leer el Excel — caso real: Bodega Aminga,
+// "Total de Gastos Bancarios" dejaba de reconocerse como Imp. Créd/Déb
+// (quedaba en $0) pese a que el parser ya la clasificaba correctamente.
+function _forzarNoTotalImpCD(r) {
+  if (r && r.esTotal && _esImpCredDeb(r.label)) return Object.assign({}, r, { esTotal: false, nivel: 1 });
+  return r;
 }
 
 function _guardarPerfilEmpresa(empresa, mappings) {
@@ -12134,7 +12155,7 @@ function _aplicarMapeadoWizard() {
     var dec = _decodeTipoVal(tipoVal);
     if (!dec) return r;
     return Object.assign({}, r, dec, { _tipoConfirmado: true });
-  }).filter(Boolean);
+  }).map(_forzarNoTotalImpCD).filter(Boolean);
 
   if (!rubrosNuevos.length) {
     if (msgEl) { msgEl.textContent = '⚠ Asigná al menos un concepto antes de continuar'; msgEl.style.color = 'var(--neg)'; }
