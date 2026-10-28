@@ -12585,6 +12585,17 @@ function parsearFlujoExcel(wb, XLSX) {
   // ── PASO 4: Leer rubros ───────────────────────────────────────────
   const rubros = [];
   let _seccion = 'egreso'; // tracking de sección activa
+  // Si ningún separador explícito ("INGRESOS"/"EGRESOS", o un label que
+  // arranca con esas palabras) marcó la sección todavía, _seccion queda en
+  // su valor por defecto ('egreso') aunque el detalle que se está leyendo
+  // en realidad sea de ingresos — caso real: Bodega Aminga, cuyo primer
+  // cuadro arranca directo en el detalle ("Fraccionado en Bodega", "UVA
+  // para Pasas"…) sin ninguna fila "INGRESOS" que lo preceda, hasta llegar
+  // a "TOTAL INGRESOS". Se corrige retroactivamente: cuando el PRIMER
+  // totalizador que aparece es de ingresos y no hubo separador explícito
+  // antes, todo lo leído hasta ahí era ingreso, no egreso.
+  let _seccionExplicita = false;
+  let _corregidoRetroactivo = false;
 
   for (let r = resumenRow + 1; r <= rng.e.r; r++) {
     let lbl = str(r, colLabel).trim();
@@ -12598,8 +12609,8 @@ function parsearFlujoExcel(wb, XLSX) {
     if (!lbl) continue;
     const lUP = lbl.toUpperCase();
     // Actualizar sección según separadores
-    if (lUP === 'INGRESOS') { _seccion = 'ingreso'; continue; }
-    if (lUP === 'EGRESOS')  { _seccion = 'egreso';  continue; }
+    if (lUP === 'INGRESOS') { _seccion = 'ingreso'; _seccionExplicita = true; continue; }
+    if (lUP === 'EGRESOS')  { _seccion = 'egreso';  _seccionExplicita = true; continue; }
     // Saltar otras filas de sección
     if (lUP === 'RESUMEN' || lUP === 'DETALLE') continue;
     // Saltar encabezados de columna repetidos a mitad de hoja (algunos
@@ -12668,8 +12679,8 @@ function parsearFlujoExcel(wb, XLSX) {
 
     // Filas de sección con valor (ej: "INGRESOS" / "EGRESOS" en CUADRO RESUMEN)
     if (!esResultadoLbl && !esTotalizador) {
-      if (/^INGRESO/.test(lUP)) _seccion = 'ingreso';
-      else if (/^EGRESO|^GASTO/.test(lUP)) _seccion = 'egreso';
+      if (/^INGRESO/.test(lUP)) { _seccion = 'ingreso'; _seccionExplicita = true; }
+      else if (/^EGRESO|^GASTO/.test(lUP)) { _seccion = 'egreso'; _seccionExplicita = true; }
     }
     // Detectar tipo — usa colCategoria (si existe) con prioridad, luego _seccion
     let tipoDesdeCategoria = null;
@@ -12684,6 +12695,14 @@ function parsearFlujoExcel(wb, XLSX) {
       : tipoDesdeCategoria !== null ? tipoDesdeCategoria
       : _seccion === 'ingreso' ? 'ingreso'
       : 'egreso';
+    // Corrección retroactiva: si llegamos al primer "TOTAL INGRESOS" sin
+    // que ningún separador explícito haya marcado la sección todavía, todo
+    // lo leído hasta ahora (que quedó con el tipo por defecto 'egreso') en
+    // realidad era detalle de ingresos.
+    if (tipo === 'ingreso' && esTotalizador && !_seccionExplicita && !_corregidoRetroactivo) {
+      rubros.forEach(r2 => { if (!r2.esTotal && r2.tipo === 'egreso') r2.tipo = 'ingreso'; });
+      _corregidoRetroactivo = true;
+    }
     // Actualizar sección después de total de ingresos
     if (tipo === 'ingreso' && esTotalizador) _seccion = 'egreso';
 
