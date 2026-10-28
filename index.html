@@ -11956,6 +11956,24 @@ function _guardarPerfilEmpresa(empresa, mappings) {
   try { marcarPendienteGuardar(['flujos']); } catch(e) {}
 }
 
+// Determinar el valor de combo del wizard ("Subtotal Egresos", "Resultado
+// / Superávit / Fondos", etc.) que corresponde al tipo/esTotal YA
+// detectado por el parser para una fila — usada tanto para precargar el
+// combo (_mostrarWizardMapeado) como para decidir si el usuario lo dejó
+// sin tocar (_aplicarMapeadoWizard): debe ser la MISMA función en los dos
+// lados, si no un combo que colapsa dos casos distintos a la misma opción
+// (ver comentario en _aplicarMapeadoWizard sobre "resultado") puede
+// perder información aunque el usuario no haya cambiado nada.
+function _rubroToTipoVal(r) {
+  if (r.tipo === 'resultado') return 'resultado';
+  if (r.tipo === 'ingreso' && r.esTotal) return 'ingreso|tot';
+  if (r.tipo === 'ingreso')  return 'ingreso';
+  if (r.tipo === 'total')    return 'total';
+  if (r.tipo === 'egreso' && r.esTotal) return 'egreso|sub';
+  if (r.tipo === 'egreso')   return 'egreso';
+  return '';
+}
+
 function _mostrarWizardMapeado(res) {
   _flujoExcelPendiente = res;
   var container = document.getElementById('wizard-rows-container');
@@ -11977,17 +11995,6 @@ function _mostrarWizardMapeado(res) {
     { val:'resultado',   lbl:'Resultado / Superávit / Fondos' },
   ];
   var stdOpts = TIPO_OPTS.map(function(o){ return '<option value="'+o.val+'">'+o.lbl+'</option>'; }).join('');
-
-  // Determinar valor actual del dropdown desde tipo/esTotal del rubro
-  function _rubroToTipoVal(r) {
-    if (r.tipo === 'resultado') return 'resultado';
-    if (r.tipo === 'ingreso' && r.esTotal) return 'ingreso|tot';
-    if (r.tipo === 'ingreso')  return 'ingreso';
-    if (r.tipo === 'total')    return 'total';
-    if (r.tipo === 'egreso' && r.esTotal) return 'egreso|sub';
-    if (r.tipo === 'egreso')   return 'egreso';
-    return '';
-  }
 
   // Solo mostrar rubros que NO fueron confirmados por perfil guardado
   var rubrosNuevos = res.rubros.filter(function(r) { return !r._tipoConfirmado; });
@@ -12102,9 +12109,21 @@ function _aplicarMapeadoWizard() {
     // corregir el tipo explícitamente, pero no debe descartar lo que el parser ya clasificó
     if (r.tipo === 'resultado' || r.tipo === 'egreso' || r.tipo === 'ingreso' ||
         (r.esTotal && (r.tipo === 'total' || r.tipo === 'ingreso'))) {
-      // Si el wizard asignó explícitamente un tipo diferente, aplicarlo
+      // Si el wizard asignó explícitamente un tipo DISTINTO al que ya traía
+      // la fila, aplicarlo — pero si el <select> quedó en su valor
+      // precargado (el usuario no lo tocó), NO re-derivar tipo/esTotal
+      // desde ese valor: _decodeTipoVal('resultado') siempre devuelve
+      // esTotal:true, pero _rubroToTipoVal (la que precarga el combo)
+      // colapsa a la MISMA opción 'resultado' tanto una fila resultado que
+      // SÍ es un total (ej. "TOTAL A SOLICITAR") como una que NO lo es
+      // (ej. "Total de Gastos Bancarios", que el parser deja esTotal:false
+      // a propósito para que _esImpCredDeb pueda encontrarla con
+      // `!r.esTotal`). Re-decodificar un combo sin tocar perdía esa
+      // distinción y ponía esTotal:true en los dos casos — caso real:
+      // Bodega Aminga, "Total de Gastos Bancarios" dejaba de reconocerse
+      // como Imp. Créd/Déb apenas el archivo pasaba por el wizard.
       var tipoExpl = rubroAssignByOrigIdx[i];
-      if (tipoExpl) {
+      if (tipoExpl && tipoExpl !== _rubroToTipoVal(r)) {
         var decExpl = _decodeTipoVal(tipoExpl);
         if (decExpl) return Object.assign({}, r, decExpl, { _tipoConfirmado: true });
       }
