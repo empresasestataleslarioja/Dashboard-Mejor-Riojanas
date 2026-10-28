@@ -2286,7 +2286,7 @@ self.onmessage = async (e) => {
 
     <!-- Panel flotante de configuración Cloud (fuera del flujo normal) -->
     <div id="cloud-panel" style="display:none;position:fixed;top:60px;right:20px;
-      width:340px;background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
+      width:340px;max-height:calc(100vh - 80px);overflow-y:auto;background:var(--s1);border:1px solid var(--bd2);border-radius:5px;
       box-shadow:0 12px 32px rgba(0,0,0,.5);z-index:300;padding:18px 20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text);font-weight:600">☁ Sincronización Google Sheets</span>
