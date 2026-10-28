@@ -2049,5 +2049,36 @@ group('_repararIngresosBrutosComoVenta — reclasifica "Ingresos Brutos" de vent
     'es idempotente — la segunda vez no encuentra nada para reclasificar');
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// index.html embebe el bridge de Apps Script completo (botón "⬇ Descargar
+// lr_bridge_v5.gs" — const codigo = "...") como texto para que el usuario
+// lo copie a su proyecto de Apps Script real. Es una SEGUNDA copia del
+// mismo código fuente que vive en apps-script/lr_bridge_v5.gs — un fix
+// aplicado a uno de los dos (como pasó realmente: el chequeo de
+// count_trans/count_autoridades y, antes, el soporte de "inflacion" y el
+// fix de headers de upsertRubros) puede quedar sin aplicarse en el otro
+// sin que ningún otro test lo note, porque ninguno ejecuta el .gs. Quien
+// descargue el bridge desde el dashboard sigue recibiendo la versión
+// vieja, con el bug ya "arreglado" en el repo pero nunca desplegado en
+// Sheets — exactamente el patrón reportado como "problemas con la
+// cantidad en DBG e impactos en sheets" que se repetía. Este test no
+// verifica NINGÚN comportamiento del bridge (no hay runtime de Apps
+// Script en Node) — solo que las dos copias no puedan divergir en
+// silencio.
+group('Bridge Apps Script embebido en index.html — debe ser idéntico a apps-script/lr_bridge_v5.gs', () => {
+  const GS_PATH = path.join(__dirname, '..', 'apps-script', 'lr_bridge_v5.gs');
+  const gs = fs.readFileSync(GS_PATH, 'utf8');
+  const m = html.match(/const codigo = "([\s\S]*?)";\n/);
+  assert(!!m, 'index.html tiene un const codigo = "..."; con el bridge embebido');
+  let embedded = null;
+  if (m) {
+    try { embedded = JSON.parse('"' + m[1] + '"'); } catch (e) { embedded = null; }
+  }
+  assert(embedded !== null, 'el bridge embebido es un string JS válido (sin escapes rotos)');
+  assert(embedded === gs,
+    'el bridge embebido en index.html coincide EXACTO con apps-script/lr_bridge_v5.gs — ' +
+    'si tocaste uno de los dos, replicá el cambio en el otro antes de publicar');
+});
+
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
 process.exit(fail ? 1 : 0);

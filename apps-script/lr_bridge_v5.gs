@@ -1,6 +1,23 @@
 // ══════════════════════════════════════════════════════════════════
 //  lr_bridge_v5.gs — Google Apps Script
 //  Dashboard BI La Rioja v6
+//  Cambios vs v5.10:
+//    · doGet: tab=count_trans y tab=count_autoridades son NUEVOS — antes
+//      no existían, así que caían al branch por defecto (que devuelve
+//      TODAS las hojas enteras) en vez de un error. El dashboard
+//      (syncSoloTransferencias/syncSoloAutoridades) interpreta esa
+//      respuesta como `{ transferencias: <número> }` o
+//      `{ autoridades: <número> }` para verificar que el conteo publicado
+//      coincide con el conteo en Sheets tras un "↑ Publicar" — al recibir
+//      en cambio el arreglo COMPLETO de filas (nunca un número), la
+//      comparación `enSheets === total` nunca podía ser verdadera, así
+//      que el control de verificación post-publicación mostraba SIEMPRE
+//      "⚠ Enviadas X, en Sheets [object Object]... Reintentá si no
+//      coinciden" — incluso cuando la publicación había sido exitosa.
+//      Caso real reportado: "problemas con la cantidad en DBG e impactos
+//      en sheets" en cada publicación de transferencias, sin que hubiera
+//      ningún problema real de datos. Ahora ambos tabs devuelven
+//      exclusivamente el conteo de filas de su hoja.
 //  Cambios vs v5.9:
 //    · Nueva sección "inflacion": la inflación mensual cargada desde el
 //      dashboard (solo el año en curso es editable ahí) no viajaba a
@@ -163,6 +180,10 @@ function doGet(e) {
   }
 
   if (tab === 'meta') return jsonResp({ meta: leerMeta(ss) });
+  // Conteos livianos para verificar una publicación sin bajar la hoja
+  // entera (ver changelog de v5.10 arriba) — devuelven SOLO un número.
+  if (tab === 'count_trans')       return jsonResp({ transferencias: leerHoja(ss, TAB.transferencias).length });
+  if (tab === 'count_autoridades') return jsonResp({ autoridades:    leerHoja(ss, TAB.autoridades).length });
   return jsonResp({
     fact:            leerHoja(ss, TAB.fact),
     resultado:       leerHoja(ss, TAB.resultado),
