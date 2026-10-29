@@ -2143,14 +2143,23 @@ self.onmessage = async (e) => {
 
     </div><!-- /topbar-row1 -->
 
-    <!-- Avisos de guardado/sync largos (ej. "rubros omitido del sync…") —
-         en una fila propia de ancho completo, en vez de apretados adentro
-         de la zona C del topbar (ancho fijo, sin wrap): un mensaje largo
-         terminaba empujando/aplastando el resto de la barra en vez de
-         bajar de línea. Se muestra/oculta igual que antes (ver
-         showStorageStatus), solo cambió dónde vive en el layout. -->
-    <div id="storage-status" style="display:none;padding:5px 14px;font-size:9.5px;font-family:var(--mono);
-      line-height:1.5;white-space:normal;word-break:break-word;border-top:1px solid var(--bd)"></div>
+    <!-- Avisos de guardado/sync largos (ej. "rubros omitido del sync…",
+         "✓ publicado", mensajes de syncSoloXxx/showStorageStatus) — flotan
+         SOBRE el contenido (position:absolute, fuera del flujo normal) en
+         vez de ocupar una fila propia dentro de .topbar (flujo normal):
+         .topbar es hermano en columna de .scroll-area (el contenido del
+         panel activo), así que aparecer/desaparecer esta fila cambiaba la
+         altura real de .topbar y empujaba TODO el contenido de abajo
+         25px+ hacia abajo o arriba en cada sync — en cualquier dispositivo,
+         no solo en uno angosto. Reportado como "se desplazan las
+         pantallas visibles" cada vez que el topbar se actualiza. Ahora
+         se superpone (igual que ya hacía _mostrarBannerCierre) sin mover
+         nada debajo; se muestra/oculta igual que antes (ver
+         showStorageStatus), solo cambió cómo ocupa espacio. -->
+    <div id="storage-status" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:90;
+      padding:5px 14px;font-size:9.5px;font-family:var(--mono);background:var(--s1);
+      line-height:1.5;white-space:normal;word-break:break-word;border-top:1px solid var(--bd);
+      border-bottom:1px solid var(--bd);box-shadow:0 6px 14px rgba(0,0,0,.25)"></div>
 
     <!-- Panel flotante de usuario ─────────────────────────────── -->
     <div id="user-panel" style="display:none;position:fixed;top:44px;right:12px;
