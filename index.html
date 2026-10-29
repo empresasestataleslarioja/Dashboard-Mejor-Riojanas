@@ -15193,6 +15193,22 @@ function _desvincularAuto(keyA, keyB) {
   buildComparacionFlujos();
 }
 
+// Llamado desde el "+" de un vínculo AUTOMÁTICO en "Vínculos definidos" —
+// pedido explícito: poder ver los vínculos automáticos ahí mismo (no solo
+// como marca chica dentro de la tabla) y agregar o quitar conceptos, igual
+// que ya se puede con los vínculos manuales. Un par automático no vive en
+// _mapeos (se recalcula de cero en cada render — ver _autoMerged/_fuzzyPares
+// más arriba), así que "editarlo" significa primero convertirlo en un
+// grupo manual real de 1:1 (con el mismo par que ya tenía) y recién después
+// dejarlo listo para ampliar, exactamente como _mapeoExpandirGrupo con un
+// vínculo manual preexistente.
+function _mapeoPromoverAuto(keyA, keyB) {
+  _guardarMapeoFlujoLS(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, [keyA], [keyB]);
+  _mapeoState.selA.add(keyA);
+  _mapeoState.selB.add(keyB);
+  buildComparacionFlujos();
+}
+
 function _mapeoToggleA(keyA) {
   if (_mapeoState.selA.has(keyA)) _mapeoState.selA.delete(keyA);
   else _mapeoState.selA.add(keyA);
@@ -15637,7 +15653,13 @@ function buildComparacionFlujos() {
 
   const hasUnmatched = _soloA.length > 0 || _soloB.length > 0;
   const hasExpandable = _expandA.length > 0 || _expandB.length > 0;
-  const showPanel    = !bSinRubros && (formatoDif || _mapeos.length > 0 || hasUnmatched);
+  // Vínculos automáticos (exacto o fuzzy) — ver _gruposSection más abajo.
+  // Calculado acá (y no ahí) para que el panel se abra automáticamente
+  // apenas hay algo que mostrar, aunque no haya ni vínculos manuales ni
+  // conceptos sin pareja — antes el panel quedaba oculto por completo en
+  // ese caso y los vínculos automáticos no tenían dónde mostrarse.
+  const _autoVinculos = _autoMerged.filter(par => par.rB);
+  const showPanel    = !bSinRubros && (formatoDif || _mapeos.length > 0 || hasUnmatched || _autoVinculos.length > 0);
 
   if (bSinRubros) {
     warnB.innerHTML = `<div style="background:#2a1000;border:1px solid #ff8c47;border-radius:4px;
@@ -15683,17 +15705,48 @@ function buildComparacionFlujos() {
       if (panel) panel.style.display = oculto ? '' : 'none';
       if (btn)   btn.textContent = oculto ? '▲ Ocultar panel' : '▼ Mostrar panel';
     };
+    // Vínculos automáticos (exacto o fuzzy) para mostrar junto a los
+    // manuales — pedido explícito: "visible también para ver que vinculó
+    // y en caso poder agregar o quitar uno o más conceptos vinculados",
+    // no solo como marca chica dentro de la tabla. _autoVinculos (calculado
+    // más arriba, antes de showPanel) ya excluye los rubros de grupos
+    // manuales (_manualKeySetA) y ya tiene aplicados los rechazos de
+    // _desvincularAuto, así que esta lista es exactamente "lo que el
+    // auto-matching dejó vinculado ahora mismo".
+    const _mkVinculoRow = (lblA, lblB, tagHtml, btnMas, btnEquis) => `<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:4px;
+            font-size:8px;font-family:var(--mono)">
+            <span style="flex:1;color:#2ecc8a;padding:3px 6px;background:rgba(71,255,180,.06);
+              border-radius:2px;line-height:1.4">${lblA}${tagHtml}</span>
+            <span style="color:var(--dim);padding-top:3px;flex-shrink:0">↔</span>
+            <span style="flex:1;color:var(--dim);padding:3px 6px;background:var(--s3);
+              border-radius:2px;line-height:1.4">${lblB}</span>
+            ${btnMas}
+            ${btnEquis}
+          </div>`;
     const _gruposSection = `
       <div style="margin-bottom:10px">
         <div style="font-size:7.5px;color:#e8c84a;letter-spacing:.08em;text-transform:uppercase;
           margin-bottom:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span>Vínculos definidos (${_mapeos.length})</span>
+          <span>Vínculos definidos (${_mapeos.length + _autoVinculos.length})</span>
           ${_btnVincular}
           ${_mapeos.length ? `<button onclick="_mapeoBorrarTodos()" style="padding:2px 7px;
             background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);border-radius:2px;
             font-size:7px;color:var(--neg);cursor:pointer;letter-spacing:0;text-transform:none">
             Borrar todos</button>` : ''}
         </div>
+        ${_autoVinculos.map(({rA, rB, _fuzzy}) => {
+          const tagHtml = `<span style="font-size:6.5px;color:${_fuzzy?'#4ab8e8':'var(--dim)'};margin-left:5px;opacity:.8"
+            title="Vínculo automático ${_fuzzy?'por similitud de denominación':'por coincidencia exacta'} — + para ampliarlo, ✕ para desvincularlo">${_fuzzy?'≈ auto':'⚡ auto'}</span>`;
+          const btnMas = `<button onclick="_mapeoPromoverAuto('${_esc(rA.key)}','${_esc(rB.key)}')" style="padding:1px 5px;flex-shrink:0;
+              background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.2);
+              border-radius:2px;font-size:7px;color:#2ecc8a;cursor:pointer;margin-top:1px"
+              title="Agregar conceptos a este vínculo">+</button>`;
+          const btnEquis = `<button onclick="_desvincularAuto('${_esc(rA.key)}','${_esc(rB.key)}')" style="padding:1px 5px;flex-shrink:0;
+              background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);
+              border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer;margin-top:1px"
+              title="Desvincular — este vínculo automático no corresponde">✕</button>`;
+          return _mkVinculoRow(_lbl(rA.label, 28), _lbl(rB.label, 28), tagHtml, btnMas, btnEquis);
+        }).join('')}
         ${_mapeos.map((g, idx) => {
           const lblA = g.keysA.map(k => {
             const r = fA.rubros.find(r => r.key === k);
@@ -15703,22 +15756,15 @@ function buildComparacionFlujos() {
             const r = fB.rubros.find(r => r.key === k);
             return r ? _lbl(r.label, 28) : k;
           }).join(' <span style="opacity:.5">+</span> ');
-          return `<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:4px;
-            font-size:8px;font-family:var(--mono)">
-            <span style="flex:1;color:#2ecc8a;padding:3px 6px;background:rgba(71,255,180,.06);
-              border-radius:2px;line-height:1.4">${lblA}</span>
-            <span style="color:var(--dim);padding-top:3px;flex-shrink:0">↔</span>
-            <span style="flex:1;color:var(--dim);padding:3px 6px;background:var(--s3);
-              border-radius:2px;line-height:1.4">${lblB}</span>
-            <button onclick="_mapeoExpandirGrupo(${idx})" style="padding:1px 5px;flex-shrink:0;
+          const btnMas = `<button onclick="_mapeoExpandirGrupo(${idx})" style="padding:1px 5px;flex-shrink:0;
               background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.2);
               border-radius:2px;font-size:7px;color:#2ecc8a;cursor:pointer;margin-top:1px"
-              title="Agregar conceptos a este vínculo">+</button>
-            <button onclick="_mapeoBorrar(${idx})" style="padding:1px 5px;flex-shrink:0;
+              title="Agregar conceptos a este vínculo">+</button>`;
+          const btnEquis = `<button onclick="_mapeoBorrar(${idx})" style="padding:1px 5px;flex-shrink:0;
               background:rgba(255,71,102,.1);border:1px solid rgba(255,71,102,.25);
               border-radius:2px;font-size:7px;color:var(--neg);cursor:pointer;margin-top:1px"
-              title="Quitar vínculo">✕</button>
-          </div>`;
+              title="Quitar vínculo">✕</button>`;
+          return _mkVinculoRow(lblA, lblB, '', btnMas, btnEquis);
         }).join('')}
       </div>`;
 
