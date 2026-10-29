@@ -15436,27 +15436,82 @@ function buildComparacionFlujos() {
 
   // 5. Auto-matching por similitud (fuzzy) — para rubros de denominación
   // parecida pero no idéntica, que los 4 niveles anteriores no pudieron vincular.
-  // Umbral conservador (70% de las palabras significativas en común) para evitar
-  // falsos positivos en datos financieros; el par queda marcado como sugerencia
-  // (_fuzzy) para que el usuario pueda revisarlo o corregirlo desde el panel manual.
-  const _wordSet = s => new Set(_normLbl(s).split(' ').filter(w => w.length > 2 && !_STOP.has(w)));
+  // El par queda marcado como sugerencia (_fuzzy) para que el usuario pueda
+  // revisarlo o corregirlo desde el panel manual, nunca se da por hecho en
+  // silencio.
+  //
+  // Reforzado — pedido explícito: "toma casi textual las palabras... hace
+  // necesario vincular casi todos los conceptos". Dos refuerzos sobre la
+  // versión anterior:
+  // 1) _stemEs(): quita plurales español comunes ("gastos"→"gasto",
+  //    "directores"→"director", "inversiones"→"inversion") ANTES de armar
+  //    el set de palabras — antes "Costo de Producción" (singular, archivo
+  //    B) vs "Costos de Producción" (plural, archivo A) no compartía
+  //    ninguna palabra exacta y quedaba sin vincular pese a ser obviamente
+  //    el mismo concepto.
+  // 2) _similaridadChars(): similitud por caracteres (Levenshtein
+  //    normalizado) sobre el label completo ya normalizado — cubre los
+  //    casos que el set de palabras no puede resolver: conceptos de UNA
+  //    sola palabra significativa (ej. "Directores", "Inversiones",
+  //    "Deuda" — antes directamente excluidos del fuzzy por tener menos de
+  //    2 palabras) y pequeñas variantes de tipeo/orden de letras. Se toma
+  //    el MÁXIMO entre ambas similitudes, así que un par que ya matchea
+  //    bien por palabras no se ve perjudicado por el chequeo de caracteres,
+  //    y viceversa.
+  const _stemEs = w => {
+    if (w.length <= 4) return w;
+    if (w.endsWith('ces') && w.length > 5) return w.slice(0, -3) + 'z'; // veces→vez
+    if (w.endsWith('es')  && w.length > 5) return w.slice(0, -2);      // directores→director, inversiones→inversion
+    if (w.endsWith('s'))                   return w.slice(0, -1);      // gastos→gasto, costos→costo
+    return w;
+  };
+  const _wordSet = s => new Set(_normLbl(s).split(' ').filter(w => w.length > 2 && !_STOP.has(w)).map(_stemEs));
   const _similaridad = (a, b) => {
     if (!a.size || !b.size) return 0;
     let inter = 0;
     a.forEach(w => { if (b.has(w)) inter++; });
     return inter / Math.min(a.size, b.size);
   };
-  const _UMBRAL_FUZZY = 0.7;
+  // Levenshtein clásico (DP) — strings cortas (labels de rubro), sin
+  // problema de performance. Similitud normalizada: 1 - distancia/largo_max.
+  const _levenshtein = (a, b) => {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) {
+        cur[j] = a[i-1] === b[j-1] ? prev[j-1]
+          : 1 + Math.min(prev[j-1], prev[j], cur[j-1]);
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  };
+  const _similaridadChars = (sA, sB) => {
+    const a = sA.replace(/\s+/g, ''), b = sB.replace(/\s+/g, '');
+    const maxLen = Math.max(a.length, b.length);
+    if (!maxLen) return 0;
+    return 1 - _levenshtein(a, b) / maxLen;
+  };
+  const _UMBRAL_FUZZY       = 0.7;  // palabras significativas en común (sobre el menor de los dos sets)
+  const _UMBRAL_FUZZY_CHARS = 0.75; // similitud de caracteres sobre el label normalizado completo
   const _candidatosB = fB.rubros.filter(r => !_bMatched.has(r.key));
   const _fuzzyPares = [];
   _autoMerged.forEach(par => {
     if (par.rB) return;
     const wA = _wordSet(par.rA.label);
-    if (wA.size < 2) return;
+    const nA = _normLbl(par.rA.label);
+    if (!wA.size && nA.length < 3) return; // nada significativo con qué comparar
     _candidatosB.forEach(rB => {
       if (_bMatched.has(rB.key) || rB.tipo !== par.rA.tipo) return;
-      const sim = _similaridad(wA, _wordSet(rB.label));
-      if (sim >= _UMBRAL_FUZZY) _fuzzyPares.push({ par, rB, sim });
+      const simPalabras = wA.size ? _similaridad(wA, _wordSet(rB.label)) : 0;
+      const simChars     = _similaridadChars(nA, _normLbl(rB.label));
+      const sim = Math.max(simPalabras, simChars);
+      if (simPalabras >= _UMBRAL_FUZZY || simChars >= _UMBRAL_FUZZY_CHARS) {
+        _fuzzyPares.push({ par, rB, sim });
+      }
     });
   });
   _fuzzyPares.sort((a, b) => b.sim - a.sim);
