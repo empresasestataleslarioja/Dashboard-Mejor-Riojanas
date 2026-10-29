@@ -15154,6 +15154,45 @@ function _borrarTodosMapeosFlujoLS(empresa, cA, cB) {
   _saveMapeosFlujoLS(all);
 }
 
+// ── Vínculos AUTOMÁTICOS rechazados (exacto o fuzzy, nunca manuales — esos
+// ya se sacan con _mapeoBorrar) ───────────────────────────────────────────
+// Pedido explícito: "cuando haya vinculaciones automáticas, éstas también
+// puedan modificarse en caso que se hayan generado incorrectamente" — el
+// auto-matching (clave/label/palabras/fuzzy) corre de cero en cada render
+// de buildComparacionFlujos() y nunca se guarda, así que no había forma de
+// decirle "esos dos NO son el mismo concepto": el par simplemente volvía a
+// aparecer vinculado en la próxima vista. Se persiste la decisión de
+// "desvincular" igual que los grupos manuales (mismo localStorage, clave
+// separada) y se excluye ese par puntual (no toda la fila) en el
+// auto-matching — el ítem queda libre para matchear con OTRO candidato o
+// pasar a "sin equivalente" en el panel manual, donde el usuario puede
+// re-vincularlo a mano si corresponde.
+function _loadAutoRechazados() {
+  try { return JSON.parse(localStorage.getItem('lr_flujos_auto_rechazados_v1') || '{}'); } catch(e) { return {}; }
+}
+function _saveAutoRechazadosLS(m) {
+  try { localStorage.setItem('lr_flujos_auto_rechazados_v1', JSON.stringify(m)); } catch(e) {}
+}
+function _getAutoRechazados(empresa, cA, cB) {
+  const raw = ((_loadAutoRechazados()[empresa] || {})[cA + '|' + cB]) || [];
+  return new Set(raw);
+}
+function _rechazarAutoFlujo(empresa, cA, cB, keyA, keyB) {
+  const all = _loadAutoRechazados();
+  if (!all[empresa]) all[empresa] = {};
+  const k = cA + '|' + cB;
+  const set = new Set(all[empresa][k] || []);
+  set.add(keyA + '||' + keyB);
+  all[empresa][k] = [...set];
+  _saveAutoRechazadosLS(all);
+}
+// Llamado desde el botón "✕" junto al vínculo automático de una fila — re-
+// renderiza de inmediato para que el usuario vea el efecto sin más pasos.
+function _desvincularAuto(keyA, keyB) {
+  _rechazarAutoFlujo(_mapeoState.empresa, _mapeoState.claveA, _mapeoState.claveB, keyA, keyB);
+  buildComparacionFlujos();
+}
+
 function _mapeoToggleA(keyA) {
   if (_mapeoState.selA.has(keyA)) _mapeoState.selA.delete(keyA);
   else _mapeoState.selA.add(keyA);
@@ -15316,6 +15355,10 @@ function buildComparacionFlujos() {
   // Sets of keys belonging to any manual group
   const _manualKeySetA = new Set(_mapeos.flatMap(g => g.keysA));
   const _manualKeySetB = new Set(_mapeos.flatMap(g => g.keysB));
+  // Pares que el usuario ya marcó explícitamente como "no son el mismo
+  // concepto" — el auto-matching (exacto o fuzzy) no puede volver a unirlos.
+  const _autoRechazados = _getAutoRechazados(fA_raw.empresa, claveA, claveB);
+  const _estaRechazado = (kA, kB) => _autoRechazados.has(kA + '||' + kB);
 
   // ── Normalizar a la misma cantidad de meses ───────────────────────
   const mesA = _mesesFlujo(fA_raw), mesB = _mesesFlujo(fB_raw);
@@ -15430,6 +15473,7 @@ function buildComparacionFlujos() {
       if (!rB) rB = labelsBByNorm.get(_normLbl(rA.label).substring(0,60)) || null;
       if (!rB) rB = labelsBByShort.get(_normShort(rA.label)) || null;
       if (!rB) { const w = _normWords(rA.label); if (w.length > 4) rB = labelsBByWords.get(w) || null; }
+      if (rB && _estaRechazado(rA.key, rB.key)) rB = null; // el usuario ya dijo que NO son el mismo concepto
       if (rB) _bMatched.add(rB.key);
       return { rA, rB };
     });
@@ -15506,6 +15550,7 @@ function buildComparacionFlujos() {
     if (!wA.size && nA.length < 3) return; // nada significativo con qué comparar
     _candidatosB.forEach(rB => {
       if (_bMatched.has(rB.key) || rB.tipo !== par.rA.tipo) return;
+      if (_estaRechazado(par.rA.key, rB.key)) return; // el usuario ya rechazó este par puntual
       const simPalabras = wA.size ? _similaridad(wA, _wordSet(rB.label)) : 0;
       const simChars     = _similaridadChars(nA, _normLbl(rB.label));
       const sim = Math.max(simPalabras, simChars);
@@ -15950,13 +15995,23 @@ function buildComparacionFlujos() {
         ? `<span style="font-size:7px;color:var(--dim);margin-left:5px;opacity:.7" title="Vinculado ${_fuzzy?'automáticamente por similitud':'manualmente'} a: ${(rB.label||'').replace(/"/g,'&quot;')}">↔ ${(rB.label||'').substring(0,30)}${(rB.label||'').length>30?'…':''}</span>` : '';
       const manualTag = _manual ? `<span style="font-size:6.5px;color:#e8c84a;margin-left:4px;opacity:.8" title="Vínculo manual">⚙</span>` : '';
       const fuzzyTag = _fuzzy ? `<span style="font-size:6.5px;color:#4ab8e8;margin-left:4px;opacity:.8" title="Vínculo automático por similitud de denominación — revisar y corregir manualmente si no corresponde">≈</span>` : '';
+      // Cualquier vínculo AUTOMÁTICO (exacto o fuzzy, no los manuales — esos
+      // ya tienen su ✕ propio en "Vínculos definidos") puede desarmarse si
+      // el matching lo generó mal: deja ambos conceptos libres para
+      // matchear con otro candidato o para vincularse a mano desde el
+      // panel — pedido explícito del usuario.
+      const autoUnlinkTag = (rA && rB && !_manual)
+        ? `<span onclick="_desvincularAuto('${(rA.key||'').replace(/'/g,"\\'")}','${(rB.key||'').replace(/'/g,"\\'")}')"
+            style="font-size:6.5px;color:var(--dim);margin-left:4px;opacity:.6;cursor:pointer;padding:0 3px;
+            border:1px solid var(--bd2);border-radius:2px" title="Desvincular — este vínculo automático no corresponde">✕</span>`
+        : '';
       const etiquetaSinPar = soloA
         ? `<span style="font-size:7px;background:var(--pos);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto incorporado en ${fA.periodo}: no existía en el período anterior">▲ NUEVO</span>`
         : soloB
         ? `<span style="font-size:7px;background:var(--neg);color:#fff;padding:1px 5px;border-radius:3px;margin-left:6px;letter-spacing:.04em;font-weight:700" title="Concepto dado de baja: existía en ${fB.periodo} pero no en el actual">▼ BAJA</span>` : '';
       const rowBg = sinPar ? (soloA ? 'rgba(26,158,104,.05)' : 'rgba(217,48,37,.05)') : st.bg;
       return `<tr style="background:${rowBg};${st.bt}">
-        <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${fuzzyTag}${bLabelDif}${etiquetaSinPar}</td>
+        <td style="padding:6px 12px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${lbl}${manualTag}${fuzzyTag}${autoUnlinkTag}${bLabelDif}${etiquetaSinPar}</td>
         <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${soloB?'var(--dim)':st.c};border-bottom:1px solid var(--bd2)">${soloB?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vA)}</td>
         <td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:var(--dim);border-bottom:1px solid var(--bd2)">${soloA?'<span style="color:var(--dim);font-size:8px">—</span>':fmtM(vB)}</td>
         ${ipc?`<td style="padding:6px 10px;text-align:right;font-family:var(--mono);font-size:9px;color:var(--dim);border-bottom:1px solid var(--bd2)">${sinPar?'':fmtMEq(vBEq)}</td>`:''}
