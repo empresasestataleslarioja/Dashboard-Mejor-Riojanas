@@ -13808,11 +13808,19 @@ function _poblarSelectoresFlujos() {
       if (a.empresa > b.empresa) return 1;
       return b.timestamp - a.timestamp;
     });
+    // Pedido explícito: en "Período anterior" (B), el flujo ya elegido en
+    // "Período actual" (A) queda deshabilitado — no tiene sentido
+    // comparar un flujo contra sí mismo. Si B ya apuntaba a ese mismo
+    // flujo (quedó así de una elección previa de A), se deselecciona
+    // (ningún <option> queda "selected", el <select> vuelve a "—
+    // Seleccionar —") en vez de dejarlo fijado en una opción disabled.
     sel.innerHTML = '<option value="">— Seleccionar —</option>' +
       ordenados.map(f => {
         const ipcTag = f.ipc ? ' · IPC ' + f.ipc + '%' : '';
-        return `<option value="${f.clave}"${f.clave===cur?' selected':''}>` +
-          `${f.empresa} · ${f.periodo} · ${f.tipo}${ipcTag}</option>`;
+        const esElActual = id === 'sel-flujo-b' && fAPrevio && f.clave === fAPrevio.clave;
+        const seleccionado = f.clave === cur && !esElActual;
+        return `<option value="${f.clave}"${seleccionado?' selected':''}${esElActual?' disabled':''}>` +
+          `${f.empresa} · ${f.periodo} · ${f.tipo}${ipcTag}${esElActual?' (= período actual)':''}</option>`;
       }).join('');
   });
 
