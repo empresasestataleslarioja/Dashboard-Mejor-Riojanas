@@ -7781,9 +7781,11 @@ function _rptEmpresasRubros() {
       // saltar de línea (overflow es visible por default). Se sobrescribe
       // white-space:normal en cada <th> de esta tabla para permitir el
       // salto de línea. Por el mismo motivo se sacó el white-space:nowrap
-      // explícito de la celda de CUIT (9%→12%): un CUIT completo
-      // ("30-70712428-4") no entra en una sola línea a ese ancho y se
-      // desbordaba sobre "Tipo Societario".
+      // explícito de la celda de CUIT: un CUIT completo
+      // ("30-70712428-4", 13 caracteres) no entraba en una sola línea al
+      // 9% de ancho original y se desbordaba sobre "Tipo Societario". Se
+      // le dio más ancho (9%→16%) para que vuelva a entrar en una sola
+      // línea en vez de partirse en dos.
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.cuit || '—'}</td>
@@ -7797,13 +7799,13 @@ function _rptEmpresasRubros() {
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:22%;white-space:normal">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:12%;white-space:normal">CUIT</th>
+          <th style="text-align:left;padding:5px 8px;width:20%;white-space:normal">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:16%;white-space:normal">CUIT</th>
           <th style="text-align:left;padding:5px 8px;width:10%;white-space:normal">Tipo Societario</th>
           <th style="text-align:left;padding:5px 8px;width:13%;white-space:normal">Actividad</th>
-          <th style="text-align:left;padding:5px 8px;width:13%;white-space:normal">Constitución</th>
+          <th style="text-align:left;padding:5px 8px;width:12%;white-space:normal">Constitución</th>
           <th style="text-align:left;padding:5px 8px;width:13%;white-space:normal">Instrumento de creación</th>
-          <th style="text-align:left;padding:5px 8px;width:17%;white-space:normal">Observaciones</th>
+          <th style="text-align:left;padding:5px 8px;width:16%;white-space:normal">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
