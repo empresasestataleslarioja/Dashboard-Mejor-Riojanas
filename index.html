@@ -7775,22 +7775,25 @@ function _rptEmpresasRubros() {
       // previa que al imprimir, por angosta que sea la columna (envuelve
       // a tantas líneas como haga falta en vez de cortarse con "...").
       //
-      // El mismo solapamiento reapareció después entre "Tipo Societario"/
-      // "Actividad" e "Instrumento de creación"/"Observaciones": la causa
-      // real es que el <th> hereda white-space:nowrap del CSS genérico de
-      // reportes (_rptCSS), así que un encabezado que no entra en una
-      // línea se desborda VISUALMENTE sobre la columna vecina en vez de
-      // saltar de línea (overflow es visible por default). Se sobrescribe
-      // white-space:normal en cada <th> de esta tabla para permitir el
-      // salto de línea. Por el mismo motivo se sacó el white-space:nowrap
-      // explícito de la celda de CUIT: un CUIT completo
-      // ("30-70712428-4", 13 caracteres) no entraba en una sola línea al
-      // 9% de ancho original y se desbordaba sobre "Tipo Societario". Se
-      // le dio más ancho (9%→16%) para que vuelva a entrar en una sola
-      // línea en vez de partirse en dos.
+      // El mismo solapamiento ("TIPO SOCIETARIOACTIVIDAD" pegados,
+      // CUIT tapando la fila) reapareció después, pero SOLO en la VISTA
+      // PREVIA en pantalla (el iframe de "Vista previa del reporte" es
+      // más angosto que la página impresa real) — la impresión real con
+      // estos mismos anchos ya se había aprobado con captura (2 páginas,
+      // CUIT y fechas en una línea, sin solapar). Probamos agrandar CUIT/
+      // Constitución para que entraran en una línea también en la vista
+      // previa angosta, pero eso le quita ancho a Empresa/Actividad e
+      // infla la altura de cada fila al IMPRIMIR, duplicando la cantidad
+      // de páginas — justo lo que no se quería. Por eso el arreglo del
+      // solapamiento en pantalla va en un <style> propio de esta tabla,
+      // aplicado SOLO con @media screen (ver más abajo): ahí se permite
+      // el salto de línea del encabezado y de la celda de CUIT para que
+      // nunca se desborden sobre la columna vecina en un iframe angosto,
+      // sin tocar un solo ancho de columna ni afectar en nada la
+      // impresión, que sigue exactamente igual a la versión aprobada.
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
-        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.cuit || '—'}</td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${societario}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
@@ -7799,21 +7802,36 @@ function _rptEmpresasRubros() {
       </tr>`;
     }).join('');
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
-      <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
+      <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:18%;white-space:normal">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:16%;white-space:normal">CUIT</th>
-          <th style="text-align:left;padding:5px 8px;width:10%;white-space:normal">Tipo Societario</th>
-          <th style="text-align:left;padding:5px 8px;width:13%;white-space:normal">Actividad</th>
-          <th style="text-align:left;padding:5px 8px;width:14%;white-space:normal">Constitución</th>
-          <th style="text-align:left;padding:5px 8px;width:13%;white-space:normal">Instrumento de creación</th>
-          <th style="text-align:left;padding:5px 8px;width:16%;white-space:normal">Observaciones</th>
+          <th style="text-align:left;padding:5px 8px;width:22%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:9%">CUIT</th>
+          <th style="text-align:left;padding:5px 8px;width:10%">Tipo Societario</th>
+          <th style="text-align:left;padding:5px 8px;width:16%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:13%">Constitución</th>
+          <th style="text-align:left;padding:5px 8px;width:13%">Instrumento de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:17%">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
   }).join('');
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+'</head><body><div class="pg">'
+  // Arreglo de solapamiento SOLO para la vista previa en pantalla (ver
+  // comentario más arriba, junto a la celda de CUIT): un iframe de
+  // preview angosto puede hacer que el encabezado o el CUIT no entren en
+  // una línea y se desborden visualmente sobre la columna vecina. En
+  // @media print NO se toca nada — la impresión real ya funciona bien
+  // con estos anchos (aprobado con captura, 2 páginas) y agrandar
+  // columnas para "forzar" una sola línea también en pantalla inflaba
+  // la altura de las filas al imprimir.
+  const fixSolapamientoPreview = `<style>
+    @media screen {
+      .rpt-ficha-emp th { white-space: normal !important; overflow-wrap: break-word !important; }
+      .rpt-ficha-emp td:nth-child(2) { white-space: normal !important; }
+    }
+  </style>`;
+
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+fixSolapamientoPreview+'</head><body><div class="pg">'
     + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas · ${estadoFiltroLbl}`)
     + kpis
     + `<div class="st">Listado por rubro — ${emprsFiltradas.length} empresa${emprsFiltradas.length!==1?'s':''} (${estadoFiltroLbl})</div>`
