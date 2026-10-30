@@ -6769,6 +6769,9 @@ function imprimirPanelActivo() {
       + '<label id="_rpt_ocultar_montos_lbl" style="display:none;align-items:center;gap:5px;color:#ffb347;font-size:8pt;font-weight:600;font-family:monospace;cursor:pointer;padding:3px 9px;background:#3a2a10;border:1px solid #997a33;border-radius:3px" title="Oculta importes y detalle operativo del cuadro de Empresas asistidas financieramente, para poder compartirlo sin datos sensibles">'
       + '<input type="checkbox" id="_rpt_chk_ocultar_montos" style="cursor:pointer">👁 Ocultar montos'
       + '</label>'
+      + '<label style="display:flex;align-items:center;gap:5px;color:#8ab4f8;font-size:8pt;font-weight:600;font-family:monospace;cursor:pointer;padding:3px 9px;background:#10203a;border:1px solid #336699;border-radius:3px" title="Oculta la fecha/hora de generación del encabezado y pie de este y todos los demás reportes imprimibles — queda guardado para la próxima vez">'
+      + '<input type="checkbox" id="_rpt_chk_ocultar_fecha" style="cursor:pointer">📅 Ocultar fecha'
+      + '</label>'
       + '<span style="color:#555;font-size:8pt;font-family:monospace">Secciones:</span>'
       + '<div id="_rpt_chk_wrap" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>'
       + '<div style="display:flex;gap:8px" id="_rpt_bar_btns"></div>'
@@ -6902,6 +6905,23 @@ function imprimirPanelActivo() {
             }
           };
         }
+      }
+    }
+    // Ocultar fecha — siempre visible (a diferencia de "Ocultar montos",
+    // que solo aplica a un cuadro puntual de Transferencias), se persiste
+    // en localStorage así que una vez tildada queda así para cualquier
+    // reporte que se abra después, sin tener que repetirlo cada vez.
+    var chkOcultarFecha = document.getElementById('_rpt_chk_ocultar_fecha');
+    if (chkOcultarFecha) {
+      chkOcultarFecha.checked = _ocultarFechaReportes();
+      if (!chkOcultarFecha._wired) {
+        chkOcultarFecha._wired = true;
+        chkOcultarFecha.onchange = function() {
+          _setOcultarFechaReportes(chkOcultarFecha.checked);
+          var ov = document.getElementById('_rpt_overlay');
+          if (ov) ov.style.display = 'none';
+          imprimirPanelActivo();
+        };
       }
     }
     var wrap = document.getElementById('_rpt_chk_wrap');
@@ -7264,9 +7284,31 @@ function _rptBarHRango(items, colorFn, modo) {
 }
 
 
+// ── Ocultar fecha en reportes imprimibles ──────────────────────────
+// Pedido explícito del usuario: poder ocultar la fecha/hora de
+// generación que muestran TODOS los reportes imprimibles (encabezado y
+// pie). Flag global persistido (no por reporte) — se setea una vez desde
+// la barra de "Vista previa del reporte" y de ahí en más todo reporte
+// que use _fechaRpt() para su fecha de generación la respeta, la abra
+// como la abra (el botón genérico "🖨 Reporte" o el acceso directo de un
+// panel puntual).
+var _LS_OCULTAR_FECHA_RPT = 'lr_ocultar_fecha_reportes';
+function _ocultarFechaReportes() {
+  try { return localStorage.getItem(_LS_OCULTAR_FECHA_RPT) === '1'; } catch(e) { return false; }
+}
+function _setOcultarFechaReportes(v) {
+  try { localStorage.setItem(_LS_OCULTAR_FECHA_RPT, v ? '1' : '0'); } catch(e) {}
+}
+// Reemplaza el `new Date().toLocaleDateString('es-AR', opts)` que cada
+// reporte ya armaba por su cuenta — mismos `opts`, mismo formato, pero
+// devuelve '' en vez de la fecha real cuando el usuario la ocultó.
+function _fechaRpt(opts) {
+  if (_ocultarFechaReportes()) return '';
+  return new Date().toLocaleDateString('es-AR', opts);
+}
+
 function _rptHeader(titulo, subtitulo) {
-  const fecha = new Date().toLocaleDateString('es-AR',
-    {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   return `<div class="hdr">
     ${_membrete({height:46})}
     <div style="text-align:right">
@@ -7278,8 +7320,7 @@ function _rptHeader(titulo, subtitulo) {
 }
 
 function _rptFooter() {
-  const fecha = new Date().toLocaleDateString('es-AR',
-    {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   return `<div class="ft">
     <span class="fx">SECRETARÍA DE INVERSIONES PÚBLICO-PRIVADAS · Jefatura de Gabinete</span>
     <span class="fx">${fecha}</span>
@@ -8431,7 +8472,7 @@ function _rptBalanceDesdeDOM() {
   const reexpEr = clone.querySelector('#bal-reexp-er');
   if (reexpEr) reexpEr.style.display = 'block';
 
-  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit', month:'long', year:'numeric'});
+  const fecha = _fechaRpt({day:'2-digit', month:'long', year:'numeric'});
   const titulo = (b.empresa || '') + (b.periodo ? '  ·  ' + b.periodo : '');
 
   const header = `<div style="
@@ -8533,7 +8574,7 @@ function _rptClasificacionBalances() {
   const todos = Object.values(_balances || {});
   if (!todos.length) { alert('No hay balances cargados.'); return; }
 
-  const fecha = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
 
   // Recopilar items (misma lógica que buildClasificacionBalances)
   const items = [];
@@ -8719,7 +8760,7 @@ function _rptClasificacionBalances() {
 // ══════════════════════════════════════════════════
 function _rptBalanceEstado() {
   const todos = Object.values(_balances);
-  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
   const añoActual = new Date().getFullYear();
   const añoDesde  = 2020;
 
@@ -8928,7 +8969,7 @@ function _rptBalanceIntegral() {
   const empresas = Object.keys(porEmpresa).sort();
   empresas.forEach(e => porEmpresa[e].sort((a, bx) => String(a.periodo).localeCompare(String(bx.periodo))));
 
-  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
 
   // Tabla por empresa
   const buildTablaEmpresa = (emp, balances) => {
@@ -9172,7 +9213,7 @@ function _rptResultadosEjercicio() {
   const años = [...new Set(todos.map(b => parseInt(b.periodo)).filter(a => !isNaN(a)))].sort((a,b) => a-b);
   if (!empresas.length || !años.length) { alert('No hay resultados de ejercicio cargados en los balances.'); return; }
 
-  const fecha = new Date().toLocaleDateString('es-AR', {day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
   // El atributo data-anio queda siempre en el año de CIERRE (p.ej. "2024"),
   // tanto para el cuadro calendario como para el no calendario — así el
   // filtro de año de la barra superior muestra, para un mismo año
@@ -9541,8 +9582,7 @@ function _rptTransferencias(autoPrint) {
     var sign=v<0?'-':'';
     return sign+'$ '+Math.round(Math.abs(v)).toLocaleString('es-AR');
   }
-  var fechaStr = new Date().toLocaleDateString('es-AR',
-    {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  var fechaStr = _fechaRpt({day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
   // Capturar leyendas del DOM
   function _capturarLeyenda(id) {
@@ -9839,8 +9879,7 @@ function _rptTransferencias(autoPrint) {
 
 function _imprimirPanelFallback(panelId, panelActivo) {
   const tituloPanel = (TITLES[panelId]||panelId).replace(/<[^>]+>/g,'').trim();
-  const fechaStr = new Date().toLocaleDateString('es-AR',
-    {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const fechaStr = _fechaRpt({day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const subtitStr = _buildPrintSubtitulo(panelId);
   const elTit = document.getElementById('print-titulo');
   const elSub = document.getElementById('print-subtitulo');
@@ -16478,7 +16517,7 @@ function exportarFlujoExcel() {
   const covColor = c => c==null ? T.dim : c>=90 ? T.pos : c>=70 ? '#b36a00' : T.neg;
 
   const hoy = new Date();
-  const fecha = hoy.toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
 
   // ── SVG bar chart: ranking egresos ────────────────────────────────
   const svgRanking = (() => {
@@ -16919,7 +16958,7 @@ function _rptFlujoIndividual() {
   if (!f) return;
 
   const hoy = new Date();
-  const fecha = hoy.toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
 
   const C = v => v==null?'—':(v<0?'($ ':' $ ')+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
   const meses = (f.meses && f.meses.length)
@@ -22065,7 +22104,7 @@ function _informeEjecutivoRender(emp) {
   const fact    = DATA.fact[emp]  || {};
   const sit     = DATA.sit[emp]   || {};
   const ruboLbl = getRuboLabel(emp);
-  const hoy     = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
+  const hoy     = _fechaRpt({ year:'numeric', month:'long', day:'numeric' });
 
   // Balances de esta empresa, ordenados por período
   const bals = Object.values(_balances)
@@ -22893,7 +22932,7 @@ function _informeEjecutivoRender(emp) {
 //  4. Cada empresa muestra una flecha de tendencia comparando los últimos
 //     dos años cerrados.
 function informeEstadoERProvisorio(empFiltro) {
-  const hoy = new Date().toLocaleDateString('es-AR', { year:'numeric', month:'long', day:'numeric' });
+  const hoy = _fechaRpt({ year:'numeric', month:'long', day:'numeric' });
   const anioActual = new Date().getFullYear();
 
   // Recolectar todas las empresas con ER mensual cargado
@@ -27302,7 +27341,7 @@ async function exportPDF() {
         fill(C.acc); doc.rect(0,H-7,W,.5,'F');
         sz(5.5); ink(C.dim);
         doc.text(`Panel Comparativo ${years[0]}–${lastY} · ${panelNames[currentPanel]||currentPanel} · La Rioja`, M, H-2.5);
-        doc.text(`Pág. ${p} / ${pages}  ·  Exportado ${new Date().toLocaleDateString('es-AR')}`, W-M, H-2.5, {align:'right'});
+        doc.text(`Pág. ${p} / ${pages}  ·  Exportado ${(_fechaRpt()||'—')}`, W-M, H-2.5, {align:'right'});
       }
     }
 
