@@ -15386,10 +15386,32 @@ function buildComparacionFlujos() {
   const _estaRechazado = (kA, kB) => _autoRechazados.has(kA + '||' + kB);
 
   // ── Normalizar a la misma cantidad de meses ───────────────────────
+  // Pedido explícito: el criterio de comparación depende de si los dos
+  // períodos tienen la MISMA cantidad de meses, no de si son
+  // específicamente un cuatrimestre.
+  //   · Misma cantidad de meses (4 vs 4, 3 vs 3, etc.): se comparan los
+  //     TOTALES del período tal cual, sin ningún ajuste — igual que
+  //     siempre.
+  //   · Cantidad distinta (ej. 4 vs 2, 3 vs 2): en vez de extrapolar el
+  //     período corto multiplicándolo para que aparente la duración del
+  //     largo (lo que antes hacía esta misma función con
+  //     targetMeses=Math.max(mesA,mesB) — mostraba una cifra "inflada"
+  //     que parecía un total real sin serlo), se reemplaza el criterio
+  //     por PROMEDIO MENSUAL de cada uno (total ÷ sus propios meses) —
+  //     ambos quedan en la misma unidad ("por mes") y son directamente
+  //     comparables sin asumir que los meses no cargados se hubiesen
+  //     comportado igual que los sí cargados. _normalizarFlujoMeses(f,1)
+  //     ya hace exactamente esto: factor = 1/mesesPropios.
   const mesA = _mesesFlujo(fA_raw), mesB = _mesesFlujo(fB_raw);
-  const targetMeses = Math.max(mesA, mesB); // usar el período más largo como base
+  const _mismaLongitud = mesA === mesB;
+  const targetMeses = _mismaLongitud ? mesA : 1;
   const fA = _normalizarFlujoMeses(fA_raw, targetMeses);
   const fB = _normalizarFlujoMeses(fB_raw, targetMeses);
+  // Textos reutilizados en las etiquetas de abajo para que quede explícito
+  // que se está comparando un promedio y no un total real del período.
+  const _tagMetrica    = _mismaLongitud ? 'TOTAL'          : 'PROMEDIO MENSUAL';
+  const _tagMetricaCap = _mismaLongitud ? 'Total'          : 'Promedio mensual';
+  const _sufMetrica    = _mismaLongitud ? ''                : ' (promedio mensual)';
 
   wrap.style.display = '';
 
@@ -15435,9 +15457,11 @@ function buildComparacionFlujos() {
     alertaGapEl.innerHTML = '';
   }
 
-  // Nota de normalización si los períodos tienen distinta duración
-  const notaNorm = (mesA !== mesB)
-    ? `  ·  normalizado a ${targetMeses} meses (${fA_raw.periodo}: ${mesA}m → ×${(targetMeses/mesA).toFixed(2)}, ${fB_raw.periodo}: ${mesB}m → ×${(targetMeses/mesB).toFixed(2)})`
+  // Nota si los períodos tienen distinta duración — reemplaza el criterio
+  // por promedio mensual (ver _mismaLongitud más arriba), nunca una
+  // extrapolación silenciosa del período corto.
+  const notaNorm = !_mismaLongitud
+    ? `  ·  ⚠ distinta duración (${fA_raw.periodo}: ${mesA}m vs. ${fB_raw.periodo}: ${mesB}m) — comparando PROMEDIO MENSUAL, no totales del período`
     : '';
   // Título
   document.getElementById('flujo-comp-titulo').textContent =
@@ -15626,7 +15650,8 @@ function buildComparacionFlujos() {
   // Guardar estado de comparación para que exportarFlujoExcel use los mismos datos
   window._compActiva = { fA, fB, ipc, ipcProy, _merged,
     necA, necB, ingA, ingB, ingAOp, ingBOp, egrA, egrB, egrADet, egrBDet, labA, labB,
-    covA, covB, varNom, varReal, labCovA, labCovB };
+    covA, covB, varNom, varReal, labCovA, labCovB,
+    _mismaLongitud, _tagMetrica, _tagMetricaCap, _sufMetrica };
 
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
   const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v<0?')':'');
@@ -15870,15 +15895,15 @@ function buildComparacionFlujos() {
   const _resASigned = necA != null && _resA != null ? (necA < 0 ? -Math.abs(_resA) : Math.abs(_resA)) : null;
   const _resBSigned = necB != null && _resB != null ? (necB < 0 ? -Math.abs(_resB) : Math.abs(_resB)) : null;
   const _resRows = [
-    { lbl:'Total egresos',  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
-    ...(ingA||ingB ? [{ lbl:'Total ingresos', vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
-    { lbl:'Resultado (néc. fondos)', vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
+    { lbl:`${_tagMetricaCap} egresos`,  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
+    ...(ingA||ingB ? [{ lbl:`${_tagMetricaCap} ingresos`, vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
+    { lbl:`Resultado (néc. fondos)${_sufMetrica}`, vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
     ...(ipc&&_resBSigned ? [{ lbl:`Resultado — Var. real (Fisher, IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
   ];
   resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
     padding:10px 16px;font-family:var(--mono)">
     <div style="font-size:8px;color:var(--dim);letter-spacing:.1em;margin-bottom:8px;text-transform:uppercase">
-      Resumen comparativo — totales
+      Resumen comparativo — ${_mismaLongitud ? 'totales' : 'promedio mensual'}
     </div>
     <table style="width:100%;border-collapse:collapse">
       <thead><tr>
@@ -15925,7 +15950,7 @@ function buildComparacionFlujos() {
   };
 
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:'Necesidad actual',     v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
+    { l:`Necesidad actual${_sufMetrica}`, v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
     { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
     { l:'Var. real (Fisher)',   v:fmtP(varReal),                                                 c:colVar(varReal) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(2)+'%' : '—',                              c:'var(--text)', popKey:'cov_ing' },
@@ -16099,9 +16124,9 @@ function buildComparacionFlujos() {
     const _egrRows = _detalle.filter(({rA,rB}) => (rA?.tipo||rB?.tipo) !== 'ingreso');
 
     return _ingRows.map(_mkRow).join('')
-      + _mkTotalRow('TOTAL INGRESOS', ingA ?? 0, ingB ?? 0, '#1a9e68', '#1a9e68')
+      + _mkTotalRow(`${_tagMetrica} INGRESOS`, ingA ?? 0, ingB ?? 0, '#1a9e68', '#1a9e68')
       + _egrRows.map(_mkRow).join('')
-      + _mkTotalRow('TOTAL EGRESOS', egrADet != null ? -Math.abs(egrADet) : null, egrBDet != null ? -Math.abs(egrBDet) : null, 'var(--neg)', 'var(--neg)');
+      + _mkTotalRow(`${_tagMetrica} EGRESOS`, egrADet != null ? -Math.abs(egrADet) : null, egrBDet != null ? -Math.abs(egrBDet) : null, 'var(--neg)', 'var(--neg)');
   })() + (() => {
     // Filas computadas tfoot: SUBTOTAL ING-EGR · IMP CRED/DEB · RESULTADO NETO
     const _rubroImpA = (fA.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
@@ -16150,9 +16175,9 @@ function buildComparacionFlujos() {
       </tr>`;
     };
     return `<tfoot>
-      ${tfRow('SUBTOTAL INGRESOS − EGRESOS', subA, subB)}
+      ${tfRow(`SUBTOTAL INGRESOS − EGRESOS${_sufMetrica}`, subA, subB)}
       ${impRow('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)}
-      ${tfRow('RESULTADO NETO', resA, resB)}
+      ${tfRow(`RESULTADO NETO${_sufMetrica}`, resA, resB)}
     </tfoot>`;
   })();
 
@@ -16376,7 +16401,8 @@ function exportarFlujoExcel() {
     ingA, ingB, egrA, egrB,
     egrADet: _egrADet, egrBDet: _egrBDet,
     labA, labB, covA, covB,
-    varNom, varReal, labCovA, labCovB } = _c;
+    varNom, varReal, labCovA, labCovB,
+    _tagMetrica, _tagMetricaCap, _sufMetrica } = _c;
   const egrADet = _egrADet ?? _flujoEgrDetTotal(fA);
   const egrBDet = _egrBDet ?? _flujoEgrDetTotal(fB);
 
@@ -16659,9 +16685,9 @@ function exportarFlujoExcel() {
           <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(vB)}</td>
           <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:600;color:${pColor(vn,posGood)}">${P(vn)}</td>
         </tr>`;
-        return _row('Total egresos', egrADet, egrBDet, _vnE, false)
-             + _row('Total ingresos', ingA, ingB, _vnI, true)
-             + _row('Resultado (néc. fondos)', _necASignado, _necBSignado, _vnN, false)
+        return _row(`${_tagMetricaCap} egresos`, egrADet, egrBDet, _vnE, false)
+             + _row(`${_tagMetricaCap} ingresos`, ingA, ingB, _vnI, true)
+             + _row(`Resultado (néc. fondos)${_sufMetrica}`, _necASignado, _necBSignado, _vnN, false)
              + (ipc&&_varRealRes!=null ? `<tr style="border-top:1px solid ${T.bd};background:${T.acc}10">
                  <td style="padding:6px 14px;font-family:monospace;font-size:9px;font-style:italic;color:${T.dim}">Resultado — Var. real (Fisher, IPC ${ipc}%)</td>
                  <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(_rNetASign)}</td>
@@ -16718,11 +16744,11 @@ function exportarFlujoExcel() {
       </div>`:'<div></div>'}
     </div>
     <div class="kpi-card" style="border-top-color:${T.pos}">
-      <div class="lbl">TOTAL INGRESOS</div>
+      <div class="lbl">${_tagMetrica} INGRESOS</div>
       <div class="val" style="color:${T.pos}">${C(ingA)}</div>
     </div>
     <div class="kpi-card" style="border-top-color:${T.neg}">
-      <div class="lbl">TOTAL EGRESOS</div>
+      <div class="lbl">${_tagMetrica} EGRESOS</div>
       <div class="val" style="color:${T.neg}">${C(egrA)}</div>
     </div>
     ${ipc&&necA?`<div class="kpi-card" style="border-top-color:${T.acc};border-left:3px solid ${T.acc}">
@@ -16821,9 +16847,9 @@ function exportarFlujoExcel() {
             <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${pC(_vr2(vn),false)}">${P(_vr2(vn))}</td>
           </tr>`;
         };
-        return tfR('SUBTOTAL INGRESOS − EGRESOS', subA, subB)
+        return tfR(`SUBTOTAL INGRESOS − EGRESOS${_sufMetrica}`, subA, subB)
              + impR('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', impA, impB)
-             + tfR('RESULTADO NETO', resA, resB);
+             + tfR(`RESULTADO NETO${_sufMetrica}`, resA, resB);
       })()}</tfoot>
     </table>
   </div>
