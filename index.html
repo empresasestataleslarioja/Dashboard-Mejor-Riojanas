@@ -15149,6 +15149,19 @@ function remapearFlujo(clave) {
 // Devuelve la cantidad de meses que cubre un flujo
 function _mesesFlujo(f) {
   if (!f) return 4;
+  // Preferir la cantidad de meses con datos REALES (algún rubro con valor
+  // distinto de cero en ese mes) sobre la cantidad de columnas informadas
+  // en el Excel — un mes puede figurar como "informado" (aparece en
+  // f.meses) pero venir totalmente en cero porque no se cargó, y contarlo
+  // igual infla artificialmente la duración del flujo, haciendo que dos
+  // flujos de distinta duración real parezcan "iguales" (_mismaLongitud)
+  // y el comparativo siga mostrando TOTALES en vez de PROMEDIO MENSUAL.
+  if (f.meses && f.meses.length > 0 && f.rubros && f.rubros.length) {
+    const mesesConDatos = f.meses.filter(m =>
+      f.rubros.some(r => r.porMes && r.porMes[m] != null && r.porMes[m] !== 0)
+    );
+    if (mesesConDatos.length > 0) return mesesConDatos.length;
+  }
   // Preferir el conteo real de meses detectados en el Excel
   if (f.meses && f.meses.length > 0) return f.meses.length;
   // Inferir del string de período
