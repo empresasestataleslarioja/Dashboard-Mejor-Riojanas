@@ -7768,10 +7768,12 @@ function _rptEmpresasRubros() {
       // Constitución (7%) era más angosta que su propio encabezado
       // ("CONSTITUCIÓN" no entraba en una línea y se solapaba visualmente
       // con "Instrumento de creación", la columna siguiente — pedido
-      // explícito con captura). Se le restó ancho a Actividad (22%→16%,
-      // su contenido igual se corta a 2 líneas con line-clamp más abajo,
-      // así que no pierde legibilidad) para dárselo a Constitución
-      // (7%→13%).
+      // explícito con captura). Se le restó ancho a Actividad (22%→16%)
+      // para dárselo a Constitución (7%→13%). Actividad NO lleva
+      // line-clamp ni ningún tope de líneas — pedido explícito de que el
+      // texto de la actividad se vea siempre completo, igual en la vista
+      // previa que al imprimir, por angosta que sea la columna (envuelve
+      // a tantas líneas como haga falta en vez de cortarse con "...").
       //
       // El mismo solapamiento reapareció después entre "Tipo Societario"/
       // "Actividad" e "Instrumento de creación"/"Observaciones": la causa
@@ -7790,7 +7792,7 @@ function _rptEmpresasRubros() {
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.cuit || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${societario}</td>
-        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word"><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${inst.actividad || '—'}</div></td>
+        <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;white-space:pre-wrap;color:${notaInst?'#185fa5':'inherit'}">${notaInst ? notaInst.replace(/</g,'&lt;') : '—'}</td>
