@@ -7762,9 +7762,14 @@ function _rptEmpresasRubros() {
       // entraban en una sola línea y la fila pasaba a ocupar dos renglones
       // (se veía como "doble fila" por empresa) — la fecha exacta de baja
       // sigue disponible en el editor de rubros del dashboard.
+      // Pedido explícito: el tipo societario (S.A.U., S.A.P.E.M., S.R.L.,
+      // etc) tiene que estar SIEMPRE en una sola línea, nunca partirse a
+      // la mitad — se envuelve en su propio span con nowrap. La
+      // participación accionaria (2ª línea, texto más largo y variable)
+      // sigue pudiendo envolver con normalidad.
       const societario = [inst.tipoSocietario, inst.participacionAccionaria]
         .filter(Boolean)
-        .map((t,i) => i===0 ? t : `<span style="font-size:7pt;color:#777">${t}</span>`)
+        .map((t,i) => i===0 ? `<span style="white-space:nowrap">${t}</span>` : `<span style="font-size:7pt;color:#777">${t}</span>`)
         .join('<br>') || '—';
       // Observación cargada (DATA.notas, la misma que el popover de este
       // editor y "Notas analíticas" del panel Por Empresa) — pedido
@@ -7856,8 +7861,15 @@ function _rptEmpresasRubros() {
       overflow-wrap: break-word !important;
       overflow: hidden !important;
     }
-    .rpt-ficha-emp td:nth-child(2) {
-      white-space: normal !important;
+    /* Pedido explícito: CUIT, tipo societario y fecha de Constitución
+       tienen que estar SIEMPRE en una sola línea, pase lo que pase.
+       white-space:nowrap lo garantiza; overflow:hidden es el resguardo
+       — si alguna vez el ancho disponible no alcanza, se recorta en vez
+       de desbordarse sobre la columna vecina (nunca más el bug de
+       solapamiento original). */
+    .rpt-ficha-emp td:nth-child(2),
+    .rpt-ficha-emp td:nth-child(5) {
+      white-space: nowrap !important;
       overflow-wrap: break-word !important;
       overflow: hidden !important;
     }
