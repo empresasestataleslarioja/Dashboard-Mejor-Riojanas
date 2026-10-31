@@ -6812,6 +6812,17 @@ function imprimirPanelActivo() {
     iframe.id = '_rpt_iframe';
     iframe.style.cssText = 'flex:1;border:none;width:100%;';
 
+    // Pedido explícito: la vista previa de la Ficha Institucional tiene
+    // que verse siempre como la página impresa (tabla ancha, CUIT y
+    // encabezados en una línea), sin achicarse al ancho real de la
+    // ventana del navegador — antes el iframe tenía width:100% puro, así
+    // que en una ventana angosta la tabla se comprimía (CUIT partiéndose
+    // en 3 líneas cortas) aunque ya no se solapara. Se le da un
+    // overflow-x:auto al overlay para que, si la ventana es más angosta
+    // que el ancho mínimo del iframe, aparezca scroll horizontal en vez
+    // de volver a comprimir las columnas.
+    overlay.style.overflowX = 'auto';
+
     overlay.appendChild(bar);
     overlay.appendChild(iframe);
     document.body.appendChild(overlay);
@@ -6835,6 +6846,10 @@ function imprimirPanelActivo() {
 
   var iframe = document.getElementById('_rpt_iframe');
   iframe._rptSecciones = rptSecs;
+  // Solo la Ficha Institucional (rubros) necesita el ancho mínimo fijo
+  // (ver comentario junto a overlay.style.overflowX más arriba) — el
+  // resto de los reportes sigue con width:100% puro como siempre.
+  iframe.style.minWidth = (panelId === 'rubros') ? '1300px' : '';
   iframe.src = blobUrl;
 
   // Cuando carga, poblar selector de secciones
