@@ -7861,6 +7861,16 @@ function _rptEmpresasRubros() {
       overflow-wrap: break-word !important;
       overflow: hidden !important;
     }
+    /* Ancho mínimo para que CUIT/encabezados entren en una línea en
+       pantalla — SOLO @media screen (nunca en @media print, para no
+       alterar la paginación de A4 ya aprobada). Esto vive ACÁ, en el
+       HTML propio del reporte, además del min-width que ya se setea
+       desde imprimirPanelActivo() sobre el <iframe>: dos capas
+       independientes para la misma garantía, por si alguna de las dos
+       no llega a aplicarse en algún contexto de renderizado. */
+    @media screen {
+      .pg { min-width: 1300px; }
+    }
   </style>`;
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+fixSolapamiento+'</head><body><div class="pg">'
