@@ -7776,21 +7776,23 @@ function _rptEmpresasRubros() {
       // a tantas líneas como haga falta en vez de cortarse con "...").
       //
       // El mismo solapamiento ("TIPO SOCIETARIOACTIVIDAD" pegados,
-      // CUIT tapando la fila) reapareció después, pero SOLO en la VISTA
-      // PREVIA en pantalla (el iframe de "Vista previa del reporte" es
-      // más angosto que la página impresa real) — la impresión real con
-      // estos mismos anchos ya se había aprobado con captura (2 páginas,
-      // CUIT y fechas en una línea, sin solapar). Probamos agrandar CUIT/
-      // Constitución para que entraran en una línea también en la vista
-      // previa angosta, pero eso le quita ancho a Empresa/Actividad e
-      // infla la altura de cada fila al IMPRIMIR, duplicando la cantidad
-      // de páginas — justo lo que no se quería. Por eso el arreglo del
-      // solapamiento en pantalla va en un <style> propio de esta tabla,
-      // aplicado SOLO con @media screen (ver más abajo): ahí se permite
-      // el salto de línea del encabezado y de la celda de CUIT para que
-      // nunca se desborden sobre la columna vecina en un iframe angosto,
-      // sin tocar un solo ancho de columna ni afectar en nada la
-      // impresión, que sigue exactamente igual a la versión aprobada.
+      // CUIT tapando la fila) reapareció después en algunos contextos de
+      // renderizado (vista previa, pestaña de impresión) más angostos que
+      // la página impresa ya aprobada (2 páginas, CUIT y fechas en una
+      // línea, sin solapar). Probamos agrandar CUIT/Constitución para que
+      // entraran en una línea también ahí, pero eso le quita ancho a
+      // Empresa/Actividad e infla la altura de cada fila al IMPRIMIR,
+      // duplicando la cantidad de páginas — justo lo que no se quería.
+      // Luego probamos limitar el arreglo a `@media screen` (para no
+      // tocar la impresión), pero resultó frágil: no hay garantía de que
+      // vista previa / pestaña de impresión / diálogo nativo de impresión
+      // apliquen siempre esa media query de la misma forma. El arreglo
+      // final (ver <style> más abajo) es INCONDICIONAL y no depende de
+      // ancho ni de media query: encabezado y CUIT permiten salto de
+      // línea Y tienen overflow:hidden como garantía dura — en el peor
+      // caso se recortan, pero NUNCA se desbordan sobre la columna
+      // vecina. Mientras haya espacio para 1-2 líneas (como en la
+      // impresión real ya aprobada) se ve exactamente igual que antes.
       return `<tr${inact?' style="color:#aaa"':''}>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
@@ -7816,22 +7818,37 @@ function _rptEmpresasRubros() {
       </table>`;
   }).join('');
 
-  // Arreglo de solapamiento SOLO para la vista previa en pantalla (ver
-  // comentario más arriba, junto a la celda de CUIT): un iframe de
-  // preview angosto puede hacer que el encabezado o el CUIT no entren en
-  // una línea y se desborden visualmente sobre la columna vecina. En
-  // @media print NO se toca nada — la impresión real ya funciona bien
-  // con estos anchos (aprobado con captura, 2 páginas) y agrandar
-  // columnas para "forzar" una sola línea también en pantalla inflaba
-  // la altura de las filas al imprimir.
-  const fixSolapamientoPreview = `<style>
-    @media screen {
-      .rpt-ficha-emp th { white-space: normal !important; overflow-wrap: break-word !important; }
-      .rpt-ficha-emp td:nth-child(2) { white-space: normal !important; }
+  // Arreglo de solapamiento — INCONDICIONAL (ya no limitado a @media
+  // screen: no hay garantía de que la vista previa, la pestaña separada
+  // que abre "Imprimir" antes de llamar a window.print(), y el panel de
+  // impresión nativo del navegador se comporten todos igual respecto a
+  // qué media query aplican, así que depender de @media screen resultó
+  // frágil). En vez de intentar que el encabezado y el CUIT SIEMPRE
+  // entren en una sola línea agrandando columnas (lo que infla la altura
+  // de las filas al imprimir y duplica la cantidad de páginas — pedido
+  // explícito en contra), se usa una garantía dura e independiente del
+  // ancho real disponible: el encabezado permite salto de línea
+  // (white-space:normal + overflow-wrap:break-word, igual que antes) Y
+  // además overflow:hidden, que jamás deja que el texto se desborde
+  // VISUALMENTE sobre la columna vecina pase lo que pase — en el peor
+  // caso (columna realmente angosta) el texto se recorta en vez de
+  // pisar al vecino, pero mientras haya espacio para 1-2 líneas (que es
+  // el caso en la impresión real ya aprobada) se ve exactamente igual
+  // que antes, sin ningún cambio de página.
+  const fixSolapamiento = `<style>
+    .rpt-ficha-emp th {
+      white-space: normal !important;
+      overflow-wrap: break-word !important;
+      overflow: hidden !important;
+    }
+    .rpt-ficha-emp td:nth-child(2) {
+      white-space: normal !important;
+      overflow-wrap: break-word !important;
+      overflow: hidden !important;
     }
   </style>`;
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+fixSolapamientoPreview+'</head><body><div class="pg">'
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+fixSolapamiento+'</head><body><div class="pg">'
     + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas · ${estadoFiltroLbl}`)
     + kpis
     + `<div class="st">Listado por rubro — ${emprsFiltradas.length} empresa${emprsFiltradas.length!==1?'s':''} (${estadoFiltroLbl})</div>`
