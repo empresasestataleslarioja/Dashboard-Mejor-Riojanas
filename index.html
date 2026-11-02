@@ -44774,13 +44774,30 @@ function applyCloudData(cloud, opts) {
 
   // TRANSFERENCIAS: merge — agregar registros de Sheets que no existen localmente.
   // Nunca eliminar registros locales. La eliminación es acción explícita del usuario.
-  if ((!_solo || _solo === 'transferencias') && !opts.skipTransferencias && cloud.transferencias && cloud.transferencias.length) {
+  //
+  // Guardia por sección pendiente (mismo criterio que fact/personal, ver
+  // comentarios arriba): si esta pestaña tiene un borrado/recarga de
+  // transferencias todavía sin publicar (marcarPendienteGuardar(['transferencias'])
+  // activo), NO mezclar lo que trae Sheets. Sin esto, el hueco entre
+  // "Eliminar por período" y el reimport que lo reemplaza quedaba
+  // momentáneamente sin esos registros en local — y esta función, al ver
+  // que Sheets (todavía con la versión vieja/duplicada, porque recién se
+  // va a publicar la corrección) "tiene" filas que local "no tiene",
+  // las traía de vuelta como si fueran nuevas. Bug real reportado: "No me
+  // sostiene los cambios al eliminar y cargar en DBG" — cualquier bajada
+  // automática (ver _resolverConflictoAntesDePublicar, disparada por auto-sync
+  // o por "Publicar ahora" de OTRO módulo) revivía la carga vieja antes de
+  // que la corrección llegara a publicarse.
+  if ((!_solo || _solo === 'transferencias') && !opts.skipTransferencias && !_seccionPendiente('transferencias') && cloud.transferencias && cloud.transferencias.length) {
     DATA.transferencias = DATA.transferencias || [];
-    // Construir set de claves locales existentes
+    // Construir set de claves locales existentes — incluye el día: la misma
+    // corrección aplicada a _claveTrans() (beneficiario+año+mes+importe sin
+    // día colapsaba pagos distintos en días distintos del mismo mes).
     const _transKey = t => [
       (t.beneficiario||'').trim(),
       String(t.año||'').trim(),
       String(t.mes||'').trim(),
+      String(t.dia||'').trim(),
       String(Math.round(parseFloat(t.importe||0)))
     ].join('|');
     const _transLocalKeys = new Set(DATA.transferencias.map(_transKey));
@@ -44800,6 +44817,7 @@ function applyCloudData(cloud, opts) {
         observacion:  r.observacion  || '',
         mes:          r.mes   ? (parseInt(r.mes) || 0) : 0,
         año:          r.año   ? (parseInt(r.año) || 0) : 0,
+        dia:          r.dia   ? (parseInt(r.dia) || 0) : 0,
         importe:      parseFloat(r.importe) || 0,
         categoria:    r.categoria       || 'Sin Clasificar',
         semana:       r.semana ? (parseInt(r.semana) || null) : null,
