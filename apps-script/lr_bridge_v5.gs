@@ -1,6 +1,21 @@
 // ══════════════════════════════════════════════════════════════════
 //  lr_bridge_v5.gs — Google Apps Script
 //  Dashboard BI La Rioja v6
+//  Cambios vs v5.11:
+//    · Transferencias: la clave de deduplicación al publicar a Sheets
+//      (doPost, Array.isArray(payload.transferencias)) y la de
+//      upsertTransferencias eran beneficiario+año+mes+importe, SIN el
+//      día — dos pagos reales y distintos al mismo beneficiario, mismo
+//      mes, mismo importe (común: cuotas FEDEI, asistencias financieras
+//      mensuales de monto fijo, repagadas en varios días) colapsaban a
+//      uno solo al escribir en la hoja, aunque el dashboard enviara
+//      ambos correctamente. Caso real detectado en auditoría: el
+//      dashboard mostraba 7.444 pagos en memoria pero la hoja
+//      "transferencias" en Sheets solo tenía 7.245 filas tras publicar
+//      — 199 pagos reales perdidos SOLO en el servidor, pese a que el
+//      cliente los había enviado todos. Se agrega el día (si está
+//      disponible) a ambas claves — confirmado por el usuario: "días
+//      distintos no son conflicto aunque compartan operación [SIDIF]".
 //  Cambios vs v5.10:
 //    · doGet: tab=count_trans y tab=count_autoridades son NUEVOS — antes
 //      no existían, así que caían al branch por defecto (que devuelve
@@ -302,11 +317,15 @@ function doPost(e) {
 
     // ── TRANSFERENCIAS ────────────────────────────────────────────
     // Reemplazo total con deduplicación previa en el payload
-    // El dashboard ya envía datos deduplicados — el bridge solo escribe
+    // El dashboard ya envía datos deduplicados — el bridge solo escribe.
+    // La clave incluye el día: dos pagos reales al mismo beneficiario,
+    // mismo mes y mismo importe (cuotas/asistencias de monto fijo
+    // repagadas en varios días) son operaciones distintas, no duplicados
+    // — solo lo son si además coinciden en el día exacto.
     if (Array.isArray(payload.transferencias)) {
       const seen = new Set();
       const dedup = filtrarBeneficiariosExcluidos(payload.transferencias, benExcluidos).filter(r => {
-        const k = [String(r.beneficiario||'').trim(), String(r.año||''), String(r.mes||''), String(Math.round(parseFloat(r.importe||0)))].join('|');
+        const k = [String(r.beneficiario||'').trim(), String(r.año||''), String(r.mes||''), String(r.dia||''), String(Math.round(parseFloat(r.importe||0)))].join('|');
         if (seen.has(k)) return false;
         seen.add(k); return true;
       });
@@ -761,19 +780,19 @@ function upsertTransferencias(ss, nuevas) {
     const datos = hoja.getRange(1, 1, lastRow, lastCol).getValues();
     headers = datos[0].map(String);
     const bi = headers.indexOf('beneficiario'), ai = headers.indexOf('año'),
-          mi = headers.indexOf('mes'), ii = headers.indexOf('importe');
+          mi = headers.indexOf('mes'), di = headers.indexOf('dia'), ii = headers.indexOf('importe');
     datos.slice(1).forEach(function(row) {
       if (!row.some(function(c){return c!=='';})) return;
-      const k = [row[bi]||'',row[ai]||'',row[mi]||'',row[ii]||''].join('|');
-      if (k !== '|||' && !existentes[k]) {
+      const k = [row[bi]||'',row[ai]||'',row[mi]||'',di>=0?(row[di]||''):'',row[ii]||''].join('|');
+      if (k !== '||||' && !existentes[k]) {
         const obj = {}; headers.forEach(function(h,i){obj[h]=row[i]!==undefined?row[i]:'';}); existentes[k]=obj;
       }
     });
   }
   if (headers.length === 0) headers = Object.keys(nuevas[0]);
   nuevas.forEach(function(r) {
-    const k = [r.beneficiario||'',r.año||'',r.mes||'',r.importe||''].join('|');
-    if (k !== '|||') existentes[k] = r;
+    const k = [r.beneficiario||'',r.año||'',r.mes||'',r.dia||'',r.importe||''].join('|');
+    if (k !== '||||') existentes[k] = r;
   });
   _backupHojaAntesDeEscribir(ss, TAB.transferencias);
   hoja.clearContents();
