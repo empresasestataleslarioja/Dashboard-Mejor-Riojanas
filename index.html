@@ -30365,7 +30365,7 @@ function limpiarDuplicadosTrans() {
 
   const eliminados = antes - DATA.transferencias.length;
   saveDataToLocalCache();
-  marcarPendienteGuardar(['balances']);
+  marcarPendienteGuardar(['transferencias']);
   buildTransferencias();
   renderAuditoriaTransferencias();
   alert('✓ ' + eliminados + ' duplicados eliminados. Quedan ' + DATA.transferencias.length + ' registros.');
