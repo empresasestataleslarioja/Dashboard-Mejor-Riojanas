@@ -24890,7 +24890,15 @@ function renderTransTabla(rows) {
         style="transition:background .15s;cursor:default;background:${rowBg}"
         onmouseover="this.style.background='var(--s2)'"
         onmouseout="if(!this.classList.contains('editing'))this.style.background='${rowBg}'">
-        <td style="padding:3px 6px;color:${sinSAF?'#ff8c47':'var(--dim)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px">${t.saf||'<span style=\"color:#ff8c47;font-size:8px\">s/d</span>'}</td>
+        <td style="padding:3px 6px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <span onclick="editarCeldaTrans(this,${realIdx},'saf')"
+            style="display:inline-block;font-size:9px;cursor:pointer;padding:2px 4px;
+            border-radius:3px;border:1px solid transparent;color:${sinSAF?'#ff8c47':'var(--dim)'}"
+            onmouseover="this.style.borderColor='var(--bd2)'"
+            onmouseout="this.style.borderColor='transparent'"
+            title="${sinSAF?'Sin SAF — click para asignar (completa Organismo automáticamente)':'Click para editar SAF'}"
+          >${t.saf||'<span style=\"color:#ff8c47;font-size:8px\">s/d</span>'}</span>
+        </td>
         <td style="padding:3px 6px;font-size:9px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
           title="${(t.organismo||'').replace(/"/g,"'")}">${(t.organismo||'—').slice(0,16)}</td>
         <td style="padding:3px 6px;font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${sinBen?'#ff8c47':''}"
@@ -41228,8 +41236,23 @@ function loadStateFromHash() {
 // ═══════════════════════════════════════════════════════════
 // ── Cambiar categoría de una transferencia desde la tabla ─────────
 // ── Editar año de una transferencia ──────────────────────────────
+// Dado un SAF, busca el Organismo que ya se usa para ese SAF en el resto
+// de las transferencias cargadas (el más frecuente, por si hay alguna
+// inconsistencia histórica de carga) — así asignar el SAF a una fila que
+// no lo trajo importado completa también el Organismo sin tener que
+// tipearlo a mano.
+function _organismoPorSAF(saf) {
+  if (!saf) return '';
+  const conteo = {};
+  (DATA.transferencias || []).forEach(t => {
+    if (t.saf === saf && t.organismo) conteo[t.organismo] = (conteo[t.organismo] || 0) + 1;
+  });
+  let mejor = '', max = 0;
+  Object.entries(conteo).forEach(([org, n]) => { if (n > max) { max = n; mejor = org; } });
+  return mejor;
+}
 // ── Editor inline genérico para columnas de transferencias ──────────
-// campo: 'observacion' | 'mes' | 'año'
+// campo: 'observacion' | 'mes' | 'año' | 'saf'
 function editarCeldaTrans(span, idx, campo) {
   const t = DATA.transferencias[idx];
   if (!t) return;
@@ -41237,7 +41260,40 @@ function editarCeldaTrans(span, idx, campo) {
   const MESES_ED = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-  if (campo === 'mes') {
+  if (campo === 'saf') {
+    // ── Dropdown de SAF (valores ya existentes en otras transferencias) ──
+    // Al confirmar, completa Organismo automáticamente según cómo ya está
+    // registrado ese SAF en el resto de la carga (ver _organismoPorSAF) —
+    // pedido explícito: asignar el SAF y que el Organismo salga solo.
+    const safsExistentes = [...new Set((DATA.transferencias || [])
+      .map(x => x.saf).filter(Boolean))].sort();
+    const sel = document.createElement('select');
+    sel.style.cssText = 'font-size:9px;font-family:var(--mono);background:var(--s2);' +
+      'border:1px solid var(--y21);color:var(--text);border-radius:3px;padding:1px 2px;outline:none;' +
+      'width:110px';
+    sel.innerHTML = '<option value="">— SAF —</option>' +
+      safsExistentes.map(s => `<option value="${s.replace(/"/g,'&quot;')}" ${t.saf===s?'selected':''}>${s}</option>`).join('');
+    span.replaceWith(sel);
+    sel.focus();
+
+    const commit = () => {
+      const v = sel.value;
+      if (v) {
+        t.saf = v;
+        const org = _organismoPorSAF(v);
+        if (org) t.organismo = org;
+        saveDataToLocalCache();
+        marcarPendienteGuardar(['transferencias']);
+      }
+      renderTransTabla(_transTablaPreFiltrada());
+    };
+    sel.addEventListener('change', commit);
+    sel.addEventListener('blur', commit);
+    sel.addEventListener('keydown', e => {
+      if (e.key === 'Escape') renderTransTabla(_transTablaPreFiltrada());
+    });
+
+  } else if (campo === 'mes') {
     // ── Dropdown de meses ─────────────────────────────────────────
     const sel = document.createElement('select');
     sel.style.cssText = 'font-size:9px;font-family:var(--mono);background:var(--s2);' +
