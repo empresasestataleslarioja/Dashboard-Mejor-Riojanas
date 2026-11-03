@@ -45666,7 +45666,14 @@ function buildCloudPayload() {
     return row;
   });
 
-  // transferencias — spread completo incluye _archivo y _hoja; excluir filas vacías
+  // transferencias — spread completo incluye _archivo y _hoja; excluir filas vacías.
+  // IMPORTANTE: incluye "dia" — este payload lo usa syncToCloud() (publicación
+  // general / auto-sync en segundo plano), con el mismo _trans_modo:'reemplazar'
+  // que syncSoloTransferencias(). Sin el día, el auto-sync volvía a colapsar en
+  // el servidor pagos reales distintos del mismo beneficiario/mes/importe en
+  // días distintos — bug real reportado varias veces como "desaparecen
+  // registros" sin que nadie tocara nada, porque el auto-sync se dispara solo
+  // en segundo plano tras cualquier edición (ver _dispararAutoSync).
   const _transVacia = t => !t.beneficiario && !t.saf && !t.organismo && !(t.importe);
   const transRows = (DATA.transferencias || [])
     .filter(t => !_transVacia(t) && !_beneficiarioExcluido(t.beneficiario)).map(t => ({
@@ -45679,6 +45686,7 @@ function buildCloudPayload() {
     observacion:  t.observacion  || '',
     mes:          t.mes          || '',
     año:          t.año          || '',
+    dia:          t.dia          || '',
     importe:      t.importe      || 0,
     categoria:    t.categoria    || 'Sin Clasificar',
     _archivo:     t._archivo     || '',
