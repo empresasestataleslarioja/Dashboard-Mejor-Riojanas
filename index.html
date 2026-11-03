@@ -44772,23 +44772,33 @@ function applyCloudData(cloud, opts) {
     });
   }
 
-  // TRANSFERENCIAS: merge — agregar registros de Sheets que no existen localmente.
-  // Nunca eliminar registros locales. La eliminación es acción explícita del usuario.
-  //
-  // Guardia por sección pendiente (mismo criterio que fact/personal, ver
-  // comentarios arriba): si esta pestaña tiene un borrado/recarga de
-  // transferencias todavía sin publicar (marcarPendienteGuardar(['transferencias'])
-  // activo), NO mezclar lo que trae Sheets. Sin esto, el hueco entre
-  // "Eliminar por período" y el reimport que lo reemplaza quedaba
-  // momentáneamente sin esos registros en local — y esta función, al ver
-  // que Sheets (todavía con la versión vieja/duplicada, porque recién se
-  // va a publicar la corrección) "tiene" filas que local "no tiene",
-  // las traía de vuelta como si fueran nuevas. Bug real reportado: "No me
-  // sostiene los cambios al eliminar y cargar en DBG" — cualquier bajada
-  // automática (ver _resolverConflictoAntesDePublicar, disparada por auto-sync
-  // o por "Publicar ahora" de OTRO módulo) revivía la carga vieja antes de
-  // que la corrección llegara a publicarse.
-  if ((!_solo || _solo === 'transferencias') && !opts.skipTransferencias && !_seccionPendiente('transferencias') && cloud.transferencias && cloud.transferencias.length) {
+  // TRANSFERENCIAS: SOLO se adoptan desde Sheets en el arranque genuino de
+  // una pestaña/dispositivo nuevo (local todavía vacío). Nunca se
+  // mezclan/agregan automáticamente una vez que esta pestaña ya tiene
+  // transferencias cargadas — ver el historial de bugs reales abajo, todos
+  // con el mismo patrón: cualquier bajada en segundo plano (el chequeo de
+  // conflicto antes de publicar, el sync periódico silencioso cada 2
+  // minutos — ver _sincronizarPeriodicoSilencioso — u otro dispositivo con
+  // auto-sync activo y datos viejos en memoria) podía traer de vuelta
+  // registros ya corregidos/eliminados localmente, antes de que la
+  // corrección llegara a publicarse:
+  //   · "No me sostiene los cambios al eliminar y cargar en DBG" — el
+  //     hueco entre "Eliminar por período" y el reimport que lo reemplaza
+  //     quedaba momentáneamente sin esas filas en local, y la bajada
+  //     automática las traía de vuelta interpretando el hueco como "Sheets
+  //     tiene algo nuevo que agregar".
+  //   · Reconstrucción completa de 2020-2025 (902/784/1005/1247/1160/1367,
+  //     verificada y publicada 7154=7154) duplicada otra vez minutos
+  //     después ("otra vez borró en sheets cuando quito pausa al sync") —
+  //     el guardia por sección pendiente (que protegía SOLO mientras había
+  //     un borrado/recarga en curso, no después de publicar) no alcanzaba
+  //     para cubrir una bajada automática posterior al publish.
+  // Mientras haya AUNQUE SEA UN registro local, transferencias queda bajo
+  // control exclusivo de esta pestaña (se publica con _trans_modo:
+  // 'reemplazar' — local SIEMPRE es la versión autoritativa al publicar).
+  // Para traer transferencias de Sheets de nuevo (p.ej. recuperar un
+  // backup), hay que vaciar `DATA.transferencias` explícitamente primero.
+  if ((!_solo || _solo === 'transferencias') && !opts.skipTransferencias && !(DATA.transferencias && DATA.transferencias.length) && cloud.transferencias && cloud.transferencias.length) {
     DATA.transferencias = DATA.transferencias || [];
     // Construir set de claves locales existentes — incluye el día: la misma
     // corrección aplicada a _claveTrans() (beneficiario+año+mes+importe sin
