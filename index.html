@@ -1136,6 +1136,66 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
   }
 }
 
+/* ═══ RESPONSIVE MOBILE — LANDSCAPE (celular apaisado) ═══════
+   La app queda fija en landscape (ver manifest.json) porque las
+   tablas/gráficos de este dashboard se leen mejor así que en vertical
+   — pedido explícito. El bloque de arriba (max-width:768px) no sirve
+   acá: un celular acostado suele tener MÁS de 768px de ancho (700-950px
+   típico), así que esas reglas nunca se activaban y la app mostraba el
+   layout completo de escritorio apretado en una pantalla angosta (p.ej.
+   el sidebar de escritorio ocupando medio ancho de pantalla, y 6
+   tarjetas de KPI en una sola fila con flex:1 — cada una quedaba con
+   ~90px, todo el texto cortado con "…").
+   Se detecta "celular apaisado" por ALTURA, no por ancho — un celular
+   acostado tiene poca altura (~360-430px) sea cual sea su ancho,
+   mientras que una notebook/PC en una ventana apaisada casi siempre
+   tiene más de 500px de alto incluso achicada. Así esto nunca se activa
+   por error en una pantalla de escritorio real. */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* ── Sidebar → barra vertical angosta (solo íconos+texto chico) ── */
+  .sidebar {
+    width:64px; min-width:64px; padding:6px 4px; gap:0;
+    overflow-y:auto; overflow-x:hidden;
+  }
+  .sidebar > .brand { display:none; }
+  .nav-item { padding:6px 4px; font-size:8px; text-align:center; }
+  .nav-group { display:none; }
+  .nav-footer { display:none; }
+
+  /* ── Topbar compacto ── */
+  .topbar-row1 { height:38px; padding:0 8px; }
+  .page-title { font-size:12px; }
+  .meta-tag { font-size:8px; padding:2px 4px; }
+  .tba-section-label { display:none; }
+
+  /* ── Contenido ── */
+  .scroll-area { padding:8px 10px 30px; }
+  .card { padding:8px 10px; }
+
+  /* ── KPIs: 3 por fila en vez de forzar todas en una sola línea ── */
+  .kpi-strip { grid-template-columns:repeat(3,1fr) !important; gap:6px; }
+  .kpi-band { flex-wrap:wrap !important; }
+  .kpi-band-item { min-width:calc(33.33% - 1px) !important; border-bottom:1px solid var(--bd); padding:6px 10px !important; }
+  .kpi-value { font-size:18px !important; }
+  .kpi-band-value { font-size:16px !important; }
+
+  /* ── Grids de filas ── */
+  .row3, .row4 { grid-template-columns:repeat(2,1fr) !important; }
+  .rowfull { grid-template-columns:1fr !important; }
+
+  /* ── Gráficos: poca altura disponible ── */
+  canvas { max-height:140px !important; }
+
+  /* ── Tablas: scroll horizontal, fuente chica ── */
+  .tbl-wrap, .rowfull { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+  table { font-size:9px; }
+  table th, table td { padding:3px 5px !important; }
+
+  /* ── Modales/paneles flotantes: no superar la altura visible ── */
+  #login-overlay > div:nth-child(2) { max-height:92vh; overflow-y:auto; }
+  #cloud-panel, #user-panel { max-height:88vh; overflow-y:auto; }
+}
+
 /* ── PANELS ─────────────────────────────────────────── */
 .panel { display: none; animation: slideIn .18s ease; }
 .panel.on { display: block; }
