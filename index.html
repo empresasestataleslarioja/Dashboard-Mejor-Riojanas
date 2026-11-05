@@ -7885,16 +7885,36 @@ function _rptEmpresasRubros() {
         <td style="padding:3px 8px;text-align:left;overflow-wrap:break-word;white-space:pre-wrap;color:${notaInst?'#185fa5':'inherit'}">${notaInst ? notaInst.replace(/</g,'&lt;') : '—'}</td>
       </tr>`;
     }).join('');
+    // Anchos de columna (table-layout:fixed → se respetan exactos, el
+    // contenido NO los empuja). CUIT pasó de 9% a 18%: a 9%, en la hoja
+    // IMPRESA real (A4, ~705px de ancho útil dentro de .pg — la vista
+    // previa en pantalla usa .pg{min-width:1300px}, PERO esa regla es
+    // @media screen y no aplica al imprimir de verdad) un CUIT completo
+    // ("30-70712428-4", 13 caracteres) necesitaba ~105px y la columna
+    // solo tenía ~63px — con white-space:nowrap + overflow:hidden (ver
+    // fixSolapamiento) eso recortaba dígitos reales en la hoja impresa,
+    // aunque la vista previa en pantalla (con el ancho de 1300px) se
+    // viera completa — pedido explícito: el CUIT tiene que verse
+    // completo SIEMPRE, también al imprimir. Verificado con Playwright
+    // generando el PDF real (A4, @media print, sin el min-width de
+    // pantalla): a 15% todavía recortaba por un margen chico (~5px); a
+    // 18% entra con margen de sobra, incluso con sustitución de fuente
+    // si 'Courier New' no está instalada en el dispositivo que imprime.
+    // El 9% que gana CUIT se le resta a Observaciones (17%→8%): es la
+    // única columna sin requisito de una sola línea y casi siempre
+    // vacía o corta ("—"), así que angostarla no debería inflar la
+    // cantidad de páginas como sí pasó cuando se probó ensanchar CUIT a
+    // costa de Empresa/Actividad.
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
           <th style="text-align:left;padding:5px 8px;width:22%">Empresa</th>
-          <th style="text-align:left;padding:5px 8px;width:9%">CUIT</th>
+          <th style="text-align:left;padding:5px 8px;width:18%">CUIT</th>
           <th style="text-align:left;padding:5px 8px;width:10%">Tipo Societario</th>
           <th style="text-align:left;padding:5px 8px;width:16%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:13%">Constitución</th>
           <th style="text-align:left;padding:5px 8px;width:13%">Instrumento de creación</th>
-          <th style="text-align:left;padding:5px 8px;width:17%">Observaciones</th>
+          <th style="text-align:left;padding:5px 8px;width:8%">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
