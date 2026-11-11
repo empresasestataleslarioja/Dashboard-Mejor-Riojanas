@@ -7908,13 +7908,13 @@ function _rptEmpresasRubros() {
     return `<div class="st" style="margin-top:14px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
       <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:5px 8px;width:22%">Empresa</th>
+          <th style="text-align:left;padding:5px 8px;width:20%">Empresa</th>
           <th style="text-align:left;padding:5px 8px;width:18%">CUIT</th>
-          <th style="text-align:left;padding:5px 8px;width:10%">Tipo Societario</th>
-          <th style="text-align:left;padding:5px 8px;width:16%">Actividad</th>
+          <th style="text-align:left;padding:5px 8px;width:12%">Tipo Societario</th>
+          <th style="text-align:left;padding:5px 8px;width:14%">Actividad</th>
           <th style="text-align:left;padding:5px 8px;width:13%">Constitución</th>
-          <th style="text-align:left;padding:5px 8px;width:13%">Instrumento de creación</th>
-          <th style="text-align:left;padding:5px 8px;width:8%">Observaciones</th>
+          <th style="text-align:left;padding:5px 8px;width:11%">Instrumento de creación</th>
+          <th style="text-align:left;padding:5px 8px;width:12%">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
@@ -7955,6 +7955,24 @@ function _rptEmpresasRubros() {
       overflow-wrap: break-word !important;
       overflow: hidden !important;
     }
+    /* Actividad, Instrumento de creación, Observaciones y la 2ª línea de
+       Tipo Societario (participación accionaria) SÍ pueden ocupar varias
+       líneas — pero sin esto, una palabra más larga que la columna
+       (p.ej. "TRANSFORMACION", "extraordinaria") se cortaba a la mitad
+       con overflow-wrap:break-word puro ("TRANSF" + salto + "ORMACION"),
+       que se ve roto/con bug. hyphens:auto deja que el navegador la
+       parta con guión en un punto silábico válido, como en un texto
+       impreso normal, y solo recurre al corte crudo si ni así entra
+       (caso extremo). Requiere lang="es" en <html> (ver más abajo) para
+       usar las reglas de separación silábica del español. */
+    .rpt-ficha-emp td:nth-child(3),
+    .rpt-ficha-emp td:nth-child(4),
+    .rpt-ficha-emp td:nth-child(6),
+    .rpt-ficha-emp td:nth-child(7) {
+      -webkit-hyphens: auto;
+      -ms-hyphens: auto;
+      hyphens: auto;
+    }
     /* Ancho mínimo para que CUIT/encabezados entren en una línea en
        pantalla — SOLO @media screen (nunca en @media print, para no
        alterar la paginación de A4 ya aprobada). Esto vive ACÁ, en el
@@ -7967,7 +7985,7 @@ function _rptEmpresasRubros() {
     }
   </style>`;
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+fixSolapamiento+'</head><body><div class="pg">'
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">'+_rptCSS()+fixSolapamiento+'</head><body><div class="pg">'
     + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas · ${estadoFiltroLbl}`)
     + kpis
     + `<div class="st">Listado por rubro — ${emprsFiltradas.length} empresa${emprsFiltradas.length!==1?'s':''} (${estadoFiltroLbl})</div>`
