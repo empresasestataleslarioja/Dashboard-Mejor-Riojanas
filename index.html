@@ -7876,32 +7876,38 @@ function _rptEmpresasRubros() {
       // vecina. Mientras haya espacio para 1-2 líneas (como en la
       // impresión real ya aprobada) se ve exactamente igual que antes.
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word">${e}${inact?` <span style="font-size:6.5pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word">${societario}</td>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
-        <td style="padding:2px 6px;text-align:left;overflow-wrap:break-word;white-space:pre-wrap;color:${notaInst?'#185fa5':'inherit'}">${notaInst ? notaInst.replace(/</g,'&lt;') : '—'}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word;white-space:nowrap;overflow:hidden">${e}${inact?` <span style="font-size:5.5pt;background:#fdecea;color:#c0392b;padding:1px 5px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word">${societario}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word">${inst.fechaConstitucion ? fmtFechaCorta(inst.fechaConstitucion) : '—'}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word">${inst.decreto || '—'}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word;white-space:pre-wrap;color:${notaInst?'#185fa5':'inherit'}">${notaInst ? notaInst.replace(/</g,'&lt;') : '—'}</td>
       </tr>`;
     }).join('');
-    // Pedido explícito (11/11): achicar tamaño de letra y alto de fila para
-    // que entren más empresas por página al imprimir — tabla de 8.5pt→7pt,
-    // padding de celda 3px 8px→2px 6px, encabezado con su propio tamaño
-    // reducido (6.5pt, ver fixSolapamiento) y separación entre rubros
-    // 14px→10px. Los 7 anchos de columna NO se tocan (siguen siendo los ya
-    // aprobados 22/9/10/16/13/13/17%) — lo que infla la paginación es la
-    // altura de cada fila (fuente+padding), no el ancho de columna.
+    // Pedido explícito (11/11, 2ª vuelta): el usuario confirmó que el CUIT
+    // SIGUE solapado al imprimir incluso con la fuente ya achicada a 7pt —
+    // y ahora pide también que el NOMBRE de la empresa entre sí o sí en una
+    // línea (antes se permitía envolver a propósito; se prioriza el pedido
+    // más reciente y explícito). Se achica más la fuente (7pt→6pt, headers
+    // 6.5pt→5.5pt) y se le da más ancho real a CUIT (9%→12%), restándoselo
+    // a Observaciones (17%→14%, la única columna sin requisito de una sola
+    // línea). Empresa pasa a nowrap+overflow:hidden (mismo resguardo que
+    // CUIT/Constitución: en el peor caso se recorta, nunca se desborda
+    // sobre la columna vecina) — ya no se prueba envolver, matching el
+    // pedido actual. Esto no se puede verificar con certeza en este
+    // entorno (sin la fuente Courier New real instalada, como ya se
+    // confirmó antes) — necesita probarse en la impresora real.
     return `<div class="st" style="margin-top:10px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
-      <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:7pt">
+      <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:6pt">
         <thead><tr style="background:#f0f4ff">
-          <th style="text-align:left;padding:3px 6px;width:22%">Empresa</th>
-          <th style="text-align:left;padding:3px 6px;width:9%">CUIT</th>
-          <th style="text-align:left;padding:3px 6px;width:10%">Tipo Societario</th>
-          <th style="text-align:left;padding:3px 6px;width:16%">Actividad</th>
-          <th style="text-align:left;padding:3px 6px;width:13%">Constitución</th>
-          <th style="text-align:left;padding:3px 6px;width:13%">Instrumento de creación</th>
-          <th style="text-align:left;padding:3px 6px;width:17%">Observaciones</th>
+          <th style="text-align:left;padding:2px 5px;width:22%">Empresa</th>
+          <th style="text-align:left;padding:2px 5px;width:12%">CUIT</th>
+          <th style="text-align:left;padding:2px 5px;width:10%">Tipo Societario</th>
+          <th style="text-align:left;padding:2px 5px;width:16%">Actividad</th>
+          <th style="text-align:left;padding:2px 5px;width:13%">Constitución</th>
+          <th style="text-align:left;padding:2px 5px;width:13%">Instrumento de creación</th>
+          <th style="text-align:left;padding:2px 5px;width:14%">Observaciones</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>`;
@@ -7929,7 +7935,7 @@ function _rptEmpresasRubros() {
       white-space: normal !important;
       overflow-wrap: break-word !important;
       overflow: hidden !important;
-      font-size: 6.5pt !important;
+      font-size: 5.5pt !important;
     }
     /* Pedido explícito: CUIT, tipo societario y fecha de Constitución
        tienen que estar SIEMPRE en una sola línea, pase lo que pase.
@@ -7943,6 +7949,18 @@ function _rptEmpresasRubros() {
       overflow-wrap: break-word !important;
       overflow: hidden !important;
     }
+    /* Resguardo para Actividad/Instrumento/Observaciones (sí pueden
+       ocupar varias líneas): una palabra más larga que su columna
+       ("TRANSFORMACION") se corta con guión en un punto silábico válido
+       en vez de partirse a la mitad sin sentido — requiere lang="es" en
+       el <html> de este reporte (ver más abajo). */
+    .rpt-ficha-emp td:nth-child(4),
+    .rpt-ficha-emp td:nth-child(6),
+    .rpt-ficha-emp td:nth-child(7) {
+      -webkit-hyphens: auto;
+      -ms-hyphens: auto;
+      hyphens: auto;
+    }
     /* Ancho mínimo para que CUIT/encabezados entren en una línea en
        pantalla — SOLO @media screen (nunca en @media print, para no
        alterar la paginación de A4 ya aprobada). Esto vive ACÁ, en el
@@ -7955,7 +7973,7 @@ function _rptEmpresasRubros() {
     }
   </style>`;
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8">'+_rptCSS()+fixSolapamiento+'</head><body><div class="pg">'
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">'+_rptCSS()+fixSolapamiento+'</head><body><div class="pg">'
     + _rptHeader('Ficha Institucional de Empresas', `Padrón del portafolio · ${allEmps.length} empresas · ${estadoFiltroLbl}`)
     + kpis
     + `<div class="st">Listado por rubro — ${emprsFiltradas.length} empresa${emprsFiltradas.length!==1?'s':''} (${estadoFiltroLbl})</div>`
