@@ -1152,12 +1152,22 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
    tiene más de 500px de alto incluso achicada. Así esto nunca se activa
    por error en una pantalla de escritorio real. */
 @media (orientation: landscape) and (max-height: 500px) {
-  /* ── Sidebar → barra vertical angosta (solo íconos+texto chico) ── */
-  .sidebar {
+  /* Pedido explícito: además del modo celular automático, un botón para
+     forzar la vista de escritorio completa en el celular (como "Ver
+     sitio de escritorio" de un navegador) — útil para quien prefiera
+     ver una tabla entera de una vez y no le moleste hacer zoom/scroll.
+     Se implementa agregando la clase .force-desktop al <body> (ver
+     toggleVistaDesktopMobile()), que esta misma media query respeta
+     con :not(.force-desktop) en cada selector — con esa clase puesta,
+     ninguna regla de acá abajo se aplica y el celular ve el layout de
+     escritorio tal cual, sin tocar ningún otro contexto (impresión,
+     pantallas anchas, etc.).
+     ── Sidebar → barra vertical angosta (solo íconos+texto chico) ── */
+  body:not(.force-desktop) .sidebar {
     width:64px; min-width:64px; padding:6px 4px; gap:0;
     overflow-y:auto; overflow-x:hidden;
   }
-  .sidebar > .brand { display:none; }
+  body:not(.force-desktop) .sidebar > .brand { display:none; }
   /* nav-item es flex ROW por defecto (ícono y texto lado a lado, ver
      CSS base) — en una barra de 64px eso apretaba el texto a una tira
      angostísima (una palabra por línea de 2-3 letras, ilegible). Se
@@ -1166,47 +1176,53 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
      indica selección junto al borde izquierdo) se oculta acá — ya no
      tiene sentido sin el layout en fila, y el resaltado de "activo"
      sigue viéndose por el fondo/color del texto. */
-  .nav-item {
+  body:not(.force-desktop) .nav-item {
     flex-direction: column; align-items: center; justify-content: center;
     gap: 2px; padding:8px 2px; font-size:8px; text-align:center; line-height:1.15;
   }
-  .nav-dot { display: none; }
-  .nav-group { display:none; }
-  .nav-footer { display:none; }
+  body:not(.force-desktop) .nav-dot { display: none; }
+  body:not(.force-desktop) .nav-group { display:none; }
+  body:not(.force-desktop) .nav-footer { display:none; }
 
   /* ── Topbar compacto ── */
-  .topbar-row1 { height:38px; padding:0 8px; }
-  .page-title { font-size:12px; }
-  .meta-tag { font-size:8px; padding:2px 4px; }
-  .tba-section-label { display:none; }
+  body:not(.force-desktop) .topbar-row1 { height:38px; padding:0 8px; }
+  body:not(.force-desktop) .page-title { font-size:12px; }
+  body:not(.force-desktop) .meta-tag { font-size:8px; padding:2px 4px; }
+  body:not(.force-desktop) .tba-section-label { display:none; }
 
   /* ── Contenido ── */
-  .scroll-area { padding:8px 10px 30px; }
-  .card { padding:8px 10px; }
+  body:not(.force-desktop) .scroll-area { padding:8px 10px 30px; }
+  body:not(.force-desktop) .card { padding:8px 10px; }
 
   /* ── KPIs: 3 por fila en vez de forzar todas en una sola línea ── */
-  .kpi-strip { grid-template-columns:repeat(3,1fr) !important; gap:6px; }
-  .kpi-band { flex-wrap:wrap !important; }
-  .kpi-band-item { min-width:calc(33.33% - 1px) !important; border-bottom:1px solid var(--bd); padding:6px 10px !important; }
-  .kpi-value { font-size:18px !important; }
-  .kpi-band-value { font-size:16px !important; }
+  body:not(.force-desktop) .kpi-strip { grid-template-columns:repeat(3,1fr) !important; gap:6px; }
+  body:not(.force-desktop) .kpi-band { flex-wrap:wrap !important; }
+  body:not(.force-desktop) .kpi-band-item { min-width:calc(33.33% - 1px) !important; border-bottom:1px solid var(--bd); padding:6px 10px !important; }
+  body:not(.force-desktop) .kpi-value { font-size:18px !important; }
+  body:not(.force-desktop) .kpi-band-value { font-size:16px !important; }
 
   /* ── Grids de filas ── */
-  .row3, .row4 { grid-template-columns:repeat(2,1fr) !important; }
-  .rowfull { grid-template-columns:1fr !important; }
+  body:not(.force-desktop) .row3, body:not(.force-desktop) .row4 { grid-template-columns:repeat(2,1fr) !important; }
+  body:not(.force-desktop) .rowfull { grid-template-columns:1fr !important; }
 
   /* ── Gráficos: poca altura disponible ── */
-  canvas { max-height:140px !important; }
+  body:not(.force-desktop) canvas { max-height:140px !important; }
 
   /* ── Tablas: scroll horizontal, fuente chica ── */
-  .tbl-wrap, .rowfull { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
-  table { font-size:9px; }
-  table th, table td { padding:3px 5px !important; }
+  body:not(.force-desktop) .tbl-wrap, body:not(.force-desktop) .rowfull { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+  body:not(.force-desktop) table { font-size:9px; }
+  body:not(.force-desktop) table th, body:not(.force-desktop) table td { padding:3px 5px !important; }
 
   /* ── Modales/paneles flotantes: no superar la altura visible ── */
-  #login-overlay > div:nth-child(2) { max-height:92vh; overflow-y:auto; }
-  #cloud-panel, #user-panel { max-height:88vh; overflow-y:auto; }
+  body:not(.force-desktop) #login-overlay > div:nth-child(2) { max-height:92vh; overflow-y:auto; }
+  body:not(.force-desktop) #cloud-panel, body:not(.force-desktop) #user-panel { max-height:88vh; overflow-y:auto; }
+
+  /* Botón de alternar, visible SOLO dentro de esta media query (celular
+     acostado) — en escritorio normal no existe este contexto así que no
+     hace falta ocultarlo aparte. */
+  #btn-toggle-desktop-mobile { display: inline-flex !important; }
 }
+#btn-toggle-desktop-mobile { display: none; }
 
 /* ── PANELS ─────────────────────────────────────────── */
 .panel { display: none; animation: slideIn .18s ease; }
@@ -2198,6 +2214,17 @@ self.onmessage = async (e) => {
           color:#1a9e68;font-family:var(--mono);font-size:9.5px;font-weight:600;border-radius:3px;
           cursor:pointer;white-space:nowrap;height:24px">🔄 Auto</button>
         <div id="cloud-status-txt-top" style="font-size:9px;color:var(--dim);font-family:var(--mono);white-space:nowrap"></div>
+        <!-- Pedido explícito: botón para alternar entre la vista mobile
+             automática (celular acostado) y forzar la vista de escritorio
+             completa. Solo visible en ese contexto (ver
+             #btn-toggle-desktop-mobile{display:none} + display:inline-flex
+             dentro de la media query de landscape) — en escritorio normal
+             o celular parado no aparece. -->
+        <button id="btn-toggle-desktop-mobile" onclick="toggleVistaDesktopMobile()"
+          title="Alternar entre vista celular y vista de escritorio completa"
+          style="padding:3px 7px;background:rgba(71,200,255,.1);border:1px solid rgba(71,200,255,.35);
+          color:var(--acc);font-family:var(--mono);font-size:9.5px;font-weight:600;border-radius:3px;
+          cursor:pointer;white-space:nowrap;height:24px">🖥 Escritorio</button>
       </div>
 
       <!-- ZONA D: Usuario (ancho fijo, nunca se superpone) -->
@@ -46549,6 +46576,38 @@ if (typeof _autoSyncEnabled === 'undefined') var _autoSyncEnabled = true;
 // ANTES de haber bajado la versión más reciente de Sheets, pisando ahí
 // cambios que otro dispositivo ya había publicado.
 if (typeof _syncInicialCompletado === 'undefined') var _syncInicialCompletado = false;
+
+// ── Alternar vista celular (automática) / escritorio forzado ──────
+// Pedido explícito: además de que el celular acostado adapte el layout
+// solo (sidebar angosto, KPIs en 3 columnas, etc. — ver @media
+// (orientation:landscape) and (max-height:500px)), un botón para forzar
+// la vista de escritorio completa ahí mismo, para quien prefiera ver
+// una tabla entera de una vez aunque haya que hacer zoom/scroll. Se
+// persiste en localStorage: una vez elegida, la preferencia se mantiene
+// entre sesiones en ese mismo dispositivo/navegador.
+const _LS_FORZAR_DESKTOP = 'lr_forzar_desktop_mobile';
+function _forzarDesktopActivo() {
+  try { return localStorage.getItem(_LS_FORZAR_DESKTOP) === '1'; } catch(e) { return false; }
+}
+function _aplicarForzarDesktop(activo) {
+  document.body.classList.toggle('force-desktop', activo);
+  const btn = document.getElementById('btn-toggle-desktop-mobile');
+  if (btn) {
+    btn.textContent = activo ? '📱 Celular' : '🖥 Escritorio';
+    btn.title = activo
+      ? 'Vista de escritorio forzada — click para volver a la vista celular'
+      : 'Vista celular (automática) — click para forzar la vista de escritorio completa';
+  }
+}
+function toggleVistaDesktopMobile() {
+  const activo = !_forzarDesktopActivo();
+  try { localStorage.setItem(_LS_FORZAR_DESKTOP, activo ? '1' : '0'); } catch(e) {}
+  _aplicarForzarDesktop(activo);
+}
+// Restaurar preferencia guardada al cargar — sin esto, cada vez que se
+// recarga la página (reinstalar la PWA, cerrar/abrir pestaña, etc.) se
+// perdía la elección y volvía siempre a la vista celular automática.
+try { _aplicarForzarDesktop(_forzarDesktopActivo()); } catch(e) {}
 
 function _toggleAutoSync() {
   _autoSyncEnabled = !_autoSyncEnabled;
