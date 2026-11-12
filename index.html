@@ -7876,7 +7876,7 @@ function _rptEmpresasRubros() {
       // vecina. Mientras haya espacio para 1-2 líneas (como en la
       // impresión real ya aprobada) se ve exactamente igual que antes.
       return `<tr${inact?' style="color:#aaa"':''}>
-        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word;white-space:nowrap;overflow:hidden">${e}${inact?` <span style="font-size:5.5pt;background:#fdecea;color:#c0392b;padding:1px 5px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
+        <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word;white-space:nowrap;overflow:hidden">${e}${inact?` <span style="font-size:5pt;background:#fdecea;color:#c0392b;padding:1px 5px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA${fechaCorta?' '+fechaCorta:''}</span>`:''}</td>
         <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word;white-space:nowrap">${inst.cuit || '—'}</td>
         <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word">${societario}</td>
         <td style="padding:2px 5px;text-align:left;overflow-wrap:break-word">${inst.actividad || '—'}</td>
@@ -7899,7 +7899,7 @@ function _rptEmpresasRubros() {
     // entorno (sin la fuente Courier New real instalada, como ya se
     // confirmó antes) — necesita probarse en la impresora real.
     return `<div class="st" style="margin-top:10px;color:${RUBRO_COLORS?.[rb]||'#6d3a9c'}">${rb} — ${emps.length} empresa${emps.length!==1?'s':''}</div>
-      <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:6pt">
+      <table class="rpt-ficha-emp" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:5.5pt">
         <thead><tr style="background:#f0f4ff">
           <th style="text-align:left;padding:2px 5px;width:22%">Empresa</th>
           <th style="text-align:left;padding:2px 5px;width:12%">CUIT</th>
@@ -7935,7 +7935,7 @@ function _rptEmpresasRubros() {
       white-space: normal !important;
       overflow-wrap: break-word !important;
       overflow: hidden !important;
-      font-size: 5.5pt !important;
+      font-size: 5pt !important;
     }
     /* Pedido explícito: CUIT, tipo societario y fecha de Constitución
        tienen que estar SIEMPRE en una sola línea, pase lo que pase.
