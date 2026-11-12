@@ -1158,7 +1158,19 @@ body.pres-mode .scroll-area { padding: 20px 32px !important; }
     overflow-y:auto; overflow-x:hidden;
   }
   .sidebar > .brand { display:none; }
-  .nav-item { padding:6px 4px; font-size:8px; text-align:center; }
+  /* nav-item es flex ROW por defecto (ícono y texto lado a lado, ver
+     CSS base) — en una barra de 64px eso apretaba el texto a una tira
+     angostísima (una palabra por línea de 2-3 letras, ilegible). Se
+     pasa a columna: ícono arriba, texto abajo, ambos centrados, como
+     un riel de íconos normal. El punto decorativo (.nav-dot, solo
+     indica selección junto al borde izquierdo) se oculta acá — ya no
+     tiene sentido sin el layout en fila, y el resaltado de "activo"
+     sigue viéndose por el fondo/color del texto. */
+  .nav-item {
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; padding:8px 2px; font-size:8px; text-align:center; line-height:1.15;
+  }
+  .nav-dot { display: none; }
   .nav-group { display:none; }
   .nav-footer { display:none; }
 
