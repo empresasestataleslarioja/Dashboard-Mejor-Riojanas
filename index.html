@@ -45848,23 +45848,23 @@ function applyCloudData(cloud, opts) {
         // no hay con qué fusionarla por registro, así que se agrega tal
         // cual solo si no hay ya un registro local equivalente (mismo
         // criterio que usaba el modo "combinar" de importarAutoridades).
-        // PERO: si ya existe localmente un registro TRACKEADO (con _id
-        // propio) para el mismo cargo/empresa/fecha "desde", esta fila
-        // huérfana es la versión VIEJA de ESE registro, no una persona
-        // distinta — se descarta sin agregarla aunque el nombre ya no
-        // coincida exactamente. Sin este chequeo, corregir una errata en
-        // el nombre de un registro que tiene una copia huérfana sin _id en
-        // Sheets (dato de antes de este sistema, nunca limpiada del lado
-        // del servidor) hacía que esa copia vieja "resucitara" como
-        // registro nuevo en el próximo sync, justo porque al corregir el
-        // nombre dejaba de matchear exacto y la comparación de abajo
-        // (yaExiste) ya no la detectaba como equivalente. Reportado como
-        // "volvió a reaparecer un registro viejo con un nombre que ya
-        // había corregido".
+        //
+        // ATENCIÓN — hubo acá un intento de descartar la huérfana también
+        // cuando coincidía empresa+cargo+"desde" (ignorando el nombre),
+        // para que una copia vieja no "resucitara" al corregir una errata
+        // de nombre. SE REVIRTIÓ: ese criterio es inseguro en la práctica
+        // real — un directorio típicamente tiene VARIAS personas distintas
+        // con el MISMO cargo ("Director") y la MISMA fecha "desde" (se
+        // nombran todas juntas en la misma resolución/acta), así que
+        // terminaba descartando para siempre a personas realmente
+        // distintas, no solo a la copia vieja de una ya corregida —
+        // reportado como pérdida de datos ya cargados en Autoridades. Se
+        // vuelve a exigir coincidencia EXACTA (incluyendo nombre): más
+        // conservador, nunca descarta una persona real distinta, al costo
+        // de que una copia huérfana sin _id pueda reaparecer si se corrige
+        // el nombre del registro real (caso ya conocido, mucho más
+        // acotado que perder gente real).
         if (!id) {
-          const yaExisteMismoCargo = DATA.autoridades.some(a =>
-            a._id && a.empresa === reg.empresa && _normCargoAutoridad(a.cargo) === _normCargoAutoridad(reg.cargo) && a.desde === reg.desde);
-          if (yaExisteMismoCargo) return;
           const yaExiste = DATA.autoridades.some(a =>
             a.empresa === reg.empresa && a.nombre === reg.nombre && a.cargo === reg.cargo && a.desde === reg.desde);
           if (!yaExiste) { _ensureAutoridadId(reg); DATA.autoridades.push(reg); }
