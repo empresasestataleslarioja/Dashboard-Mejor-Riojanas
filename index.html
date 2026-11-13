@@ -3094,12 +3094,9 @@ self.onmessage = async (e) => {
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
             <option value="">— Todas las empresas —</option>
           </select>
-          <select id="sel-autoridades-cargo" onchange="buildAutoridades()"
-            title="Filtrar por tipo de cargo (Presidente, Director, Síndico, etc.)"
-            style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
-            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
-            <option value="">— Todos los cargos —</option>
-          </select>
+          <span style="font-size:9px;color:var(--dim);font-family:var(--mono)">Cargo:</span>
+          <div id="autoridades-cargo-chips" title="Filtrar por tipo de cargo — tocá uno o varios para combinarlos (ninguno seleccionado = todos)"
+            style="display:flex;gap:4px;flex-wrap:wrap"></div>
           <input type="text" id="autoridades-busq-nombre" oninput="buildAutoridades()"
             placeholder="🔎 Buscar por nombre…" title="Filtra por nombre y apellido — para revisar y corregir posibles errores de carga (duplicados, grafías distintas, etc.)"
             style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
@@ -19451,6 +19448,26 @@ function _autoridadesCargoOptions() {
     .map(([clave, label]) => ({ clave, label }));
 }
 
+// Filtro de cargo de Autoridades — selector MÚLTIPLE (pedido explícito:
+// "necesito un selector múltiple de cargos para lograr filtrados más
+// puntuales", ej. ver a la vez Presidente + Vicepresidente). Se maneja
+// con chips tocables (mismo patrón que Rubro/Año en Resultados), no con
+// un <select> de una sola opción. `_autoridadesCargosSel` guarda las
+// claves normalizadas activas; vacío = sin filtro (se muestran todos los
+// cargos). `_ultimasOpcionesCargoAutoridades` guarda las opciones del
+// último render para que el handler de click pueda resolver el índice
+// del chip sin tener que volcar la clave/label en un atributo HTML.
+let _autoridadesCargosSel = [];
+let _ultimasOpcionesCargoAutoridades = [];
+function toggleAutoridadCargoChip(el) {
+  const o = _ultimasOpcionesCargoAutoridades[parseInt(el.dataset.idx, 10)];
+  if (!o) return;
+  const pos = _autoridadesCargosSel.indexOf(o.clave);
+  if (pos >= 0) _autoridadesCargosSel.splice(pos, 1);
+  else _autoridadesCargosSel.push(o.clave);
+  buildAutoridades();
+}
+
 // Una autoridad es vigente solo si su propio "hasta" no venció Y la
 // empresa sigue activa — si la empresa pasó a inactiva, sus cargos dejan
 // de contar como vigentes a partir de esa fecha aunque el registro de la
@@ -19496,19 +19513,19 @@ function buildAutoridades() {
   }
   const selEmp = selEl?.value || '';
 
-  // Repoblar el filtro de cargo (mismo criterio que el de empresa arriba:
-  // preservar la selección actual si sigue existiendo entre las opciones
-  // nuevas) — pedido explícito, igual que el filtro por empresa/SAF que
-  // ya tiene Transferencias.
-  const selCargoEl = document.getElementById('sel-autoridades-cargo');
+  // Repoblar los chips de cargo (selector MÚLTIPLE — ver comentario en
+  // _autoridadesCargosSel), preservando la selección actual para las
+  // claves que sigan existiendo entre las opciones nuevas.
+  const cargoChipsEl = document.getElementById('autoridades-cargo-chips');
   const opcionesCargo = _autoridadesCargoOptions();
-  if (selCargoEl) {
-    const prevCargo = selCargoEl.value;
-    selCargoEl.innerHTML = '<option value="">— Todos los cargos —</option>' +
-      opcionesCargo.map(o => `<option value="${o.clave}">${o.label}</option>`).join('');
-    selCargoEl.value = opcionesCargo.some(o => o.clave === prevCargo) ? prevCargo : '';
+  _ultimasOpcionesCargoAutoridades = opcionesCargo;
+  _autoridadesCargosSel = _autoridadesCargosSel.filter(c => opcionesCargo.some(o => o.clave === c));
+  if (cargoChipsEl) {
+    cargoChipsEl.innerHTML = opcionesCargo.map((o, i) => `
+      <div class="chip${_autoridadesCargosSel.includes(o.clave) ? ' on-lay' : ''}" data-idx="${i}"
+        onclick="toggleAutoridadCargoChip(this)" style="font-size:9px;padding:3px 8px">${o.label}</div>
+    `).join('');
   }
-  const selCargo = selCargoEl?.value || '';
 
   const verHistorial = document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy = new Date().toISOString().slice(0,10);
@@ -19532,7 +19549,7 @@ function buildAutoridades() {
   // registro real en DATA.autoridades (accedido por _idx) no se toca.
   let filas = (DATA.autoridades || []).map((a, idx) => ({ ...a, _idx: idx, empresa: _nombreCanonicoAutoridad(a.empresa) }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
-  if (selCargo) filas = filas.filter(a => _normCargoAutoridad(a.cargo) === selCargo);
+  if (_autoridadesCargosSel.length) filas = filas.filter(a => _autoridadesCargosSel.includes(_normCargoAutoridad(a.cargo)));
   if (busqNombre) {
     // Buscando por nombre se ignora el filtro de vigencia — el objetivo es
     // encontrar TODOS los registros de esa persona (vigentes, cerrados o
@@ -19544,7 +19561,9 @@ function buildAutoridades() {
 
   if (lbl) {
     const empInactivaLbl = selEmp && empresasInactivas[selEmp] ? ' (empresa inactiva)' : '';
-    const cargoLbl = selCargo ? ' · ' + (opcionesCargo.find(o => o.clave === selCargo)?.label || selCargo) : '';
+    const cargoLbl = _autoridadesCargosSel.length
+      ? ' · ' + _autoridadesCargosSel.map(c => opcionesCargo.find(o => o.clave === c)?.label || c).join(' + ')
+      : '';
     const sufijo = busqNombre ? `búsqueda: "${busqNombreRaw.trim()}"` : (verHistorial ? 'historial completo' : 'vigentes');
     lbl.textContent = (selEmp ? selEmp : 'todas las empresas') + cargoLbl + ' — ' + sufijo + empInactivaLbl;
   }
@@ -45724,10 +45743,26 @@ function applyCloudData(cloud, opts) {
           _ts: tsCloud,
         };
         // Fila vieja de Sheets (publicada antes de este fix) sin _id —
-        // no hay con qué fusionarla por registro; se agrega tal cual solo
-        // si no hay ya un registro local equivalente (mismo criterio que
-        // usaba el modo "combinar" de importarAutoridades).
+        // no hay con qué fusionarla por registro, así que se agrega tal
+        // cual solo si no hay ya un registro local equivalente (mismo
+        // criterio que usaba el modo "combinar" de importarAutoridades).
+        // PERO: si ya existe localmente un registro TRACKEADO (con _id
+        // propio) para el mismo cargo/empresa/fecha "desde", esta fila
+        // huérfana es la versión VIEJA de ESE registro, no una persona
+        // distinta — se descarta sin agregarla aunque el nombre ya no
+        // coincida exactamente. Sin este chequeo, corregir una errata en
+        // el nombre de un registro que tiene una copia huérfana sin _id en
+        // Sheets (dato de antes de este sistema, nunca limpiada del lado
+        // del servidor) hacía que esa copia vieja "resucitara" como
+        // registro nuevo en el próximo sync, justo porque al corregir el
+        // nombre dejaba de matchear exacto y la comparación de abajo
+        // (yaExiste) ya no la detectaba como equivalente. Reportado como
+        // "volvió a reaparecer un registro viejo con un nombre que ya
+        // había corregido".
         if (!id) {
+          const yaExisteMismoCargo = DATA.autoridades.some(a =>
+            a._id && a.empresa === reg.empresa && _normCargoAutoridad(a.cargo) === _normCargoAutoridad(reg.cargo) && a.desde === reg.desde);
+          if (yaExisteMismoCargo) return;
           const yaExiste = DATA.autoridades.some(a =>
             a.empresa === reg.empresa && a.nombre === reg.nombre && a.cargo === reg.cargo && a.desde === reg.desde);
           if (!yaExiste) { _ensureAutoridadId(reg); DATA.autoridades.push(reg); }
