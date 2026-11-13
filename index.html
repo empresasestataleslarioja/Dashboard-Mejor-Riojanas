@@ -3116,7 +3116,7 @@ self.onmessage = async (e) => {
             <input type="checkbox" id="chk-autoridades-reemplazar">
             🔁 Reemplazar al importar
           </label>
-          <label class="tba-btn tba-btn-file" title="Importar Excel/CSV: columnas Empresa | Nombre y Apellido | Cargo | Desde | Hasta (Hasta vacío = vigente)"
+          <label class="tba-btn tba-btn-file" title="Importar Excel/CSV: columnas Empresa | Apellido y Nombre | Cargo | Desde | Hasta (Hasta vacío = vigente)"
             style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
             background:rgba(71,232,255,.08);border:1px solid rgba(71,232,255,.3);color:var(--acc);
             font-family:var(--mono);border-radius:3px;cursor:pointer">
@@ -3145,8 +3145,8 @@ self.onmessage = async (e) => {
                 font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;min-width:180px"></select>
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
-              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Nombre y Apellido</label>
-              <input id="autoridad-form-nombre" type="text" placeholder="NOMBRE Y APELLIDO…"
+              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">Apellido y Nombre</label>
+              <input id="autoridad-form-nombre" type="text" placeholder="APELLIDO Y NOMBRE…"
                 style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
                 font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:200px;text-transform:uppercase">
             </div>
@@ -19748,7 +19748,7 @@ function buildAutoridades() {
     }).join('');
   }
 
-  tbl.innerHTML = `<thead><tr><th>Nombre y Apellido</th><th>Cargo</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+  tbl.innerHTML = `<thead><tr><th>Apellido y Nombre</th><th>Cargo</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
     <tbody>${bodyHtml}</tbody>`;
 }
 
@@ -20351,7 +20351,7 @@ function importarAutoridades(file) {
         });
 
         if (parsed.length === 0) {
-          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Nombre y Apellido, y Cargo/Puesto).');
+          throw new Error('No se importó ningún registro válido (verificá que cada fila tenga Empresa, Apellido y Nombre, y Cargo/Puesto).');
         }
 
         const chkReemplazar = document.getElementById('chk-autoridades-reemplazar');
