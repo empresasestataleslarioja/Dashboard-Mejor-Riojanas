@@ -3094,6 +3094,12 @@ self.onmessage = async (e) => {
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
             <option value="">— Todas las empresas —</option>
           </select>
+          <select id="sel-autoridades-cargo" onchange="buildAutoridades()"
+            title="Filtrar por tipo de cargo (Presidente, Director, Síndico, etc.)"
+            style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
+            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
+            <option value="">— Todos los cargos —</option>
+          </select>
           <input type="text" id="autoridades-busq-nombre" oninput="buildAutoridades()"
             placeholder="🔎 Buscar por nombre…" title="Filtra por nombre y apellido — para revisar y corregir posibles errores de carga (duplicados, grafías distintas, etc.)"
             style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
@@ -19419,6 +19425,32 @@ function _autoridadesEmpresaOptions() {
   return Object.keys(rubros || {}).sort();
 }
 
+// Pedido explícito: filtro por tipo de cargo en el listado de
+// Autoridades, mismo criterio que el filtro por empresa/SAF de
+// Transferencias. A diferencia de las empresas (universo fijo, el
+// portafolio completo en `rubros`), el cargo es texto libre cargado en
+// cada registro — las opciones salen de los valores REALMENTE
+// cargados en DATA.autoridades (normalizados con _normCargoAutoridad
+// para no listar "Director" y "DIRECTOR" como dos cargos distintos),
+// ordenadas por la misma jerarquía ya usada en el reporte imprimible
+// (ORDEN_CARGOS_RPT_AUTORIDADES/_rangoCargoRpt) y, dentro de un mismo
+// rango, alfabéticamente. El valor de cada <option> es la forma
+// normalizada (clave de filtro); el texto visible es la primera grafía
+// real encontrada para ese cargo, para que se lea como lo cargó quien
+// lo ingresó.
+function _autoridadesCargoOptions() {
+  const porClave = new Map();
+  (DATA.autoridades || []).forEach(a => {
+    const clave = _normCargoAutoridad(a.cargo);
+    if (!clave) return;
+    if (!porClave.has(clave)) porClave.set(clave, (a.cargo || '').trim());
+  });
+  return [...porClave.entries()]
+    .sort(([claveA, labelA], [claveB, labelB]) =>
+      _rangoCargoRpt(claveA) - _rangoCargoRpt(claveB) || labelA.localeCompare(labelB, 'es'))
+    .map(([clave, label]) => ({ clave, label }));
+}
+
 // Una autoridad es vigente solo si su propio "hasta" no venció Y la
 // empresa sigue activa — si la empresa pasó a inactiva, sus cargos dejan
 // de contar como vigentes a partir de esa fecha aunque el registro de la
@@ -19463,6 +19495,21 @@ function buildAutoridades() {
     selEl.value = opciones.includes(prev) ? prev : '';
   }
   const selEmp = selEl?.value || '';
+
+  // Repoblar el filtro de cargo (mismo criterio que el de empresa arriba:
+  // preservar la selección actual si sigue existiendo entre las opciones
+  // nuevas) — pedido explícito, igual que el filtro por empresa/SAF que
+  // ya tiene Transferencias.
+  const selCargoEl = document.getElementById('sel-autoridades-cargo');
+  const opcionesCargo = _autoridadesCargoOptions();
+  if (selCargoEl) {
+    const prevCargo = selCargoEl.value;
+    selCargoEl.innerHTML = '<option value="">— Todos los cargos —</option>' +
+      opcionesCargo.map(o => `<option value="${o.clave}">${o.label}</option>`).join('');
+    selCargoEl.value = opcionesCargo.some(o => o.clave === prevCargo) ? prevCargo : '';
+  }
+  const selCargo = selCargoEl?.value || '';
+
   const verHistorial = document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy = new Date().toISOString().slice(0,10);
   const esVigente = a => _autoridadEsVigente(a, hoy);
@@ -19485,6 +19532,7 @@ function buildAutoridades() {
   // registro real en DATA.autoridades (accedido por _idx) no se toca.
   let filas = (DATA.autoridades || []).map((a, idx) => ({ ...a, _idx: idx, empresa: _nombreCanonicoAutoridad(a.empresa) }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
+  if (selCargo) filas = filas.filter(a => _normCargoAutoridad(a.cargo) === selCargo);
   if (busqNombre) {
     // Buscando por nombre se ignora el filtro de vigencia — el objetivo es
     // encontrar TODOS los registros de esa persona (vigentes, cerrados o
@@ -19496,8 +19544,9 @@ function buildAutoridades() {
 
   if (lbl) {
     const empInactivaLbl = selEmp && empresasInactivas[selEmp] ? ' (empresa inactiva)' : '';
+    const cargoLbl = selCargo ? ' · ' + (opcionesCargo.find(o => o.clave === selCargo)?.label || selCargo) : '';
     const sufijo = busqNombre ? `búsqueda: "${busqNombreRaw.trim()}"` : (verHistorial ? 'historial completo' : 'vigentes');
-    lbl.textContent = (selEmp ? selEmp : 'todas las empresas') + ' — ' + sufijo + empInactivaLbl;
+    lbl.textContent = (selEmp ? selEmp : 'todas las empresas') + cargoLbl + ' — ' + sufijo + empInactivaLbl;
   }
 
   // Ordenar: empresa (si es consolidado) → jerarquía del cargo (ver
