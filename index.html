@@ -5027,16 +5027,15 @@ self.onmessage = async (e) => {
 <div class="panel" id="panel-exportaciones">
   <div class="kpi-strip" id="kpi-exportaciones"></div>
 
-  <div class="exp-pie-row">
-    <div class="card">
-      <div class="card-hd"><span class="card-hd-title" id="exp-pie-filtro-lbl">Participación por país — empresa seleccionada</span><span class="card-hd-unit">% del total USD</span></div>
-      <canvas id="ch-exp-pais-filtro" style="max-height:230px"></canvas>
-    </div>
-    <div class="card">
-      <div class="card-hd"><span class="card-hd-title">Participación por país — Total general</span><span class="card-hd-unit">% del total USD (todas las empresas)</span></div>
-      <canvas id="ch-exp-pais-total" style="max-height:230px"></canvas>
-    </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-hd"><span class="card-hd-title">Participación por país — Total general</span><span class="card-hd-unit">% del total USD (todas las empresas)</span></div>
+    <canvas id="ch-exp-pais-total" style="max-height:230px"></canvas>
   </div>
+
+  <!-- Un gráfico de torta por cada empresa con exportaciones cargadas —
+       pedido explícito: nada que seleccionar, se ven todas a la vez. Se
+       llena dinámicamente desde buildExportaciones(). -->
+  <div class="exp-pie-row" id="exp-pies-empresas"></div>
 
   <div class="card" style="margin-bottom:12px">
     <div class="card-hd" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -27116,14 +27115,17 @@ function buildExportaciones() {
   filas.sort((a,b) => a.emp.localeCompare(b.emp,'es') || b.anio.localeCompare(a.anio) || (b.totalUsd||0) - (a.totalUsd||0));
 
   // Mismo aplanado pero IGNORANDO el filtro de empresa (solo respeta el
-  // de año, si hay uno elegido) — es la base del gráfico "Total general",
-  // para poder comparar la mezcla de países de una empresa puntual contra
-  // la del total de todas.
+  // de año, si hay uno elegido) — es la base del gráfico "Total general"
+  // y de los gráficos por empresa de abajo, agrupados en paralelo.
   let filasTotalTodasEmpresas = [];
+  const porEmpresaParaPies = {}; // emp -> filas[] (respeta año, ignora selEmp)
   Object.entries(DATA.exportaciones || {}).forEach(([emp, porAnio]) => {
     Object.entries(porAnio || {}).forEach(([anio, bloque]) => {
       if (selAnio && anio !== selAnio) return;
-      (bloque.filas || []).forEach(f => filasTotalTodasEmpresas.push(f));
+      (bloque.filas || []).forEach(f => {
+        filasTotalTodasEmpresas.push(f);
+        (porEmpresaParaPies[emp] = porEmpresaParaPies[emp] || []).push(f);
+      });
     });
   });
 
@@ -27131,15 +27133,28 @@ function buildExportaciones() {
     lbl.textContent = (selEmp || 'todas las empresas') + ' — ' + (selAnio ? 'año ' + selAnio : 'todos los años');
   }
 
-  // Gráficos de torta — participación por país destino: uno para el
-  // filtro actual (empresa puntual, o todas si no hay empresa elegida) y
-  // otro siempre con el total de todas las empresas, para poder comparar.
-  const pieFiltroLbl = document.getElementById('exp-pie-filtro-lbl');
-  if (pieFiltroLbl) {
-    pieFiltroLbl.textContent = 'Participación por país — ' + (selEmp || 'todas las empresas') + (selAnio ? ' (' + selAnio + ')' : '');
-  }
-  _renderExportPaisPie('ch-exp-pais-filtro', filas);
+  // Gráficos de torta — participación por país destino: uno con el total
+  // de todas las empresas, y un gráfico MÁS por cada empresa con datos
+  // cargados (pedido explícito: nada que seleccionar, se ven todas a la
+  // vez) — ambos ignoran el filtro de empresa de la tabla a propósito,
+  // solo respetan el de año.
   _renderExportPaisPie('ch-exp-pais-total', filasTotalTodasEmpresas);
+  const contEmp = document.getElementById('exp-pies-empresas');
+  if (contEmp) {
+    // Destruir los charts de empresa de la versión anterior ANTES de
+    // reconstruir el contenedor — si no, quedan instancias de Chart.js
+    // apuntando a un <canvas> que el innerHTML de abajo ya borró del DOM.
+    Object.keys(charts).forEach(id => {
+      if (id.indexOf('ch-exp-pais-emp-') === 0 && charts[id]) { charts[id].destroy(); delete charts[id]; }
+    });
+    const empresasConDatos = Object.keys(porEmpresaParaPies).sort((a,b) => a.localeCompare(b,'es'));
+    contEmp.innerHTML = empresasConDatos.map((emp, i) => `
+      <div class="card">
+        <div class="card-hd"><span class="card-hd-title">Participación por país — ${emp}</span><span class="card-hd-unit">% del total USD</span></div>
+        <canvas id="ch-exp-pais-emp-${i}" style="max-height:230px"></canvas>
+      </div>`).join('');
+    empresasConDatos.forEach((emp, i) => _renderExportPaisPie('ch-exp-pais-emp-' + i, porEmpresaParaPies[emp]));
+  }
 
   // KPIs del recorte actual
   const totalUsd = filas.reduce((s,f) => s + (parseFloat(f.totalUsd) || 0), 0);
