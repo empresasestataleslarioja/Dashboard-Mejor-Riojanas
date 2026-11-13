@@ -167,6 +167,7 @@ const TAB = {
   empresas_eliminadas_excepciones: 'empresas_eliminadas_excepciones',
   beneficiarios_excluidos: 'beneficiarios_excluidos',
   autoridades_eliminadas: 'autoridades_eliminadas',
+  exportaciones: 'exportaciones',
   meta:           'meta',
   auditoria:      'auditoria',
   log:            '_log',
@@ -223,6 +224,7 @@ function doGet(e) {
     empresas_eliminadas_excepciones: leerHoja(ss, TAB.empresas_eliminadas_excepciones),
     beneficiarios_excluidos: leerHoja(ss, TAB.beneficiarios_excluidos),
     autoridades_eliminadas: leerHoja(ss, TAB.autoridades_eliminadas),
+    exportaciones: leerHoja(ss, TAB.exportaciones),
     meta:            leerMeta(ss),
   });
   } catch(err) {
@@ -423,6 +425,16 @@ function doPost(e) {
       const filtradas = filtrarEliminadas(payload.er_mensual, tumbas);
       const total = upsertErMensual(ss, filtradas, tumbas);
       resultados.er_mensual = total;
+    }
+
+    // ── EXPORTACIONES (por empresa+año) ───────────────────────────
+    // Mismo criterio que ER_MENSUAL arriba: merge por upsert (empresa+
+    // año), un dispositivo que publica no debe borrar exportaciones de
+    // una empresa/año que él mismo no tocó.
+    if (Array.isArray(payload.exportaciones)) {
+      const filtradas = filtrarEliminadas(payload.exportaciones, tumbas);
+      const total = upsertExportaciones(ss, filtradas, tumbas);
+      resultados.exportaciones = total;
     }
 
     // ── ER_DETALLE (partidas Excel ER formal) ───────────────────────
@@ -857,6 +869,49 @@ function upsertErMensual(ss, nuevas, tumbas) {
   });
   const rows = Object.values(existentes);
   _backupHojaAntesDeEscribir(ss, TAB.er_mensual);
+  hoja.clearContents();
+  if (rows.length === 0) return 0;
+  if (headers.length === 0) headers = Object.keys(rows[0]);
+  const matrix = [headers, ...rows.map(r => headers.map(h => { const v = r[h]; return (v === null || v === undefined) ? '' : v; }))];
+  hoja.getRange(1, 1, matrix.length, headers.length).setValues(matrix);
+  return rows.length;
+}
+
+// ── Exportaciones: merge por upsert (empresa+año) ───────────────────
+// Mismo principio exacto que upsertErMensual (ver comentario ahí): cada
+// fila entrante (un bloque empresa+año completo, con las líneas de
+// producto/país/USD en filas_json) solo reemplaza la fila existente con
+// la misma empresa+año — el resto de las empresas/años ya cargados se
+// conservan tal cual. Un dispositivo que publica no borra las
+// exportaciones de una empresa/año que no tocó.
+function upsertExportaciones(ss, nuevas, tumbas) {
+  let hoja = ss.getSheetByName(TAB.exportaciones);
+  if (!hoja) hoja = ss.insertSheet(TAB.exportaciones);
+  const lastRow = hoja.getLastRow();
+  const lastCol = hoja.getLastColumn();
+  const existentes = {}; // 'empresa|anio' -> objeto fila
+  let headers = ['empresa', 'anio', 'filas_json', 'total_usd', 'total_cantidad'];
+  if (lastRow >= 2 && lastCol >= 1) {
+    const datos = hoja.getRange(1, 1, lastRow, lastCol).getValues();
+    headers = datos[0].map(String);
+    const ei = headers.indexOf('empresa'), ai = headers.indexOf('anio');
+    datos.slice(1).forEach(row => {
+      if (!row.some(c => c !== '')) return;
+      const emp = ei >= 0 ? String(row[ei] || '').trim() : '';
+      const anio = ai >= 0 ? String(row[ai] || '').trim() : '';
+      if (!emp || !anio) return;
+      if (tumbas && tumbas.has(emp)) return; // empresa eliminada — no la resucita
+      const obj = {}; headers.forEach((h, i) => { obj[h] = row[i] !== undefined ? row[i] : ''; });
+      existentes[emp + '|' + anio] = obj;
+    });
+  }
+  (nuevas || []).forEach(r => {
+    const emp = String(r.empresa || '').trim(), anio = String(r.anio || '').trim();
+    if (!emp || !anio) return;
+    existentes[emp + '|' + anio] = r;
+  });
+  const rows = Object.values(existentes);
+  _backupHojaAntesDeEscribir(ss, TAB.exportaciones);
   hoja.clearContents();
   if (rows.length === 0) return 0;
   if (headers.length === 0) headers = Object.keys(rows[0]);
