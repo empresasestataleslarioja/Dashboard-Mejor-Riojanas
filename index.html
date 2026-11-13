@@ -19469,6 +19469,9 @@ function _autoridadesCargoOptions() {
 // atributo HTML.
 let _autoridadesCargosSel = [];
 let _ultimasOpcionesCargoAutoridades = [];
+// Caída masiva detectada en la última sincronización de Autoridades
+// (ver applyCloudData) — null si no hay ninguna activa. La lee checkAlerts().
+let _alertaCaidaAutoridades = null;
 
 function toggleAutoridadesCargoMenu() {
   const menu = document.getElementById('autoridades-cargo-menu');
@@ -34193,13 +34196,22 @@ function checkAlerts() {
     });
   }
 
+  // Caída masiva de registros de Autoridades en la última sync (ver
+  // applyCloudData/_alertaCaidaAutoridades) — pedido explícito tras un
+  // caso real de reemplazo manual de la pestaña en Sheets con una
+  // versión vieja.
+  if (_alertaCaidaAutoridades) {
+    alerts.push({ tipo:'sync_caida', msg:
+      `Autoridades: la última sincronización trajo ${_alertaCaidaAutoridades.despues} registro(s) desde Sheets, muchos menos que los ${_alertaCaidaAutoridades.antes} que ya había cargados en este dispositivo — revisar si se reemplazó la pestaña "autoridades" con una versión vieja (este dispositivo no perdió datos, pero otro que sincronice sin la copia completa sí podría).` });
+  }
+
   const badge    = document.getElementById('alerts-badge');
   const countLbl = document.getElementById('alerts-count-lbl');
   const panel    = document.getElementById('alerts-panel');
   if (!badge || !panel) return;
 
   const alertHTML = alerts.map(a => {
-    const color = a.tipo==='deficit'?'#ff4766':a.tipo==='dep'?'#ff8c47':a.tipo==='autoridad'?'#c447ff':a.tipo==='jerarquia'?'#ff3d7f':'#e8ff47';
+    const color = a.tipo==='deficit'?'#ff4766':a.tipo==='dep'?'#ff8c47':a.tipo==='autoridad'?'#c447ff':a.tipo==='jerarquia'?'#ff3d7f':a.tipo==='sync_caida'?'#ff4766':'#e8ff47';
     return '<div style="padding:7px 10px;border-left:3px solid '+color+';margin-bottom:5px;font-size:9.5px;line-height:1.5;background:var(--s2);border-radius:0 3px 3px 0">'+a.msg+'</div>';
   }).join('');
 
@@ -45792,6 +45804,28 @@ function applyCloudData(cloud, opts) {
   // gana solo si es genuinamente más nueva (_ts), y una baja se respeta vía
   // tumba salvo que la fila de Sheets sea más nueva que esa baja.
   if (Array.isArray(cloud.autoridades)) {
+    // Aviso de posible reversión masiva — pedido explícito tras un caso
+    // real: pegar/reemplazar manualmente la pestaña "autoridades" en
+    // Sheets con una versión vieja completa (para corregir un nombre)
+    // puede arrastrar también la pérdida de registros agregados DESPUÉS
+    // de esa versión vieja, sin que nadie lo note hasta mucho después. La
+    // fusión de abajo es aditiva y nunca borra una entrada local solo
+    // porque no vino en `cloud.autoridades` (ver comentario más abajo),
+    // así que ESTE dispositivo no pierde datos — pero si la cantidad de
+    // filas que trae Sheets cae fuerte respecto a lo que ya había
+    // localmente, es una señal de que la planilla en sí se achicó de
+    // golpe y conviene revisarla antes de que otro dispositivo (sin la
+    // copia completa todavía) sincronice y sí la pierda. Se guarda en
+    // memoria (no persiste entre recargas) — si la próxima sync ya trae
+    // la cantidad esperada, se descarta sola.
+    const _localCountAntesAut = DATA.autoridades.length;
+    const _cloudCountAut = cloud.autoridades.length;
+    if (_localCountAntesAut >= 10 && _cloudCountAut < _localCountAntesAut * 0.7) {
+      _alertaCaidaAutoridades = { antes: _localCountAntesAut, despues: _cloudCountAut };
+    } else if (_cloudCountAut >= _localCountAntesAut) {
+      _alertaCaidaAutoridades = null;
+    }
+
     const _delMapAut = _getAutoridadesDelMap();
     const _autLocalPorId = {};
     DATA.autoridades.forEach(a => { _autLocalPorId[_ensureAutoridadId(a)] = a; });
