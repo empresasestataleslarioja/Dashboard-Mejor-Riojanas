@@ -27052,6 +27052,40 @@ function _agruparExportPorPais(filasArr) {
 // DBG (rubros, temas) — no depende de cuántos países haya.
 const _EXPORT_PIE_PALETTE = ['#47e8ff','#ff8c47','#c447ff','#1a9e68','#ff4766','#e8ff47','#8a8f98','#47ffb4','#ff47c4','#4761ff'];
 
+// Pedido explícito: los porcentajes tienen que verse directo en la torta,
+// no solo al pasar el mouse (tooltip). Mismo patrón que _donutCenterPlugin
+// (plugin de Chart.js dibujado a mano, sin agregar una librería nueva de
+// datalabels) — se pasa por chart a chart vía options._plugins, scope que
+// ya soporta buildSingleChart. Umbral del 3%: una porción muy chica no
+// tiene lugar para el texto sin que se superponga con la vecina.
+const _exportPctLabelPlugin = {
+  id: 'exportPctLabels',
+  afterDatasetsDraw(chart) {
+    const meta = chart.getDatasetMeta(0);
+    if (!meta || meta.hidden) return;
+    const data = chart.data.datasets[0].data;
+    const total = data.reduce((s,v) => s + (parseFloat(v) || 0), 0);
+    if (total <= 0) return;
+    const ctx = chart.ctx;
+    meta.data.forEach((arc, i) => {
+      const val = parseFloat(data[i]) || 0;
+      if (val <= 0) return;
+      const pct = val / total * 100;
+      if (pct < 3) return;
+      const pos = arc.tooltipPosition();
+      ctx.save();
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 10px var(--mono, monospace)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,.65)';
+      ctx.shadowBlur = 3;
+      ctx.fillText(pct.toFixed(0) + '%', pos.x, pos.y);
+      ctx.restore();
+    });
+  }
+};
+
 function _renderExportPaisPie(canvasId, filasArr, sinDatosMsg) {
   const el = document.getElementById(canvasId);
   if (!el) return;
@@ -27070,7 +27104,8 @@ function _renderExportPaisPie(canvasId, filasArr, sinDatosMsg) {
     plugins: { tooltip: { callbacks: { label: c => {
       const pct = total > 0 ? (c.raw / total * 100) : 0;
       return '  ' + c.label + ': ' + _fmtExportUsd(c.raw) + ' (' + pct.toFixed(1) + '%)';
-    } } } }
+    } } } },
+    _plugins: [ _exportPctLabelPlugin ],
   });
 }
 
