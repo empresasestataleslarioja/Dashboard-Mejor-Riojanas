@@ -166,6 +166,7 @@ const TAB = {
   empresas_eliminadas_restauradas: 'empresas_eliminadas_restauradas',
   empresas_eliminadas_excepciones: 'empresas_eliminadas_excepciones',
   beneficiarios_excluidos: 'beneficiarios_excluidos',
+  autoridades_eliminadas: 'autoridades_eliminadas',
   meta:           'meta',
   auditoria:      'auditoria',
   log:            '_log',
@@ -221,6 +222,7 @@ function doGet(e) {
     empresas_eliminadas_restauradas: leerHoja(ss, TAB.empresas_eliminadas_restauradas),
     empresas_eliminadas_excepciones: leerHoja(ss, TAB.empresas_eliminadas_excepciones),
     beneficiarios_excluidos: leerHoja(ss, TAB.beneficiarios_excluidos),
+    autoridades_eliminadas: leerHoja(ss, TAB.autoridades_eliminadas),
     meta:            leerMeta(ss),
   });
   } catch(err) {
@@ -310,9 +312,24 @@ function doPost(e) {
     // dispositivo, publican, pero el cambio no se sostiene". También
     // procesa autoridades_a_eliminar (bajas), que antes el servidor
     // nunca leía al escribir.
+    //
+    // autoridades_a_eliminar (ver payload.autoridades_a_eliminar) solo
+    // vivía hasta acá: se usaba para filtrar ESTA escritura puntual, pero
+    // nunca quedaba guardado en ningún lado que doGet pudiera devolver —
+    // a diferencia de empresas_eliminadas (que SÍ tiene su propia hoja
+    // durable). Un dispositivo que no tuviera esa baja en su propio
+    // localStorage (otro dispositivo, una PWA reinstalada, o alguien que
+    // pegó a mano una versión vieja de la pestaña en Sheets) no tenía
+    // forma de enterarse de que ese registro ya se había borrado, y
+    // terminaba resucitándolo en la próxima publicación — reportado como
+    // "me aparecen en Sheets registros que ya se eliminaron". Ahora
+    // upsertAutoridadesEliminadas persiste la baja en su propia hoja
+    // (mismo patrón que empresas_eliminadas) y doGet la devuelve, para
+    // que CUALQUIER dispositivo pueda aprenderla y purgar su copia local.
     if (Array.isArray(payload.autoridades)) {
       const filtradasAut = filtrarEliminadas(payload.autoridades, tumbas);
-      resultados.autoridades = upsertAutoridades(ss, filtradasAut, payload.autoridades_a_eliminar || [], tumbas);
+      const tumbasAut = upsertAutoridadesEliminadas(ss, payload.autoridades_a_eliminar || [], filtradasAut);
+      resultados.autoridades = upsertAutoridades(ss, filtradasAut, payload.autoridades_a_eliminar || [], tumbas, tumbasAut);
     }
 
     // ── TRANSFERENCIAS ────────────────────────────────────────────
@@ -898,15 +915,76 @@ function upsertFlujos(ss, nuevos, aEliminar) {
   hoja.getRange(1, 1, matrix.length, allHeaders.length).setValues(matrix);
 }
 
+// ── Autoridades eliminadas: tumbas DURABLES por _id ───────────────
+// Mismo patrón que upsertEmpresasEliminadas, pero por registro (_id) en
+// vez de por empresa — ver el comentario grande en el doPost que llama
+// a esta función para el caso real que la motivó ("me aparecen en
+// Sheets registros que ya se eliminaron"). Unión pura (nunca se pierde
+// una baja ya conocida) salvo "resurrección legítima": si en ESTE mismo
+// envío llega una fila con ese mismo _id y un _ts más nuevo que la
+// baja, se entiende que alguien volvió a editar ese registro a
+// propósito después de borrarlo, y se saca la tumba (no hay feature de
+// "restaurar a mano" para un registro individual de autoridades, a
+// diferencia de empresas — la única forma de revivir uno es volver a
+// guardarlo, que ya genera un _ts más nuevo). Devuelve un Map id→
+// deleted_at para que upsertAutoridades filtre la hoja principal contra
+// esta lista durable, no solo contra el aEliminar de este envío puntual.
+function upsertAutoridadesEliminadas(ss, nuevas, rowsEntrantes) {
+  let hoja = ss.getSheetByName(TAB.autoridades_eliminadas);
+  if (!hoja) hoja = ss.insertSheet(TAB.autoridades_eliminadas);
+  const lastRow = hoja.getLastRow();
+  const existentes = {}; // id -> {id, deleted_at, empresa, nombre, cargo}
+  if (lastRow >= 2) {
+    const datos = hoja.getRange(1, 1, lastRow, 5).getValues();
+    datos.slice(1).forEach(row => {
+      const id = String(row[0] || '').trim();
+      if (id) existentes[id] = { id, deleted_at: parseInt(row[1], 10) || 0, empresa: row[2] || '', nombre: row[3] || '', cargo: row[4] || '' };
+    });
+  }
+  (nuevas || []).forEach(t => {
+    if (!t || !t.id) return;
+    const id = String(t.id);
+    const deletedAt = parseInt(t.deleted_at, 10) || 0;
+    if (!existentes[id]) {
+      existentes[id] = { id, deleted_at: deletedAt, empresa: t.empresa || '', nombre: t.nombre || '', cargo: t.cargo || '' };
+    } else {
+      existentes[id].deleted_at = Math.max(existentes[id].deleted_at, deletedAt);
+    }
+  });
+  // Resurrección legítima: una fila de ESTE envío con _ts más nuevo que
+  // la tumba anula la baja — se volvió a guardar a propósito.
+  (rowsEntrantes || []).forEach(r => {
+    const id = String(r._id || '');
+    if (!id || !existentes[id]) return;
+    const tsNuevo = parseInt(r._ts, 10) || 0;
+    if (tsNuevo > existentes[id].deleted_at) delete existentes[id];
+  });
+  const rows = Object.values(existentes);
+  hoja.clearContents();
+  const headers = ['id', 'deleted_at', 'empresa', 'nombre', 'cargo'];
+  if (rows.length > 0) {
+    const matrix = [headers, ...rows.map(r => headers.map(h => r[h] === undefined ? '' : r[h]))];
+    hoja.getRange(1, 1, matrix.length, headers.length).setValues(matrix);
+  }
+  const mapa = new Map();
+  rows.forEach(r => mapa.set(r.id, r.deleted_at));
+  return mapa;
+}
+
 // ── Autoridades: merge por upsert (_id) ───────────────
 // Mismo principio que upsertFlujos/upsertErMensual: cada fila entrante
 // solo reemplaza la existente con el mismo _id si su _ts es igual o más
 // nuevo; si no, la fila ya en Sheets (más nueva, bajada todavía por
 // ningún otro dispositivo) prevalece. Una fila tumbada en aEliminar (con
 // deleted_at >= su propio _ts) se borra, tanto si viene en `nuevas` como
-// si ya estaba en la hoja de una publicación anterior. Devuelve la
-// cantidad total de filas después del merge (para el log de auditoría).
-function upsertAutoridades(ss, nuevas, aEliminar, tumbas) {
+// si ya estaba en la hoja de una publicación anterior. `tumbasAut` (de
+// upsertAutoridadesEliminadas, la hoja DURABLE de bajas) refuerza esto
+// mismo para cuando la baja no viene en el `aEliminar` de ESTE envío
+// puntual — por ejemplo, alguien pegó a mano una versión vieja de la
+// pestaña en Sheets sin ningún dato de baja: sin esto, esa fila
+// resucitada se habría aceptado igual. Devuelve la cantidad total de
+// filas después del merge (para el log de auditoría).
+function upsertAutoridades(ss, nuevas, aEliminar, tumbas, tumbasAut) {
   let hoja = ss.getSheetByName(TAB.autoridades);
   if (!hoja) hoja = ss.insertSheet(TAB.autoridades);
   const lastRow = hoja.getLastRow();
@@ -928,8 +1006,11 @@ function upsertAutoridades(ss, nuevas, aEliminar, tumbas) {
     });
   }
   const delMap = {};
+  (tumbasAut || new Map()).forEach((deletedAt, id) => { delMap[String(id)] = deletedAt; });
   (aEliminar || []).forEach(t => {
-    if (t && t.id) delMap[String(t.id)] = parseInt(t.deleted_at, 10) || 0;
+    if (!t || !t.id) return;
+    const id = String(t.id), ts = parseInt(t.deleted_at, 10) || 0;
+    delMap[id] = Math.max(delMap[id] || 0, ts);
   });
   (nuevas || []).forEach(r => {
     const id = String(r._id || '');
@@ -940,8 +1021,11 @@ function upsertAutoridades(ss, nuevas, aEliminar, tumbas) {
     if (!actual || (parseInt(actual._ts, 10) || 0) <= tsNuevo) existentes[id] = r;
     // si no, la fila ya en Sheets es más nueva — se conserva tal cual
   });
-  // Bajas publicadas por otro dispositivo sobre filas que YA estaban en
-  // Sheets y no vinieron en este envío (esta pestaña aún no las conoce).
+  // Bajas (de este envío o de la hoja durable autoridades_eliminadas)
+  // sobre filas que YA estaban en Sheets y no vinieron en este envío —
+  // cubre tanto una baja publicada por otro dispositivo como una fila
+  // resucitada por un reemplazo manual de la pestaña, ya detectada como
+  // tumba durable aunque este envío no la mencione.
   Object.keys(delMap).forEach(id => {
     const fila = existentes[id];
     if (fila && delMap[id] >= (parseInt(fila._ts, 10) || 0)) delete existentes[id];
