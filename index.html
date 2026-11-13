@@ -3094,9 +3094,15 @@ self.onmessage = async (e) => {
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
             <option value="">— Todas las empresas —</option>
           </select>
-          <span style="font-size:9px;color:var(--dim);font-family:var(--mono)">Cargo:</span>
-          <div id="autoridades-cargo-chips" title="Filtrar por tipo de cargo — tocá uno o varios para combinarlos (ninguno seleccionado = todos)"
-            style="display:flex;gap:4px;flex-wrap:wrap"></div>
+          <div style="position:relative;display:inline-block">
+            <button id="btn-autoridades-cargo-menu" onclick="toggleAutoridadesCargoMenu()"
+              title="Filtrar por tipo de cargo — podés marcar uno o varios para combinarlos"
+              style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
+              color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">— Todos los cargos — ▾</button>
+            <div id="autoridades-cargo-menu" style="display:none;position:fixed;background:var(--s1);
+              border:1px solid var(--bd2);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.4);
+              z-index:9100;min-width:190px;max-height:260px;overflow-y:auto"></div>
+          </div>
           <input type="text" id="autoridades-busq-nombre" oninput="buildAutoridades()"
             placeholder="🔎 Buscar por nombre…" title="Filtra por nombre y apellido — para revisar y corregir posibles errores de carga (duplicados, grafías distintas, etc.)"
             style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
@@ -19448,23 +19454,81 @@ function _autoridadesCargoOptions() {
     .map(([clave, label]) => ({ clave, label }));
 }
 
-// Filtro de cargo de Autoridades — selector MÚLTIPLE (pedido explícito:
-// "necesito un selector múltiple de cargos para lograr filtrados más
-// puntuales", ej. ver a la vez Presidente + Vicepresidente). Se maneja
-// con chips tocables (mismo patrón que Rubro/Año en Resultados), no con
-// un <select> de una sola opción. `_autoridadesCargosSel` guarda las
-// claves normalizadas activas; vacío = sin filtro (se muestran todos los
-// cargos). `_ultimasOpcionesCargoAutoridades` guarda las opciones del
-// último render para que el handler de click pueda resolver el índice
-// del chip sin tener que volcar la clave/label en un atributo HTML.
+// Filtro de cargo de Autoridades — selector MÚLTIPLE con menú desplegable
+// (pedido explícito: "necesito un selector múltiple de cargos para
+// lograr filtrados más puntuales", ej. ver a la vez Presidente +
+// Vicepresidente; después pidió explícitamente que fuera "con menú
+// desplegable", no chips sueltos). Un botón abre un popover con un
+// checkbox por cargo — igual patrón de popover fijo que ya usa el menú
+// de Exportar (#export-menu/toggleExportMenu), pero sin cerrarse al
+// marcar una opción, porque acá hay que poder tildar varias seguidas.
+// `_autoridadesCargosSel` guarda las claves normalizadas activas; vacío
+// = sin filtro (se muestran todos los cargos). `_ultimasOpcionesCargoAutoridades`
+// guarda las opciones del último render para que el handler de click
+// resuelva el índice del checkbox sin volcar la clave/label en un
+// atributo HTML.
 let _autoridadesCargosSel = [];
 let _ultimasOpcionesCargoAutoridades = [];
-function toggleAutoridadCargoChip(el) {
+
+function toggleAutoridadesCargoMenu() {
+  const menu = document.getElementById('autoridades-cargo-menu');
+  const btn  = document.getElementById('btn-autoridades-cargo-menu');
+  if (!menu || !btn) return;
+  const open = menu.style.display !== 'none';
+  if (open) {
+    menu.style.display = 'none';
+    document.removeEventListener('click', _closeAutoridadesCargoMenu);
+  } else {
+    _renderAutoridadesCargoMenu();
+    const r = btn.getBoundingClientRect();
+    menu.style.top  = (r.bottom + 4) + 'px';
+    menu.style.left = r.left + 'px';
+    menu.style.display = 'block';
+    setTimeout(() => document.addEventListener('click', _closeAutoridadesCargoMenu), 10);
+  }
+}
+function _closeAutoridadesCargoMenu(e) {
+  const menu = document.getElementById('autoridades-cargo-menu');
+  const btn  = document.getElementById('btn-autoridades-cargo-menu');
+  if (menu && !menu.contains(e.target) && e.target !== btn) {
+    menu.style.display = 'none';
+    document.removeEventListener('click', _closeAutoridadesCargoMenu);
+  }
+}
+// Dibuja el contenido del popover (checkboxes) a partir de
+// _ultimasOpcionesCargoAutoridades — separado de toggleAutoridadesCargoMenu
+// para poder refrescarlo desde buildAutoridades() sin cerrarlo/reabrirlo
+// cuando el usuario tilda una opción (el popover tiene que quedar abierto
+// para poder marcar varias seguidas).
+function _renderAutoridadesCargoMenu() {
+  const menu = document.getElementById('autoridades-cargo-menu');
+  if (!menu) return;
+  const opciones = _ultimasOpcionesCargoAutoridades;
+  const cabecera = `<div style="padding:6px 12px;font-size:8px;text-transform:uppercase;letter-spacing:.1em;
+    color:var(--dim);border-bottom:1px solid var(--bd);font-family:var(--mono);display:flex;justify-content:space-between;align-items:center">
+    <span>Filtrar por cargo</span>
+    ${_autoridadesCargosSel.length ? '<span onclick="_limpiarAutoridadesCargoSel()" style="cursor:pointer;text-decoration:underline;text-transform:none;letter-spacing:0">limpiar</span>' : ''}
+  </div>`;
+  const items = opciones.length
+    ? opciones.map((o, i) => `
+      <label class="export-menu-item" style="display:flex;align-items:center;gap:7px;cursor:pointer">
+        <input type="checkbox" data-idx="${i}" onchange="_toggleAutoridadCargoOpcion(this)"
+          ${_autoridadesCargosSel.includes(o.clave) ? 'checked' : ''}>
+        ${o.label}
+      </label>`).join('')
+    : `<div style="padding:10px 12px;font-size:9px;color:var(--dim)">No hay cargos cargados todavía.</div>`;
+  menu.innerHTML = cabecera + items;
+}
+function _toggleAutoridadCargoOpcion(el) {
   const o = _ultimasOpcionesCargoAutoridades[parseInt(el.dataset.idx, 10)];
   if (!o) return;
   const pos = _autoridadesCargosSel.indexOf(o.clave);
   if (pos >= 0) _autoridadesCargosSel.splice(pos, 1);
   else _autoridadesCargosSel.push(o.clave);
+  buildAutoridades();
+}
+function _limpiarAutoridadesCargoSel() {
+  _autoridadesCargosSel = [];
   buildAutoridades();
 }
 
@@ -19513,19 +19577,23 @@ function buildAutoridades() {
   }
   const selEmp = selEl?.value || '';
 
-  // Repoblar los chips de cargo (selector MÚLTIPLE — ver comentario en
-  // _autoridadesCargosSel), preservando la selección actual para las
-  // claves que sigan existiendo entre las opciones nuevas.
-  const cargoChipsEl = document.getElementById('autoridades-cargo-chips');
+  // Refrescar opciones del menú desplegable de cargo (selector MÚLTIPLE —
+  // ver comentario en _autoridadesCargosSel), preservando la selección
+  // actual para las claves que sigan existiendo entre las opciones
+  // nuevas. El texto del botón resume la selección; el popover en sí
+  // solo se vuelve a dibujar si ya está abierto (si no, se dibuja recién
+  // al abrirlo, en toggleAutoridadesCargoMenu).
   const opcionesCargo = _autoridadesCargoOptions();
   _ultimasOpcionesCargoAutoridades = opcionesCargo;
   _autoridadesCargosSel = _autoridadesCargosSel.filter(c => opcionesCargo.some(o => o.clave === c));
-  if (cargoChipsEl) {
-    cargoChipsEl.innerHTML = opcionesCargo.map((o, i) => `
-      <div class="chip${_autoridadesCargosSel.includes(o.clave) ? ' on-lay' : ''}" data-idx="${i}"
-        onclick="toggleAutoridadCargoChip(this)" style="font-size:9px;padding:3px 8px">${o.label}</div>
-    `).join('');
+  const btnCargoMenu = document.getElementById('btn-autoridades-cargo-menu');
+  if (btnCargoMenu) {
+    btnCargoMenu.textContent = (_autoridadesCargosSel.length
+      ? _autoridadesCargosSel.map(c => opcionesCargo.find(o => o.clave === c)?.label || c).join(' + ')
+      : '— Todos los cargos —') + ' ▾';
   }
+  const menuCargoAbierto = document.getElementById('autoridades-cargo-menu')?.style.display !== 'none';
+  if (menuCargoAbierto) _renderAutoridadesCargoMenu();
 
   const verHistorial = document.getElementById('chk-autoridades-historial')?.checked || false;
   const hoy = new Date().toISOString().slice(0,10);
