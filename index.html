@@ -27008,6 +27008,15 @@ function _recalcularTotalesExportacion(emp, anio) {
   bloque.totalCantidad = (bloque.filas || []).reduce((s,f) => s + (parseFloat(f.cantidad) || 0), 0);
 }
 
+// Los importes de Exportaciones son siempre en dólares (columna "TOTAL
+// NETO (USD)" del Excel origen) — a diferencia del resto del DBG, que
+// muestra todo en pesos con fvFull ("$"). Pedido explícito: distinguir
+// la moneda con el símbolo correspondiente en vez del "$" genérico, que
+// en este panel se podía confundir con pesos.
+function _fmtExportUsd(v) {
+  return fvFull(v).replace('$', 'US$');
+}
+
 function buildExportaciones() {
   const tbl = document.getElementById('tbl-exportaciones');
   const lbl = document.getElementById('exportaciones-tabla-lbl');
@@ -27053,13 +27062,13 @@ function buildExportaciones() {
   }
 
   // KPIs del recorte actual
+  const totalUsd = filas.reduce((s,f) => s + (parseFloat(f.totalUsd) || 0), 0);
   const kpiEl = document.getElementById('kpi-exportaciones');
   if (kpiEl) {
-    const totalUsd = filas.reduce((s,f) => s + (parseFloat(f.totalUsd) || 0), 0);
     const empresasInvolucradas = new Set(filas.map(f => f.emp)).size;
     const paisesDestino = new Set(filas.map(f => f.paisDestino).filter(Boolean)).size;
     kpiEl.innerHTML = `
-      <div class="kpi"><div class="kpi-label">Total exportado (USD)</div><div class="kpi-value">${fvFull(totalUsd)}</div></div>
+      <div class="kpi"><div class="kpi-label">Total exportado (USD)</div><div class="kpi-value">${_fmtExportUsd(totalUsd)}</div></div>
       <div class="kpi"><div class="kpi-label">Empresas exportadoras</div><div class="kpi-value">${empresasInvolucradas}</div></div>
       <div class="kpi"><div class="kpi-label">Países destino</div><div class="kpi-value">${paisesDestino}</div></div>
       <div class="kpi"><div class="kpi-label">Líneas de producto</div><div class="kpi-value">${filas.length}</div></div>`;
@@ -27082,7 +27091,7 @@ function buildExportaciones() {
       const bloque = DATA.exportaciones[f.emp][f.anio];
       grupoHtml = `<tr class="autoridad-grupo-empresa">
         <td colspan="6" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${f.emp} — ${f.anio}</td>
-        <td style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2);text-align:right">${fvFull(bloque.totalUsd||0)}</td>
+        <td style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2);text-align:right">${_fmtExportUsd(bloque.totalUsd||0)}</td>
         <td style="background:var(--s2);border-top:1px solid var(--bd2)"></td>
       </tr>`;
     }
@@ -27093,7 +27102,7 @@ function buildExportaciones() {
       <td class="r">${(parseFloat(f.cantidad)||0).toLocaleString('es-AR')}</td>
       <td>${f.unidad || ''}</td>
       <td>${f.paisDestino || ''}</td>
-      <td class="r">${fvFull(parseFloat(f.totalUsd)||0)}</td>
+      <td class="r">${_fmtExportUsd(parseFloat(f.totalUsd)||0)}</td>
       <td style="white-space:nowrap">
         <button onclick="toggleExportacionForm('${f.emp.replace(/'/g,"\\'")}','${f.anio}',${f.fi})" title="Editar"
           style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--dim);
@@ -27106,7 +27115,12 @@ function buildExportaciones() {
   }).join('');
 
   tbl.innerHTML = `<thead><tr><th>Empresa</th><th>Año</th><th>Producto</th><th class="r">Cantidad</th><th>Unidad</th><th>País destino</th><th class="r">Total USD</th><th></th></tr></thead>
-    <tbody>${bodyHtml}</tbody>`;
+    <tbody>${bodyHtml}</tbody>
+    <tfoot><tr>
+      <td colspan="6" style="padding:7px 8px;font-weight:700;text-align:right;border-top:2px solid var(--bd2)">TOTAL GENERAL${selEmp||selAnio?' (filtrado)':''}</td>
+      <td class="r" style="padding:7px 8px;font-weight:700;border-top:2px solid var(--bd2);color:var(--acc)">${_fmtExportUsd(totalUsd)}</td>
+      <td style="border-top:2px solid var(--bd2)"></td>
+    </tr></tfoot>`;
 }
 
 // Abre el formulario de alta (sin argumentos) o edición (empresa/año/
