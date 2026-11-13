@@ -5028,16 +5028,6 @@ self.onmessage = async (e) => {
   <div class="kpi-strip" id="kpi-exportaciones"></div>
 
   <div class="card" style="margin-bottom:12px">
-    <div class="card-hd"><span class="card-hd-title">Participación por país — Total general</span><span class="card-hd-unit">% del total USD (todas las empresas)</span></div>
-    <canvas id="ch-exp-pais-total" style="max-height:230px"></canvas>
-  </div>
-
-  <!-- Un gráfico de torta por cada empresa con exportaciones cargadas —
-       pedido explícito: nada que seleccionar, se ven todas a la vez. Se
-       llena dinámicamente desde buildExportaciones(). -->
-  <div class="exp-pie-row" id="exp-pies-empresas"></div>
-
-  <div class="card" style="margin-bottom:12px">
     <div class="card-hd" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <span class="card-hd-title">📦 Exportaciones</span>
       <span class="card-hd-unit" id="exportaciones-tabla-lbl">todas las empresas — todos los años</span>
@@ -5133,6 +5123,16 @@ self.onmessage = async (e) => {
       <table class="tbl" id="tbl-exportaciones" style="font-size:9.5px"></table>
     </div>
   </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-hd"><span class="card-hd-title">Participación por país — Total general</span><span class="card-hd-unit">% del total USD (todas las empresas)</span></div>
+    <canvas id="ch-exp-pais-total" style="max-height:230px"></canvas>
+  </div>
+
+  <!-- Un gráfico de torta por cada empresa con exportaciones cargadas —
+       pedido explícito: nada que seleccionar, se ven todas a la vez. Se
+       llena dinámicamente desde buildExportaciones(). -->
+  <div class="exp-pie-row" id="exp-pies-empresas"></div>
 </div>
 
 <!-- ═══════ PANEL FLUJOS DE FONDOS ═══════════════════════════ -->
