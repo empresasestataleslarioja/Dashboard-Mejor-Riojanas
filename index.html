@@ -27169,10 +27169,16 @@ function buildExportaciones() {
   }
 
   // Gráficos de torta — participación por país destino: uno con el total
-  // de todas las empresas, y un gráfico MÁS por cada empresa con datos
-  // cargados (pedido explícito: nada que seleccionar, se ven todas a la
+  // de todas las empresas, y un gráfico MÁS por cada empresa del
+  // portafolio (pedido explícito: nada que seleccionar, se ven todas a la
   // vez) — ambos ignoran el filtro de empresa de la tabla a propósito,
-  // solo respetan el de año.
+  // solo respetan el de año. Pedido explícito adicional: también se
+  // listan las empresas ACTIVAS que no tienen ninguna exportación
+  // cargada (en ese año/filtro) — con una tarjeta sin gráfico, para que
+  // la ausencia de datos sea visible en vez de que esa empresa
+  // simplemente no aparezca. Las inactivas se excluyen (mismo criterio
+  // ya usado para Autoridades: una empresa dada de baja no necesita
+  // reclamo de dato faltante).
   _renderExportPaisPie('ch-exp-pais-total', filasTotalTodasEmpresas);
   const contEmp = document.getElementById('exp-pies-empresas');
   if (contEmp) {
@@ -27182,13 +27188,21 @@ function buildExportaciones() {
     Object.keys(charts).forEach(id => {
       if (id.indexOf('ch-exp-pais-emp-') === 0 && charts[id]) { charts[id].destroy(); delete charts[id]; }
     });
-    const empresasConDatos = Object.keys(porEmpresaParaPies).sort((a,b) => a.localeCompare(b,'es'));
-    contEmp.innerHTML = empresasConDatos.map((emp, i) => `
-      <div class="card">
-        <div class="card-hd"><span class="card-hd-title">Participación por país — ${emp}</span><span class="card-hd-unit">% del total USD</span></div>
-        <canvas id="ch-exp-pais-emp-${i}" style="max-height:230px"></canvas>
-      </div>`).join('');
-    empresasConDatos.forEach((emp, i) => _renderExportPaisPie('ch-exp-pais-emp-' + i, porEmpresaParaPies[emp]));
+    const empresasConDatos = new Set(Object.keys(porEmpresaParaPies));
+    const empresasSinDatos = Object.keys(rubros || {})
+      .filter(emp => !empresasInactivas[emp] && !empresasConDatos.has(emp));
+    const todasLasEmpresas = [...empresasConDatos, ...empresasSinDatos].sort((a,b) => a.localeCompare(b,'es'));
+    contEmp.innerHTML = todasLasEmpresas.map((emp, i) => empresasConDatos.has(emp)
+      ? `<div class="card">
+          <div class="card-hd"><span class="card-hd-title">Participación por país — ${emp}</span><span class="card-hd-unit">% del total USD</span></div>
+          <canvas id="ch-exp-pais-emp-${i}" style="max-height:230px"></canvas>
+        </div>`
+      : `<div class="card">
+          <div class="card-hd"><span class="card-hd-title">Participación por país — ${emp}</span><span class="card-hd-unit">% del total USD</span></div>
+          <div style="padding:30px 14px;text-align:center;color:var(--dim);font-size:10px">Sin exportaciones cargadas${selAnio ? ' en ' + selAnio : ''}.</div>
+        </div>`
+    ).join('');
+    todasLasEmpresas.forEach((emp, i) => { if (empresasConDatos.has(emp)) _renderExportPaisPie('ch-exp-pais-emp-' + i, porEmpresaParaPies[emp]); });
   }
 
   // KPIs del recorte actual
