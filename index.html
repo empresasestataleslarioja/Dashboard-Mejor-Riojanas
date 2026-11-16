@@ -27085,6 +27085,24 @@ const _EXPORT_PIE_PALETTE = ['#47e8ff','#ff8c47','#c447ff','#1a9e68','#ff4766','
 // porciones chicas consecutivas para que sus etiquetas no se pisen entre
 // sí (suele pasar: las porciones más chicas quedan agrupadas juntas, al
 // estar la torta ordenada de mayor a menor).
+// Pedido explícito: si el fondo de la tarjeta (tema claro: powerbi,
+// gobierno, ft, atlas, mineral) es claro, la línea guía tiene que ser
+// oscura — con el mismo blanco/55% de siempre, en esos temas quedaba
+// invisible. Se lee --s1 (el fondo real de la tarjeta) en el momento de
+// dibujar, igual criterio que ya usa buildSingleChart para leer
+// --chart-tick/--chart-grid — así no hace falta mantener una lista fija
+// de qué temas son claros, se adapta solo si se agrega un tema nuevo.
+function _fondoTarjetaEsClaro() {
+  try {
+    const val = getComputedStyle(document.documentElement).getPropertyValue('--s1').trim();
+    const m = /^#?([0-9a-f]{6})$/i.exec(val.replace('#',''));
+    if (!m) return false;
+    const hex = m[1];
+    const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+    return (0.299*r + 0.587*g + 0.114*b) / 255 > 0.6;
+  } catch(e) { return false; }
+}
+
 const _exportPctLabelPlugin = {
   id: 'exportPctLabels',
   afterDatasetsDraw(chart) {
@@ -27094,6 +27112,8 @@ const _exportPctLabelPlugin = {
     const total = data.reduce((s,v) => s + (parseFloat(v) || 0), 0);
     if (total <= 0) return;
     const ctx = chart.ctx;
+    const claro = _fondoTarjetaEsClaro();
+    const colorLinea = claro ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.55)';
     ctx.save();
     ctx.fillStyle = '#000';
     ctx.font = '700 10px var(--mono, monospace)';
@@ -27122,7 +27142,7 @@ const _exportPctLabelPlugin = {
       const haciaDerecha = cos >= 0;
       const x3 = x2 + (haciaDerecha ? 10 : -10);
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = 'rgba(255,255,255,.55)';
+      ctx.strokeStyle = colorLinea;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
