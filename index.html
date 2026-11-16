@@ -27158,6 +27158,17 @@ function _renderExportPaisPie(canvasId, filasArr, sinDatosMsg) {
       const pct = total > 0 ? (c.raw / total * 100) : 0;
       return '  ' + c.label + ': ' + _fmtExportUsd(c.raw) + ' (' + pct.toFixed(1) + '%)';
     } } } },
+    // Pedido explícito: las porciones chicas (las últimas, por estar
+    // ordenadas de mayor a menor) quedaban agrupadas arriba de la torta
+    // (12 en punto, el inicio por defecto de Chart.js) — justo donde
+    // está la leyenda, haciendo que sus líneas guía se superpongan con
+    // el texto de la leyenda. Girando el arranque 90° (a las 3 en
+    // punto) ese grupo de porciones chicas queda del costado, con
+    // espacio libre para que la línea guía salga para la derecha o la
+    // izquierda sin chocar con la leyenda. Como _renderExportPaisPie se
+    // usa tanto para cada empresa como para el gráfico Total general,
+    // este giro aplica a los dos por igual.
+    rotation: 90,
     _plugins: [ _exportPctLabelPlugin ],
   });
 }
