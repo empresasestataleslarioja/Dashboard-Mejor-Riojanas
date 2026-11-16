@@ -27031,6 +27031,20 @@ function _fmtExportUsd(v) {
   return fvFull(v).replace('$', 'US$');
 }
 
+// Pedido explícito: dentro de la celda de la tabla, "US$" pegado al
+// borde izquierdo y el importe pegado al borde derecho (en vez de todo
+// el bloque "US$ 251.977" alineado a la derecha como una sola unidad).
+// Separa el símbolo (con el signo "-" si es negativo) del número vía
+// flex con justify-content:space-between — NO se usa en el tooltip del
+// gráfico (_fmtExportUsd a secas), porque ahí Chart.js solo acepta texto
+// plano, no HTML.
+function _fmtExportUsdCell(v) {
+  const full = _fmtExportUsd(v);
+  const m = /^(-?US\$)\s*(.+)$/.exec(full);
+  if (!m) return full;
+  return `<span style="display:flex;justify-content:space-between;gap:6px"><span>${m[1]}</span><span>${m[2]}</span></span>`;
+}
+
 // Agrupa un array de filas de exportación por país destino, sumando el
 // total USD de cada uno — base de los dos gráficos de torta (pedido
 // explícito: "porcentaje de participación por país"). Orden descendente
@@ -27235,7 +27249,7 @@ function buildExportaciones() {
       const bloque = DATA.exportaciones[f.emp][f.anio];
       grupoHtml = `<tr class="autoridad-grupo-empresa">
         <td colspan="6" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${f.emp} — ${f.anio}</td>
-        <td style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2);text-align:right">${_fmtExportUsd(bloque.totalUsd||0)}</td>
+        <td style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${_fmtExportUsdCell(bloque.totalUsd||0)}</td>
         <td style="background:var(--s2);border-top:1px solid var(--bd2)"></td>
       </tr>`;
     }
@@ -27246,7 +27260,7 @@ function buildExportaciones() {
       <td class="r">${(parseFloat(f.cantidad)||0).toLocaleString('es-AR')}</td>
       <td>${f.unidad || ''}</td>
       <td>${f.paisDestino || ''}</td>
-      <td class="r">${_fmtExportUsd(parseFloat(f.totalUsd)||0)}</td>
+      <td>${_fmtExportUsdCell(parseFloat(f.totalUsd)||0)}</td>
       <td style="white-space:nowrap">
         <button onclick="toggleExportacionForm('${f.emp.replace(/'/g,"\\'")}','${f.anio}',${f.fi})" title="Editar"
           style="padding:2px 6px;background:none;border:1px solid var(--bd2);color:var(--dim);
@@ -27262,7 +27276,7 @@ function buildExportaciones() {
     <tbody>${bodyHtml}</tbody>
     <tfoot><tr>
       <td colspan="6" style="padding:7px 8px;font-weight:700;text-align:right;border-top:2px solid var(--bd2)">TOTAL GENERAL${selEmp||selAnio?' (filtrado)':''}</td>
-      <td class="r" style="padding:7px 8px;font-weight:700;border-top:2px solid var(--bd2);color:var(--acc)">${_fmtExportUsd(totalUsd)}</td>
+      <td style="padding:7px 8px;font-weight:700;border-top:2px solid var(--bd2);color:var(--acc)">${_fmtExportUsdCell(totalUsd)}</td>
       <td style="border-top:2px solid var(--bd2)"></td>
     </tr></tfoot>`;
 }
