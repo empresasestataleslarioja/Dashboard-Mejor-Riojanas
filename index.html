@@ -27070,8 +27070,21 @@ const _EXPORT_PIE_PALETTE = ['#47e8ff','#ff8c47','#c447ff','#1a9e68','#ff4766','
 // no solo al pasar el mouse (tooltip). Mismo patrón que _donutCenterPlugin
 // (plugin de Chart.js dibujado a mano, sin agregar una librería nueva de
 // datalabels) — se pasa por chart a chart vía options._plugins, scope que
-// ya soporta buildSingleChart. Umbral del 3%: una porción muy chica no
-// tiene lugar para el texto sin que se superponga con la vecina.
+// ya soporta buildSingleChart.
+//
+// Texto en negro (pedido explícito — antes era blanco), con un halo claro
+// (shadow) en vez de uno oscuro para que siga leyéndose tanto arriba de
+// una porción de color oscuro como del fondo oscuro del canvas (caso de
+// la línea guía de abajo).
+//
+// Umbral del 3%: una porción muy chica no tiene lugar para el texto
+// ADENTRO sin que se superponga con la vecina — pedido explícito: en vez
+// de omitir el dato, se dibuja una línea guía hacia afuera (mismo
+// recurso visual que usan Excel/PowerPoint para porciones chicas) y el
+// porcentaje al final de esa línea. El largo de la línea alterna entre
+// porciones chicas consecutivas para que sus etiquetas no se pisen entre
+// sí (suele pasar: las porciones más chicas quedan agrupadas juntas, al
+// estar la torta ordenada de mayor a menor).
 const _exportPctLabelPlugin = {
   id: 'exportPctLabels',
   afterDatasetsDraw(chart) {
@@ -27081,22 +27094,48 @@ const _exportPctLabelPlugin = {
     const total = data.reduce((s,v) => s + (parseFloat(v) || 0), 0);
     if (total <= 0) return;
     const ctx = chart.ctx;
+    ctx.save();
+    ctx.fillStyle = '#000';
+    ctx.font = '700 10px var(--mono, monospace)';
+    ctx.shadowColor = 'rgba(255,255,255,.85)';
+    ctx.shadowBlur = 3;
+    let chicaIdx = 0;
     meta.data.forEach((arc, i) => {
       const val = parseFloat(data[i]) || 0;
       if (val <= 0) return;
       const pct = val / total * 100;
-      if (pct < 3) return;
-      const pos = arc.tooltipPosition();
-      ctx.save();
-      ctx.fillStyle = '#fff';
-      ctx.font = '700 10px var(--mono, monospace)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0,0,0,.65)';
+      const label = pct.toFixed(0) + '%';
+      if (pct >= 3) {
+        const pos = arc.tooltipPosition();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, pos.x, pos.y);
+        return;
+      }
+      // Porción chica: línea guía desde el borde de la torta hacia afuera.
+      const midAngle = (arc.startAngle + arc.endAngle) / 2;
+      const cos = Math.cos(midAngle), sin = Math.sin(midAngle);
+      const cx = arc.x, cy = arc.y, outerR = arc.outerRadius;
+      const x1 = cx + cos * outerR, y1 = cy + sin * outerR;
+      const largo = 16 + (chicaIdx % 3) * 12; // 3 largos distintos, para separar varias vecinas
+      const x2 = cx + cos * (outerR + largo), y2 = cy + sin * (outerR + largo);
+      const haciaDerecha = cos >= 0;
+      const x3 = x2 + (haciaDerecha ? 10 : -10);
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y2);
+      ctx.stroke();
       ctx.shadowBlur = 3;
-      ctx.fillText(pct.toFixed(0) + '%', pos.x, pos.y);
-      ctx.restore();
+      ctx.textAlign = haciaDerecha ? 'left' : 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x3 + (haciaDerecha ? 2 : -2), y2);
+      chicaIdx++;
     });
+    ctx.restore();
   }
 };
 
