@@ -15143,7 +15143,11 @@ function buildVistaIndividualFlujo(claveOverride) {
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Fondos solicitados',       v:fmt(necA),   c:necCol, big:true },
     { l:'Total ingresos',           v:fmt(ingA),   c:'#1a9e68' },
-    { l:'Total egresos',            v:fmt(egrA),   c:'var(--neg)' },
+    // Egresos detalle (sin imp. créd/déb), igual que cobertura/subtotal más abajo —
+    // mostrar acá el total bruto importado del Excel (egrA) hacía que esta tarjeta
+    // no coincidiera con "TOTAL EGRESOS" de la tabla ni con el pie SUBTOTAL, cuando
+    // el archivo de origen trae un total declarado que no cierra con sus propias filas.
+    { l:'Total egresos',            v:fmt(Math.abs(egrADetCov)),   c:'var(--neg)' },
     { l:'Cobertura ing / egresos',  v:covA, c:'var(--text)', popKey:'cov_ing' },
     ...(covLabA ? [{ l:'Cobertura ing / costo laboral', v:covLabA, c:'#e8c84a', popKey:'cov_lab' }] : []),
     { l:'IPC período',              v:f.ipc ? f.ipc + '%' : '—', c:'#47e8ff' },
@@ -15303,18 +15307,35 @@ function buildVistaIndividualFlujo(claveOverride) {
     : m => Math.abs(_mesSub(m)) * 0.012;
   const _mesRes = m => _mesSub(m) - _mesImp(m);
 
+  // La columna TOTAL de cada fila del pie debe ser la suma de sus propias
+  // celdas mensuales — nunca un valor aparte (subtotal/resultado, tomado de
+  // "Fondos solicitados" o estimado). "Fondos solicitados" puede ser $0 por
+  // decisión administrativa aunque el resultado neto real del período sea
+  // deficitario: mostrar esos dos valores distintos como si fueran el mismo
+  // en la columna TOTAL contradice visualmente las propias celdas mensuales
+  // de la fila (ver reporte de ACCION VERDE: RESULTADO NETO TOTAL = $0 con
+  // los 4 meses en déficit de varios millones cada uno).
+  const subPorMes = meses.map(_mesSub);
+  const impPorMes = meses.map(m => -_mesImp(m));
+  const resPorMes = meses.map(_mesRes);
+  const _sumaMensual = arr => arr.reduce((s,v)=>s+v, 0);
+  const haySumaMensual = !sinDesglose && meses.length > 1;
+  const subTotalFila = haySumaMensual ? _sumaMensual(subPorMes) : subtotal;
+  const impTotalFila = haySumaMensual ? _sumaMensual(impPorMes) : -impCredDeb;
+  const resTotalFila = haySumaMensual ? _sumaMensual(resPorMes) : resultado;
+
   const pieHtml = [
     _pieFila('SUBTOTAL  INGRESOS − EGRESOS',
       'rgba(100,100,80,.06)', 'border-top:2px solid var(--bd)', 'var(--text)', '600',
-      meses.map(_mesSub), subtotal),
+      subPorMes, subTotalFila),
     _pieFila('IMP. SOBRE CRÉDITO/DÉBITO  (1,2%)',
       'rgba(232,255,71,.04)', '', '#e8c84a', '500',
-      meses.map(m=>-_mesImp(m)), -impCredDeb),
+      impPorMes, impTotalFila),
     _pieFila('RESULTADO NETO — I. ACTIVIDADES OPERATIVAS',
-      resultado < 0 ? 'rgba(255,71,102,.07)' : 'rgba(71,255,180,.07)',
-      `border-top:2px solid ${resultado<0?'var(--neg)':'var(--pos)'}`,
-      resultado < 0 ? 'var(--neg)' : 'var(--pos)', '700',
-      meses.map(_mesRes), resultado),
+      resTotalFila < 0 ? 'rgba(255,71,102,.07)' : 'rgba(71,255,180,.07)',
+      `border-top:2px solid ${resTotalFila<0?'var(--neg)':'var(--pos)'}`,
+      resTotalFila < 0 ? 'var(--neg)' : 'var(--pos)', '700',
+      resPorMes, resTotalFila),
   ].join('');
 
   tbl.innerHTML = `<thead><tr style="background:var(--s3)">
