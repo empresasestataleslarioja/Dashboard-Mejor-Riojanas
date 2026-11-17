@@ -13749,7 +13749,7 @@ function _confirmarImportFlujo(res) {
   const prev = document.getElementById('fc-rubros-preview');
   if (prev) {
     const fmtV = v => v == null ? '—' :
-      (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+      (v < 0 ? '(' : '') + '$ ' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v < 0 ? ')' : '');
     prev.innerHTML = '<table style="font-size:9px;font-family:var(--mono);width:100%;border-collapse:collapse">' +
       '<thead><tr>' +
         '<th style="text-align:left;padding:3px 8px;background:var(--s3);border-bottom:1px solid var(--bd)">Rubro</th>' +
@@ -14270,8 +14270,8 @@ function _renderListaFlujos() {
     return;
   }
 
-  const fmt = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
-  const fmtDim = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
+  const fmt = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtDim = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   // Helper de encabezado con ordenamiento
   const th = (label, colKey, extra='') => {
@@ -15239,7 +15239,7 @@ function _mostrarAuditoriaFlujos(hallazgos, umbralAbs, umbralPct) {
   overlay.id = '_flujo_audit_overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  const fmt = v => v == null ? '—' : (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+  const fmt = v => v == null ? '—' : (v < 0 ? '(' : '') + '$ ' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v < 0 ? ')' : '');
   const filas = hallazgos.length ? hallazgos.map(h => `
     <tr style="border-bottom:1px solid var(--bd2)">
       <td style="padding:8px 10px;font-size:10px;color:var(--text)">${h.f.empresa}</td>
@@ -15354,7 +15354,7 @@ function buildVistaIndividualFlujo(claveOverride) {
   if (btnEdit) btnEdit.style.display = '';
 
   const fmt = v => v == null ? '—' :
-    (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+    (v < 0 ? '(' : '') + '$ ' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v < 0 ? ')' : '');
 
   // KPIs
   const necA = _flujoNecesidadSignada(f);
@@ -15522,7 +15522,7 @@ function buildVistaIndividualFlujo(claveOverride) {
       }
     }
   }
-  const _fmtC = v => v == null ? '—' : (v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
+  const _fmtC = v => v == null ? '—' : (v<0?'(':'')+'$ '+Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+(v<0?')':'');
   const _fmtPorMes = (rubros, mes, tipo) => {
     const suma = rubros.filter(r=>r.tipo===tipo&&!r.esTotal&&!_esImpCredDeb(r.label))
       .reduce((s,r)=>s+(r.porMes?.[mes]??0),0);
@@ -16339,7 +16339,7 @@ function buildComparacionFlujos() {
     _mismaLongitud, _tagMetrica, _tagMetricaCap, _sufMetrica };
 
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
-  const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v<0?')':'');
+  const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v<0?')':'');
   const colVar = v => v==null ? 'var(--dim)' : v>0 ? 'var(--pos)' : 'var(--neg)';
 
   // ── Compatibilidad de formatos ───────────────────────────────────
@@ -16552,7 +16552,7 @@ function buildComparacionFlujos() {
   }
 
   // ── Resumen agregado — siempre comparable independientemente del formato ──
-  const _fmtMabs = v => v==null ? '—' : '$ '+Math.abs(Math.round(v)).toLocaleString('es-AR');
+  const _fmtMabs = v => v==null ? '—' : '$ '+Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const _varPct  = (a,b) => (a!=null&&b!=null&&b!==0) ? (Math.abs(a)-Math.abs(b))/Math.abs(b)*100 : null;
   const _varStr  = v => v==null ? '' : ` <span style="color:${v>0?'var(--neg)':'var(--pos)'};font-size:8px">${v>0?'+':''}${v.toFixed(2)}%</span>`;
   let resumenEl = document.getElementById('flujo-resumen-agregado');
@@ -17139,8 +17139,8 @@ function exportarFlujoExcel() {
   // ── helpers ──────────────────────────────────────────────────────
   const C = (v, fallback='—') => {
     if (v==null) return fallback;
-    const a = Math.abs(Math.round(v));
-    return (v<0?'($ ':' $ ') + a.toLocaleString('es-AR') + (v<0?')':'');
+    const a = Math.abs(v);
+    return (v<0?'($ ':' $ ') + a.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v<0?')':'');
   };
   const P = (v, d=2) => v==null ? '—' : (v>0?'+':'')+v.toFixed(d)+'%';
   const pColor = (v, isIng=false) => v==null ? T.dim : isIng ? (v>=0 ? T.pos : T.neg) : (v>=0 ? T.neg : T.pos);
@@ -17595,7 +17595,7 @@ function _rptFlujoIndividual() {
   const hoy = new Date();
   const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
 
-  const C = v => v==null?'—':(v<0?'($ ':' $ ')+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
+  const C = v => v==null?'—':(v<0?'($ ':' $ ')+Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+(v<0?')':'');
   const meses = (f.meses && f.meses.length)
     ? f.meses
     : [...new Set(f.rubros.flatMap(r => Object.keys(r.porMes || {})))];
@@ -17798,7 +17798,7 @@ async function generarInformeFlujo() {
                    'JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const fecha = hoy.getDate() + ' DE ' + meses[hoy.getMonth()] + ' DE ' + hoy.getFullYear();
 
-    const fmtM  = v => v==null?'—':(v<0?'$'+Math.abs(Math.round(v)).toLocaleString('es-AR')+' (déficit)':'$'+Math.round(v).toLocaleString('es-AR'));
+    const fmtM  = v => v==null?'—':(v<0?'$'+Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+' (déficit)':'$'+v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}));
     const fmtP  = v => v==null?'—':(v>0?'+':'')+v.toFixed(2)+'%';
     const fmtPa = v => v==null?'—':Math.abs(v).toFixed(2)+'%';
 
@@ -17899,7 +17899,7 @@ function _generarInformeHTML(fA, fB, ipcInput) {
   try {
     const ipc = ipcInput > 0 ? ipcInput : (fA.ipc || 0);
     const necA = fA.necesidad_fondos;
-    const fmtM = v => v==null?'—':(v<0?'(':'')+'$ '+Math.abs(Math.round(v)).toLocaleString('es-AR')+(v<0?')':'');
+    const fmtM = v => v==null?'—':(v<0?'(':'')+'$ '+Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+(v<0?')':'');
     const hoy = new Date();
     const ms = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Times New Roman,serif;font-size:12pt;margin:2.5cm}p{text-align:justify;margin:8pt 0}b{font-weight:bold}h2{font-size:12pt;font-weight:bold;text-decoration:underline}table{width:100%;border-collapse:collapse;margin:10pt 0}th,td{border:1px solid #999;padding:4pt 8pt}th{background:#eee}</style></head><body>'
