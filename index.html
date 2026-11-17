@@ -13093,9 +13093,20 @@ function parsearFlujoExcel(wb, XLSX) {
     }
     if (!lbl) continue;
     const lUP = lbl.toUpperCase();
+    // Separadores de sección con marcadores decorativos (ej. "▼ EGRESOS",
+    // típico de secciones colapsables) — sin esta normalización el match
+    // exacto de abajo no reconocía el separador como EXPLÍCITO (seguía
+    // detectando la sección vía el fallback de substring más abajo, que
+    // SÍ actualiza _seccion pero no marca _seccionExplicita=true), así que
+    // la corrección retroactiva de "TOTAL INGRESOS" más adelante en la
+    // hoja terminaba reclasificando como ingreso TODOS los egresos ya
+    // leídos — caso real: ACCION VERDE ene-abr 2027, con "▼ EGRESOS" en
+    // la fila 19 sin ser reconocido, y Sueldos/Cargas Sociales/etc.
+    // terminaban con tipo:'ingreso'.
+    const lUPSeccion = lUP.replace(/[▼▲►◄]/g, '').trim();
     // Actualizar sección según separadores
-    if (lUP === 'INGRESOS') { _seccion = 'ingreso'; _seccionExplicita = true; continue; }
-    if (lUP === 'EGRESOS')  { _seccion = 'egreso';  _seccionExplicita = true; continue; }
+    if (lUPSeccion === 'INGRESOS') { _seccion = 'ingreso'; _seccionExplicita = true; continue; }
+    if (lUPSeccion === 'EGRESOS')  { _seccion = 'egreso';  _seccionExplicita = true; continue; }
     // Saltar otras filas de sección
     if (lUP === 'RESUMEN' || lUP === 'DETALLE') continue;
     // Saltar encabezados de columna repetidos a mitad de hoja (algunos
@@ -13112,6 +13123,15 @@ function parsearFlujoExcel(wb, XLSX) {
     // acá en más duplicaría conceptos (algunos con la MISMA etiqueta que
     // uno ya leído arriba, ej. "Gastos Salarial", pero otro valor).
     if (/DESTINO\s+DE\s+LOS\s+FONDOS/.test(lUP)) break;
+    // Saltar filas de índices/ratios (ej. "Índice de cobertura de gastos
+    // (Ingresos por ventas / Gastos Totales)") — no son rubros de dinero,
+    // y su label suele mencionar "ingreso"+"gasto" a la vez, lo que las
+    // hacía matchear por error la detección de fila-resultado (tipo
+    // 'resultado'/esTotal) más abajo, contaminando la búsqueda de "último
+    // resultado"/"primer total de ingresos" que usa el resto del dashboard
+    // — caso real: ACCION VERDE ene-abr 2027, donde esa fila terminaba
+    // pisando el verdadero RESULTADO NETO en "Fondos solicitados".
+    if (/^.{0,3}ÍNDICE|^.{0,3}INDICE/.test(lUP)) continue;
     // Saltar filas sin valor en colTotal ni en meses — pero antes detectar headers de sección
     {
       const valTotalPre = getNum(r, colTotal);
@@ -13150,7 +13170,11 @@ function parsearFlujoExcel(wb, XLSX) {
       lUP.includes('FONDOS') || lUP.includes('SOLICIT') ||
       (lUP.includes('NECESIDAD') && !lUP.includes('SEMANAL') && !lUP.includes('MENSUAL') && !lUP.includes('DIARIA')) ||
       lUP.includes('RESULTADO') || lUP.includes('DÉFICIT') || lUP.includes('DEFICIT') ||
-      lUP.includes('REQUERI') ||
+      // Anclado al inicio: "REQUERIMIENTO MENSUAL"/"REQUERIMIENTO DE FONDOS"
+      // es un resultado final, pero un includes() suelto también matcheaba
+      // "Honorarios Arca, requerimiento aprox" (un gasto cualquiera que solo
+      // menciona la palabra) — caso real: ACCION VERDE ene-abr 2027.
+      /^REQUERI/.test(lUP) ||
       (lUP.includes('INGRESO') && (lUP.includes('MENOS') || lUP.includes('GASTO') || lUP.includes('EGRESO'))) ||
       // "SALDO MENSUAL"/"SALDO DEL PERÍODO"/etc. es el resultado neto del
       // período (ingresos − egresos), no un concepto de egreso — distinto de
@@ -13264,7 +13288,13 @@ function parsearFlujoExcel(wb, XLSX) {
     let suma = 0;
     for (let j = i + 1; j < Math.min(i + 15, rubros.length); j++) {
       suma += Math.abs(rubros[j].actual || 0);
-      if (Math.abs(suma - objetivo) <= Math.max(objetivo * 0.0005, 1)) {
+      // Exigir al menos 2 filas de detalle sumadas (j > i+1): un solo
+      // vecino con el mismo importe es una coincidencia habitual entre
+      // dos conceptos sin relación (ej. dos ingresos de $12.000.000 cada
+      // uno) y NO un sub-encabezado — caso real: ACCION VERDE ene-abr
+      // 2027, donde el primer ingreso quedaba marcado esTotal=true solo
+      // porque el segundo ingreso (ya el total real) tenía igual importe.
+      if (j > i + 1 && Math.abs(suma - objetivo) <= Math.max(objetivo * 0.0005, 1)) {
         r.esTotal = true;
         r.nivel = 0;
         break;
@@ -14827,11 +14857,16 @@ function _flujoNecesidad(f) {
 
 function _flujoIngTotal(f) {
   if (!f) return null;
-  // Prioridad 1: rubro marcado explícitamente como total de ingresos
-  const r = f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.esTotal)
-         // Prioridad 2: label específico de TOTAL INGRESOS (no "TOTAL DE APORTES" ni similares)
-         ?? f.rubros.find(r2 => r2.tipo === 'ingreso' && /TOTAL\s*(DE\s*)?ING/i.test(r2.label||''))
-         ?? f.rubros.find(r2 => /TOTAL\s*(DE\s*)?ING/i.test(r2.label||''));
+  // Prioridad 1: label específico de TOTAL INGRESOS — más confiable que "el
+  // primer rubro con esTotal", que puede ser cualquier fila de detalle mal
+  // marcada como total (mismo criterio que ya usa _flujoEgrTotal) — caso
+  // real: ACCION VERDE ene-abr 2027, donde la primera fila de ingresos
+  // (Mant y Conserv de Jardines) quedaba con esTotal=true y, al ser la
+  // PRIMERA, tapaba el verdadero TOTAL INGRESOS que aparece más abajo.
+  const r = f.rubros.find(r2 => r2.tipo === 'ingreso' && /TOTAL\s*(DE\s*)?ING/i.test(r2.label||''))
+         ?? f.rubros.find(r2 => /TOTAL\s*(DE\s*)?ING/i.test(r2.label||''))
+         // Prioridad 2: rubro marcado explícitamente como total de ingresos
+         ?? f.rubros.find(r2 => r2.tipo === 'ingreso' && r2.esTotal);
   if (r) return r.actual ?? null;
   // Fallback: sumar solo rubros de ingreso detalle, excluyendo totalizadores intermedios
   const ingRows = (f.rubros||[]).filter(r2 => {
