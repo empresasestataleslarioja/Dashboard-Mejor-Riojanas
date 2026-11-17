@@ -15104,6 +15104,19 @@ function _flujoResultadoBottomUp(f) {
   return subtotal - impCredDeb;
 }
 
+// Detecta la MISMA causa que se encontró y corrigió en ACCION VERDE: un
+// rubro de asistencia financiera/subsidio/transferencia del Estado cargado
+// como egreso en vez de ingreso (mismo patrón que ahora reclasifica el
+// parser al importar — ver parsearFlujoExcel). Devuelve el rubro si lo
+// encuentra, o null si la diferencia tiene otra causa que hay que revisar
+// a mano.
+function _flujoRubroAsistenciaMalClasificado(f) {
+  const RE = /ASISTENCIA.{0,15}(FINANCIER|ESTADO)|SUBSIDIO|TRANSFERENCIA.{0,12}ESTADO|APORTE.{0,12}ESTADO/;
+  return (f.rubros || []).find(r =>
+    r.tipo === 'egreso' && !r.esTotal && r.actual != null && RE.test((r.label||'').toUpperCase())
+  ) || null;
+}
+
 // Audita TODOS los flujos cargados buscando el mismo problema detectado en
 // ACCION VERDE sept-dic 2026: "Fondos solicitados" (declarado en el Excel,
 // puede ser una decisión administrativa) muy distinto del resultado neto
@@ -15122,11 +15135,36 @@ function auditarFlujosInconsistentes() {
     const diff = Math.abs(necA - bottomUp);
     const egrBase = Math.abs(_flujoEgrDetTotal(f) || 0);
     const pctBase = egrBase > 0 ? diff / egrBase : (diff > 0 ? 1 : 0);
-    if (diff > UMBRAL_ABS && pctBase > UMBRAL_PCT) hallazgos.push({ clave, f, necA, bottomUp, diff });
+    if (diff > UMBRAL_ABS && pctBase > UMBRAL_PCT) {
+      hallazgos.push({ clave, f, necA, bottomUp, diff, rubroSospechoso: _flujoRubroAsistenciaMalClasificado(f) });
+    }
   });
   hallazgos.sort((a, b) => b.diff - a.diff);
   _mostrarAuditoriaFlujos(hallazgos, UMBRAL_ABS, UMBRAL_PCT);
   return hallazgos;
+}
+
+// Aplica la misma corrección que ya hace el parser al importar: reclasifica
+// el rubro de asistencia/subsidio de egreso a ingreso y guarda — mismo
+// camino de persistencia y sync que usa el editor manual de flujos
+// (_guardarFlujoData), así que sube a Sheets igual que cualquier otra
+// edición. Después re-corre la auditoría para que la fila se actualice o
+// desaparezca de la lista.
+function _reclasificarRubroFlujo(clave, rubroKey) {
+  const f = DATA.flujos[clave];
+  if (!f) return;
+  const r = (f.rubros || []).find(r2 => r2.key === rubroKey && r2.tipo === 'egreso' && !r2.esTotal);
+  if (!r) { alert('No se encontró el rubro — puede que ya se haya reclasificado.'); auditarFlujosInconsistentes(); return; }
+  const ok = confirm(`Reclasificar "${r.label}" de Egreso a Ingreso en ${f.empresa} · ${f.periodo} y guardar?\n\nEsto sube el cambio a Sheets inmediatamente.`);
+  if (!ok) return;
+  r.tipo = 'ingreso';
+  _guardarFlujoData({
+    empresa: f.empresa, periodo: f.periodo, tipo: f.tipo, ipc: f.ipc, año: f.año,
+    meses: f.meses, rubros: f.rubros,
+    necesidad_fondos: f.necesidad_fondos, necesidad_fondos_ant: f.necesidad_fondos_ant,
+    fuente: f.fuente,
+  });
+  auditarFlujosInconsistentes();
 }
 
 function _mostrarAuditoriaFlujos(hallazgos, umbralAbs, umbralPct) {
@@ -15144,17 +15182,23 @@ function _mostrarAuditoriaFlujos(hallazgos, umbralAbs, umbralPct) {
       <td style="padding:8px 10px;text-align:right;font-size:10px;font-family:var(--mono);color:var(--text)">${fmt(h.necA)}</td>
       <td style="padding:8px 10px;text-align:right;font-size:10px;font-family:var(--mono);color:${h.bottomUp<0?'var(--neg)':'var(--pos)'}">${fmt(h.bottomUp)}</td>
       <td style="padding:8px 10px;text-align:right;font-size:10px;font-family:var(--mono);color:#ff8c47">${fmt(h.diff)}</td>
-      <td style="padding:8px 10px;text-align:right">
+      <td style="padding:8px 10px;font-size:8.5px;color:${h.rubroSospechoso?'#ff8c47':'var(--dim)'};max-width:180px">
+        ${h.rubroSospechoso ? `"${h.rubroSospechoso.label}" cargada como egreso` : '—'}
+      </td>
+      <td style="padding:8px 10px;text-align:right;white-space:nowrap">
+        ${h.rubroSospechoso ? `<button onclick="_reclasificarRubroFlujo('${h.clave}','${h.rubroSospechoso.key}')"
+          style="padding:3px 10px;font-size:8.5px;font-family:var(--mono);background:rgba(255,140,71,.12);
+          border:1px solid #ff8c47;color:#ff8c47;border-radius:3px;cursor:pointer;margin-right:4px">🔧 Reclasificar</button>` : ''}
         <button onclick="document.getElementById('_flujo_audit_overlay').remove();_verFlujoIndividual('${h.clave}')"
           style="padding:3px 10px;font-size:8.5px;font-family:var(--mono);background:rgba(71,232,255,.12);
           border:1px solid var(--acc);color:var(--acc);border-radius:3px;cursor:pointer">Ver →</button>
       </td>
     </tr>`).join('')
-    : `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--dim);font-size:10px">
+    : `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--dim);font-size:10px">
         ✓ No se encontraron otros flujos con esta inconsistencia.
       </td></tr>`;
   overlay.innerHTML = `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:8px;
-    max-width:920px;width:100%;max-height:80vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">
+    max-width:1060px;width:100%;max-height:80vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">
         ⚠ Auditoría de flujos — Fondos solicitados vs. Resultado neto real
@@ -15166,7 +15210,9 @@ function _mostrarAuditoriaFlujos(hallazgos, umbralAbs, umbralPct) {
       Compara "Fondos solicitados" (declarado en el Excel) contra el resultado neto calculado
       de abajo hacia arriba (ingresos − egresos − imp. créd/déb) en cada flujo cargado. Una
       diferencia grande no es necesariamente un error — puede ser que la empresa no solicitó
-      fondos pese a tener déficit — pero conviene revisarla antes de publicar.
+      fondos pese a tener déficit — pero conviene revisarla antes de publicar. Cuando la causa
+      probable es un rubro de asistencia/subsidio estatal cargado como egreso (el mismo caso de
+      ACCION VERDE), "🔧 Reclasificar" lo pasa a ingreso y guarda al instante.
       ${hallazgos.length} flujo(s) con diferencia mayor a ${fmt(umbralAbs)} y ${Math.round(umbralPct*100)}% de los egresos.
     </div>
     <table style="width:100%;border-collapse:collapse">
@@ -15176,6 +15222,7 @@ function _mostrarAuditoriaFlujos(hallazgos, umbralAbs, umbralPct) {
         <th style="padding:6px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">FONDOS SOLICITADOS</th>
         <th style="padding:6px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">RESULTADO NETO REAL</th>
         <th style="padding:6px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">DIFERENCIA</th>
+        <th style="padding:6px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono)">CAUSA PROBABLE</th>
         <th></th>
       </tr></thead>
       <tbody>${filas}</tbody>
