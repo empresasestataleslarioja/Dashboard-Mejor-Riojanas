@@ -14333,7 +14333,7 @@ function _renderListaFlujos() {
       }
 
       const varPct = _varNecesidad(necAct, necAnt);
-      const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--neg)' : 'var(--pos)';
+      const varCol = varPct == null ? 'var(--dim)' : varPct > 0 ? 'var(--pos)' : 'var(--neg)';
 
       // Badge tipo — todo en una línea, sin <br>
       const tieneMes = f.meses && f.meses.length > 0;
@@ -14727,9 +14727,18 @@ function _flujoNecesidadSignada(f) {
 // pero esa fórmula solo ve que 150 y 100 son parecidos y puede mostrarlo
 // como una mejora leve. Usar el valor con signo directamente da el
 // resultado correcto también cuando el signo cambia de un período a otro.
+// FIX: el orden de la resta estaba invertido — daba negativo cuando el
+// déficit mejoraba y positivo cuando empeoraba, al revés de "más positivo
+// es mejor" (verificado con el propio ejemplo del comentario: de +100 a
+// -150 daba +250% en vez de -250%). Los lugares que colorean este valor ya
+// compensaban el signo invertido a propósito, así que al corregir acá hubo
+// que ajustar esos mismos lugares para que seguro verde=mejora.
+// Además: si "anterior" es prácticamente cero, el % se vuelve una cifra
+// absurda (ej. "Fondos solicitados" ≈ $0 con un período actual de varios
+// millones daba +22.000.000.000%) — no es un dato útil, se descarta.
 function _varNecesidad(actual, anterior) {
-  if (actual == null || anterior == null || anterior === 0) return null;
-  return (anterior - actual) / Math.abs(anterior) * 100;
+  if (actual == null || anterior == null || Math.abs(anterior) < 100) return null;
+  return (actual - anterior) / Math.abs(anterior) * 100;
 }
 
 function _flujoNecesidad(f) {
@@ -16297,7 +16306,7 @@ function buildComparacionFlujos() {
 
   const fmtP   = v => v==null ? '—' : (v>0?'+':'') + v.toFixed(2) + '%';
   const fmtM   = v => v==null ? '—' : (v<0?'(':'') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v<0?')':'');
-  const colVar = v => v==null ? 'var(--dim)' : v>0 ? 'var(--neg)' : 'var(--pos)';
+  const colVar = v => v==null ? 'var(--dim)' : v>0 ? 'var(--pos)' : 'var(--neg)';
 
   // ── Compatibilidad de formatos ───────────────────────────────────
   const bSinRubros = !fB_raw.rubros?.some(r => r.actual != null);
@@ -16790,8 +16799,10 @@ function buildComparacionFlujos() {
       // de comparar solo magnitudes absolutas.
       const vn = _varNecesidad(vA, vB);
       const vr = _vr(vn);
-      const cv = _cv(vn, false);
-      const cr = _cv(vr, false);
+      // pos=true: _varNecesidad ya devuelve más positivo=mejora (a diferencia
+      // de impRow más abajo, que usa un vn de magnitud simple donde más=peor).
+      const cv = _cv(vn, true);
+      const cr = _cv(vr, true);
       const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
       return `<tr style="background:rgba(232,255,71,.05);border-top:2px solid var(--y21)">
         <td style="padding:7px 12px;font-size:9.5px;font-weight:700;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}${extra}</td>
@@ -17329,7 +17340,7 @@ function exportarFlujoExcel() {
         </tr>`;
         return _row(`${_tagMetricaCap} egresos`, egrADet, egrBDet, _vnE, false)
              + _row(`${_tagMetricaCap} ingresos`, ingA, ingB, _vnI, true)
-             + _row(`Resultado (néc. fondos)${_sufMetrica}`, _necASignado, _necBSignado, _vnN, false)
+             + _row(`Resultado (néc. fondos)${_sufMetrica}`, _necASignado, _necBSignado, _vnN, true)
              + (ipc&&_varRealRes!=null ? `<tr style="border-top:1px solid ${T.bd};background:${T.acc}10">
                  <td style="padding:6px 14px;font-family:monospace;font-size:9px;font-style:italic;color:${T.dim}">Resultado — Var. real (Fisher, IPC ${ipc}%)</td>
                  <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(_rNetASign)}</td>
@@ -17474,8 +17485,8 @@ function exportarFlujoExcel() {
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${C(vA)}</td>
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;color:${T.dim}">${C(vB)}</td>
             ${ipc?`<td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:9px;color:${T.dim}88">${vBEq?'≈'+C(vBEq):'—'}</td>`:''}
-            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,false)}">${P(vn)}</td>
-            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,false)}">${P(vr)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vn,true)}">${P(vn)}</td>
+            <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${pC(vr,true)}">${P(vr)}</td>
           </tr>`;
         };
         const impR = (lbl, vA, vB) => {
@@ -17772,7 +17783,7 @@ async function generarInformeFlujo() {
 
     // Texto variación nominal
     const textoVarNom = varNom != null
-      ? (varNom>0?'aumento':'reducción') + ' del ' + fmtPa(varNom) +
+      ? (Math.abs(necA ?? 0) > Math.abs(necB ?? 0) ? 'aumento' : 'reducción') + ' del ' + fmtPa(varNom) +
         ' en términos nominales; pasando de ' + fmtM(necB) +
         ' (' + (fB?.periodo||'período anterior') + ') a ' + fmtM(necA) +
         ' (' + fA.periodo + ')'
