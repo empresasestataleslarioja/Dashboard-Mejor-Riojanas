@@ -5206,6 +5206,14 @@ self.onmessage = async (e) => {
         ✏ Editar flujo
       </button>
 
+      <button onclick="auditarFlujosInconsistentes()"
+        title="Revisa todos los flujos cargados buscando casos donde 'Fondos solicitados' difiere mucho del resultado neto real (ingresos − egresos − imp. créd/déb)"
+        style="padding:5px 12px;background:rgba(255,140,71,.08);
+        border:1.5px solid #ff8c47;color:#ff8c47;border-radius:4px;
+        cursor:pointer;font-family:var(--mono);font-size:9.5px;white-space:nowrap">
+        ⚠ Auditar flujos
+      </button>
+
       <button onclick="generarInformeFlujo()"
         style="padding:5px 12px;background:rgba(232,255,71,.08);
         border:1.5px solid var(--y21);color:#b8a000;border-radius:4px;
@@ -15055,6 +15063,100 @@ function _diagFlujo(empresaStr) {
     console.groupEnd();
     console.groupEnd();
   });
+}
+
+// Resultado neto "de abajo hacia arriba": ingresos − egresos detalle (sin imp.
+// créd/déb) − imp. créd/déb. Misma fórmula que usa el pie de la vista
+// individual de flujo (ver buildVistaIndividualFlujo) para separar el
+// resultado neto REAL del campo "Fondos solicitados" del archivo.
+function _flujoResultadoBottomUp(f) {
+  const ingA = _flujoIngTotal(f);
+  const egrDet = _flujoEgrDetTotal(f);
+  if (ingA == null || egrDet == null) return null;
+  const subtotal = ingA - Math.abs(egrDet);
+  const rubroImpCD = (f.rubros || []).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+  const impCredDeb = rubroImpCD ? Math.abs(rubroImpCD.actual || 0) : Math.abs(subtotal) * 0.012;
+  return subtotal - impCredDeb;
+}
+
+// Audita TODOS los flujos cargados buscando el mismo problema detectado en
+// ACCION VERDE sept-dic 2026: "Fondos solicitados" (declarado en el Excel,
+// puede ser una decisión administrativa) muy distinto del resultado neto
+// real calculado de abajo hacia arriba. No es necesariamente un error —
+// pero una diferencia grande amerita revisar el flujo. Uso: botón
+// "⚠ Auditar flujos" en el toolbar, o _auditarFlujos() desde la consola.
+function auditarFlujosInconsistentes() {
+  const UMBRAL_ABS = 500000;  // $500.000
+  const UMBRAL_PCT = 0.15;    // 15% de los egresos detalle del flujo
+  const hallazgos = [];
+  Object.entries(DATA.flujos || {}).forEach(([clave, f]) => {
+    if (!f.rubros || !f.rubros.length) return;
+    const necA = _flujoNecesidadSignada(f);
+    const bottomUp = _flujoResultadoBottomUp(f);
+    if (necA == null || bottomUp == null) return;
+    const diff = Math.abs(necA - bottomUp);
+    const egrBase = Math.abs(_flujoEgrDetTotal(f) || 0);
+    const pctBase = egrBase > 0 ? diff / egrBase : (diff > 0 ? 1 : 0);
+    if (diff > UMBRAL_ABS && pctBase > UMBRAL_PCT) hallazgos.push({ clave, f, necA, bottomUp, diff });
+  });
+  hallazgos.sort((a, b) => b.diff - a.diff);
+  _mostrarAuditoriaFlujos(hallazgos, UMBRAL_ABS, UMBRAL_PCT);
+  return hallazgos;
+}
+
+function _mostrarAuditoriaFlujos(hallazgos, umbralAbs, umbralPct) {
+  let overlay = document.getElementById('_flujo_audit_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_flujo_audit_overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const fmt = v => v == null ? '—' : (v < 0 ? '(' : '') + '$ ' + Math.abs(Math.round(v)).toLocaleString('es-AR') + (v < 0 ? ')' : '');
+  const filas = hallazgos.length ? hallazgos.map(h => `
+    <tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:8px 10px;font-size:10px;color:var(--text)">${h.f.empresa}</td>
+      <td style="padding:8px 10px;font-size:9px;color:var(--dim)">${h.f.periodo}</td>
+      <td style="padding:8px 10px;text-align:right;font-size:10px;font-family:var(--mono);color:var(--text)">${fmt(h.necA)}</td>
+      <td style="padding:8px 10px;text-align:right;font-size:10px;font-family:var(--mono);color:${h.bottomUp<0?'var(--neg)':'var(--pos)'}">${fmt(h.bottomUp)}</td>
+      <td style="padding:8px 10px;text-align:right;font-size:10px;font-family:var(--mono);color:#ff8c47">${fmt(h.diff)}</td>
+      <td style="padding:8px 10px;text-align:right">
+        <button onclick="document.getElementById('_flujo_audit_overlay').remove();_verFlujoIndividual('${h.clave}')"
+          style="padding:3px 10px;font-size:8.5px;font-family:var(--mono);background:rgba(71,232,255,.12);
+          border:1px solid var(--acc);color:var(--acc);border-radius:3px;cursor:pointer">Ver →</button>
+      </td>
+    </tr>`).join('')
+    : `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--dim);font-size:10px">
+        ✓ No se encontraron otros flujos con esta inconsistencia.
+      </td></tr>`;
+  overlay.innerHTML = `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:8px;
+    max-width:920px;width:100%;max-height:80vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">
+        ⚠ Auditoría de flujos — Fondos solicitados vs. Resultado neto real
+      </div>
+      <button onclick="document.getElementById('_flujo_audit_overlay').remove()"
+        style="background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:9px;color:var(--dim);margin-bottom:12px;line-height:1.5">
+      Compara "Fondos solicitados" (declarado en el Excel) contra el resultado neto calculado
+      de abajo hacia arriba (ingresos − egresos − imp. créd/déb) en cada flujo cargado. Una
+      diferencia grande no es necesariamente un error — puede ser que la empresa no solicitó
+      fondos pese a tener déficit — pero conviene revisarla antes de publicar.
+      ${hallazgos.length} flujo(s) con diferencia mayor a ${fmt(umbralAbs)} y ${Math.round(umbralPct*100)}% de los egresos.
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:2px solid var(--bd)">
+        <th style="padding:6px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono)">EMPRESA</th>
+        <th style="padding:6px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono)">PERÍODO</th>
+        <th style="padding:6px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">FONDOS SOLICITADOS</th>
+        <th style="padding:6px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">RESULTADO NETO REAL</th>
+        <th style="padding:6px 10px;text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">DIFERENCIA</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+  </div>`;
+  document.body.appendChild(overlay);
 }
 
 // Recalcula necesidad_fondos_ant para todos los flujos existentes sin reimportar Excel
