@@ -13147,12 +13147,25 @@ function parsearFlujoExcel(wb, XLSX) {
       if (/cobro|ingreso|subsidio|transferencia recibida/.test(cat)) tipoDesdeCategoria = 'ingreso';
       else if (/pago|egreso|gasto|remuner|honorar|servicio|proveedor|impuesto|transferencia realizada/.test(cat)) tipoDesdeCategoria = 'egreso';
     }
-    const tipo = esResultadoLbl ? 'resultado'
+    let tipo = esResultadoLbl ? 'resultado'
       : (esTotalizador && (lUP.includes('ING') || (_seccion==='ingreso' && !lUP.includes('EGR')))) ? 'ingreso'
       : (esTotalizador && (lUP.includes('EGR') || _seccion==='egreso')) ? 'total'
       : tipoDesdeCategoria !== null ? tipoDesdeCategoria
       : _seccion === 'ingreso' ? 'ingreso'
       : 'egreso';
+    // Asistencia financiera estatal / subsidios / transferencias recibidas:
+    // son fondos que recibe la empresa, un ingreso — aunque el Excel de
+    // origen a veces los ubica físicamente dentro de la sección EGRESOS
+    // (como compensación de un gasto puntual). Si se dejan como egreso, el
+    // detalle de ingresos queda desalineado del "TOTAL INGRESOS" que el
+    // propio archivo declara (que sí los suma como ingreso) — caso real:
+    // ACCION VERDE sept-dic 2026, "Asistencia financiera estatal" $10.223.728
+    // cargada como egreso mientras el TOTAL INGRESOS del Excel ya la incluía.
+    if (tipo === 'egreso' && !esResultadoLbl && !esTotalizador &&
+        (/ASISTENCIA.{0,15}(FINANCIER|ESTADO)/.test(lUP) || /SUBSIDIO/.test(lUP) ||
+         /TRANSFERENCIA.{0,12}ESTADO/.test(lUP) || /APORTE.{0,12}ESTADO/.test(lUP))) {
+      tipo = 'ingreso';
+    }
     // Corrección retroactiva: si llegamos al primer "TOTAL INGRESOS" sin
     // que ningún separador explícito haya marcado la sección todavía, todo
     // lo leído hasta ahora (que quedó con el tipo por defecto 'egreso') en
@@ -14820,6 +14833,18 @@ function _flujoEgrDetTotal(f) {
   return -suma; // siempre negativo (egresos)
 }
 
+// Ingreso total consistente con la tabla: suma los rubros de ingreso detalle
+// (lo mismo que suma "TOTAL INGRESOS" en la tabla), en vez del "TOTAL
+// INGRESOS" que declara el Excel de origen — que puede no coincidir si el
+// archivo clasificó algún rubro (ej. una asistencia financiera estatal) en
+// la sección equivocada.
+function _flujoIngDetTotal(f) {
+  if (!f) return null;
+  const rows = (f.rubros||[]).filter(r => r.tipo === 'ingreso' && !r.esTotal && r.actual != null);
+  if (!rows.length) return _flujoIngTotal(f);
+  return rows.reduce((s, r) => s + (r.actual ?? 0), 0);
+}
+
 // Ingresos operativos: excluye subsidios y transferencias del estado
 // Rubros de ingreso no operativos — excluidos de los indicadores de cobertura
 function _esIngExcluido(lbl) {
@@ -15222,6 +15247,11 @@ function buildVistaIndividualFlujo(claveOverride) {
   // KPIs
   const necA = _flujoNecesidadSignada(f);
   const ingA = _flujoIngTotal(f);
+  // Ingresos detalle, igual que "TOTAL INGRESOS" de la tabla — mostrar acá el
+  // total declarado por el Excel (ingA) hacía que esta tarjeta no coincidiera
+  // con la tabla cuando el archivo clasificó algún rubro (ej. una asistencia
+  // financiera estatal) en la sección equivocada.
+  const ingADet = _flujoIngDetTotal(f) ?? ingA;
   const ingAOp = _flujoIngOperativo(f);
   const egrA = _flujoEgrTotal(f);
   // Cobertura vía egresos SIN impCredDeb/gastos bancarios (_flujoEgrDetTotal),
@@ -15244,7 +15274,7 @@ function buildVistaIndividualFlujo(claveOverride) {
 
   document.getElementById('flujo-kpis').innerHTML = [
     { l:'Fondos solicitados',       v:fmt(necA),   c:necCol, big:true },
-    { l:'Total ingresos',           v:fmt(ingA),   c:'#1a9e68' },
+    { l:'Total ingresos',           v:fmt(ingADet),   c:'#1a9e68' },
     // Egresos detalle (sin imp. créd/déb), igual que cobertura/subtotal más abajo —
     // mostrar acá el total bruto importado del Excel (egrA) hacía que esta tarjeta
     // no coincidiera con "TOTAL EGRESOS" de la tabla ni con el pie SUBTOTAL, cuando
@@ -15458,12 +15488,22 @@ function buildVistaIndividualFlujo(claveOverride) {
         ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, r.actual) ?? '—'}</td>` : ''}
       </tr>`;
     };
-    const _mkTotRow = (lbl, val, mesFn, color) =>
-      `<tr style="background:${color}18;border-top:2px solid ${color}">
+    // El TOTAL de la fila siempre es la suma de sus propias celdas
+    // mensuales (mesFn) — nunca un valor aparte (ej. ingA, el "TOTAL
+    // INGRESOS" declarado por el Excel), para que la columna TOTAL nunca
+    // contradiga las celdas mensuales que tiene arriba en la misma fila.
+    // Con un solo mes (sin desglose) no hay celdas mensuales para sumar, así
+    // que ahí sí se usa el valor aparte como única fuente disponible.
+    const _mkTotRow = (lbl, val, mesFn, color) => {
+      const totalFila = (!sinDesglose && meses.length > 1)
+        ? meses.reduce((s, m) => s + mesFn(m), 0)
+        : val;
+      return `<tr style="background:${color}18;border-top:2px solid ${color}">
         <td style="padding:6px 12px;font-size:9.5px;font-weight:700;color:${color};font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}</td>
         ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${color};border-bottom:1px solid var(--bd)">${_fmtC(mesFn(m))}</td>`).join('')}
-        ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${color};background:rgba(100,100,80,.06);border-bottom:1px solid var(--bd)">${_fmtC(val)}</td>` : ''}
+        ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:${color};background:rgba(100,100,80,.06);border-bottom:1px solid var(--bd)">${_fmtC(totalFila)}</td>` : ''}
       </tr>`;
+    };
     return rubrosIngDet.map(_mkDetRow).join('')
       + _mkTotRow('TOTAL INGRESOS', ingA ?? 0,
           m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0),
