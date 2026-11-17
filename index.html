@@ -14237,7 +14237,6 @@ function _renderListaFlujos() {
     return;
   }
 
-  const necSignada = f => _flujoNecesidadSignada(f);
   const fmt = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
   const fmtDim = v => v == null ? '—' : (v < 0 ? '-' : '') + '$' + Math.abs(Math.round(v)).toLocaleString('es-AR');
 
@@ -14311,7 +14310,8 @@ function _renderListaFlujos() {
       </tr>`;
     }
     fEmp.forEach(f => {
-      const necAct = necSignada(f);
+      const necActInfo = _flujoNecesidadParaLista(f);
+      const necAct = necActInfo.valor;
       // Período anterior: primero el campo guardado, luego buscar on-the-fly por fecha.
       // Usar el valor guardado tal cual (sin forzar el signo a negativo): se
       // graba con el signo real de necesidad_fondos al momento de cargar el
@@ -14384,8 +14384,8 @@ function _renderListaFlujos() {
         </td>
         <td style="${tdBase}">${tipoTag}${mesBadge}</td>
         <td style="${tdBase}">${rubrosBadge}</td>
-        <td style="${tdBase};font-family:var(--mono);text-align:right">
-          <strong style="color:${necCol}">${fmt(necAct)}</strong>
+        <td style="${tdBase};font-family:var(--mono);text-align:right"${necActInfo.estimado ? ` title="&quot;Fondos solicitados&quot; (${fmt(necActInfo.necA)}) no coincide con el resultado neto calculado — se muestra el calculado"` : ''}>
+          ${necActInfo.estimado ? '<span style="color:#ff8c47;font-size:8px" title="Calculado: diverge del valor declarado en el Excel">≈</span> ' : ''}<strong style="color:${necCol}">${fmt(necAct)}</strong>
         </td>
         <td style="${tdBase};font-family:var(--mono);text-align:right;color:${antCol}">
           ${fmtDim(necAnt)}
@@ -15104,6 +15104,36 @@ function _flujoResultadoBottomUp(f) {
   return subtotal - impCredDeb;
 }
 
+// Umbral de divergencia entre "Fondos solicitados" (declarado en el Excel)
+// y el resultado neto real (calculado de abajo hacia arriba) — compartido
+// entre la auditoría y la lista de flujos, para no duplicar el criterio.
+const _FLUJO_UMBRAL_DIVERGENCIA_ABS = 500000;  // $500.000
+const _FLUJO_UMBRAL_DIVERGENCIA_PCT = 0.15;    // 15% de los egresos detalle
+function _flujoDivergeDeBottomUp(f, necA, bottomUp) {
+  if (necA == null || bottomUp == null) return false;
+  const diff = Math.abs(necA - bottomUp);
+  const egrBase = Math.abs(_flujoEgrDetTotal(f) || 0);
+  const pctBase = egrBase > 0 ? diff / egrBase : (diff > 0 ? 1 : 0);
+  return diff > _FLUJO_UMBRAL_DIVERGENCIA_ABS && pctBase > _FLUJO_UMBRAL_DIVERGENCIA_PCT;
+}
+
+// Déficit/necesidad a mostrar en la lista de flujos: preferir "Fondos
+// solicitados" (declarado en el Excel), pero si diverge demasiado del
+// resultado neto real calculado (mismo criterio que la auditoría), mostrar
+// el calculado en su lugar — un "Fondos solicitados" en $0 con un déficit
+// real de varios millones es más confuso que útil en una lista pensada
+// para ver de un vistazo qué flujo necesita atención (caso real: ACCION
+// VERDE sept-dic 2026, que seguía mostrando $0 en la lista después de
+// reclasificar "Asistencia financiera estatal" — esa reclasificación
+// corrige el detalle ingresos/egresos, pero "Fondos solicitados" es un
+// campo aparte que no se toca solo).
+function _flujoNecesidadParaLista(f) {
+  const necA = _flujoNecesidadSignada(f);
+  const bottomUp = _flujoResultadoBottomUp(f);
+  if (_flujoDivergeDeBottomUp(f, necA, bottomUp)) return { valor: bottomUp, estimado: true, necA };
+  return { valor: necA, estimado: false, necA };
+}
+
 // Detecta la MISMA causa que se encontró y corrigió en ACCION VERDE: un
 // rubro de asistencia financiera/subsidio/transferencia del Estado cargado
 // como egreso en vez de ingreso (mismo patrón que ahora reclasifica el
@@ -15124,23 +15154,16 @@ function _flujoRubroAsistenciaMalClasificado(f) {
 // pero una diferencia grande amerita revisar el flujo. Uso: botón
 // "⚠ Auditar flujos" en el toolbar, o _auditarFlujos() desde la consola.
 function auditarFlujosInconsistentes() {
-  const UMBRAL_ABS = 500000;  // $500.000
-  const UMBRAL_PCT = 0.15;    // 15% de los egresos detalle del flujo
   const hallazgos = [];
   Object.entries(DATA.flujos || {}).forEach(([clave, f]) => {
     if (!f.rubros || !f.rubros.length) return;
     const necA = _flujoNecesidadSignada(f);
     const bottomUp = _flujoResultadoBottomUp(f);
-    if (necA == null || bottomUp == null) return;
-    const diff = Math.abs(necA - bottomUp);
-    const egrBase = Math.abs(_flujoEgrDetTotal(f) || 0);
-    const pctBase = egrBase > 0 ? diff / egrBase : (diff > 0 ? 1 : 0);
-    if (diff > UMBRAL_ABS && pctBase > UMBRAL_PCT) {
-      hallazgos.push({ clave, f, necA, bottomUp, diff, rubroSospechoso: _flujoRubroAsistenciaMalClasificado(f) });
-    }
+    if (!_flujoDivergeDeBottomUp(f, necA, bottomUp)) return;
+    hallazgos.push({ clave, f, necA, bottomUp, diff: Math.abs(necA - bottomUp), rubroSospechoso: _flujoRubroAsistenciaMalClasificado(f) });
   });
   hallazgos.sort((a, b) => b.diff - a.diff);
-  _mostrarAuditoriaFlujos(hallazgos, UMBRAL_ABS, UMBRAL_PCT);
+  _mostrarAuditoriaFlujos(hallazgos, _FLUJO_UMBRAL_DIVERGENCIA_ABS, _FLUJO_UMBRAL_DIVERGENCIA_PCT);
   return hallazgos;
 }
 
