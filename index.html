@@ -5283,10 +5283,10 @@ self.onmessage = async (e) => {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)" title="Monto que la empresa propuso originalmente como déficit — se usa para medir la variación contra lo finalmente gestionado">Déficit inicial propuesto</label>
-          <input id="fc-deficit-inicial" type="text" inputmode="numeric" placeholder="$ opcional"
+          <input id="fc-deficit-inicial" type="text" inputmode="decimal" placeholder="$ opcional"
             style="width:140px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
-            oninput="const n=this.value.replace(/\./g,'').replace(/,/g,'').replace(/[^\d-]/g,'');this.value=n?Math.abs(parseInt(n,10)).toLocaleString('es-AR'):'';">
+            oninput="this.value=this.value.replace(/[^\d.,]/g,'');">
         </div>
       </div>
       <div id="fc-aviso-impcd" style="display:none;margin-bottom:10px;padding:8px 12px;
@@ -5392,10 +5392,10 @@ self.onmessage = async (e) => {
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)" title="Monto que la empresa propuso originalmente como déficit — se usa para medir la variación contra lo finalmente gestionado">Déficit inicial propuesto</label>
-          <input id="fm-deficit-inicial" type="text" inputmode="numeric" placeholder="$ opcional"
+          <input id="fm-deficit-inicial" type="text" inputmode="decimal" placeholder="$ opcional"
             style="width:140px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
-            oninput="const n=this.value.replace(/\./g,'').replace(/,/g,'').replace(/[^\d-]/g,'');this.value=n?Math.abs(parseInt(n,10)).toLocaleString('es-AR'):'';">
+            oninput="this.value=this.value.replace(/[^\d.,]/g,'');">
         </div>
       </div>
       <div style="margin-bottom:10px">
@@ -12641,6 +12641,19 @@ function descargarTemplateFlujo() {
 }
 
 // Clave única: empresa + periodo + tipo (proyectado/real)
+// Parsea un monto en formato argentino (punto=miles, coma=decimales) tal
+// como lo tipea un usuario en los inputs de edición manual de flujos — a
+// diferencia de un simple parseFloat() o un replace que borra ambos
+// separadores, acá SÍ se preserva la parte decimal (ej. "3.000.000,67" →
+// 3000000.67, no 300000067 ni 3).
+function _parseMontoAR(str) {
+  if (str == null) return null;
+  const limpio = String(str).trim().replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+  if (!limpio) return null;
+  const n = parseFloat(limpio);
+  return isNaN(n) ? null : n;
+}
+
 function _claveFlujo(empresa, periodo, tipo) {
   // FIX 5: normalizar eliminando tildes y caracteres especiales
   const norm = s => (s || '').trim()
@@ -13822,8 +13835,8 @@ function confirmarGuardarFlujo() {
 }
 
 function _leerDeficitInicialConfirm() {
-  const raw = (document.getElementById('fc-deficit-inicial')?.value || '').replace(/\./g,'').replace(/,/g,'');
-  return raw ? Math.abs(parseFloat(raw)) || null : null;
+  const v = _parseMontoAR(document.getElementById('fc-deficit-inicial')?.value);
+  return v != null ? Math.abs(v) : null;
 }
 
 function _cerrarConfirmFlujo() {
@@ -13957,7 +13970,7 @@ function guardarFlujoManual() {
       return Object.assign(
         { key, label: orig?.label || key, tipo: orig?.tipo || 'egreso',
           esTotal: orig?.esTotal ?? false, nivel: orig?.nivel ?? 1,
-          actual: parseFloat(inp.value.replace(/\./g,'').replace(/,/g,'')) || null,
+          actual: _parseMontoAR(inp.value),
           anterior: orig?.anterior ?? null, var_pct: null, porMes: orig?.porMes || {} },
         tipoDec || {}
       );
@@ -13977,8 +13990,8 @@ function guardarFlujoManual() {
   const necValor = nec?.actual ?? defRub?.actual ?? _flujoNecesidad({ rubros: rubrosFinales }) ?? null;
   const mesesFinal = mesesSel.length ? mesesSel : (_fOrig?.meses || []);
   const añoFinal = año || _fOrig?.año || null;
-  const defInicialInp = (document.getElementById('fm-deficit-inicial')?.value || '').replace(/\./g,'').replace(/,/g,'');
-  const defInicial = defInicialInp ? Math.abs(parseFloat(defInicialInp)) || null : null;
+  const _defInicialParsed = _parseMontoAR(document.getElementById('fm-deficit-inicial')?.value);
+  const defInicial = _defInicialParsed != null ? Math.abs(_defInicialParsed) : null;
   _guardarFlujoData({
     empresa, periodo, tipo, ipc, año: añoFinal, rubros: rubrosFinales,
     meses: mesesFinal,
@@ -15658,7 +15671,7 @@ function editarFlujo(clave) {
   set('fm-periodo', f.periodo);
   set('fm-año',     f.año || parseInt((f.periodo||'').match(/20\d\d/)?.[0]) || '');
   set('fm-ipc',     f.ipc || '');
-  set('fm-deficit-inicial', f.deficit_inicial_propuesto != null ? Math.round(f.deficit_inicial_propuesto).toLocaleString('es-AR') : '');
+  set('fm-deficit-inicial', f.deficit_inicial_propuesto != null ? f.deficit_inicial_propuesto.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '');
   const tipoEl = document.getElementById('fm-tipo');
   if (tipoEl) tipoEl.value = f.tipo || 'proyectado';
 
@@ -15702,13 +15715,12 @@ function editarFlujo(clave) {
       return `<div style="display:flex;flex-direction:column;gap:2px;border-left:2px solid ${tipoColor};padding-left:6px">
         <label style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px" title="${r.label}">${r.label}</label>
         <div style="display:flex;gap:4px;align-items:center">
-          <input data-key="${r.key}" type="text" inputmode="numeric"
-            value="${r.actual != null ? Math.round(r.actual).toLocaleString('es-AR') : ''}"
+          <input data-key="${r.key}" type="text" inputmode="decimal"
+            value="${r.actual != null ? r.actual.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}"
             placeholder="Importe"
             style="width:110px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none"
-            oninput="const n=this.value.replace(/\./g,'').replace(/,/g,'').replace(/[^\d-]/g,'');
-              if(!isNaN(n)&&n!=='')this.value=parseInt(n).toLocaleString('es-AR');">
+            oninput="this.value=this.value.replace(/[^\d.,-]/g,'');">
           <select data-tipo-key="${r.key}"
             style="flex:1;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px">
