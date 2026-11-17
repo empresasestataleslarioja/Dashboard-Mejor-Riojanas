@@ -15607,10 +15607,20 @@ function buildVistaIndividualFlujo(claveOverride) {
     const _mkDetRow = r => {
       const st = _est(r);
       const ind = st.indent ? `padding-left:${12+st.indent}px` : 'padding:6px 12px';
+      // TOTAL de la fila = suma de sus propias celdas mensuales (porMes),
+      // no r.actual — ese campo puede venir del Excel con menos precisión
+      // decimal que la suma real de los meses (ej. un "Total" redondeado
+      // al peso en la columna del archivo, mientras cada mes sí trae
+      // centavos), y mostrar r.actual tal cual hacía que la columna TOTAL
+      // contradijera la suma visible de sus propios meses.
+      const _mesesConDato = meses.filter(m => r.porMes?.[m] != null);
+      const totalFila = (!sinDesglose && meses.length > 1 && _mesesConDato.length)
+        ? _mesesConDato.reduce((s, m) => s + r.porMes[m], 0)
+        : r.actual;
       return `<tr style="background:${st.bg};${st.bt}">
         <td style="${ind};padding-top:5px;padding-bottom:5px;font-size:9.5px;font-weight:${st.fw};color:${st.c};font-family:var(--mono);border-bottom:1px solid var(--bd2)">${r.label}</td>
         ${meses.map(m => `<td style="padding:5px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;color:${st.c};font-weight:${st.fw};border-bottom:1px solid var(--bd2)">${fmt2(r,m)}</td>`).join('')}
-        ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, r.actual) ?? '—'}</td>` : ''}
+        ${meses.length !== 1 ? `<td style="padding:5px 12px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:${st.fw};color:${st.c};background:rgba(100,100,80,.04);border-bottom:1px solid var(--bd2)">${_fmtSgn(r, totalFila) ?? '—'}</td>` : ''}
       </tr>`;
     };
     // El TOTAL de la fila siempre es la suma de sus propias celdas
