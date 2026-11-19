@@ -1086,10 +1086,18 @@ function upsertAutoridades(ss, nuevas, aEliminar, tumbas, tumbasAut) {
     if (fila && delMap[id] >= (parseInt(fila._ts, 10) || 0)) delete existentes[id];
   });
   const rows = Object.values(existentes);
+  // headers se recalcula como la unión de TODAS las claves presentes en
+  // `rows` (no solo las que la hoja ya tenía antes del merge) — mismo
+  // fix ya aplicado en upsertRubros (ver su comentario): sin esto, un
+  // campo nuevo agregado al dashboard (ej. "dni") se descartaba en
+  // silencio al escribir en una hoja "autoridades" ya existente, aunque
+  // el objeto fusionado en memoria sí lo tuviera.
+  const headersSet = new Set(headers);
+  rows.forEach(r => Object.keys(r).forEach(k => headersSet.add(k)));
+  headers = [...headersSet];
   _backupHojaAntesDeEscribir(ss, TAB.autoridades);
   hoja.clearContents();
   if (rows.length === 0) return 0;
-  if (headers.length === 0) headers = Object.keys(rows[0]);
   const matrix = [headers, ...rows.map(r => headers.map(h => { const v = r[h]; return (v === null || v === undefined) ? '' : v; }))];
   hoja.getRange(1, 1, matrix.length, headers.length).setValues(matrix);
   return rows.length;
