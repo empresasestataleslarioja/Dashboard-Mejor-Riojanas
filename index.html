@@ -3138,6 +3138,9 @@ self.onmessage = async (e) => {
           <button onclick="_rptAutoridades()" title="Generar reporte imprimible de autoridades"
             style="padding:3px 9px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.3);
             color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">🖨 Reporte</button>
+          <button onclick="_mostrarIncompatibilidadesAutoridades(true)" title="Personas con autoridades vigentes en más de una empresa — posibles incompatibilidades de funciones"
+            style="padding:3px 9px;background:rgba(255,140,71,.08);border:1px solid #ff8c47;
+            color:#ff8c47;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">⚠ Incompatibilidades</button>
         </div>
 
         <!-- Formulario de alta/edición -->
@@ -20378,6 +20381,12 @@ function _normCargoAutoridad(cargo) {
 function _normNombreAutoridad(nombre) {
   return String(nombre || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
+// Fecha pura "YYYY-MM-DD" → "DD/MM/YYYY" por manipulación de string, sin
+// pasar por Date/zona horaria (desde/hasta de autoridades no tienen hora;
+// fmtFechaAR sí ajusta UTC-3 y corre la fecha un día para atrás acá).
+function _fmtFechaAutoridad(f) {
+  return f ? f.split('-').reverse().join('/') : '—';
+}
 
 function _rangoCargoRpt(cargo) {
   const norm = _normCargoAutoridad(cargo); // sin acentos: "SÍNDICO" → "SINDICO"
@@ -20442,6 +20451,159 @@ function _detectarAnomaliasAutoridades() {
     });
   });
   return anomalias;
+}
+
+// Detecta personas (por nombre normalizado) con registros de autoridad en
+// MÁS DE UNA empresa distinta — señal de posible incompatibilidad de
+// funciones. A diferencia de _detectarAnomaliasAutoridades (que solo
+// cruza duplicados DENTRO de la misma empresa), esto compara contra TODO
+// el padrón sin importar la empresa. Marca como "simultaneo" los casos
+// donde los rangos de fechas de dos empresas distintas se superponen
+// (la señal más fuerte: la persona ejerció ambos cargos al mismo tiempo)
+// — un cruce sin superposición de fechas también se lista, pero como
+// historial a revisar, no como incompatibilidad activa.
+function _detectarIncompatibilidadesAutoridades(soloVigentes) {
+  const hoy = new Date().toISOString().slice(0,10);
+  const regs = (DATA.autoridades || []).filter(a => !soloVigentes || _autoridadEsVigente(a, hoy));
+  const porNombre = new Map();
+  regs.forEach(a => {
+    const key = _normNombreAutoridad(a.nombre);
+    if (!key) return;
+    if (!porNombre.has(key)) porNombre.set(key, []);
+    porNombre.get(key).push(a);
+  });
+  const resultado = [];
+  porNombre.forEach(lista => {
+    const empresas = [...new Set(lista.map(a => a.empresa))];
+    if (empresas.length < 2) return; // mismo nombre pero en una sola empresa: no es cruce
+    const simultaneo = lista.some((a, i) => lista.some((b, j) => {
+      if (i >= j || a.empresa === b.empresa) return false;
+      const aFin = a.hasta || '9999-12-31', bFin = b.hasta || '9999-12-31';
+      const aIni = a.desde || '0000-01-01', bIni = b.desde || '0000-01-01';
+      return aIni <= bFin && bIni <= aFin; // rangos de fechas solapados
+    }));
+    resultado.push({
+      nombre: lista[0].nombre,
+      registros: [...lista].sort((a,b) => (a.empresa||'').localeCompare(b.empresa||'','es') || (a.desde||'').localeCompare(b.desde||'')),
+      nEmpresas: empresas.length,
+      simultaneo,
+    });
+  });
+  resultado.sort((a,b) => (b.simultaneo - a.simultaneo) || b.nEmpresas - a.nEmpresas || a.nombre.localeCompare(b.nombre,'es'));
+  return resultado;
+}
+
+function _mostrarIncompatibilidadesAutoridades(soloVigentes) {
+  soloVigentes = soloVigentes !== false;
+  const hoy = new Date().toISOString().slice(0,10);
+  const casos = _detectarIncompatibilidadesAutoridades(soloVigentes);
+  let overlay = document.getElementById('_autoridades_incomp_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_autoridades_incomp_overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const filas = casos.length ? casos.map(c => {
+    const detalle = c.registros.map(r => {
+      const vig = _autoridadEsVigente(r, hoy);
+      const rango = _fmtFechaAutoridad(r.desde) + ' — ' + (r.hasta ? _fmtFechaAutoridad(r.hasta) : 'vigente');
+      return `<div style="padding:3px 0;border-bottom:1px solid var(--bd2)">
+        <span style="color:var(--acc);font-weight:600">${r.empresa}</span>
+        <span style="color:var(--dim)"> · ${r.cargo} · ${rango}</span>
+        ${vig ? '<span style="color:var(--pos);font-size:8px;margin-left:4px">● vigente</span>' : '<span style="color:var(--dim);font-size:8px;margin-left:4px">○ cerrado</span>'}
+      </div>`;
+    }).join('');
+    return `<tr style="border-bottom:1px solid var(--bd2)">
+      <td style="padding:8px 10px;font-size:10px;font-weight:600;color:var(--text);vertical-align:top;white-space:nowrap">
+        ${c.nombre}
+        ${c.simultaneo ? '<div style="margin-top:3px"><span style="font-size:8px;color:#ff4766;font-weight:700">⚠ SIMULTÁNEO</span></div>' : '<div style="margin-top:3px"><span style="font-size:8px;color:var(--dim)">sin solape de fechas</span></div>'}
+      </td>
+      <td style="padding:8px 10px;font-size:9.5px;font-family:var(--mono)">${detalle}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="2" style="padding:24px;text-align:center;color:var(--dim);font-size:10px">
+      ✓ No se encontraron personas con autoridades en más de una empresa${soloVigentes?' vigentes':''}.
+    </td></tr>`;
+
+  overlay.innerHTML = `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:8px;
+    max-width:980px;width:100%;max-height:85vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">
+        ⚠ Posibles incompatibilidades de funciones — Autoridades en más de una empresa
+      </div>
+      <button onclick="document.getElementById('_autoridades_incomp_overlay').remove()"
+        style="background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:9px;color:var(--dim);margin-bottom:10px;line-height:1.5">
+      Cruza apellido y nombre contra TODO el padrón de autoridades (no solo dentro de una empresa). "⚠ SIMULTÁNEO"
+      significa que los rangos de fechas de dos empresas distintas se superponen — la persona ejerció ambos cargos
+      al mismo tiempo. Un cruce sin esa marca solo indica que la misma persona pasó por más de una empresa en
+      distintos momentos — revisar igual, pero no es necesariamente una incompatibilidad activa.
+      ${casos.length} persona(s) encontrada(s).
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button onclick="_mostrarIncompatibilidadesAutoridades(true)"
+        style="padding:3px 10px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;
+        border:1px solid ${soloVigentes?'var(--acc)':'var(--bd2)'};background:${soloVigentes?'rgba(71,232,255,.12)':'none'};color:${soloVigentes?'var(--acc)':'var(--dim)'}">Solo vigentes</button>
+      <button onclick="_mostrarIncompatibilidadesAutoridades(false)"
+        style="padding:3px 10px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;
+        border:1px solid ${!soloVigentes?'var(--acc)':'var(--bd2)'};background:${!soloVigentes?'rgba(71,232,255,.12)':'none'};color:${!soloVigentes?'var(--acc)':'var(--dim)'}">Todo el histórico</button>
+      <button onclick="_imprimirIncompatibilidadesAutoridades(${soloVigentes})"
+        style="padding:3px 10px;font-size:8.5px;font-family:var(--mono);border-radius:3px;cursor:pointer;
+        border:1px solid #e8c84a;background:rgba(232,255,71,.08);color:#b8a000;margin-left:auto">🖨 Imprimir / exportar</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:2px solid var(--bd)">
+        <th style="padding:6px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono)">APELLIDO Y NOMBRE</th>
+        <th style="padding:6px 10px;text-align:left;font-size:8.5px;color:var(--dim);font-family:var(--mono)">EMPRESA · CARGO · VIGENCIA</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Versión imprimible del mismo cruce — mismo criterio de "simultaneo" que
+// el modal, en una página aparte lista para imprimir/guardar como PDF.
+function _imprimirIncompatibilidadesAutoridades(soloVigentes) {
+  const hoy = new Date().toISOString().slice(0,10);
+  const casos = _detectarIncompatibilidadesAutoridades(soloVigentes);
+  const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric'}).toUpperCase();
+  const filas = casos.map(c => {
+    const filasDet = c.registros.map((r,i) => {
+      const vig = _autoridadEsVigente(r, hoy);
+      const rango = _fmtFechaAutoridad(r.desde) + ' — ' + (r.hasta ? _fmtFechaAutoridad(r.hasta) : 'vigente');
+      return `<tr style="background:${i%2?'#f8f8f8':'#fff'}">
+        ${i===0 ? `<td rowspan="${c.registros.length}" style="padding:5px 8px;border:1px solid #ccc;font-weight:700;vertical-align:top">${c.nombre}${c.simultaneo?'<div style="color:#c00;font-size:8pt;margin-top:3px">⚠ SIMULTÁNEO</div>':''}</td>` : ''}
+        <td style="padding:5px 8px;border:1px solid #ccc">${r.empresa}</td>
+        <td style="padding:5px 8px;border:1px solid #ccc">${r.cargo}</td>
+        <td style="padding:5px 8px;border:1px solid #ccc">${rango}${vig?' (vigente)':''}</td>
+      </tr>`;
+    }).join('');
+    return filasDet;
+  }).join('');
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <title>Incompatibilidades de funciones — Autoridades</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:9.5pt;margin:2cm;color:#222}
+      h1{font-size:14pt;margin-bottom:4px}
+      .sub{font-size:8.5pt;color:#666;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:8.5pt}
+      th{background:#eee;padding:6px 8px;border:1px solid #ccc;text-align:left}
+      @media print{.no-print{display:none!important}}
+    </style></head><body>
+    <h1>Posibles incompatibilidades de funciones — Autoridades</h1>
+    <div class="sub">${fecha} · ${soloVigentes?'Solo registros vigentes':'Todo el histórico'} · ${casos.length} persona(s) con autoridades en más de una empresa</div>
+    <table>
+      <thead><tr><th>Apellido y Nombre</th><th>Empresa</th><th>Cargo</th><th>Vigencia</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="4" style="padding:10px;text-align:center">Sin casos encontrados.</td></tr>'}</tbody>
+    </table>
+    <div class="no-print" style="position:fixed;bottom:20px;right:20px">
+      <button onclick="window.print()" style="padding:10px 22px;background:#1a3a8f;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">🖨 Imprimir</button>
+    </div>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
 }
 
 // Texto de aviso para una anomalía de _detectarAnomaliasAutoridades —
