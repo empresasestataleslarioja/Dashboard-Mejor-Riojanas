@@ -3132,6 +3132,15 @@ self.onmessage = async (e) => {
               style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
               onchange="importarAutoridades(this.files[0]);this.value=''">
           </label>
+          <label class="tba-btn tba-btn-file" title="Completa el DNI de autoridades YA CARGADAS en el DBG — matchea por empresa y nombre, nunca crea registros nuevos ni pisa un DNI ya cargado. Columnas esperadas: Empresa | Nombre | DNI"
+            style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
+            background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.3);color:#a855f7;
+            font-family:var(--mono);border-radius:3px;cursor:pointer">
+            📇 Completar DNI desde Excel
+            <input type="file" accept=".xlsx,.xls,.csv"
+              style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
+              onchange="importarDNIsAutoridades(this.files[0]);this.value=''">
+          </label>
           <button onclick="toggleAutoridadForm()"
             style="padding:3px 9px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
             color:var(--pos);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">+ Agregar autoridad</button>
@@ -20411,6 +20420,19 @@ function _normNombreAutoridad(nombre) {
 function _normDNI(dni) {
   return String(dni || '').replace(/\D/g, '').slice(0, 8);
 }
+// Compara dos "Apellido y Nombre" sin importar el orden en que vengan
+// cargados (el DBG pide "Apellido y Nombre", pero un padrón externo suele
+// traer "Nombre Apellido", o con coma) — se normaliza y se compara como
+// conjunto de palabras, no como string exacto.
+function _mismoNombrePersona(a, b) {
+  if (!a || !b) return false;
+  const norm = s => _normNombreAutoridad(s).replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  const na = norm(a), nb = norm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const tokenize = s => s.split(' ').filter(Boolean).sort().join(' ');
+  return tokenize(na) === tokenize(nb);
+}
 function _fmtDNI(dni) {
   const d = _normDNI(dni);
   if (!d) return '';
@@ -21119,6 +21141,142 @@ function importarAutoridades(file) {
     s.onload = doImport;
     document.head.appendChild(s);
   }
+}
+
+// ── Completar DNI de autoridades YA CARGADAS desde un padrón externo ──
+// A diferencia de importarAutoridades (que agrega/combina registros
+// completos), esto NUNCA crea ni reemplaza registros: solo matchea cada
+// fila del archivo (Empresa + Nombre, con Cargo como desempate opcional)
+// contra DATA.autoridades y, si encuentra exactamente un registro sin DNI
+// cargado, lo completa. Pedido explícito: cargar un padrón externo
+// (ej. "DIRECTORIOS_EMPRESAS_ESTATALES.xlsx") que trae DNI pero no fechas
+// de vigencia, sin arriesgarse a duplicar el historial ya cargado (que sí
+// tiene "desde"/"hasta") si se usara el importador general.
+function importarDNIsAutoridades(file) {
+  if (!file) return;
+  const msg = document.getElementById('pers-import-msg');
+
+  const doImport = () => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+
+        let headerRow = -1, cols = null, rows = null;
+        for (const sn of wb.SheetNames) {
+          const wsRows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+          for (let i = 0; i < Math.min(5, wsRows.length); i++) {
+            const hdrs = wsRows[i].map(c => String(c).trim().toUpperCase());
+            const iEmp = hdrs.findIndex(h => /EMPRESA/.test(h));
+            const iDni = hdrs.findIndex(h => /\bDNI\b|DOCUMENTO/.test(h));
+            const iNom = hdrs.indexOf('NOMBRE') >= 0 ? hdrs.indexOf('NOMBRE')
+              : hdrs.findIndex(h => /APELLIDO\s*Y?\s*NOMBRE|NOMBRE\s+Y?\s*APELLIDO|NOMBRE\s+COMPLETO/.test(h));
+            if (iEmp >= 0 && iDni >= 0 && iNom >= 0) {
+              headerRow = i; rows = wsRows;
+              cols = { empresa: iEmp, dni: iDni, nombre: iNom, cargo: hdrs.findIndex(h => /CARGO|PUESTO|FUNCION|ROL/.test(h)) };
+              break;
+            }
+          }
+          if (headerRow >= 0) break;
+        }
+        if (headerRow < 0) throw new Error('No se encontraron columnas de "Empresa", "Nombre" y "DNI" en ninguna hoja (primeras 5 filas de cada una).');
+
+        const portafolio = Object.keys(rubros || {});
+        let empresaActual = '';
+        const filas = [];
+        rows.slice(headerRow + 1).forEach(row => {
+          const empresaCell = String(row[cols.empresa] || '').trim();
+          if (empresaCell) empresaActual = empresaCell;
+          if (!empresaActual) return;
+          const nombre = String(row[cols.nombre] || '').trim();
+          const dni = _normDNI(row[cols.dni]);
+          if (!nombre || !dni) return;
+          const cargo = cols.cargo >= 0 ? String(row[cols.cargo] || '').trim() : '';
+          filas.push({ empresa: _matchEmpresaAutoridad(empresaActual, portafolio) || empresaActual, nombre, dni, cargo });
+        });
+        if (!filas.length) throw new Error('No se encontró ninguna fila con Empresa, Nombre y DNI completos.');
+
+        let completados = 0, yaCoincidia = 0;
+        const conflictos = [], sinCoincidencia = [], ambiguos = [];
+        filas.forEach(f => {
+          const candidatos = DATA.autoridades.filter(a =>
+            _mismoNombreEmpresa(_nombreCanonicoAutoridad(a.empresa), f.empresa) && _mismoNombrePersona(a.nombre, f.nombre));
+          if (!candidatos.length) { sinCoincidencia.push(f); return; }
+          let objetivo = candidatos;
+          if (candidatos.length > 1 && f.cargo) {
+            const porCargo = candidatos.filter(a => _normCargoAutoridad(a.cargo) === _normCargoAutoridad(f.cargo));
+            if (porCargo.length) objetivo = porCargo;
+          }
+          if (objetivo.length > 1) { ambiguos.push(f); return; }
+          const a = objetivo[0];
+          if (!a.dni) {
+            a.dni = f.dni; a._ts = Date.now(); _ensureAutoridadId(a);
+            completados++;
+          } else if (a.dni === f.dni) {
+            yaCoincidia++;
+          } else {
+            conflictos.push({ ...f, dniActual: a.dni });
+          }
+        });
+
+        if (completados) { saveDataToLocalCache(); marcarPendienteGuardar(['autoridades']); buildAutoridades(); }
+
+        _mostrarResultadoImportDNI({ totalArchivo: filas.length, completados, yaCoincidia, conflictos, sinCoincidencia, ambiguos });
+      } catch(err) {
+        if (msg) { msg.textContent = '✗ Error: ' + err.message; msg.style.color = 'var(--neg)'; }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  if (window.XLSX) { doImport(); }
+  else {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = doImport;
+    document.head.appendChild(s);
+  }
+}
+
+// Resumen de _importarDNIsAutoridades — lista lo que no se pudo completar
+// solo, para que se revise a mano (nunca se adivina ni se pisa un DNI
+// distinto al ya cargado).
+function _mostrarResultadoImportDNI(r) {
+  let overlay = document.getElementById('_dni_import_overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = '_dni_import_overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const lista = (titulo, color, items, render) => !items.length ? '' : `
+    <div style="margin-top:10px">
+      <div style="font-size:9px;color:${color};font-weight:700;margin-bottom:4px">${titulo} (${items.length})</div>
+      <div style="font-size:9px;font-family:var(--mono);color:var(--dim);max-height:140px;overflow:auto;border:1px solid var(--bd2);border-radius:4px;padding:6px 8px">
+        ${items.map(render).join('<br>')}
+      </div>
+    </div>`;
+
+  overlay.innerHTML = `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:8px;
+    max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">📇 Completar DNI — resultado</div>
+      <button onclick="document.getElementById('_dni_import_overlay').remove()"
+        style="background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:10px;color:var(--text);font-family:var(--mono);line-height:1.8">
+      ${r.totalArchivo} fila(s) con DNI en el archivo ·
+      <span style="color:var(--pos);font-weight:700">${r.completados} completado(s)</span> ·
+      ${r.yaCoincidia} ya tenían el mismo DNI cargado
+    </div>
+    ${lista('⚠ DNI distinto al ya cargado — no se pisó, revisar a mano', '#ff4766', r.conflictos,
+        f => `${f.empresa} — ${f.nombre}: archivo trae ${_fmtDNI(f.dni)}, el DBG ya tiene ${_fmtDNI(f.dniActual)}`)}
+    ${lista('🔍 Sin coincidencia en el DBG (no está cargada, o el nombre/empresa difiere demasiado)', '#ff8c47', r.sinCoincidencia,
+        f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
+    ${lista('❓ Más de una autoridad posible — no se adivinó, revisar a mano', '#a855f7', r.ambiguos,
+        f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
+  </div>`;
+  document.body.appendChild(overlay);
 }
 
 // ═══════════════════════════════════════════════════════════
