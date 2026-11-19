@@ -11675,10 +11675,13 @@ function _renombrarEmpresa(from, to) {
   if (pd) pd.e = to;
   // notas, datos institucionales, presupuesto, rubros, estado activa/inactiva
   _renombrarPerEmpresaStores(from, to);
-  // balances
+  // balances — matcheo flexible (ignora tildes/puntuación), igual que
+  // _balancePerteneceAEmpresa: con comparación exacta, un balance cargado
+  // bajo una variante de grafía de `from` (ej. con tilde) no se reasignaba
+  // al renombrar/fusionar y quedaba con el nombre viejo.
   Object.values(_balances||{}).forEach(b => {
-    if (b.empresa === from)   b.empresa   = to;
-    if (b.vinculada === from) b.vinculada = to;
+    if (_mismoNombreEmpresa(b.empresa, from))   b.empresa   = to;
+    if (b.vinculada && _mismoNombreEmpresa(b.vinculada, from)) b.vinculada = to;
   });
   // datos mensuales (fact_mensual, res_mensual, er_mensual)
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
@@ -11740,9 +11743,10 @@ function _fusionarEmpresas(from, to) {
   }
   // notas, datos institucionales, presupuesto, rubros, estado activa/inactiva
   _fusionarPerEmpresaStores(from, to);
+  // balances — matcheo flexible (ver misma nota en _renombrarEmpresa)
   Object.values(_balances||{}).forEach(b => {
-    if (b.empresa === from)   b.empresa   = to;
-    if (b.vinculada === from) b.vinculada = to;
+    if (_mismoNombreEmpresa(b.empresa, from))   b.empresa   = to;
+    if (b.vinculada && _mismoNombreEmpresa(b.vinculada, from)) b.vinculada = to;
   });
   // datos mensuales: el destino conserva sus años; toma del origen los años que no tenga
   ['fact_mensual','res_mensual','er_mensual'].forEach(k => {
