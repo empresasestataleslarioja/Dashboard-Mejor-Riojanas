@@ -3131,18 +3131,6 @@ self.onmessage = async (e) => {
             <input type="checkbox" id="chk-autoridades-reemplazar">
             🔁 Reemplazar al importar
           </label>
-          <span style="width:1px;align-self:stretch;background:var(--bd2)"></span>
-          <span style="font-size:8px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">🖨 Reporte imprimible:</span>
-          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
-            title="No incluir Directores Suplentes ni Síndicos Suplentes.">
-            <input type="checkbox" id="chk-autoridades-rpt-ocultar-suplentes">
-            Sin suplentes
-          </label>
-          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
-            title="No incluir la fecha/hora de emisión en el encabezado.">
-            <input type="checkbox" id="chk-autoridades-rpt-ocultar-fecha">
-            Sin fecha de emisión
-          </label>
         </div>
 
         <!-- Fila 3: acciones -->
@@ -20810,13 +20798,14 @@ function _msgAnomaliaAutoridad(an) {
 // no depender de tildes (SÍNDICO/SINDICO).
 const CARGOS_SUPLENTES_RPT = ['DIRECTOR SUPLENTE', 'SINDICO SUPLENTE'];
 
-function _rptAutoridades() {
-  const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
-  const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
-  const ocultarSuplentes = document.getElementById('chk-autoridades-rpt-ocultar-suplentes')?.checked || false;
-  const ocultarFecha = document.getElementById('chk-autoridades-rpt-ocultar-fecha')?.checked || false;
-  const hoy         = new Date().toISOString().slice(0,10);
-  const esVigente   = a => _autoridadEsVigente(a, hoy);
+// Arma el HTML del reporte imprimible de Autoridades. selEmp/verHistorial
+// vienen del panel (son filtros que también afectan la tabla en pantalla);
+// ocultarSuplentes/ocultarFecha/mostrarDNI son opciones EXCLUSIVAS del
+// reporte imprimible (ver _rptAutoridades) — por eso viven como controles
+// dentro del visor del reporte y no como checkboxes del panel activo.
+function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI) {
+  const hoy       = new Date().toISOString().slice(0,10);
+  const esVigente = a => _autoridadEsVigente(a, hoy);
 
   // Igual que en buildAutoridades: normalizar al nombre de portafolio antes
   // de filtrar/agrupar, para que una autoridad cargada como "LAR RENOVABLES
@@ -20838,13 +20827,15 @@ function _rptAutoridades() {
   const nVigentes = filas.filter(esVigente).length;
   const subt = (selEmp || 'Todas las empresas') + ' · ' +
     (verHistorial ? 'historial completo' : 'autoridades vigentes') +
-    (ocultarSuplentes ? ' · sin suplentes' : '');
+    (ocultarSuplentes ? ' · sin suplentes' : '') +
+    (mostrarDNI ? ' · con DNI' : '');
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
-  // Pedido explícito: sin desde/hasta/VIGENTE — solo nombre y cargo.
+  // Pedido explícito: sin desde/hasta/VIGENTE — solo nombre y cargo (y,
+  // opcionalmente, DNI).
   const itemRpt = a => `<div class="cardAut-row">
-      <span class="cardAut-n">${a.nombre || ''}</span>
+      <span class="cardAut-n">${a.nombre || ''}${mostrarDNI && a.dni ? ` <span class="cardAut-dni">(DNI ${_fmtDNI(a.dni)})</span>` : ''}</span>
       <span class="cardAut-c">${a.cargo || ''}</span>
     </div>`;
 
@@ -20892,6 +20883,7 @@ function _rptAutoridades() {
     .cardAut-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
     .cardAut-row:last-child{border-bottom:none}
     .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;white-space:nowrap}
+    .cardAut-dni{font-size:7pt;color:#888;font-family:'Courier New',monospace}
     .cardAut-c{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;text-align:right;white-space:nowrap}
   </style>`;
 
@@ -20922,6 +20914,19 @@ function _rptAutoridades() {
     + _rptFooter()
     + '</div></body></html>';
 
+  return { html, subt };
+}
+
+function _rptAutoridades() {
+  const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
+  const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
+
+  // Opciones exclusivas del reporte imprimible — viven en los controles del
+  // propio visor (abajo), no en el panel activo: pedido explícito, para no
+  // mezclar filtros de datos (que también afectan la tabla en pantalla) con
+  // opciones de presentación del documento impreso. Empiezan sin marcar.
+  let ocultarSuplentes = false, ocultarFecha = false, mostrarDNI = false;
+
   let overlay = document.getElementById('_aut_rpt_overlay');
   if (overlay) overlay.remove();
   overlay = document.createElement('div');
@@ -20929,8 +20934,30 @@ function _rptAutoridades() {
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;display:flex;flex-direction:column;background:#1a1f2e';
 
   const bar = document.createElement('div');
-  bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0';
-  bar.innerHTML = `<span style="color:#aaa;font-size:9pt;font-family:monospace;flex:1">Reporte — Autoridades · ${subt}</span>`;
+  bar.style.cssText = 'display:flex;align-items:center;gap:14px;padding:8px 16px;background:#1a1f2e;border-bottom:1px solid #333;flex-shrink:0;flex-wrap:wrap';
+
+  const lbl = document.createElement('span');
+  lbl.style.cssText = 'color:#aaa;font-size:9pt;font-family:monospace';
+  bar.appendChild(lbl);
+
+  const _mkChk = (texto, title) => {
+    const wrap = document.createElement('label');
+    wrap.title = title || '';
+    wrap.style.cssText = 'display:flex;align-items:center;gap:4px;color:#ccc;font-size:8.5pt;font-family:monospace;cursor:pointer';
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    wrap.appendChild(chk);
+    wrap.appendChild(document.createTextNode(texto));
+    bar.appendChild(wrap);
+    return chk;
+  };
+  const chkSuplentes = _mkChk('Sin suplentes', 'No incluir Directores Suplentes ni Síndicos Suplentes.');
+  const chkFecha      = _mkChk('Sin fecha de emisión', 'No incluir la fecha/hora de emisión en el encabezado.');
+  const chkDNI         = _mkChk('Mostrar DNI', 'Incluir el DNI de cada autoridad junto al nombre.');
+
+  const spacer = document.createElement('span');
+  spacer.style.cssText = 'flex:1';
+  bar.appendChild(spacer);
 
   const btnPrint = document.createElement('button');
   btnPrint.textContent = '🖨 Imprimir';
@@ -20952,9 +20979,23 @@ function _rptAutoridades() {
   overlay.appendChild(iframe);
   document.body.appendChild(overlay);
 
-  const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
-  _ifrDoc.open(); _ifrDoc.write(html); _ifrDoc.close();
+  // Regenera el reporte dentro del MISMO iframe/overlay (sin cerrarlo) cada
+  // vez que se toca una de las 3 opciones — así se puede comparar con/sin
+  // suplentes, con/sin DNI, etc. sin perder el resto del estado del visor.
+  const _render = () => {
+    ocultarSuplentes = chkSuplentes.checked;
+    ocultarFecha     = chkFecha.checked;
+    mostrarDNI       = chkDNI.checked;
+    const { html, subt } = _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI);
+    lbl.textContent = `Reporte — Autoridades · ${subt}`;
+    const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
+    _ifrDoc.open(); _ifrDoc.write(html); _ifrDoc.close();
+  };
+  chkSuplentes.onchange = _render;
+  chkFecha.onchange     = _render;
+  chkDNI.onchange       = _render;
+  _render();
 }
 
 // Normaliza una celda de fecha (Date de Excel, serial numérico, o texto en
