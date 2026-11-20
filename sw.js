@@ -1,6 +1,6 @@
 // Service Worker — Dashboard Mejor Riojanas
 // Actualizar CACHE_VER fuerza limpieza en todos los browsers al próximo deploy
-const CACHE_VER = 'f9c8776';
+const CACHE_VER = 'fd2a6fc';
 
 self.addEventListener('install', () => self.skipWaiting());
 
