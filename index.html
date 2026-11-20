@@ -20833,18 +20833,18 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
-  // Pedido explícito: "CARGO"/"PERCIBE HONORARIOS" van como encabezado de
-  // columna UNA sola vez, arriba a la derecha de la tarjeta (junto al
-  // nombre de la empresa) — no repetidos como referencia debajo de cada
-  // dato en cada fila. Las filas solo llevan el valor, alineado debajo de
-  // su encabezado. El DNI (cuando se pide) va junto al nombre.
+  // Pedido explícito: "DNI"/"CARGO"/"PERCIBE HONORARIOS" van como
+  // encabezado de columna UNA sola vez, arriba a la derecha de la tarjeta
+  // (junto al nombre de la empresa) — no repetidos por fila. DNI es la
+  // PRIMERA de esas columnas (antes iba pegado al nombre). Encabezado y
+  // dato van centrados.
   const itemRpt = a => {
-    const dniHtml = mostrarDNI && a.dni ? ` <span class="cardAut-dni">(DNI ${_fmtDNI(a.dni)})</span>` : '';
     const honorValor = a.honorarios === 'SI' ? 'SÍ' : a.honorarios === 'NO' ? 'NO' : '—';
     const honorColor = a.honorarios === 'SI' ? '#1a7a4c' : a.honorarios === 'NO' ? '#999' : '#ccc';
     return `<div class="cardAut-row">
-      <span class="cardAut-n">${a.nombre || ''}${dniHtml}</span>
+      <span class="cardAut-n">${a.nombre || ''}</span>
       <div class="cardAut-fields">
+        ${mostrarDNI ? `<span class="cardAut-val">${a.dni ? _fmtDNI(a.dni) : '—'}</span>` : ''}
         <span class="cardAut-val">${a.cargo || '—'}</span>
         ${mostrarHonorarios ? `<span class="cardAut-val" style="color:${honorColor}">${honorValor}</span>` : ''}
       </div>
@@ -20852,6 +20852,7 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
   };
 
   const headerLabels = `<div class="cardAut-hlbls">
+      ${mostrarDNI ? '<span class="cardAut-hlbl">DNI</span>' : ''}
       <span class="cardAut-hlbl">Cargo</span>
       ${mostrarHonorarios ? '<span class="cardAut-hlbl">Percibe<br>honorarios</span>' : ''}
     </div>`;
@@ -20906,14 +20907,13 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
     .cardAut{border:.5px solid #ddd;border-radius:6px;background:#fff;page-break-inside:avoid}
     .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
     .cardAut-hlbls{display:flex;gap:14px;flex-shrink:0}
-    .cardAut-hlbl{font-size:5.5pt;color:#6a8bb3;font-weight:700;text-transform:uppercase;letter-spacing:.04em;line-height:1.3;min-width:62px;text-align:right}
+    .cardAut-hlbl{font-size:5.5pt;color:#6a8bb3;font-weight:700;text-transform:uppercase;letter-spacing:.04em;line-height:1.3;min-width:62px;text-align:center}
     .cardAut-b{padding:4px 10px 6px}
     .cardAut-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
     .cardAut-row:last-child{border-bottom:none}
     .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;flex:1;min-width:0}
-    .cardAut-dni{font-size:7pt;color:#888;font-family:'Courier New',monospace}
     .cardAut-fields{display:flex;gap:14px}
-    .cardAut-val{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;font-weight:700;white-space:nowrap;min-width:62px;text-align:right}
+    .cardAut-val{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;font-weight:700;white-space:nowrap;min-width:62px;text-align:center}
   </style>`;
 
   // En modo "vigentes" (el default), "Registros listados" y "Autoridades
@@ -20943,7 +20943,7 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
     + _rptFooter()
     + '</div></body></html>';
 
-  return { html, subt };
+  return { html, subt, filas };
 }
 
 function _rptAutoridades() {
@@ -20955,6 +20955,7 @@ function _rptAutoridades() {
   // mezclar filtros de datos (que también afectan la tabla en pantalla) con
   // opciones de presentación del documento impreso. Empiezan sin marcar.
   let ocultarSuplentes = false, ocultarFecha = false, mostrarDNI = false, mostrarHonorarios = false, ocultarAdvertencias = false;
+  let _ultimasFilas = [], _ultimoSubt = '';
 
   let overlay = document.getElementById('_aut_rpt_overlay');
   if (overlay) overlay.remove();
@@ -20995,12 +20996,19 @@ function _rptAutoridades() {
   btnPrint.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
   btnPrint.onclick = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
 
+  const btnExcel = document.createElement('button');
+  btnExcel.textContent = '⬇ Excel';
+  btnExcel.style.cssText = 'padding:6px 16px;background:rgba(71,255,180,.15);color:#1a9e68;border:1px solid rgba(71,255,180,.4);border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
+  btnExcel.title = 'Exportar a Excel con los mismos filtros/opciones que el reporte (empresa, historial, suplentes, DNI, honorarios).';
+  btnExcel.onclick = () => _exportarAutoridadesExcel(_ultimasFilas, _ultimoSubt, { mostrarDNI, mostrarHonorarios });
+
   const btnClose = document.createElement('button');
   btnClose.textContent = '✕ Cerrar';
   btnClose.style.cssText = 'padding:6px 14px;background:#333;color:#aaa;border:1px solid #555;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace';
   btnClose.onclick = () => overlay.remove();
 
   bar.appendChild(btnPrint);
+  bar.appendChild(btnExcel);
   bar.appendChild(btnClose);
 
   const iframe = document.createElement('iframe');
@@ -21019,7 +21027,9 @@ function _rptAutoridades() {
     ocultarAdvertencias = chkAdvertencias.checked;
     mostrarDNI          = chkDNI.checked;
     mostrarHonorarios   = chkHonorarios.checked;
-    const { html, subt } = _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI, mostrarHonorarios, ocultarAdvertencias);
+    const { html, subt, filas } = _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI, mostrarHonorarios, ocultarAdvertencias);
+    _ultimasFilas = filas;
+    _ultimoSubt   = subt;
     lbl.textContent = `Reporte — Autoridades · ${subt}`;
     const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
@@ -21031,6 +21041,48 @@ function _rptAutoridades() {
   chkDNI.onchange          = _render;
   chkHonorarios.onchange   = _render;
   _render();
+}
+
+// Exporta a Excel exactamente las mismas filas que el reporte imprimible
+// tiene cargadas en ese momento (mismos filtros: empresa, historial,
+// suplentes) con las mismas columnas opcionales activadas (DNI,
+// honorarios) — pedido explícito: "generar un excel con iguales filtros".
+function _exportarAutoridadesExcel(filas, subt, opts) {
+  if (!filas || !filas.length) { alert('No hay autoridades para exportar con los filtros actuales.'); return; }
+  const doExport = () => {
+    const data = filas.map(a => {
+      const row = {
+        'Empresa': a.empresa || '',
+        'Apellido y Nombre': a.nombre || '',
+      };
+      if (opts.mostrarDNI) row['DNI'] = a.dni ? _fmtDNI(a.dni) : '';
+      row['Cargo'] = a.cargo || '';
+      if (opts.mostrarHonorarios) row['Percibe Honorarios'] = a.honorarios === 'SI' ? 'SÍ' : a.honorarios === 'NO' ? 'NO' : '';
+      row['Desde'] = a.desde ? _fmtFechaAutoridad(a.desde) : '';
+      row['Hasta'] = a.hasta ? _fmtFechaAutoridad(a.hasta) : 'VIGENTE';
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const colWidths = [{wch:30},{wch:28}];
+    if (opts.mostrarDNI) colWidths.push({wch:14});
+    colWidths.push({wch:20});
+    if (opts.mostrarHonorarios) colWidths.push({wch:16});
+    colWidths.push({wch:12},{wch:12});
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Autoridades');
+    const fechaStr = nowAR().slice(0,10);
+    XLSX.writeFile(wb, `autoridades_${fechaStr}.xlsx`);
+  };
+
+  if (window.XLSX) doExport();
+  else {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = doExport;
+    document.head.appendChild(s);
+  }
 }
 
 // Normaliza una celda de fecha (Date de Excel, serial numérico, o texto en
