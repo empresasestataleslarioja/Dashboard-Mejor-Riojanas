@@ -3096,8 +3096,12 @@ self.onmessage = async (e) => {
         <div class="card-hd" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="card-hd-title">👤 Autoridades</span>
           <span class="card-hd-unit" id="autoridades-tabla-lbl">director/presidente, síndico, etc.</span>
+        </div>
+
+        <!-- Fila 1: filtros -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">
           <select id="sel-autoridades-emp" onchange="buildAutoridades()"
-            style="margin-left:8px;padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
+            style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px">
             <option value="">— Todas las empresas —</option>
           </select>
@@ -3114,20 +3118,38 @@ self.onmessage = async (e) => {
             placeholder="🔎 Buscar por nombre o DNI…" title="Filtra por nombre y apellido o por DNI — para revisar y corregir posibles errores de carga (duplicados, grafías distintas, etc.)"
             style="padding:3px 7px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;width:160px">
-          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:auto">
+        </div>
+
+        <!-- Fila 2: opciones (tabla e informe imprimible) -->
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd2)">
+          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer">
             <input type="checkbox" id="chk-autoridades-historial" onchange="buildAutoridades()">
             Ver historial completo
-          </label>
-          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
-            title="Al generar el reporte imprimible (🖨 Reporte), no incluir Directores Suplentes ni Síndicos Suplentes.">
-            <input type="checkbox" id="chk-autoridades-rpt-ocultar-suplentes">
-            Reporte sin suplentes
           </label>
           <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
             title="Al importar, borra los registros actuales de las empresas incluidas en el archivo y los reemplaza por completo (se pierde el historial cerrado de esas empresas). Si no se marca, el archivo se combina con lo que ya hay.">
             <input type="checkbox" id="chk-autoridades-reemplazar">
             🔁 Reemplazar al importar
           </label>
+          <span style="width:1px;align-self:stretch;background:var(--bd2)"></span>
+          <span style="font-size:8px;color:var(--dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">🖨 Reporte imprimible:</span>
+          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
+            title="No incluir Directores Suplentes ni Síndicos Suplentes.">
+            <input type="checkbox" id="chk-autoridades-rpt-ocultar-suplentes">
+            Sin suplentes
+          </label>
+          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
+            title="No incluir la fecha/hora de emisión en el encabezado.">
+            <input type="checkbox" id="chk-autoridades-rpt-ocultar-fecha">
+            Sin fecha de emisión
+          </label>
+        </div>
+
+        <!-- Fila 3: acciones -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd2)">
+          <button onclick="toggleAutoridadForm()"
+            style="padding:3px 9px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
+            color:var(--pos);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">+ Agregar autoridad</button>
           <label class="tba-btn tba-btn-file" title="Importar Excel/CSV: columnas Empresa | Apellido y Nombre | Cargo | Desde | Hasta (Hasta vacío = vigente)"
             style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
             background:rgba(71,232,255,.08);border:1px solid rgba(71,232,255,.3);color:var(--acc);
@@ -3146,9 +3168,7 @@ self.onmessage = async (e) => {
               style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
               onchange="importarDNIsAutoridades(this.files[0]);this.value=''">
           </label>
-          <button onclick="toggleAutoridadForm()"
-            style="padding:3px 9px;background:rgba(71,255,180,.08);border:1px solid rgba(71,255,180,.3);
-            color:var(--pos);font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer">+ Agregar autoridad</button>
+          <span style="margin-left:auto"></span>
           <button onclick="_rptAutoridades()" title="Generar reporte imprimible de autoridades"
             style="padding:3px 9px;background:rgba(232,255,71,.07);border:1px solid rgba(232,255,71,.3);
             color:#b8a000;font-family:var(--mono);font-size:9px;border-radius:3px;cursor:pointer;font-weight:600">🖨 Reporte</button>
@@ -7615,14 +7635,18 @@ function _fechaRpt(opts) {
   return new Date().toLocaleDateString('es-AR', opts);
 }
 
-function _rptHeader(titulo, subtitulo) {
+// ocultarFecha: opcional (default false, retrocompatible con el resto de
+// los reportes que llaman a _rptHeader sin este 3er parámetro) — permite
+// que un reporte puntual (ej. Autoridades) no incluya la fecha/hora de
+// emisión en el encabezado.
+function _rptHeader(titulo, subtitulo, ocultarFecha) {
   const fecha = _fechaRpt({day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
   return `<div class="hdr">
     ${_membrete({height:46})}
     <div style="text-align:right">
       <div class="ht">Dashboard Gerencial · Mejor Riojanas — ${titulo}</div>
       <div class="hs">${subtitulo}</div>
-      <div style="font-size:7pt;color:#aaa;margin-top:2px;font-family:monospace">${fecha}</div>
+      ${ocultarFecha ? '' : `<div style="font-size:7pt;color:#aaa;margin-top:2px;font-family:monospace">${fecha}</div>`}
     </div>
   </div>`;
 }
@@ -20790,6 +20814,7 @@ function _rptAutoridades() {
   const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
   const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
   const ocultarSuplentes = document.getElementById('chk-autoridades-rpt-ocultar-suplentes')?.checked || false;
+  const ocultarFecha = document.getElementById('chk-autoridades-rpt-ocultar-fecha')?.checked || false;
   const hoy         = new Date().toISOString().slice(0,10);
   const esVigente   = a => _autoridadEsVigente(a, hoy);
 
@@ -20890,7 +20915,7 @@ function _rptAutoridades() {
       </div>`;
 
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Autoridades</title>'+_rptCSS()+cssCardsAut+'</head><body><div class="pg">'
-    + _rptHeader('Autoridades', subt)
+    + _rptHeader('Autoridades', subt, ocultarFecha)
     + kpisAut
     + faltantesHtml
     + cardsHtml
