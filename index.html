@@ -20903,7 +20903,7 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
   // activado se usan columnas más anchas para que entre todo cómodo.
   const colMin = (mostrarDNI || mostrarHonorarios) ? 380 : 320;
   const cssCardsAut = `<style>
-    .gridAut{display:grid;grid-template-columns:repeat(auto-fit,minmax(${colMin}px,1fr));gap:10px;margin-bottom:12px}
+    .gridAut{display:grid;grid-template-columns:repeat(auto-fill,minmax(${colMin}px,460px));gap:10px;margin-bottom:12px;justify-content:start}
     .cardAut{border:.5px solid #ddd;border-radius:6px;background:#fff;page-break-inside:avoid}
     .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
     .cardAut-hlbls{display:flex;gap:14px;flex-shrink:0}
