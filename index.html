@@ -21234,38 +21234,54 @@ function importarDNIsAutoridades(file) {
         let completados = 0, yaCoincidia = 0;
         const conflictos = [], sinCoincidencia = [], ambiguos = [];
         filas.forEach(f => {
-          const enEsaEmpresa = DATA.autoridades.filter(a => _mismoNombreEmpresa(_nombreCanonicoAutoridad(a.empresa), f.empresa));
-          const candidatos = enEsaEmpresa.filter(a => _mismoNombrePersona(a.nombre, f.nombre));
-          if (!candidatos.length) {
-            // No llegó al umbral de match automático — igual se busca el
-            // más parecido dentro de la misma empresa, para mostrarlo como
-            // sugerencia a revisar a mano en vez de un "sin coincidencia"
-            // mudo que obliga a buscarlo línea por línea.
+          // El nombre identifica a la PERSONA, no la empresa que diga el
+          // archivo para esa fila en particular: si la misma persona está
+          // cargada en el DBG en otra(s) empresa(s) (algo frecuente — ver
+          // Incompatibilidades), también recibe el DNI ahí. Se busca en
+          // TODO el padrón, sin filtrar primero por la empresa del archivo.
+          const todos = DATA.autoridades.filter(a => _mismoNombrePersona(a.nombre, f.nombre));
+          if (!todos.length) {
+            // No llegó al umbral de match automático en ninguna empresa —
+            // igual se busca el candidato más parecido en TODO el padrón,
+            // para mostrarlo como sugerencia a revisar a mano en vez de un
+            // "sin coincidencia" mudo que obliga a buscarlo línea por línea.
             let mejor = null, mejorSim = 0;
-            enEsaEmpresa.forEach(a => {
+            DATA.autoridades.forEach(a => {
               const sim = _similitudNombrePersona(a.nombre, f.nombre);
               if (sim > mejorSim) { mejorSim = sim; mejor = a; }
             });
             sinCoincidencia.push(mejor && mejorSim >= 0.5
-              ? { ...f, sugerencia: mejor.nombre, sugerenciaCargo: mejor.cargo, sugerenciaDni: mejor.dni }
+              ? { ...f, sugerencia: mejor.nombre, sugerenciaCargo: mejor.cargo, sugerenciaEmpresa: mejor.empresa, sugerenciaDni: mejor.dni, sugerenciaId: _ensureAutoridadId(mejor) }
               : f);
             return;
           }
-          let objetivo = candidatos;
-          if (candidatos.length > 1 && f.cargo) {
-            const porCargo = candidatos.filter(a => _normCargoAutoridad(a.cargo) === _normCargoAutoridad(f.cargo));
-            if (porCargo.length) objetivo = porCargo;
-          }
-          if (objetivo.length > 1) { ambiguos.push(f); return; }
-          const a = objetivo[0];
-          if (!a.dni) {
-            a.dni = f.dni; a._ts = Date.now(); _ensureAutoridadId(a);
-            completados++;
-          } else if (a.dni === f.dni) {
-            yaCoincidia++;
-          } else {
-            conflictos.push({ ...f, dniActual: a.dni });
-          }
+          // Se desambigua (por cargo) y se completa POR EMPRESA por
+          // separado — dos registros de la misma persona en empresas
+          // distintas no "compiten" entre sí; una empresa con homónimos
+          // ambiguos no bloquea completar el DNI en las demás.
+          const porEmpresa = new Map();
+          todos.forEach(a => {
+            const emp = _nombreCanonicoAutoridad(a.empresa);
+            if (!porEmpresa.has(emp)) porEmpresa.set(emp, []);
+            porEmpresa.get(emp).push(a);
+          });
+          porEmpresa.forEach((lista, emp) => {
+            let objetivo = lista;
+            if (lista.length > 1 && f.cargo) {
+              const porCargo = lista.filter(a => _normCargoAutoridad(a.cargo) === _normCargoAutoridad(f.cargo));
+              if (porCargo.length) objetivo = porCargo;
+            }
+            if (objetivo.length > 1) { ambiguos.push({ ...f, empresaAmbigua: emp }); return; }
+            const a = objetivo[0];
+            if (!a.dni) {
+              a.dni = f.dni; a._ts = Date.now(); _ensureAutoridadId(a);
+              completados++;
+            } else if (a.dni === f.dni) {
+              yaCoincidia++;
+            } else {
+              conflictos.push({ ...f, dniActual: a.dni, empresaConflicto: emp });
+            }
+          });
         });
 
         if (completados) { saveDataToLocalCache(); marcarPendienteGuardar(['autoridades']); buildAutoridades(); }
@@ -21319,14 +21335,41 @@ function _mostrarResultadoImportDNI(r) {
       ${r.yaCoincidia} ya tenían el mismo DNI cargado
     </div>
     ${lista('⚠ DNI distinto al ya cargado — no se pisó, revisar a mano', '#ff4766', r.conflictos,
-        f => `${f.empresa} — ${f.nombre}: archivo trae ${_fmtDNI(f.dni)}, el DBG ya tiene ${_fmtDNI(f.dniActual)}`)}
-    ${lista('🔍 Sin coincidencia en el DBG (no está cargada, o el nombre/empresa difiere demasiado)', '#ff8c47', r.sinCoincidencia,
+        f => `${f.empresaConflicto || f.empresa} — ${f.nombre}: archivo trae ${_fmtDNI(f.dni)}, el DBG ya tiene ${_fmtDNI(f.dniActual)}`)}
+    ${lista('🔍 Sin coincidencia en el DBG (no está cargada, o el nombre difiere demasiado)', '#ff8c47', r.sinCoincidencia,
         f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`
-          + (f.sugerencia ? `<br><span style="padding-left:14px;color:#a855f7">↳ parecido: "${f.sugerencia}"${f.sugerenciaCargo?' ('+f.sugerenciaCargo+')':''}${f.sugerenciaDni?' — ya tiene DNI '+_fmtDNI(f.sugerenciaDni):' — sin DNI cargado'} — revisar si es la misma persona</span>` : ''))}
+          + (f.sugerencia ? `<br><span style="padding-left:14px;color:#a855f7">↳ parecido: "${f.sugerencia}" (${f.sugerenciaEmpresa}${f.sugerenciaCargo?' · '+f.sugerenciaCargo:''})${f.sugerenciaDni?' — ya tiene DNI '+_fmtDNI(f.sugerenciaDni):' — sin DNI cargado'}`
+            + (f.sugerenciaDni ? '' : `<button onclick="_confirmarSugerenciaDNI('${f.sugerenciaId}','${f.dni}')" style="margin-left:6px;padding:1px 7px;font-size:8px;border-radius:2px;cursor:pointer;background:rgba(196,71,255,.12);border:1px solid #a855f7;color:#a855f7">✓ Es la misma persona, completar</button>`)
+            + '</span>' : ''))}
     ${lista('❓ Más de una autoridad posible — no se adivinó, revisar a mano', '#a855f7', r.ambiguos,
-        f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
+        f => `${f.empresaAmbigua || f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
   </div>`;
   document.body.appendChild(overlay);
+  window._ultimoResultadoImportDNI = r;
+}
+
+// Confirmación manual de una sugerencia de _mostrarResultadoImportDNI: el
+// nombre no llegó al umbral de match automático (ej. apodo, grafía muy
+// distinta), pero el usuario reconoce que es la misma persona. Nunca pisa
+// un DNI ya cargado sin preguntar — mismo criterio de seguridad que el
+// match automático.
+function _confirmarSugerenciaDNI(id, dni) {
+  const a = DATA.autoridades.find(x => _ensureAutoridadId(x) === id);
+  if (!a) { alert('No se encontró el registro — puede que la lista haya cambiado. Recargá e intentá de nuevo.'); return; }
+  if (a.dni && a.dni !== dni && !confirm(`"${a.nombre}" (${a.empresa}) ya tiene cargado el DNI ${_fmtDNI(a.dni)}. ¿Reemplazarlo por ${_fmtDNI(dni)}?`)) return;
+  a.dni = _normDNI(dni);
+  a._ts = Date.now();
+  saveDataToLocalCache();
+  marcarPendienteGuardar(['autoridades']);
+  buildAutoridades();
+  const r = window._ultimoResultadoImportDNI;
+  if (r) {
+    r.sinCoincidencia = r.sinCoincidencia.filter(f => f.sugerenciaId !== id);
+    r.completados++;
+    _mostrarResultadoImportDNI(r);
+  } else {
+    alert(`✓ DNI ${_fmtDNI(dni)} asignado a "${a.nombre}".`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
