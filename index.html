@@ -20420,29 +20420,53 @@ function _normNombreAutoridad(nombre) {
 function _normDNI(dni) {
   return String(dni || '').replace(/\D/g, '').slice(0, 8);
 }
-// Compara dos "Apellido y Nombre" sin importar el orden en que vengan
-// cargados (el DBG pide "Apellido y Nombre", pero un padrón externo suele
-// traer "Nombre Apellido", o con coma) — se normaliza y se compara como
-// conjunto de palabras, no como string exacto. También tolera que a uno
-// le falte un nombre intermedio (ej. "BOVEDA GUILLERMO" cargado en el DBG
-// vs "BOVEDA GUILLERMO GABRIEL" en el padrón externo): si el conjunto de
-// palabras más corto está enteramente contenido en el más largo, se
-// considera la misma persona — exigiendo al menos 2 palabras en el más
-// corto (apellido + un nombre) para no matchear por un apellido sumamente
-// común solo.
+// Palabras de un "Apellido y Nombre" normalizadas (sin tildes, sin coma/
+// punto, sin importar mayúsculas) — base para compararlos sin importar
+// el orden en que vengan cargados (el DBG pide "Apellido y Nombre", pero
+// un padrón externo suele traer "Nombre Apellido").
+function _tokensNombrePersona(s) {
+  return _normNombreAutoridad(s).replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+}
+// Dos palabras "coinciden" si son iguales, si una es abreviatura de la
+// otra (ej. "GUIL" por "GUILLERMO"), o si una es una inicial sola (ej.
+// "G" o "G." por "GABRIEL" — el punto ya se quitó al tokenizar).
+function _tokenCoincideParcial(t1, t2) {
+  if (t1 === t2) return true;
+  if (t1.length >= 2 && t2.length >= 2 && (t1.startsWith(t2) || t2.startsWith(t1))) return true;
+  if (t1.length === 1 || t2.length === 1) {
+    const corta = t1.length === 1 ? t1 : t2, larga = t1.length === 1 ? t2 : t1;
+    return larga.length >= 2 && larga[0] === corta;
+  }
+  return false;
+}
+// Fracción de las palabras del nombre MÁS CORTO que encuentran pareja (sin
+// reutilizar palabras) en el nombre más largo — 1 significa que todas las
+// palabras del más corto aparecen (igual o abreviado) en el más largo,
+// sin importar el orden. Se usa tanto para el match automático (umbral
+// alto) como para sugerir "candidato más parecido" en los que no llegan a
+// ese umbral, en vez de descartarlos en silencio como "sin coincidencia".
+function _similitudNombrePersona(a, b) {
+  const ta = _tokensNombrePersona(a), tb = _tokensNombrePersona(b);
+  if (ta.length < 2 || tb.length < 2) return 0; // nunca matchear por una sola palabra
+  const [chicos, grandes] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  const usados = new Set();
+  let matched = 0;
+  chicos.forEach(t => {
+    const idx = grandes.findIndex((g, i) => !usados.has(i) && _tokenCoincideParcial(t, g));
+    if (idx >= 0) { usados.add(idx); matched++; }
+  });
+  return matched / chicos.length;
+}
+// Match automático (para completar el DNI sin pedir confirmación): exige
+// que TODAS las palabras del nombre más corto encuentren pareja — tolera
+// que falte un nombre intermedio (ej. "BOVEDA GUILLERMO" vs "BOVEDA
+// GUILLERMO GABRIEL"), que estén en otro orden, y que una esté abreviada
+// ("G." por "GABRIEL"). Lo que no llega a este umbral pero tiene alguna
+// similitud se ofrece como sugerencia para revisar a mano (ver
+// _similitudNombrePersona), nunca se auto-aplica.
 function _mismoNombrePersona(a, b) {
   if (!a || !b) return false;
-  const norm = s => _normNombreAutoridad(s).replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
-  const na = norm(a), nb = norm(b);
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  const setA = new Set(na.split(' ').filter(Boolean));
-  const setB = new Set(nb.split(' ').filter(Boolean));
-  if (setA.size === setB.size) {
-    return [...setA].every(t => setB.has(t));
-  }
-  const [chica, grande] = setA.size < setB.size ? [setA, setB] : [setB, setA];
-  return chica.size >= 2 && [...chica].every(t => grande.has(t));
+  return _similitudNombrePersona(a, b) >= 0.999;
 }
 function _fmtDNI(dni) {
   const d = _normDNI(dni);
@@ -21210,9 +21234,23 @@ function importarDNIsAutoridades(file) {
         let completados = 0, yaCoincidia = 0;
         const conflictos = [], sinCoincidencia = [], ambiguos = [];
         filas.forEach(f => {
-          const candidatos = DATA.autoridades.filter(a =>
-            _mismoNombreEmpresa(_nombreCanonicoAutoridad(a.empresa), f.empresa) && _mismoNombrePersona(a.nombre, f.nombre));
-          if (!candidatos.length) { sinCoincidencia.push(f); return; }
+          const enEsaEmpresa = DATA.autoridades.filter(a => _mismoNombreEmpresa(_nombreCanonicoAutoridad(a.empresa), f.empresa));
+          const candidatos = enEsaEmpresa.filter(a => _mismoNombrePersona(a.nombre, f.nombre));
+          if (!candidatos.length) {
+            // No llegó al umbral de match automático — igual se busca el
+            // más parecido dentro de la misma empresa, para mostrarlo como
+            // sugerencia a revisar a mano en vez de un "sin coincidencia"
+            // mudo que obliga a buscarlo línea por línea.
+            let mejor = null, mejorSim = 0;
+            enEsaEmpresa.forEach(a => {
+              const sim = _similitudNombrePersona(a.nombre, f.nombre);
+              if (sim > mejorSim) { mejorSim = sim; mejor = a; }
+            });
+            sinCoincidencia.push(mejor && mejorSim >= 0.5
+              ? { ...f, sugerencia: mejor.nombre, sugerenciaCargo: mejor.cargo, sugerenciaDni: mejor.dni }
+              : f);
+            return;
+          }
           let objetivo = candidatos;
           if (candidatos.length > 1 && f.cargo) {
             const porCargo = candidatos.filter(a => _normCargoAutoridad(a.cargo) === _normCargoAutoridad(f.cargo));
@@ -21283,7 +21321,8 @@ function _mostrarResultadoImportDNI(r) {
     ${lista('⚠ DNI distinto al ya cargado — no se pisó, revisar a mano', '#ff4766', r.conflictos,
         f => `${f.empresa} — ${f.nombre}: archivo trae ${_fmtDNI(f.dni)}, el DBG ya tiene ${_fmtDNI(f.dniActual)}`)}
     ${lista('🔍 Sin coincidencia en el DBG (no está cargada, o el nombre/empresa difiere demasiado)', '#ff8c47', r.sinCoincidencia,
-        f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
+        f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`
+          + (f.sugerencia ? `<br><span style="padding-left:14px;color:#a855f7">↳ parecido: "${f.sugerencia}"${f.sugerenciaCargo?' ('+f.sugerenciaCargo+')':''}${f.sugerenciaDni?' — ya tiene DNI '+_fmtDNI(f.sugerenciaDni):' — sin DNI cargado'} — revisar si es la misma persona</span>` : ''))}
     ${lista('❓ Más de una autoridad posible — no se adivinó, revisar a mano', '#a855f7', r.ambiguos,
         f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
   </div>`;
