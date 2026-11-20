@@ -3132,11 +3132,11 @@ self.onmessage = async (e) => {
               style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
               onchange="importarAutoridades(this.files[0]);this.value=''">
           </label>
-          <label class="tba-btn tba-btn-file" title="Completa el DNI de autoridades YA CARGADAS en el DBG — matchea por empresa y nombre, nunca crea registros nuevos ni pisa un DNI ya cargado. Columnas esperadas: Empresa | Nombre | DNI"
+          <label class="tba-btn tba-btn-file" title="Completa el DNI y los Honorarios de autoridades YA CARGADAS en el DBG — matchea por nombre en cualquier empresa donde esté registrada, nunca crea registros nuevos ni pisa un dato ya cargado. Columnas esperadas: Empresa | Nombre | DNI | (opcional) Honorarios/Remuneración"
             style="font-size:9px;height:24px;padding:3px 9px;position:relative;display:inline-flex;align-items:center;
             background:rgba(196,71,255,.08);border:1px solid rgba(196,71,255,.3);color:#a855f7;
             font-family:var(--mono);border-radius:3px;cursor:pointer">
-            📇 Completar DNI desde Excel
+            📇 Completar DNI/Honorarios desde Excel
             <input type="file" accept=".xlsx,.xls,.csv"
               style="position:absolute;opacity:0;inset:0;cursor:pointer;width:100%"
               onchange="importarDNIsAutoridades(this.files[0]);this.value=''">
@@ -3209,6 +3209,17 @@ self.onmessage = async (e) => {
               <input id="autoridad-form-hasta" type="date"
                 style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
                 font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">¿Percibe honorarios?</label>
+              <select id="autoridad-form-honorarios"
+                title="Si percibe una remuneración/honorario por ejercer esta función en esta empresa"
+                style="padding:4px 8px;background:var(--s1);border:1px solid var(--bd2);color:var(--text);
+                font-family:var(--mono);font-size:9.5px;border-radius:3px;outline:none;width:110px">
+                <option value="">— Sin dato —</option>
+                <option value="SI">SÍ</option>
+                <option value="NO">NO</option>
+              </select>
             </div>
             <div style="display:flex;gap:6px">
               <button onclick="guardarAutoridad()"
@@ -20204,6 +20215,7 @@ function buildAutoridades() {
       <td>${a.nombre || ''}</td>
       <td style="color:var(--dim)">${a.dni ? _fmtDNI(a.dni) : '—'}</td>
       <td>${a.cargo || ''}</td>
+      <td>${a.honorarios === 'SI' ? '<span style="color:var(--pos)">SÍ</span>' : a.honorarios === 'NO' ? '<span style="color:var(--dim)">NO</span>' : '<span style="color:var(--dim)">—</span>'}</td>
       <td>${fmtFecha(a.desde)}</td>
       <td>${hastaCell}</td>
       <td style="white-space:nowrap">
@@ -20237,14 +20249,14 @@ function buildAutoridades() {
           ? ' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;margin-left:4px;white-space:nowrap">INACTIVA</span>'
           : '';
         grupoHtml = `<tr class="autoridad-grupo-empresa">
-          <td colspan="6" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${empresaActual}${badgeInactiva}</td>
+          <td colspan="7" style="padding:6px 8px;font-weight:700;background:var(--s2);border-top:1px solid var(--bd2)">${empresaActual}${badgeInactiva}</td>
         </tr>`;
       }
       return grupoHtml + filaHtml(a);
     }).join('');
   }
 
-  tbl.innerHTML = `<thead><tr><th>Apellido y Nombre</th><th>DNI</th><th>Cargo</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+  tbl.innerHTML = `<thead><tr><th>Apellido y Nombre</th><th>DNI</th><th>Cargo</th><th>Honorarios</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
     <tbody>${bodyHtml}</tbody>`;
 }
 
@@ -20267,6 +20279,7 @@ function toggleAutoridadForm(idx) {
   const cargoOtro   = document.getElementById('autoridad-form-cargo-otro');
   const desdeField  = document.getElementById('autoridad-form-desde');
   const hastaField  = document.getElementById('autoridad-form-hasta');
+  const honorField  = document.getElementById('autoridad-form-honorarios');
 
   // El cargo pasó de texto libre a un desplegable con las opciones
   // estándar (pedido explícito) + "Otro" para no perder cargos ya
@@ -20299,6 +20312,7 @@ function toggleAutoridadForm(idx) {
     _setCargoField(a.cargo || '');
     desdeField.value  = a.desde  || '';
     hastaField.value  = a.hasta  || '';
+    if (honorField) honorField.value = a.honorarios || '';
   } else {
     idxField.value = '';
     const empActual = document.getElementById('sel-autoridades-emp')?.value || '';
@@ -20308,6 +20322,7 @@ function toggleAutoridadForm(idx) {
     _setCargoField('');
     desdeField.value  = '';
     hastaField.value  = '';
+    if (honorField) honorField.value = '';
   }
 
   form.style.display = '';
@@ -20340,6 +20355,7 @@ function guardarAutoridad() {
     : cargoSel;
   const desde   = document.getElementById('autoridad-form-desde')?.value || '';
   const hasta   = document.getElementById('autoridad-form-hasta')?.value || '';
+  const honorarios = document.getElementById('autoridad-form-honorarios')?.value || '';
 
   if (!empresa) { alert('Seleccioná la empresa.'); return; }
   if (!nombre) { alert('Ingresá el nombre y apellido.'); return; }
@@ -20349,7 +20365,7 @@ function guardarAutoridad() {
 
   const idx = idxRaw !== '' && idxRaw != null ? parseInt(idxRaw) : null;
   const existente = idx != null ? DATA.autoridades[idx] : null;
-  const registro = { empresa, nombre, dni, cargo, desde, hasta, _id: existente ? existente._id : null, _ts: Date.now() };
+  const registro = { empresa, nombre, dni, cargo, desde, hasta, honorarios, _id: existente ? existente._id : null, _ts: Date.now() };
   _ensureAutoridadId(registro);
   if (existente) DATA.autoridades[idx] = registro;
   else DATA.autoridades.push(registro);
@@ -20403,6 +20419,16 @@ const ORDEN_CARGOS_RPT_AUTORIDADES = [
   'PRESIDENTE','VICEPRESIDENTE','DIRECTOR TITULAR','DIRECTOR','SECRETARIO',
   'DIRECTOR SUPLENTE','SINDICO TITULAR','SINDICO','SINDICO SUPLENTE',
 ];
+// Normaliza la columna "¿Percibe honorarios?" a 'SI'/'NO'/'' — un padrón
+// externo suele traer variantes sueltas ("S", "Sí", "x") en vez de SI/NO
+// exacto.
+function _normHonorarios(v) {
+  const s = String(v || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!s) return '';
+  if (/^(SI?|X|YES)$/.test(s)) return 'SI';
+  if (/^NO?$/.test(s)) return 'NO';
+  return '';
+}
 // Normaliza cargo/nombre para comparar sin distinguir mayúsculas/
 // minúsculas ni acentos — mismo criterio usado en toda la sección de
 // Autoridades (búsqueda, orden, limpieza de duplicados).
@@ -21054,6 +21080,7 @@ function importarAutoridades(file) {
                 dni: hdrs.findIndex(h => /\bDNI\b|DOCUMENTO/.test(h)),
                 desde: hdrs.findIndex(h => /^DESDE$|FECHA.*DESDE|VIGENCIA.*DESDE/.test(h)),
                 hasta: hdrs.findIndex(h => /^HASTA$|FECHA.*HASTA|VIGENCIA.*HASTA|^CESE$/.test(h)),
+                honorarios: hdrs.findIndex(h => /HONORARIO|REMUNERACION/.test(h)),
               };
               break;
             }
@@ -21094,8 +21121,9 @@ function importarAutoridades(file) {
           const desde = cols.desde >= 0 ? _parseFechaAutoridad(row[cols.desde]) : '';
           const hasta = cols.hasta >= 0 ? _parseFechaAutoridad(row[cols.hasta]) : '';
           const dni   = cols.dni >= 0 ? _normDNI(row[cols.dni]) : '';
+          const honorarios = cols.honorarios >= 0 ? _normHonorarios(row[cols.honorarios]) : '';
 
-          parsed.push({ empresa, nombre, dni, cargo, desde, hasta });
+          parsed.push({ empresa, nombre, dni, cargo, desde, hasta, honorarios });
         });
 
         if (parsed.length === 0) {
@@ -21140,7 +21168,7 @@ function importarAutoridades(file) {
           parsed.forEach(p => {
             const existente = DATA.autoridades.find(a =>
               a.empresa === p.empresa && a.nombre === p.nombre && a.cargo === p.cargo && a.desde === p.desde);
-            if (existente) { existente.hasta = p.hasta; if (p.dni && !existente.dni) existente.dni = p.dni; existente._ts = Date.now(); _ensureAutoridadId(existente); actualizados++; }
+            if (existente) { existente.hasta = p.hasta; if (p.dni && !existente.dni) existente.dni = p.dni; if (p.honorarios && !existente.honorarios) existente.honorarios = p.honorarios; existente._ts = Date.now(); _ensureAutoridadId(existente); actualizados++; }
             else { p._ts = Date.now(); _ensureAutoridadId(p); DATA.autoridades.push(p); importados++; }
           });
         }
@@ -21208,7 +21236,11 @@ function importarDNIsAutoridades(file) {
               : hdrs.findIndex(h => /APELLIDO\s*Y?\s*NOMBRE|NOMBRE\s+Y?\s*APELLIDO|NOMBRE\s+COMPLETO/.test(h));
             if (iEmp >= 0 && iDni >= 0 && iNom >= 0) {
               headerRow = i; rows = wsRows;
-              cols = { empresa: iEmp, dni: iDni, nombre: iNom, cargo: hdrs.findIndex(h => /CARGO|PUESTO|FUNCION|ROL/.test(h)) };
+              cols = {
+                empresa: iEmp, dni: iDni, nombre: iNom,
+                cargo: hdrs.findIndex(h => /CARGO|PUESTO|FUNCION|ROL/.test(h)),
+                honorarios: hdrs.findIndex(h => /HONORARIO|REMUNERACION/.test(h)),
+              };
               break;
             }
           }
@@ -21225,13 +21257,14 @@ function importarDNIsAutoridades(file) {
           if (!empresaActual) return;
           const nombre = String(row[cols.nombre] || '').trim();
           const dni = _normDNI(row[cols.dni]);
-          if (!nombre || !dni) return;
+          const honorarios = cols.honorarios >= 0 ? _normHonorarios(row[cols.honorarios]) : '';
+          if (!nombre || (!dni && !honorarios)) return;
           const cargo = cols.cargo >= 0 ? String(row[cols.cargo] || '').trim() : '';
-          filas.push({ empresa: _matchEmpresaAutoridad(empresaActual, portafolio) || empresaActual, nombre, dni, cargo });
+          filas.push({ empresa: _matchEmpresaAutoridad(empresaActual, portafolio) || empresaActual, nombre, dni, honorarios, cargo });
         });
-        if (!filas.length) throw new Error('No se encontró ninguna fila con Empresa, Nombre y DNI completos.');
+        if (!filas.length) throw new Error('No se encontró ninguna fila con Empresa, Nombre y DNI (u Honorarios) completos.');
 
-        let completados = 0, yaCoincidia = 0;
+        let completados = 0, yaCoincidia = 0, completadosHonorarios = 0;
         const conflictos = [], sinCoincidencia = [], ambiguos = [];
         filas.forEach(f => {
           // El nombre identifica a la PERSONA, no la empresa que diga el
@@ -21251,7 +21284,7 @@ function importarDNIsAutoridades(file) {
               if (sim > mejorSim) { mejorSim = sim; mejor = a; }
             });
             sinCoincidencia.push(mejor && mejorSim >= 0.5
-              ? { ...f, sugerencia: mejor.nombre, sugerenciaCargo: mejor.cargo, sugerenciaEmpresa: mejor.empresa, sugerenciaDni: mejor.dni, sugerenciaId: _ensureAutoridadId(mejor) }
+              ? { ...f, sugerencia: mejor.nombre, sugerenciaCargo: mejor.cargo, sugerenciaEmpresa: mejor.empresa, sugerenciaDni: mejor.dni, sugerenciaHonorarios: mejor.honorarios, sugerenciaId: _ensureAutoridadId(mejor) }
               : f);
             return;
           }
@@ -21273,20 +21306,25 @@ function importarDNIsAutoridades(file) {
             }
             if (objetivo.length > 1) { ambiguos.push({ ...f, empresaAmbigua: emp }); return; }
             const a = objetivo[0];
-            if (!a.dni) {
-              a.dni = f.dni; a._ts = Date.now(); _ensureAutoridadId(a);
-              completados++;
-            } else if (a.dni === f.dni) {
-              yaCoincidia++;
-            } else {
-              conflictos.push({ ...f, dniActual: a.dni, empresaConflicto: emp });
+            let tocado = false;
+            if (f.dni) {
+              if (!a.dni) { a.dni = f.dni; completados++; tocado = true; }
+              else if (a.dni === f.dni) { yaCoincidia++; }
+              else { conflictos.push({ ...f, dniActual: a.dni, empresaConflicto: emp }); }
             }
+            // Independiente del DNI (puede venir vacío, coincidir, o en
+            // conflicto): completar Honorarios igual si falta, nunca pisar
+            // un valor ya cargado distinto.
+            if (f.honorarios && !a.honorarios) {
+              a.honorarios = f.honorarios; completadosHonorarios++; tocado = true;
+            }
+            if (tocado) { a._ts = Date.now(); _ensureAutoridadId(a); }
           });
         });
 
-        if (completados) { saveDataToLocalCache(); marcarPendienteGuardar(['autoridades']); buildAutoridades(); }
+        if (completados || completadosHonorarios) { saveDataToLocalCache(); marcarPendienteGuardar(['autoridades']); buildAutoridades(); }
 
-        _mostrarResultadoImportDNI({ totalArchivo: filas.length, completados, yaCoincidia, conflictos, sinCoincidencia, ambiguos });
+        _mostrarResultadoImportDNI({ totalArchivo: filas.length, completados, completadosHonorarios, yaCoincidia, conflictos, sinCoincidencia, ambiguos });
       } catch(err) {
         if (msg) { msg.textContent = '✗ Error: ' + err.message; msg.style.color = 'var(--neg)'; }
       }
@@ -21325,24 +21363,29 @@ function _mostrarResultadoImportDNI(r) {
   overlay.innerHTML = `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:8px;
     max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:18px" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">📇 Completar DNI — resultado</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text);font-family:var(--mono)">📇 Completar DNI / Honorarios — resultado</div>
       <button onclick="document.getElementById('_dni_import_overlay').remove()"
         style="background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="font-size:10px;color:var(--text);font-family:var(--mono);line-height:1.8">
-      ${r.totalArchivo} fila(s) con DNI en el archivo ·
-      <span style="color:var(--pos);font-weight:700">${r.completados} completado(s)</span> ·
+      ${r.totalArchivo} fila(s) en el archivo ·
+      <span style="color:var(--pos);font-weight:700">${r.completados} DNI completado(s)</span> ·
+      <span style="color:var(--pos);font-weight:700">${r.completadosHonorarios||0} honorario(s) completado(s)</span> ·
       ${r.yaCoincidia} ya tenían el mismo DNI cargado
     </div>
     ${lista('⚠ DNI distinto al ya cargado — no se pisó, revisar a mano', '#ff4766', r.conflictos,
         f => `${f.empresaConflicto || f.empresa} — ${f.nombre}: archivo trae ${_fmtDNI(f.dni)}, el DBG ya tiene ${_fmtDNI(f.dniActual)}`)}
     ${lista('🔍 Sin coincidencia en el DBG (no está cargada, o el nombre difiere demasiado)', '#ff8c47', r.sinCoincidencia,
-        f => `${f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`
-          + (f.sugerencia ? `<br><span style="padding-left:14px;color:#a855f7">↳ parecido: "${f.sugerencia}" (${f.sugerenciaEmpresa}${f.sugerenciaCargo?' · '+f.sugerenciaCargo:''})${f.sugerenciaDni?' — ya tiene DNI '+_fmtDNI(f.sugerenciaDni):' — sin DNI cargado'}`
-            + (f.sugerenciaDni ? '' : `<button onclick="_confirmarSugerenciaDNI('${f.sugerenciaId}','${f.dni}')" style="margin-left:6px;padding:1px 7px;font-size:8px;border-radius:2px;cursor:pointer;background:rgba(196,71,255,.12);border:1px solid #a855f7;color:#a855f7">✓ Es la misma persona, completar</button>`)
+        f => `${f.empresa} — ${f.nombre}${f.dni?' (DNI '+_fmtDNI(f.dni)+')':''}${f.honorarios?' · honorarios: '+f.honorarios:''}`
+          + (f.sugerencia ? `<br><span style="padding-left:14px;color:#a855f7">↳ parecido: "${f.sugerencia}" (${f.sugerenciaEmpresa}${f.sugerenciaCargo?' · '+f.sugerenciaCargo:''})`
+            + `${f.sugerenciaDni?' — ya tiene DNI '+_fmtDNI(f.sugerenciaDni):(f.dni?' — sin DNI cargado':'')}`
+            + `${f.sugerenciaHonorarios?' — ya tiene honorarios: '+f.sugerenciaHonorarios:''}`
+            + ((f.dni && !f.sugerenciaDni) || (f.honorarios && !f.sugerenciaHonorarios)
+                ? `<button onclick="_confirmarSugerenciaDNI('${f.sugerenciaId}','${f.dni||''}','${f.honorarios||''}')" style="margin-left:6px;padding:1px 7px;font-size:8px;border-radius:2px;cursor:pointer;background:rgba(196,71,255,.12);border:1px solid #a855f7;color:#a855f7">✓ Es la misma persona, completar</button>`
+                : '')
             + '</span>' : ''))}
     ${lista('❓ Más de una autoridad posible — no se adivinó, revisar a mano', '#a855f7', r.ambiguos,
-        f => `${f.empresaAmbigua || f.empresa} — ${f.nombre} (DNI ${_fmtDNI(f.dni)})`)}
+        f => `${f.empresaAmbigua || f.empresa} — ${f.nombre}${f.dni?' (DNI '+_fmtDNI(f.dni)+')':''}`)}
   </div>`;
   document.body.appendChild(overlay);
   window._ultimoResultadoImportDNI = r;
@@ -21350,14 +21393,17 @@ function _mostrarResultadoImportDNI(r) {
 
 // Confirmación manual de una sugerencia de _mostrarResultadoImportDNI: el
 // nombre no llegó al umbral de match automático (ej. apodo, grafía muy
-// distinta), pero el usuario reconoce que es la misma persona. Nunca pisa
-// un DNI ya cargado sin preguntar — mismo criterio de seguridad que el
-// match automático.
-function _confirmarSugerenciaDNI(id, dni) {
+// distinta), pero el usuario reconoce que es la misma persona. Completa
+// DNI y/o Honorarios (lo que venga en la fila del archivo y falte en el
+// registro) — nunca pisa un valor ya cargado sin preguntar, mismo
+// criterio de seguridad que el match automático.
+function _confirmarSugerenciaDNI(id, dni, honorarios) {
   const a = DATA.autoridades.find(x => _ensureAutoridadId(x) === id);
   if (!a) { alert('No se encontró el registro — puede que la lista haya cambiado. Recargá e intentá de nuevo.'); return; }
-  if (a.dni && a.dni !== dni && !confirm(`"${a.nombre}" (${a.empresa}) ya tiene cargado el DNI ${_fmtDNI(a.dni)}. ¿Reemplazarlo por ${_fmtDNI(dni)}?`)) return;
-  a.dni = _normDNI(dni);
+  if (dni && a.dni && a.dni !== dni && !confirm(`"${a.nombre}" (${a.empresa}) ya tiene cargado el DNI ${_fmtDNI(a.dni)}. ¿Reemplazarlo por ${_fmtDNI(dni)}?`)) return;
+  const honorAplicado = !!(honorarios && !a.honorarios);
+  if (dni) a.dni = _normDNI(dni);
+  if (honorAplicado) a.honorarios = honorarios;
   a._ts = Date.now();
   saveDataToLocalCache();
   marcarPendienteGuardar(['autoridades']);
@@ -21365,10 +21411,11 @@ function _confirmarSugerenciaDNI(id, dni) {
   const r = window._ultimoResultadoImportDNI;
   if (r) {
     r.sinCoincidencia = r.sinCoincidencia.filter(f => f.sugerenciaId !== id);
-    r.completados++;
+    if (dni) r.completados++;
+    if (honorAplicado) r.completadosHonorarios = (r.completadosHonorarios||0) + 1;
     _mostrarResultadoImportDNI(r);
   } else {
-    alert(`✓ DNI ${_fmtDNI(dni)} asignado a "${a.nombre}".`);
+    alert(`✓ Datos asignados a "${a.nombre}".`);
   }
 }
 
@@ -47397,6 +47444,7 @@ function applyCloudData(cloud, opts) {
           cargo:   String(r.cargo || ''),
           desde:   String(r.desde || ''),
           hasta:   String(r.hasta || ''),
+          honorarios: (String(r.honorarios || '').trim().toUpperCase() === 'SI' || String(r.honorarios || '').trim().toUpperCase() === 'NO') ? String(r.honorarios).trim().toUpperCase() : '',
           _id: id || undefined,
           _ts: tsCloud,
         };
@@ -47999,6 +48047,7 @@ function buildCloudPayload() {
     cargo:   a.cargo   || '',
     desde:   a.desde   || '',
     hasta:   a.hasta   || '',
+    honorarios: a.honorarios || '',
     _id:     _ensureAutoridadId(a),
     _ts:     a._ts || 0,
   }));
