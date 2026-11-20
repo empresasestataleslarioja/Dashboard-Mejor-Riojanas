@@ -20833,21 +20833,17 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
-  // Pedido explícito: sin desde/hasta/VIGENTE — solo nombre y cargo, más
-  // una segunda línea opcional con DNI/Honorarios cuando se piden — una
-  // sola fila con todo (nombre, cargo, DNI, honorarios) quedaba muy
-  // apretada y difícil de leer.
+  // Pedido explícito: nombre, cargo y SI/NO de honorarios en la MISMA
+  // fila (no en dos líneas). El DNI (cuando se pide) va junto al nombre.
   const itemRpt = a => {
-    const extras = [];
-    if (mostrarDNI && a.dni) extras.push(`DNI ${_fmtDNI(a.dni)}`);
-    if (mostrarHonorarios && a.honorarios) extras.push(`Honorarios: ${a.honorarios === 'SI' ? 'SÍ' : 'NO'}`);
-    const extrasHtml = extras.length ? `<div class="cardAut-extra">${extras.join(' · ')}</div>` : '';
+    const dniHtml = mostrarDNI && a.dni ? ` <span class="cardAut-dni">(DNI ${_fmtDNI(a.dni)})</span>` : '';
+    const honorHtml = mostrarHonorarios && a.honorarios
+      ? `<span class="cardAut-honor" style="color:${a.honorarios === 'SI' ? '#1a7a4c' : '#999'}">${a.honorarios === 'SI' ? 'SÍ' : 'NO'}</span>`
+      : (mostrarHonorarios ? `<span class="cardAut-honor" style="color:#ccc">—</span>` : '');
     return `<div class="cardAut-row">
-      <div class="cardAut-main">
-        <span class="cardAut-n">${a.nombre || ''}</span>
-        <span class="cardAut-c">${a.cargo || ''}</span>
-      </div>
-      ${extrasHtml}
+      <span class="cardAut-n">${a.nombre || ''}${dniHtml}</span>
+      <span class="cardAut-c">${a.cargo || ''}</span>
+      ${honorHtml}
     </div>`;
   };
 
@@ -20892,21 +20888,21 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
         </div>`;
   }
 
-  // Con DNI y/o Honorarios cada fila ocupa 2 líneas — tarjetas más angostas
-  // quedaban con mucho espacio vacío al costado; con cualquiera de los dos
-  // activado se usan columnas más anchas para que se lea cómodo.
+  // Con DNI y/o Honorarios la fila es más larga (nombre+DNI, cargo, SI/NO)
+  // — tarjetas más angostas quedaban apretadas; con cualquiera de los dos
+  // activado se usan columnas más anchas para que entre todo cómodo.
   const colMin = (mostrarDNI || mostrarHonorarios) ? 380 : 320;
   const cssCardsAut = `<style>
     .gridAut{display:grid;grid-template-columns:repeat(auto-fit,minmax(${colMin}px,1fr));gap:10px;margin-bottom:12px}
     .cardAut{border:.5px solid #ddd;border-radius:6px;background:#fff;page-break-inside:avoid}
     .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif}
     .cardAut-b{padding:4px 10px 6px}
-    .cardAut-row{padding:4px 0;border-bottom:.5px solid #f0f0f0}
+    .cardAut-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
     .cardAut-row:last-child{border-bottom:none}
-    .cardAut-main{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
-    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif}
+    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;flex:1;min-width:0}
+    .cardAut-dni{font-size:7pt;color:#888;font-family:'Courier New',monospace}
     .cardAut-c{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;text-align:right;white-space:nowrap}
-    .cardAut-extra{font-size:7pt;color:#888;font-family:'Courier New',monospace;margin-top:1px}
+    .cardAut-honor{font-size:7.5pt;font-family:'Courier New',monospace;font-weight:700;min-width:16px;text-align:right}
   </style>`;
 
   // En modo "vigentes" (el default), "Registros listados" y "Autoridades
