@@ -20423,15 +20423,26 @@ function _normDNI(dni) {
 // Compara dos "Apellido y Nombre" sin importar el orden en que vengan
 // cargados (el DBG pide "Apellido y Nombre", pero un padrón externo suele
 // traer "Nombre Apellido", o con coma) — se normaliza y se compara como
-// conjunto de palabras, no como string exacto.
+// conjunto de palabras, no como string exacto. También tolera que a uno
+// le falte un nombre intermedio (ej. "BOVEDA GUILLERMO" cargado en el DBG
+// vs "BOVEDA GUILLERMO GABRIEL" en el padrón externo): si el conjunto de
+// palabras más corto está enteramente contenido en el más largo, se
+// considera la misma persona — exigiendo al menos 2 palabras en el más
+// corto (apellido + un nombre) para no matchear por un apellido sumamente
+// común solo.
 function _mismoNombrePersona(a, b) {
   if (!a || !b) return false;
   const norm = s => _normNombreAutoridad(s).replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
   const na = norm(a), nb = norm(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
-  const tokenize = s => s.split(' ').filter(Boolean).sort().join(' ');
-  return tokenize(na) === tokenize(nb);
+  const setA = new Set(na.split(' ').filter(Boolean));
+  const setB = new Set(nb.split(' ').filter(Boolean));
+  if (setA.size === setB.size) {
+    return [...setA].every(t => setB.has(t));
+  }
+  const [chica, grande] = setA.size < setB.size ? [setA, setB] : [setB, setA];
+  return chica.size >= 2 && [...chica].every(t => grande.has(t));
 }
 function _fmtDNI(dni) {
   const d = _normDNI(dni);
