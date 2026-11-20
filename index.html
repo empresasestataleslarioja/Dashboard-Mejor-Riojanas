@@ -20803,7 +20803,7 @@ const CARGOS_SUPLENTES_RPT = ['DIRECTOR SUPLENTE', 'SINDICO SUPLENTE'];
 // ocultarSuplentes/ocultarFecha/mostrarDNI son opciones EXCLUSIVAS del
 // reporte imprimible (ver _rptAutoridades) — por eso viven como controles
 // dentro del visor del reporte y no como checkboxes del panel activo.
-function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI) {
+function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI, mostrarHonorarios, ocultarAdvertencias) {
   const hoy       = new Date().toISOString().slice(0,10);
   const esVigente = a => _autoridadEsVigente(a, hoy);
 
@@ -20828,16 +20828,28 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
   const subt = (selEmp || 'Todas las empresas') + ' · ' +
     (verHistorial ? 'historial completo' : 'autoridades vigentes') +
     (ocultarSuplentes ? ' · sin suplentes' : '') +
-    (mostrarDNI ? ' · con DNI' : '');
+    (mostrarDNI ? ' · con DNI' : '') +
+    (mostrarHonorarios ? ' · con honorarios' : '');
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
-  // Pedido explícito: sin desde/hasta/VIGENTE — solo nombre y cargo (y,
-  // opcionalmente, DNI).
-  const itemRpt = a => `<div class="cardAut-row">
-      <span class="cardAut-n">${a.nombre || ''}${mostrarDNI && a.dni ? ` <span class="cardAut-dni">(DNI ${_fmtDNI(a.dni)})</span>` : ''}</span>
-      <span class="cardAut-c">${a.cargo || ''}</span>
+  // Pedido explícito: sin desde/hasta/VIGENTE — solo nombre y cargo, más
+  // una segunda línea opcional con DNI/Honorarios cuando se piden — una
+  // sola fila con todo (nombre, cargo, DNI, honorarios) quedaba muy
+  // apretada y difícil de leer.
+  const itemRpt = a => {
+    const extras = [];
+    if (mostrarDNI && a.dni) extras.push(`DNI ${_fmtDNI(a.dni)}`);
+    if (mostrarHonorarios && a.honorarios) extras.push(`Honorarios: ${a.honorarios === 'SI' ? 'SÍ' : 'NO'}`);
+    const extrasHtml = extras.length ? `<div class="cardAut-extra">${extras.join(' · ')}</div>` : '';
+    return `<div class="cardAut-row">
+      <div class="cardAut-main">
+        <span class="cardAut-n">${a.nombre || ''}</span>
+        <span class="cardAut-c">${a.cargo || ''}</span>
+      </div>
+      ${extrasHtml}
     </div>`;
+  };
 
   let cardsHtml;
   if (filas.length === 0) {
@@ -20864,27 +20876,37 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
 
   // Empresas activas sin ninguna autoridad vigente cargada — pedido
   // explícito: que el reporte muestre directamente cuáles faltan, sin
-  // depender de encontrar la campana de alertas en la topbar.
-  const _faltantes = _empresasActivasSinAutoridadVigente();
-  const faltantesHtml = _faltantes.length
-    ? `<div style="margin:14px 0;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">
-        <div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ${_faltantes.length} empresa${_faltantes.length!==1?'s':''} activa${_faltantes.length!==1?'s':''} sin autoridades vigentes cargadas</div>
-        <div style="font-size:9.5px;color:#7a2a20;line-height:1.6">${_faltantes.join(' · ')}</div>
-      </div>`
-    : `<div style="margin:14px 0;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">
-        ✓ Todas las empresas activas tienen al menos una autoridad vigente cargada.
-      </div>`;
+  // depender de encontrar la campana de alertas en la topbar. Ocultable
+  // (ocultarAdvertencias) para un reporte más corto/formal que no necesite
+  // este aviso operativo.
+  let faltantesHtml = '';
+  if (!ocultarAdvertencias) {
+    const _faltantes = _empresasActivasSinAutoridadVigente();
+    faltantesHtml = _faltantes.length
+      ? `<div style="margin:14px 0;padding:10px 14px;border:1px solid #c0392b55;background:#fdecea;border-radius:4px">
+          <div style="font-weight:700;color:#c0392b;font-size:10.5px;margin-bottom:4px">⚠ ${_faltantes.length} empresa${_faltantes.length!==1?'s':''} activa${_faltantes.length!==1?'s':''} sin autoridades vigentes cargadas</div>
+          <div style="font-size:9.5px;color:#7a2a20;line-height:1.6">${_faltantes.join(' · ')}</div>
+        </div>`
+      : `<div style="margin:14px 0;padding:8px 14px;border:1px solid #0f6e5655;background:#eafaf3;border-radius:4px;font-size:9.5px;color:#0f6e56">
+          ✓ Todas las empresas activas tienen al menos una autoridad vigente cargada.
+        </div>`;
+  }
 
+  // Con DNI y/o Honorarios cada fila ocupa 2 líneas — tarjetas más angostas
+  // quedaban con mucho espacio vacío al costado; con cualquiera de los dos
+  // activado se usan columnas más anchas para que se lea cómodo.
+  const colMin = (mostrarDNI || mostrarHonorarios) ? 380 : 320;
   const cssCardsAut = `<style>
-    .gridAut{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;margin-bottom:12px}
+    .gridAut{display:grid;grid-template-columns:repeat(auto-fit,minmax(${colMin}px,1fr));gap:10px;margin-bottom:12px}
     .cardAut{border:.5px solid #ddd;border-radius:6px;background:#fff;page-break-inside:avoid}
     .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif}
     .cardAut-b{padding:4px 10px 6px}
-    .cardAut-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
+    .cardAut-row{padding:4px 0;border-bottom:.5px solid #f0f0f0}
     .cardAut-row:last-child{border-bottom:none}
-    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;white-space:nowrap}
-    .cardAut-dni{font-size:7pt;color:#888;font-family:'Courier New',monospace}
+    .cardAut-main{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif}
     .cardAut-c{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;text-align:right;white-space:nowrap}
+    .cardAut-extra{font-size:7pt;color:#888;font-family:'Courier New',monospace;margin-top:1px}
   </style>`;
 
   // En modo "vigentes" (el default), "Registros listados" y "Autoridades
@@ -20925,7 +20947,7 @@ function _rptAutoridades() {
   // propio visor (abajo), no en el panel activo: pedido explícito, para no
   // mezclar filtros de datos (que también afectan la tabla en pantalla) con
   // opciones de presentación del documento impreso. Empiezan sin marcar.
-  let ocultarSuplentes = false, ocultarFecha = false, mostrarDNI = false;
+  let ocultarSuplentes = false, ocultarFecha = false, mostrarDNI = false, mostrarHonorarios = false, ocultarAdvertencias = false;
 
   let overlay = document.getElementById('_aut_rpt_overlay');
   if (overlay) overlay.remove();
@@ -20951,9 +20973,11 @@ function _rptAutoridades() {
     bar.appendChild(wrap);
     return chk;
   };
-  const chkSuplentes = _mkChk('Sin suplentes', 'No incluir Directores Suplentes ni Síndicos Suplentes.');
-  const chkFecha      = _mkChk('Sin fecha de emisión', 'No incluir la fecha/hora de emisión en el encabezado.');
-  const chkDNI         = _mkChk('Mostrar DNI', 'Incluir el DNI de cada autoridad junto al nombre.');
+  const chkSuplentes    = _mkChk('Sin suplentes', 'No incluir Directores Suplentes ni Síndicos Suplentes.');
+  const chkFecha        = _mkChk('Ocultar fechas', 'No incluir la fecha/hora de emisión en el encabezado.');
+  const chkAdvertencias = _mkChk('Ocultar advertencias', 'No incluir el cartel de empresas activas sin autoridades vigentes cargadas.');
+  const chkDNI          = _mkChk('Mostrar DNI', 'Incluir el DNI de cada autoridad junto al nombre.');
+  const chkHonorarios   = _mkChk('Mostrar Honorarios', 'Incluir si percibe honorarios por esa función.');
 
   const spacer = document.createElement('span');
   spacer.style.cssText = 'flex:1';
@@ -20980,21 +21004,25 @@ function _rptAutoridades() {
   document.body.appendChild(overlay);
 
   // Regenera el reporte dentro del MISMO iframe/overlay (sin cerrarlo) cada
-  // vez que se toca una de las 3 opciones — así se puede comparar con/sin
+  // vez que se toca una de las opciones — así se puede comparar con/sin
   // suplentes, con/sin DNI, etc. sin perder el resto del estado del visor.
   const _render = () => {
-    ocultarSuplentes = chkSuplentes.checked;
-    ocultarFecha     = chkFecha.checked;
-    mostrarDNI       = chkDNI.checked;
-    const { html, subt } = _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI);
+    ocultarSuplentes    = chkSuplentes.checked;
+    ocultarFecha        = chkFecha.checked;
+    ocultarAdvertencias = chkAdvertencias.checked;
+    mostrarDNI          = chkDNI.checked;
+    mostrarHonorarios   = chkHonorarios.checked;
+    const { html, subt } = _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, ocultarFecha, mostrarDNI, mostrarHonorarios, ocultarAdvertencias);
     lbl.textContent = `Reporte — Autoridades · ${subt}`;
     const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
     _ifrDoc.open(); _ifrDoc.write(html); _ifrDoc.close();
   };
-  chkSuplentes.onchange = _render;
-  chkFecha.onchange     = _render;
-  chkDNI.onchange       = _render;
+  chkSuplentes.onchange    = _render;
+  chkFecha.onchange        = _render;
+  chkAdvertencias.onchange = _render;
+  chkDNI.onchange          = _render;
+  chkHonorarios.onchange   = _render;
   _render();
 }
 
