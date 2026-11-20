@@ -20833,27 +20833,28 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
-  // Pedido explícito: nombre a la izquierda; Cargo y Percibe Honorarios a
-  // la derecha, en la MISMA fila, cada uno como un valor con su referencia
-  // (etiqueta) debajo — así el dato se entiende sin depender de un
-  // encabezado de columna aparte. El DNI (cuando se pide) va junto al
-  // nombre.
+  // Pedido explícito: "CARGO"/"PERCIBE HONORARIOS" van como encabezado de
+  // columna UNA sola vez, arriba a la derecha de la tarjeta (junto al
+  // nombre de la empresa) — no repetidos como referencia debajo de cada
+  // dato en cada fila. Las filas solo llevan el valor, alineado debajo de
+  // su encabezado. El DNI (cuando se pide) va junto al nombre.
   const itemRpt = a => {
     const dniHtml = mostrarDNI && a.dni ? ` <span class="cardAut-dni">(DNI ${_fmtDNI(a.dni)})</span>` : '';
-    const campo = (valor, color, etiqueta) => `<div class="cardAut-field">
-        <div class="cardAut-val"${color ? ` style="color:${color}"` : ''}>${valor}</div>
-        <div class="cardAut-lbl">${etiqueta}</div>
-      </div>`;
     const honorValor = a.honorarios === 'SI' ? 'SÍ' : a.honorarios === 'NO' ? 'NO' : '—';
     const honorColor = a.honorarios === 'SI' ? '#1a7a4c' : a.honorarios === 'NO' ? '#999' : '#ccc';
     return `<div class="cardAut-row">
       <span class="cardAut-n">${a.nombre || ''}${dniHtml}</span>
       <div class="cardAut-fields">
-        ${campo(a.cargo || '—', null, 'Cargo')}
-        ${mostrarHonorarios ? campo(honorValor, honorColor, 'Percibe honorarios') : ''}
+        <span class="cardAut-val">${a.cargo || '—'}</span>
+        ${mostrarHonorarios ? `<span class="cardAut-val" style="color:${honorColor}">${honorValor}</span>` : ''}
       </div>
     </div>`;
   };
+
+  const headerLabels = `<div class="cardAut-hlbls">
+      <span class="cardAut-hlbl">Cargo</span>
+      ${mostrarHonorarios ? '<span class="cardAut-hlbl">Percibe<br>honorarios</span>' : ''}
+    </div>`;
 
   let cardsHtml;
   if (filas.length === 0) {
@@ -20871,7 +20872,7 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
     const cards = grupos.map(g => {
       const badge = empresasInactivas[g.empresa] ? ' <span style="font-size:7pt;background:#fdecea;color:#c0392b;padding:1px 6px;border-radius:2px;font-weight:700">INACTIVA</span>' : '';
       return `<div class="cardAut">
-        <div class="cardAut-h">${g.empresa}${badge}</div>
+        <div class="cardAut-h"><span>${g.empresa}${badge}</span>${headerLabels}</div>
         <div class="cardAut-b">${g.items.map(itemRpt).join('')}</div>
       </div>`;
     }).join('');
@@ -20903,16 +20904,16 @@ function _construirReporteAutoridades(selEmp, verHistorial, ocultarSuplentes, oc
   const cssCardsAut = `<style>
     .gridAut{display:grid;grid-template-columns:repeat(auto-fit,minmax(${colMin}px,1fr));gap:10px;margin-bottom:12px}
     .cardAut{border:.5px solid #ddd;border-radius:6px;background:#fff;page-break-inside:avoid}
-    .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif}
+    .cardAut-h{background:#f0f4fb;border-bottom:1px solid #d7e3f5;padding:7px 10px;font-weight:700;font-size:8.5pt;color:#185fa5;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+    .cardAut-hlbls{display:flex;gap:14px;flex-shrink:0}
+    .cardAut-hlbl{font-size:5.5pt;color:#6a8bb3;font-weight:700;text-transform:uppercase;letter-spacing:.04em;line-height:1.3;min-width:62px;text-align:right}
     .cardAut-b{padding:4px 10px 6px}
-    .cardAut-row{display:flex;justify-content:space-between;align-items:flex-start;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
+    .cardAut-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:.5px solid #f0f0f0;gap:8px;flex-wrap:wrap}
     .cardAut-row:last-child{border-bottom:none}
-    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;flex:1;min-width:0;padding-top:1px}
+    .cardAut-n{font-size:8.5pt;color:#111;font-family:Arial,sans-serif;flex:1;min-width:0}
     .cardAut-dni{font-size:7pt;color:#888;font-family:'Courier New',monospace}
     .cardAut-fields{display:flex;gap:14px}
-    .cardAut-field{text-align:right;min-width:40px}
-    .cardAut-val{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;font-weight:700;white-space:nowrap}
-    .cardAut-lbl{font-size:5.5pt;color:#aaa;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:.04em;margin-top:1px;white-space:nowrap}
+    .cardAut-val{font-size:7.5pt;color:#777;font-family:'Courier New',monospace;font-weight:700;white-space:nowrap;min-width:62px;text-align:right}
   </style>`;
 
   // En modo "vigentes" (el default), "Registros listados" y "Autoridades
