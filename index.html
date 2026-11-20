@@ -3119,6 +3119,11 @@ self.onmessage = async (e) => {
             Ver historial completo
           </label>
           <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
+            title="Al generar el reporte imprimible (🖨 Reporte), no incluir Directores Suplentes ni Síndicos Suplentes.">
+            <input type="checkbox" id="chk-autoridades-rpt-ocultar-suplentes">
+            Reporte sin suplentes
+          </label>
+          <label style="font-size:9px;color:var(--dim);font-family:var(--mono);display:flex;align-items:center;gap:4px;cursor:pointer"
             title="Al importar, borra los registros actuales de las empresas incluidas en el archivo y los reemplaza por completo (se pierde el historial cerrado de esas empresas). Si no se marca, el archivo se combina con lo que ya hay.">
             <input type="checkbox" id="chk-autoridades-reemplazar">
             🔁 Reemplazar al importar
@@ -20776,9 +20781,15 @@ function _msgAnomaliaAutoridad(an) {
   return an.empresa + ': ' + an.nombre + ' figura en ' + an.cargos.length + ' cargos vigentes a la vez (' + an.cargos.join(', ') + ')';
 }
 
+// Cargos excluidos del reporte imprimible cuando se marca "Reporte sin
+// suplentes" — pedido explícito. Comparación por _normCargoAutoridad para
+// no depender de tildes (SÍNDICO/SINDICO).
+const CARGOS_SUPLENTES_RPT = ['DIRECTOR SUPLENTE', 'SINDICO SUPLENTE'];
+
 function _rptAutoridades() {
   const selEmp      = document.getElementById('sel-autoridades-emp')?.value || '';
   const verHistorial= document.getElementById('chk-autoridades-historial')?.checked || false;
+  const ocultarSuplentes = document.getElementById('chk-autoridades-rpt-ocultar-suplentes')?.checked || false;
   const hoy         = new Date().toISOString().slice(0,10);
   const esVigente   = a => _autoridadEsVigente(a, hoy);
 
@@ -20789,6 +20800,7 @@ function _rptAutoridades() {
   let filas = (DATA.autoridades || []).map(a => ({ ...a, empresa: _nombreCanonicoAutoridad(a.empresa) }));
   if (selEmp) filas = filas.filter(a => a.empresa === selEmp);
   if (!verHistorial) filas = filas.filter(esVigente);
+  if (ocultarSuplentes) filas = filas.filter(a => !CARGOS_SUPLENTES_RPT.includes(_normCargoAutoridad(a.cargo)));
   // Orden: empresa → jerarquía del cargo (ver ORDEN_CARGOS_RPT_AUTORIDADES)
   // → nombre, a pedido explícito del usuario (antes era alfabético por cargo).
   filas.sort((a,b) =>
@@ -20800,7 +20812,8 @@ function _rptAutoridades() {
   const nEmpresas = new Set(filas.map(a => a.empresa)).size;
   const nVigentes = filas.filter(esVigente).length;
   const subt = (selEmp || 'Todas las empresas') + ' · ' +
-    (verHistorial ? 'historial completo' : 'autoridades vigentes');
+    (verHistorial ? 'historial completo' : 'autoridades vigentes') +
+    (ocultarSuplentes ? ' · sin suplentes' : '');
 
   // ── Tarjetas por empresa (en vez de una sola tabla de 4 columnas que
   // quedaba muy ancha y vacía cuando había pocas autoridades por fila) ──
