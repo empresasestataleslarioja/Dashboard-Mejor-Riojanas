@@ -17660,7 +17660,7 @@ function exportarFlujoExcel() {
   const btnPrint = document.createElement('button');
   btnPrint.textContent = '🖨 Imprimir';
   btnPrint.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
-  btnPrint.onclick = () => iframe.contentWindow.print();
+  btnPrint.onclick = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
 
   const btnClose = document.createElement('button');
   btnClose.textContent = '✕ Cerrar';
@@ -17831,7 +17831,7 @@ function _rptFlujoIndividual() {
   const btnP = document.createElement('button');
   btnP.textContent = '🖨 Imprimir';
   btnP.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
-  btnP.onclick = () => iframe.contentWindow.print();
+  btnP.onclick = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
   const btnC = document.createElement('button');
   btnC.textContent = '✕ Cerrar';
   btnC.style.cssText = 'padding:6px 14px;background:#333;color:#aaa;border:1px solid #555;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace';
@@ -20910,7 +20910,7 @@ function _rptAutoridades() {
   const btnPrint = document.createElement('button');
   btnPrint.textContent = '🖨 Imprimir';
   btnPrint.style.cssText = 'padding:6px 16px;background:#185fa5;color:#fff;border:none;border-radius:4px;font-size:9pt;cursor:pointer;font-family:monospace;font-weight:600';
-  btnPrint.onclick = () => iframe.contentWindow.print();
+  btnPrint.onclick = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
 
   const btnClose = document.createElement('button');
   btnClose.textContent = '✕ Cerrar';
@@ -24304,7 +24304,7 @@ function _informeEjecutivoRender(emp) {
   bClose.style.cssText = 'background:#333;color:#ccc;border:none;padding:5px 12px;font-family:monospace;font-size:9pt;border-radius:3px;cursor:pointer';
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'flex:1;border:none;width:100%;background:#fff';
-  bPrint.onclick = () => iframe.contentWindow.print();
+  bPrint.onclick = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
   bClose.onclick = () => overlay.remove();
   bar.appendChild(tit); bar.appendChild(bPrint); bar.appendChild(bClose);
   overlay.appendChild(bar); overlay.appendChild(iframe);
