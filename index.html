@@ -20465,13 +20465,16 @@ function _tokenCoincideParcial(t1, t2) {
   }
   return false;
 }
-// Fracción de las palabras del nombre MÁS CORTO que encuentran pareja (sin
-// reutilizar palabras) en el nombre más largo — 1 significa que todas las
-// palabras del más corto aparecen (igual o abreviado) en el más largo,
-// sin importar el orden. Se usa tanto para el match automático (umbral
-// alto) como para sugerir "candidato más parecido" en los que no llegan a
-// ese umbral, en vez de descartarlos en silencio como "sin coincidencia".
-function _similitudNombrePersona(a, b) {
+// Cantidad de palabras que encuentran pareja (sin reutilizar palabras,
+// igual o abreviada, sin importar el orden) entre dos nombres. Base tanto
+// del match automático como de las sugerencias — pedido explícito: de las
+// 3 o 4 palabras posibles de un "Apellido y Nombre" (apellido(s) + nombre(s)),
+// tienen que coincidir AL MENOS 2 para siquiera considerar una posible
+// coincidencia; una sola palabra en común (típicamente solo el apellido,
+// muy frecuente) no alcanza — antes una sola coincidencia ya generaba una
+// sugerencia, resultando en referencias demasiado amplias entre personas
+// distintas.
+function _coincidenciasNombrePersona(a, b) {
   const ta = _tokensNombrePersona(a), tb = _tokensNombrePersona(b);
   if (ta.length < 2 || tb.length < 2) return 0; // nunca matchear por una sola palabra
   const [chicos, grandes] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
@@ -20481,15 +20484,26 @@ function _similitudNombrePersona(a, b) {
     const idx = grandes.findIndex((g, i) => !usados.has(i) && _tokenCoincideParcial(t, g));
     if (idx >= 0) { usados.add(idx); matched++; }
   });
-  return matched / chicos.length;
+  return matched;
+}
+// Fracción de las palabras del nombre MÁS CORTO que encuentran pareja —
+// 1 significa que todas aparecen (igual o abreviadas) en el más largo.
+// Solo sirve para RANKEAR candidatos que ya cumplieron el mínimo de 2
+// coincidencias (ver _coincidenciasNombrePersona) — nunca para decidir si
+// hay o no coincidencia por sí sola.
+function _similitudNombrePersona(a, b) {
+  const ta = _tokensNombrePersona(a), tb = _tokensNombrePersona(b);
+  const chicoLen = Math.min(ta.length, tb.length);
+  if (chicoLen < 2) return 0;
+  return _coincidenciasNombrePersona(a, b) / chicoLen;
 }
 // Match automático (para completar el DNI sin pedir confirmación): exige
 // que TODAS las palabras del nombre más corto encuentren pareja — tolera
 // que falte un nombre intermedio (ej. "BOVEDA GUILLERMO" vs "BOVEDA
 // GUILLERMO GABRIEL"), que estén en otro orden, y que una esté abreviada
-// ("G." por "GABRIEL"). Lo que no llega a este umbral pero tiene alguna
-// similitud se ofrece como sugerencia para revisar a mano (ver
-// _similitudNombrePersona), nunca se auto-aplica.
+// ("G." por "GABRIEL"). Lo que no llega a este umbral pero tiene al menos
+// 2 coincidencias se ofrece como sugerencia para revisar a mano, nunca se
+// auto-aplica.
 function _mismoNombrePersona(a, b) {
   if (!a || !b) return false;
   return _similitudNombrePersona(a, b) >= 0.999;
@@ -21278,12 +21292,16 @@ function importarDNIsAutoridades(file) {
             // igual se busca el candidato más parecido en TODO el padrón,
             // para mostrarlo como sugerencia a revisar a mano en vez de un
             // "sin coincidencia" mudo que obliga a buscarlo línea por línea.
+            // Mínimo de 2 palabras en común para siquiera proponer un
+            // candidato (ver _coincidenciasNombrePersona) — entre los que
+            // cumplen ese mínimo, se queda con el de mejor proporción.
             let mejor = null, mejorSim = 0;
             DATA.autoridades.forEach(a => {
+              if (_coincidenciasNombrePersona(a.nombre, f.nombre) < 2) return;
               const sim = _similitudNombrePersona(a.nombre, f.nombre);
               if (sim > mejorSim) { mejorSim = sim; mejor = a; }
             });
-            sinCoincidencia.push(mejor && mejorSim >= 0.5
+            sinCoincidencia.push(mejor
               ? { ...f, sugerencia: mejor.nombre, sugerenciaCargo: mejor.cargo, sugerenciaEmpresa: mejor.empresa, sugerenciaDni: mejor.dni, sugerenciaHonorarios: mejor.honorarios, sugerenciaId: _ensureAutoridadId(mejor) }
               : f);
             return;
