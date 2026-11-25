@@ -12710,6 +12710,14 @@ function _parseMontoAR(str) {
   return isNaN(n) ? null : n;
 }
 
+// Deriva una key estable a partir de un label de rubro (mismo criterio que
+// usa el parser de Excel) — se usa para los rubros agregados a mano desde
+// el editor, que al crearse no tienen más que un id temporal interno.
+function _slugRubroKey(lbl) {
+  return (lbl || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 40);
+}
+
 function _claveFlujo(empresa, periodo, tipo) {
   // FIX 5: normalizar eliminando tildes y caracteres especiales
   const norm = s => (s || '').trim()
@@ -13311,6 +13319,22 @@ function parsearFlujoExcel(wb, XLSX) {
       const esRepeticionDeTotal = rubros.some(r2 =>
         r2.esTotal && r2.actual != null && Math.abs(Math.abs(r2.actual) - Math.abs(valTotalCalc)) < 0.5);
       if (esRepeticionDeTotal) continue;
+    }
+
+    // Evitar un rubro de DETALLE duplicado literal: mismo label (misma key,
+    // derivada del texto) y mismo importe que uno ya cargado en esta misma
+    // sección — algunos Excel repiten una fila completa en dos tablas/cajas
+    // distintas de la misma hoja (ej. Bodega Aminga, 3er cuatrimestre 2026:
+    // "Asignación financiera estatal" aparecía dos veces y duplicaba el
+    // TOTAL INGRESOS). A diferencia de "esRepeticionDeTotal" (que compara
+    // contra un TOTAL ya cargado), esto detecta la repetición de un mismo
+    // concepto de detalle consigo mismo.
+    if (!esTotal && (tipo === 'egreso' || tipo === 'ingreso')) {
+      const esDupDetalle = rubros.some(r2 =>
+        !r2.esTotal && r2.tipo === tipo && r2.key === key &&
+        ((r2.actual == null && valTotalCalc == null) ||
+         (r2.actual != null && valTotalCalc != null && Math.abs(r2.actual - valTotalCalc) < 0.5)));
+      if (esDupDetalle) continue;
     }
 
     rubros.push({
@@ -14046,18 +14070,39 @@ function guardarFlujoManual() {
       'total':       { tipo:'total',     esTotal:true,  nivel:0 },
       'resultado':   { tipo:'resultado', esTotal:true,  nivel:0 },
     };
-    rubrosFinales = Array.from(grid.querySelectorAll('input[data-key]')).map(inp => {
+    // Cada fila puede traer VARIOS inputs con el mismo data-key (uno por mes)
+    // en vez de uno solo con el importe agregado — agrupar antes de leer.
+    const porKey = new Map();
+    grid.querySelectorAll('input[data-key]').forEach(inp => {
       const key = inp.dataset.key;
+      if (!porKey.has(key)) porKey.set(key, []);
+      porKey.get(key).push(inp);
+    });
+    rubrosFinales = Array.from(porKey.entries()).map(([key, inputs]) => {
       const orig = fOriginal?.rubros.find(r => r.key === key);
-      // Leer tipo editado desde el select hermano si existe
-      const selTipo = inp.closest('div')?.querySelector('select[data-tipo-key]');
+      const row = inputs[0].closest('.fm-rubro-row');
+      const labelInp = row?.querySelector('input[data-label-key]');
+      const label = (labelInp?.value || '').trim() || orig?.label || key;
+      const selTipo = row?.querySelector('select[data-tipo-key]');
       const tipoVal = selTipo ? selTipo.value : null;
       const tipoDec = tipoVal ? (_DEC_TIPO[tipoVal] || { tipo: tipoVal, esTotal: false, nivel: 1 }) : null;
+      const tieneMeses = inputs.some(i => i.dataset.mes);
+      let actual, porMes;
+      if (tieneMeses) {
+        porMes = {};
+        inputs.forEach(i => { const v = _parseMontoAR(i.value); if (v != null) porMes[i.dataset.mes] = v; });
+        actual = Object.keys(porMes).length ? Object.values(porMes).reduce((s, v) => s + v, 0) : null;
+      } else {
+        actual = _parseMontoAR(inputs[0].value);
+        porMes = orig?.porMes || {};
+      }
+      // Rubro agregado a mano (key temporal "nuevo_...") → derivar una key
+      // estable del label, como la que tendría si viniera de un Excel.
+      const keyFinal = key.startsWith('nuevo_') ? (_slugRubroKey(label) || key) : key;
       return Object.assign(
-        { key, label: orig?.label || key, tipo: orig?.tipo || 'egreso',
+        { key: keyFinal, label, tipo: orig?.tipo || 'egreso',
           esTotal: orig?.esTotal ?? false, nivel: orig?.nivel ?? 1,
-          actual: _parseMontoAR(inp.value),
-          anterior: orig?.anterior ?? null, var_pct: null, porMes: orig?.porMes || {} },
+          actual, anterior: orig?.anterior ?? null, var_pct: null, porMes },
         tipoDec || {}
       );
     }).filter(r => r.actual !== null || r.anterior !== null);
@@ -15858,6 +15903,85 @@ function buildVistaIndividualFlujo(claveOverride) {
 }
 
 // ── Edición manual de flujo cargado ──────────────────────────────
+const TIPO_OPTS_EDIT = [
+  { val:'ingreso',     lbl:'Ingreso',             c:'#2ecc8a' },
+  { val:'ingreso|tot', lbl:'Total Ingresos',       c:'#47ffb4' },
+  { val:'egreso',      lbl:'Egreso',               c:'var(--text)' },
+  { val:'egreso|sub',  lbl:'Subtotal Egresos',     c:'#47e8ff' },
+  { val:'total',       lbl:'Total Egresos',        c:'var(--neg)' },
+  { val:'resultado',   lbl:'Resultado/Fondos',     c:'var(--y21)' },
+];
+function _rubroToTipoValEdit(r) {
+  if (r.tipo === 'resultado')             return 'resultado';
+  if (r.tipo === 'ingreso' && r.esTotal)  return 'ingreso|tot';
+  if (r.tipo === 'ingreso')               return 'ingreso';
+  if (r.tipo === 'total')                 return 'total';
+  if (r.tipo === 'egreso' && r.esTotal)   return 'egreso|sub';
+  return 'egreso';
+}
+// Arma una fila del editor de rubros: rótulo editable, tipo, y un input por
+// mes (o uno solo con el importe total si el flujo no tiene meses conocidos).
+function _fmFilaRubroHtml(r, key, mesesEdit) {
+  const curTipo = _rubroToTipoValEdit(r);
+  const tipoColor = r.tipo==='ingreso'?'#2ecc8a':r.tipo==='total'?'var(--neg)':r.tipo==='resultado'?'var(--y21)':'#47e8ff44';
+  const selOpts = TIPO_OPTS_EDIT.map(o =>
+    `<option value="${o.val}"${o.val===curTipo?' selected':''}>${o.lbl}</option>`
+  ).join('');
+  const _fmtEd = v => v == null ? '' : v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rowId = `fmrub_${key}`;
+  const montoInputs = mesesEdit.length
+    ? mesesEdit.map(m => `<input data-key="${key}" data-mes="${m}" type="text" inputmode="decimal"
+        value="${_fmtEd(r.porMes?.[m])}" placeholder="${m.slice(0,3)}"
+        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmRecalcFila('${rowId}')"
+        style="width:86px;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px;outline:none">`).join('')
+    : `<input data-key="${key}" type="text" inputmode="decimal"
+        value="${_fmtEd(r.actual)}" placeholder="Importe"
+        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');"
+        style="width:110px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
+        color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">`;
+  return `<div id="${rowId}" class="fm-rubro-row" style="display:flex;align-items:center;gap:5px;
+    border-left:2px solid ${tipoColor};padding:3px 6px;background:var(--s3);border-radius:3px;flex-wrap:wrap">
+    <button type="button" title="Eliminar rubro" onclick="document.getElementById('${rowId}').remove()"
+      style="background:none;border:none;color:var(--neg);cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0">🗑</button>
+    <input type="text" data-label-key="${key}" value="${r.label||''}" title="${r.label||''}" placeholder="Nombre del rubro"
+      style="width:150px;flex-shrink:0;padding:2px 4px;background:var(--s2);border:1px solid var(--bd2);
+      color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:3px">
+    <select data-tipo-key="${key}" style="width:95px;flex-shrink:0;padding:3px 4px;background:var(--s2);
+      border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:8px;border-radius:3px">
+      ${selOpts}
+    </select>
+    <div style="display:flex;gap:3px;flex-wrap:wrap">${montoInputs}</div>
+    <span class="fm-rubro-total" data-total-for="${key}" style="margin-left:auto;min-width:95px;
+      text-align:right;font-size:8.5px;color:var(--dim);font-family:var(--mono)">${_fmtEd(r.actual) || '—'}</span>
+  </div>`;
+}
+let _fmNuevoRubroSeq = 0;
+function _fmAgregarRubro() {
+  const grid = document.getElementById('fm-rubros-grid');
+  if (!grid) return;
+  let mesesEdit = [];
+  try { mesesEdit = JSON.parse(grid.dataset.mesesEdit || '[]'); } catch(e) {}
+  const key = `nuevo_${Date.now()}_${_fmNuevoRubroSeq++}`;
+  const html = _fmFilaRubroHtml({ label:'', tipo:'egreso', esTotal:false, actual:null, porMes:{} }, key, mesesEdit);
+  const addBtn = grid.querySelector('button[onclick="_fmAgregarRubro()"]');
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const row = wrap.firstElementChild;
+  if (addBtn) grid.insertBefore(row, addBtn); else grid.appendChild(row);
+  row.querySelector('input[data-label-key]')?.focus();
+}
+// Recalcula en vivo el total mostrado a la derecha de una fila mientras se
+// editan los importes por mes (el importe final que se guarda es la suma).
+function _fmRecalcFila(rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const total = Array.from(row.querySelectorAll('input[data-mes]'))
+    .reduce((s, i) => s + (_parseMontoAR(i.value) || 0), 0);
+  const span = row.querySelector('.fm-rubro-total');
+  if (span) span.textContent = total ? total.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+}
+
 function editarFlujo(clave) {
   const f = DATA.flujos[clave];
   if (!f) return;
@@ -15893,48 +16017,23 @@ function editarFlujo(clave) {
     if (idx !== undefined) _fmToggleMes(idx);
   });
 
-  const TIPO_OPTS_EDIT = [
-    { val:'ingreso',     lbl:'Ingreso',             c:'#2ecc8a' },
-    { val:'ingreso|tot', lbl:'Total Ingresos',       c:'#47ffb4' },
-    { val:'egreso',      lbl:'Egreso',               c:'var(--text)' },
-    { val:'egreso|sub',  lbl:'Subtotal Egresos',     c:'#47e8ff' },
-    { val:'total',       lbl:'Total Egresos',        c:'var(--neg)' },
-    { val:'resultado',   lbl:'Resultado/Fondos',     c:'var(--y21)' },
-  ];
-  const _rubroToTipoValEdit = r => {
-    if (r.tipo === 'resultado')             return 'resultado';
-    if (r.tipo === 'ingreso' && r.esTotal)  return 'ingreso|tot';
-    if (r.tipo === 'ingreso')               return 'ingreso';
-    if (r.tipo === 'total')                 return 'total';
-    if (r.tipo === 'egreso' && r.esTotal)   return 'egreso|sub';
-    return 'egreso';
-  };
-
+  // Edición por mes: si el flujo tiene meses conocidos, cada rubro se edita
+  // columna por columna (mismas columnas que la tabla de detalle) en vez de
+  // un único importe agregado — permite corregir directamente casos como un
+  // rubro duplicado (basta eliminar la fila sobrante) o un mes al que le
+  // falta el Imp. Cred/Déb, sin depender de volver a importar el Excel.
+  const mesesEdit = (f.meses && f.meses.length)
+    ? f.meses
+    : [...new Set(f.rubros.flatMap(r => Object.keys(r.porMes || {})))];
   const grid = document.getElementById('fm-rubros-grid');
   if (grid) {
-    grid.innerHTML = f.rubros.map(r => {
-      const curTipo = _rubroToTipoValEdit(r);
-      const tipoColor = r.tipo==='ingreso'?'#2ecc8a':r.tipo==='total'?'var(--neg)':r.tipo==='resultado'?'var(--y21)':'#47e8ff44';
-      const selOpts = TIPO_OPTS_EDIT.map(o =>
-        `<option value="${o.val}"${o.val===curTipo?' selected':''}>${o.lbl}</option>`
-      ).join('');
-      return `<div style="display:flex;flex-direction:column;gap:2px;border-left:2px solid ${tipoColor};padding-left:6px">
-        <label style="font-size:8px;color:var(--dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px" title="${r.label}">${r.label}</label>
-        <div style="display:flex;gap:4px;align-items:center">
-          <input data-key="${r.key}" type="text" inputmode="decimal"
-            value="${r.actual != null ? r.actual.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : ''}"
-            placeholder="Importe"
-            style="width:110px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
-            color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none"
-            oninput="this.value=this.value.replace(/[^\d.,-]/g,'');">
-          <select data-tipo-key="${r.key}"
-            style="flex:1;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
-            color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px">
-            ${selOpts}
-          </select>
-        </div>
-      </div>`;
-    }).join('');
+    grid.dataset.mesesEdit = JSON.stringify(mesesEdit);
+    grid.style.cssText = 'display:flex;flex-direction:column;gap:5px;margin-bottom:12px';
+    grid.innerHTML = f.rubros.map(r => _fmFilaRubroHtml(r, r.key, mesesEdit)).join('') +
+      `<button type="button" onclick="_fmAgregarRubro()"
+        style="align-self:flex-start;margin-top:2px;padding:4px 10px;background:none;
+        border:1px dashed var(--bd2);color:var(--acc);font-family:var(--mono);font-size:8.5px;
+        border-radius:4px;cursor:pointer">+ Agregar rubro</button>`;
   }
 
   pm.dataset.editandoClave = clave;
