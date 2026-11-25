@@ -5630,6 +5630,10 @@ Se calcula automáticamente desde tabla INDEC+REM cuando el flujo tiene meses y 
 
     </div>
 
+    <!-- Alerta: flujos proyectados no presentados dentro del plazo (30 días
+         antes del inicio del cuatrimestre) — ver _flujosNoPresentadosUpdate -->
+    <div id="flujos-alerta-no-presentados" style="display:none"></div>
+
     <!-- ── Lista de flujos registrados ────────────────────────── -->
     <div class="card">
       <div class="card-hd">
@@ -14137,6 +14141,110 @@ function _absInicioPeriodo(p) {
   return p.anio * 12 + m;
 }
 
+// ── Alerta: flujos PROYECTADOS no presentados en plazo ──────────────
+// Pedido explícito: los flujos son cuatrimestrales (Ene–Abr, May–Ago,
+// Sep–Dic) y el proyectado de cada uno debería cargarse hasta 30 días
+// antes de que arranque ese cuatrimestre. Solo se evalúan empresas que ya
+// tienen historial de carga por cuatrimestre (nunca se exige a una
+// empresa que nunca presentó ninguno, ni se evalúan períodos anteriores
+// al primero que esa empresa presentó) — mismo criterio conservador que
+// el resto de las alertas de cobertura del dashboard.
+//
+// _parsePeriodoFlujoStr (de más arriba) no alcanza acá: exige la palabra
+// completa "cuatrimestre" en el texto, pero el período real que queda
+// guardado casi nunca la trae — el importador de Excel guarda "3° 2026"
+// (etiqueta CUATRIMESTRE: ya consumida aparte, ver cuatriStrV14) o
+// "ENE-FEB-MAR-ABR 2026" (meses unidos) cuando no hay esa etiqueta, y la
+// carga manual sugiere "ENE-ABR 2026". Por eso esta alerta usa su propio
+// parser, más permisivo, pensado solo para reconocer a qué cuatrimestre
+// corresponde cualquiera de esos formatos reales.
+const DIAS_ANTICIPO_FLUJO = 30;
+const FLUJO_CUAT_LBL = {1:'Ene–Abr', 2:'May–Ago', 3:'Sep–Dic'};
+function _parsePeriodoCuatrimestre(per) {
+  const s = (per || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const anioM = s.match(/20\d\d/);
+  if (!anioM) return null;
+  const anio = parseInt(anioM[0]);
+  // "3° CUATRIMESTRE", "1ER CUATRIMESTRE", "2DO CUATRIM", etc.
+  let m = s.match(/([1-3])\s*(?:ER|DO|RO|TO)?\s*[°O]?\s*CUATRIM/);
+  if (m) return { anio, num: parseInt(m[1]) };
+  // Etiqueta bare "N° AAAA" / "N AAAA" (la palabra CUATRIMESTRE ya se leyó
+  // aparte como etiqueta en el Excel — ver cuatriStrV14 en el parser).
+  m = s.match(/^([1-3])\s*[°O]?\s*20\d\d$/);
+  if (m) return { anio, num: parseInt(m[1]) };
+  // Rango de meses ("ENE-ABR 2026", "Enero a Abril 2027"): el mes más
+  // temprano mencionado indica a qué grupo de 4 meses pertenece (Ene-Abr=1,
+  // May-Ago=2, Sep-Dic=3). Se exige al MENOS DOS meses distintos para no
+  // confundir con una carga MENSUAL (ej. "Enero 2026" por sí solo no cuenta).
+  const MESES = [
+    ['ENERO','ENE'], ['FEBRERO','FEB'], ['MARZO','MAR'], ['ABRIL','ABR'],
+    ['MAYO','MAY'], ['JUNIO','JUN'], ['JULIO','JUL'], ['AGOSTO','AGO'],
+    ['SEPTIEMBRE','SETIEMBRE','SEP','SET'], ['OCTUBRE','OCT'], ['NOVIEMBRE','NOV'], ['DICIEMBRE','DIC'],
+  ];
+  const menciones = [];
+  MESES.forEach((alts, i) => {
+    let mejorPos = Infinity;
+    alts.forEach(a => { const p = s.indexOf(a); if (p >= 0 && p < mejorPos) mejorPos = p; });
+    if (mejorPos < Infinity) menciones.push({ i, p: mejorPos });
+  });
+  if (menciones.length < 2) return null;
+  menciones.sort((a, b) => a.p - b.p);
+  return { anio, num: Math.floor(menciones[0].i / 4) + 1 };
+}
+function _detectarFlujosProyectadosFaltantes() {
+  const hoy = new Date();
+  const todosFlujos = Object.values(DATA.flujos || {});
+  const empresas = [...new Set(todosFlujos.map(f => f.empresa))];
+  const faltantes = [];
+  empresas.forEach(emp => {
+    if (empresasInactivas[emp]) return;
+    const flujosEmp = todosFlujos.filter(f => f.empresa === emp);
+    const periodosCuat = flujosEmp
+      .map(f => _parsePeriodoCuatrimestre(f.periodo))
+      .filter(Boolean);
+    if (!periodosCuat.length) return; // esta empresa no usa el esquema de cuatrimestres — no se evalúa
+    const abs = p => p.anio * 12 + (p.num - 1) * 4 + 1;
+    const primerAbs = Math.min(...periodosCuat.map(abs));
+    const anioIni = Math.floor((primerAbs - 1) / 12);
+    for (let anio = anioIni; anio <= hoy.getFullYear(); anio++) {
+      for (let num = 1; num <= 3; num++) {
+        if (abs({ anio, num }) < primerAbs) continue;
+        const inicio = new Date(anio, (num - 1) * 4, 1);
+        const deadline = new Date(inicio);
+        deadline.setDate(deadline.getDate() - DIAS_ANTICIPO_FLUJO);
+        if (hoy < deadline) continue; // el plazo todavía no venció
+        const presentado = flujosEmp.some(f => {
+          const p = _parsePeriodoCuatrimestre(f.periodo);
+          return p && p.anio === anio && p.num === num && (f.tipo || 'proyectado') === 'proyectado';
+        });
+        if (!presentado) faltantes.push({ empresa: emp, anio, num, deadline });
+      }
+    }
+  });
+  faltantes.sort((a, b) =>
+    a.empresa.localeCompare(b.empresa, 'es') || (a.anio * 12 + a.num) - (b.anio * 12 + b.num));
+  return faltantes;
+}
+
+function _flujosNoPresentadosUpdate() {
+  const el = document.getElementById('flujos-alerta-no-presentados');
+  if (!el) return;
+  const faltantes = _detectarFlujosProyectadosFaltantes();
+  if (!faltantes.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const _fmtDia = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const items = faltantes.map(x =>
+    `${x.empresa} — ${FLUJO_CUAT_LBL[x.num]} ${x.anio} <span style="opacity:.7">(plazo venció el ${_fmtDia(x.deadline)})</span>`);
+  el.style.display = '';
+  el.innerHTML = `<div class="card" style="margin-bottom:14px;padding:10px 14px;border:1px solid #b45309;background:#2a1a00">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="color:#fbbf24;font-size:12pt;flex-shrink:0">⚠</span>
+      <strong style="color:#fbbf24;font-size:10px;font-family:var(--mono)">${faltantes.length} flujo${faltantes.length!==1?'s':''} proyectado${faltantes.length!==1?'s':''} sin presentar</strong>
+    </div>
+    <div style="font-size:9px;color:#dca75e;font-family:var(--mono);line-height:1.9">${items.join('<br>')}</div>
+    <div style="font-size:8px;color:#a8762e;margin-top:6px">Plazo: el proyectado de cada cuatrimestre (Ene–Abr, May–Ago, Sep–Dic) debe cargarse hasta 30 días antes de que empiece. Solo se evalúan empresas con historial de carga por cuatrimestre.</div>
+  </div>`;
+}
+
 // ── GUARDAR datos del flujo (core) ────────────────────────────────
 function _guardarFlujoData(data) {
   // Usar rubrosArr para evitar colisión con el objeto global `rubros` (empresa→sector)
@@ -14220,6 +14328,7 @@ function _guardarFlujoData(data) {
 // ── BUILD PRINCIPAL ────────────────────────────────────────────────
 function buildFlujos() {
   _poblarSelectoresFlujos();
+  try { _flujosNoPresentadosUpdate(); } catch(e) {}
   // Agregar headers a la tabla aunque no haya datos
   const tbl = document.getElementById('tbl-flujos-lista');
   if (tbl && !Object.keys(DATA.flujos || {}).length) {
