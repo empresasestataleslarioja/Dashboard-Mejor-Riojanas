@@ -5464,8 +5464,10 @@ self.onmessage = async (e) => {
       </div>
       <div id="fm-rubros-grid" style="display:grid;grid-template-columns:repeat(3,1fr);
         gap:8px;margin-bottom:12px"></div>
-      <div id="fm-impcd-estimado" style="display:none;margin-bottom:12px;padding:8px 10px;
+      <div id="fm-impcd-estimado" style="display:none;margin-bottom:8px;padding:8px 10px;
         background:rgba(232,200,74,.06);border:1px solid rgba(232,200,74,.25);border-radius:5px"></div>
+      <div id="fm-resultado-estimado" style="display:none;margin-bottom:12px;padding:8px 10px;
+        background:rgba(255,71,102,.05);border:1px solid rgba(255,71,102,.22);border-radius:5px"></div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="guardarFlujoManual()"
           style="padding:6px 18px;background:rgba(71,255,180,.15);border:1.5px solid #2ecc8a;
@@ -14025,6 +14027,8 @@ function toggleFlujoManual() {
   }
   const impEst = document.getElementById('fm-impcd-estimado');
   if (impEst) { impEst.style.display = 'none'; impEst.innerHTML = ''; }
+  const resEst = document.getElementById('fm-resultado-estimado');
+  if (resEst) { resEst.style.display = 'none'; resEst.innerHTML = ''; }
 }
 
 function guardarFlujoManual() {
@@ -15153,7 +15157,11 @@ function _esIngExcluido(lbl) {
   const u = (lbl||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   if (u.includes('SUBSIDIO') || /TRANSFERENCIA.{0,12}ESTADO/.test(u) ||
       /APORTE.{0,12}ESTADO/.test(u) || /COBRO.{0,12}SUBSIDIO/.test(u) ||
-      /ASISTENCIA.{0,15}(FINANCIER|ESTADO)/.test(u)) return true;
+      /ASISTENCIA.{0,15}(FINANCIER|ESTADO)/.test(u) ||
+      // "Asignación financiera estatal" (caso real: Bodega y Fincas de
+      // Aminga) — fondos que da el Estado, mismo criterio que subsidios y
+      // transferencias: no es venta propia de la empresa.
+      /ASIGNACION.{0,20}(FINANCIER|ESTATAL)/.test(u)) return true;
   // Saldos de OP / órdenes de pago / remesas — no son ingresos de explotación
   if (/SALDO.{0,6}OP/.test(u) || /ORDEN(ES)?.{0,6}(DE.{0,4})?PAGO/.test(u) ||
       u.includes('OP VIGENTE') || u.includes('SALDO INICIAL') || u.includes('SALDO ANTERIOR')) return true;
@@ -15938,23 +15946,23 @@ function _fmFilaRubroHtml(r, key, mesesEdit) {
   const montoInputs = mesesEdit.length
     ? mesesEdit.map(m => `<input data-key="${key}" data-mes="${m}" type="text" inputmode="decimal"
         value="${_fmtEd(r.porMes?.[m])}" placeholder="${m.slice(0,3)}"
-        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmRecalcFila('${rowId}');_fmActualizarImpEstimado()"
+        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmRecalcFila('${rowId}');_fmActualizarEstimados()"
         style="width:86px;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
         color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px;outline:none">`).join('')
     : `<input data-key="${key}" type="text" inputmode="decimal"
         value="${_fmtEd(r.actual)}" placeholder="Importe"
-        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmActualizarImpEstimado()"
+        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmActualizarEstimados()"
         style="width:110px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
         color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">`;
   return `<div id="${rowId}" class="fm-rubro-row" style="display:flex;align-items:center;gap:5px;
     border-left:2px solid ${tipoColor};padding:3px 6px;background:var(--s3);border-radius:3px;flex-wrap:wrap">
-    <button type="button" title="Eliminar rubro" onclick="document.getElementById('${rowId}').remove();_fmActualizarImpEstimado()"
+    <button type="button" title="Eliminar rubro" onclick="document.getElementById('${rowId}').remove();_fmActualizarEstimados()"
       style="background:none;border:none;color:var(--neg);cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0">🗑</button>
     <input type="text" data-label-key="${key}" value="${r.label||''}" title="${r.label||''}" placeholder="Nombre del rubro"
-      onchange="_fmActualizarImpEstimado()"
+      onchange="_fmActualizarEstimados()"
       style="width:150px;flex-shrink:0;padding:2px 4px;background:var(--s2);border:1px solid var(--bd2);
       color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:3px">
-    <select data-tipo-key="${key}" onchange="_fmActualizarImpEstimado()"
+    <select data-tipo-key="${key}" onchange="_fmActualizarEstimados()"
       style="width:95px;flex-shrink:0;padding:3px 4px;background:var(--s2);
       border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:8px;border-radius:3px">
       ${selOpts}
@@ -16000,7 +16008,14 @@ function _fmFilaInfo(row) {
   const label = labelInp ? labelInp.value : '';
   const selTipo = row.querySelector('select[data-tipo-key]');
   const tipoVal = selTipo ? selTipo.value : 'egreso';
-  return { label, esIngresoDet: tipoVal === 'ingreso', esEgresoDet: tipoVal === 'egreso' };
+  return { label, esIngresoDet: tipoVal === 'ingreso', esEgresoDet: tipoVal === 'egreso', esResultado: tipoVal === 'resultado' };
+}
+// Dispara ambos recálculos en vivo (Imp. Cred/Déb y Resultado/Fondos) ante
+// cualquier cambio en los rubros — ambos dependen de los mismos ingresos y
+// egresos editados, y el resultado además depende del imp. cred/déb.
+function _fmActualizarEstimados() {
+  _fmActualizarImpEstimado();
+  _fmActualizarResultadoEstimado();
 }
 function _fmSumarIngEgr(grid, mesesEdit, excluirRow) {
   const sumIng = {}, sumEgr = {};
@@ -16092,7 +16107,90 @@ function _fmAplicarImpEstimado() {
     const est = Math.abs(totIng - totEgr) * 0.012;
     if (inp) inp.value = est ? est.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
   }
-  _fmActualizarImpEstimado();
+  _fmActualizarEstimados();
+}
+
+// ── Recálculo en vivo del Resultado Neto / Fondos solicitados ───────────
+// Mismo problema que el Imp. Cred/Déb: si el flujo trae un rubro explícito
+// de tipo "Resultado/Fondos" (ej. "Fondos solicitados" tal como lo declaró
+// el Excel), ese valor queda congelado aunque se editen los ingresos o
+// egresos a mano — la tarjeta de arriba sigue mostrando el importe viejo,
+// desalineado del detalle. Recalcula subtotal (ingresos − egresos) menos
+// el Imp. Cred/Déb vigente (el rubro real si existe, o el 1,2% estimado) y
+// ofrece ACTUALIZAR el rubro ya cargado — nunca crear uno nuevo, por el
+// mismo motivo que el Imp. Cred/Déb: si no hay un rubro de resultado
+// explícito, la vista de detalle ya calcula el resultado neto sola.
+function _fmBuscarFilaResultado(grid) {
+  return Array.from(grid.querySelectorAll('.fm-rubro-row'))
+    .find(row => _fmFilaInfo(row).esResultado);
+}
+function _fmActualizarResultadoEstimado() {
+  const grid = document.getElementById('fm-rubros-grid');
+  const out = document.getElementById('fm-resultado-estimado');
+  if (!grid || !out) return;
+  const resRow = _fmBuscarFilaResultado(grid);
+  if (!grid.querySelectorAll('.fm-rubro-row').length || !resRow) {
+    out.style.display = 'none'; out.innerHTML = ''; return;
+  }
+  let mesesEdit = [];
+  try { mesesEdit = JSON.parse(grid.dataset.mesesEdit || '[]'); } catch(e) {}
+  const impRow = _fmBuscarFilaImpCD(grid);
+  const { sumIng, sumEgr, totIng, totEgr } = _fmSumarIngEgr(grid, mesesEdit, impRow || resRow);
+  const _fmt = v => v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const _signo = v => v < 0 ? `($ ${_fmt(Math.abs(v))})` : `$ ${_fmt(v)}`;
+  let detalle;
+  if (mesesEdit.length) {
+    const impPorMes = impRow
+      ? mesesEdit.map(m => { const i = Array.from(impRow.querySelectorAll('input[data-mes]')).find(x=>x.dataset.mes===m); return Math.abs(_parseMontoAR(i?.value) || 0); })
+      : mesesEdit.map(m => Math.abs((sumIng[m]||0) - (sumEgr[m]||0)) * 0.012);
+    const resPorMes = mesesEdit.map((m,i) => (sumIng[m]||0) - (sumEgr[m]||0) - impPorMes[i]);
+    detalle = mesesEdit.map((m,i) => `${m.slice(0,3)}: ${_signo(resPorMes[i])}`).join('  ·  ') +
+      `  ·  <strong>Total: ${_signo(resPorMes.reduce((s,v)=>s+v,0))}</strong>`;
+  } else {
+    const impVal = impRow
+      ? Math.abs(_parseMontoAR(impRow.querySelector('input[data-key]')?.value) || 0)
+      : Math.abs(totIng - totEgr) * 0.012;
+    detalle = `<strong>${_signo(totIng - totEgr - impVal)}</strong>`;
+  }
+  out.style.display = '';
+  out.innerHTML = `<div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">
+      ↻ Resultado Neto / Fondos solicitados recalculado (ingresos − egresos − Imp. Cred/Déb)
+    </div>
+    <div style="font-size:9px;color:var(--neg);font-family:var(--mono);line-height:1.6">${detalle}</div>
+    <button type="button" onclick="_fmAplicarResultadoEstimado()"
+      style="margin-top:5px;padding:3px 10px;background:none;border:1px solid var(--neg);
+      color:var(--neg);font-family:var(--mono);font-size:8px;border-radius:4px;cursor:pointer">
+      ↻ Actualizar el rubro cargado
+    </button>`;
+}
+function _fmAplicarResultadoEstimado() {
+  const grid = document.getElementById('fm-rubros-grid');
+  if (!grid) return;
+  const resRow = _fmBuscarFilaResultado(grid);
+  if (!resRow) return; // nunca crea un rubro nuevo — solo actualiza uno ya cargado
+  let mesesEdit = [];
+  try { mesesEdit = JSON.parse(grid.dataset.mesesEdit || '[]'); } catch(e) {}
+  const impRow = _fmBuscarFilaImpCD(grid);
+  const { sumIng, sumEgr, totIng, totEgr } = _fmSumarIngEgr(grid, mesesEdit, impRow || resRow);
+  if (mesesEdit.length) {
+    resRow.querySelectorAll('input[data-mes]').forEach(i => {
+      const m = i.dataset.mes;
+      const impMes = impRow
+        ? Math.abs(_parseMontoAR(Array.from(impRow.querySelectorAll('input[data-mes]')).find(x=>x.dataset.mes===m)?.value) || 0)
+        : Math.abs((sumIng[m]||0) - (sumEgr[m]||0)) * 0.012;
+      const resVal = (sumIng[m]||0) - (sumEgr[m]||0) - impMes;
+      i.value = resVal ? resVal.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+    });
+    _fmRecalcFila(resRow.id);
+  } else {
+    const impVal = impRow
+      ? Math.abs(_parseMontoAR(impRow.querySelector('input[data-key]')?.value) || 0)
+      : Math.abs(totIng - totEgr) * 0.012;
+    const resVal = totIng - totEgr - impVal;
+    const inp = resRow.querySelector('input[data-key]');
+    if (inp) inp.value = resVal ? resVal.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+  }
+  _fmActualizarEstimados();
 }
 
 function editarFlujo(clave) {
@@ -16147,7 +16245,7 @@ function editarFlujo(clave) {
         style="align-self:flex-start;margin-top:2px;padding:4px 10px;background:none;
         border:1px dashed var(--bd2);color:var(--acc);font-family:var(--mono);font-size:8.5px;
         border-radius:4px;cursor:pointer">+ Agregar rubro</button>`;
-    _fmActualizarImpEstimado();
+    _fmActualizarEstimados();
   }
 
   pm.dataset.editandoClave = clave;
