@@ -16542,9 +16542,36 @@ function _ordenarMerged(merged) {
     if (t === 'resultado')        return 5; // resultado (se reemplaza por computed)
     return 6;
   };
-  return merged.map((r, i) => [r, i])
+  const ordenado = merged.map((r, i) => [r, i])
     .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
     .map(([r]) => r);
+
+  // Pedido explícito: SAC debe quedar inmediatamente después de Sueldos, y
+  // Cargas Sociales SAC inmediatamente después de Cargas Sociales — en el
+  // Excel de origen suelen venir separados por otros conceptos intermedios.
+  // Nunca mueve un rubro fuera de su propio grupo (rank): si por algún
+  // motivo quedaran en grupos distintos (ej. uno es total y el otro no),
+  // no se reordena nada.
+  const _normLbl = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _lbl = r => (r.rA || r.rB)?.label || '';
+  const _esSAC = r => { const u = _normLbl(_lbl(r)); return !u.includes('CARGA') && (u.includes('SAC') || u.includes('ANUAL COMPLEMENTARIO')); };
+  const _esSueldos = r => { const u = _normLbl(_lbl(r)); return u.includes('SUELDO') && !u.includes('CARGA') && !_esSAC(r); };
+  const _esCargasSocialesSAC = r => { const u = _normLbl(_lbl(r)); return u.includes('CARGA') && (u.includes('SAC') || u.includes('ANUAL COMPLEMENTARIO')); };
+  const _esCargasSociales = r => { const u = _normLbl(_lbl(r)); return u.includes('CARGA') && u.includes('SOCIAL') && !_esCargasSocialesSAC(r); };
+  const _moverDespuesDe = (esAncla, esMover) => {
+    const idxAncla = ordenado.findIndex(esAncla);
+    if (idxAncla < 0) return;
+    const idxMover = ordenado.findIndex((r, i) => i !== idxAncla && esMover(r));
+    if (idxMover < 0 || idxMover === idxAncla + 1) return;
+    if (rank(ordenado[idxMover]) !== rank(ordenado[idxAncla])) return;
+    const [item] = ordenado.splice(idxMover, 1);
+    const nuevoIdxAncla = ordenado.findIndex(esAncla);
+    ordenado.splice(nuevoIdxAncla + 1, 0, item);
+  };
+  _moverDespuesDe(_esSueldos, _esSAC);
+  _moverDespuesDe(_esCargasSociales, _esCargasSocialesSAC);
+
+  return ordenado;
 }
 
 // Detecta rubros de Imp. Crédito/Débito bancario por label
@@ -17984,11 +18011,6 @@ function exportarFlujoExcel() {
       <div class="lbl">${_tagMetrica} EGRESOS</div>
       <div class="val" style="color:${T.neg}">${C(egrA)}</div>
     </div>
-    ${ipc&&necA?`<div class="kpi-card" style="border-top-color:${T.acc};border-left:3px solid ${T.acc}">
-      <div class="lbl">PROYECCIÓN PRÓX. PERÍODO</div>
-      <div class="val" style="color:${T.acc};font-size:15px">${C(necA*(1+ipc/100))}</div>
-      <div class="note">si IPC se mantiene en ${ipc}%</div>
-    </div>`:''}
   </div>
 
   <!-- COSTO LABORAL -->
