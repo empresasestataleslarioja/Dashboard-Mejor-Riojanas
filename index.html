@@ -14371,6 +14371,11 @@ function _guardarFlujoData(data) {
   try { syncToCloud('Guardado de flujo'); } catch(e) { try { _dispararAutoSync(); } catch(e2) {} }
   _poblarSelectoresFlujos();
   buildFlujos();
+  // Si la vista de detalle (tarjetas + tabla por mes) está abierta mostrando
+  // justamente este flujo, refrescarla — si no, queda con los valores de
+  // ANTES de la edición (ej. Imp. Cred/Déb o Resultado Neto recién
+  // actualizados en el editor no se ven reflejados ahí hasta reabrirla).
+  try { if (window._flujoActualClave === clave) buildVistaIndividualFlujo(clave); } catch(e) {}
 
   const msg = document.getElementById('flujo-msg');
   if (msg) {
