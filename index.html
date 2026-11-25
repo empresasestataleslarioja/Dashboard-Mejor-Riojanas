@@ -16047,28 +16047,39 @@ function _fmActualizarImpEstimado() {
   } else {
     detalle = `<strong>$ ${_fmt(Math.abs(totIng - totEgr) * 0.012)}</strong>`;
   }
+  // Si el flujo NO tiene un rubro propio de Imp. Cred/Déb, no se ofrece
+  // crear uno: ese caso ya lo cubre la fórmula dinámica del 1,2% que la
+  // vista de detalle aplica automáticamente (_calcResultadoNeto/_mesImp),
+  // recalculada en el momento a partir de los ingresos/egresos vigentes —
+  // guardar acá un importe fijo sería una segunda fuente para el mismo
+  // dato, exactamente la duplicación de impuesto que ya se corrigió antes
+  // en esta misma vista (ver comentario en _mesImp). Solo tiene sentido
+  // actualizar un importe cuando YA existe un rubro cargado (típicamente
+  // un Imp. Cred/Déb real, tomado del extracto bancario al importar) y se
+  // modificó algún ingreso/egreso a mano en el dashboard.
   out.style.display = '';
-  out.innerHTML = `<div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">
-      ↻ Imp. Cred/Déb recalculado (1,2% s/ |ingresos − egresos|)${impRow ? '' : ' — todavía no hay un rubro cargado para este concepto'}
-    </div>
-    <div style="font-size:9px;color:#e8c84a;font-family:var(--mono);line-height:1.6">${detalle}</div>
-    <button type="button" onclick="_fmAplicarImpEstimado()"
-      style="margin-top:5px;padding:3px 10px;background:none;border:1px solid #e8c84a66;
-      color:#e8c84a;font-family:var(--mono);font-size:8px;border-radius:4px;cursor:pointer">
-      ${impRow ? '↻ Aplicar al rubro cargado' : '+ Crear rubro con este valor'}
-    </button>`;
+  out.innerHTML = impRow
+    ? `<div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">
+        ↻ Imp. Cred/Déb recalculado (1,2% s/ |ingresos − egresos|)
+      </div>
+      <div style="font-size:9px;color:#e8c84a;font-family:var(--mono);line-height:1.6">${detalle}</div>
+      <button type="button" onclick="_fmAplicarImpEstimado()"
+        style="margin-top:5px;padding:3px 10px;background:none;border:1px solid #e8c84a66;
+        color:#e8c84a;font-family:var(--mono);font-size:8px;border-radius:4px;cursor:pointer">
+        ↻ Actualizar el rubro cargado
+      </button>`
+    : `<div style="font-size:8px;color:var(--dim);font-family:var(--mono)">
+        Este flujo no tiene un rubro propio de Imp. Cred/Déb — se calcula automáticamente
+        (1,2% s/ |ingresos − egresos|) al mostrar el detalle, sin necesidad de cargarlo.
+      </div>`;
 }
 function _fmAplicarImpEstimado() {
   const grid = document.getElementById('fm-rubros-grid');
   if (!grid) return;
   let mesesEdit = [];
   try { mesesEdit = JSON.parse(grid.dataset.mesesEdit || '[]'); } catch(e) {}
-  let impRow = _fmBuscarFilaImpCD(grid);
-  if (!impRow) {
-    impRow = _fmAgregarRubro();
-    impRow.querySelector('input[data-label-key]').value = 'IMP. SOBRE CRÉDITO/DÉBITO (1,2%)';
-    impRow.querySelector('select[data-tipo-key]').value = 'egreso';
-  }
+  const impRow = _fmBuscarFilaImpCD(grid);
+  if (!impRow) return; // nunca crea un rubro nuevo — solo actualiza uno ya cargado
   const { sumIng, sumEgr, totIng, totEgr } = _fmSumarIngEgr(grid, mesesEdit, impRow);
   if (mesesEdit.length) {
     impRow.querySelectorAll('input[data-mes]').forEach(i => {
