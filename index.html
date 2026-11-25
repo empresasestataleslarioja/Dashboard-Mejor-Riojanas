@@ -5936,6 +5936,14 @@ function ocultarLogin() {
   } catch(e) {}
   // Aplicar modo solo lectura si corresponde
   applyReadonlyMode();
+  // Alerta de flujos proyectados no presentados — se evalúa acá para que
+  // la vea cada usuario al loguearse y en cada dispositivo donde entre
+  // (sesión nueva o sesión ya vigente retomada), no solo quien entra al
+  // módulo de Flujos de Fondos. Con un pequeño delay: los datos locales
+  // recién terminan de cargarse ~40ms después del arranque del dashboard
+  // (ver loadDataFromLocalCache más abajo), antes de eso DATA.flujos
+  // puede estar vacío.
+  setTimeout(() => { try { _avisoFlujosAlLoguear(); } catch(e) {} }, 700);
 }
 
 function cerrarSesion() {
@@ -50002,9 +50010,61 @@ setTimeout(() => {
 <!-- ══ MODO PRESENTACIÓN ════════════════════════════════ -->
 <!-- barra modo presentación eliminada -->
 
+<!-- ══ AVISO: flujos proyectados sin presentar (al loguearse) ══════ -->
+<div id="aviso-flujos-login" style="display:none;position:fixed;top:14px;left:50%;transform:translateX(-50%);
+  z-index:9000;max-width:560px;width:calc(100% - 28px);background:#2a1a00;border:1px solid #b45309;
+  border-radius:8px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:flex-start;gap:10px">
+    <span style="color:#fbbf24;font-size:16px;flex-shrink:0;line-height:1">⚠</span>
+    <div style="flex:1;min-width:0">
+      <div id="aviso-flujos-login-titulo" style="font-size:10px;font-weight:700;color:#fbbf24;font-family:var(--mono);margin-bottom:6px"></div>
+      <div id="aviso-flujos-login-detalle" style="font-size:9px;color:#dca75e;font-family:var(--mono);line-height:1.8;max-height:160px;overflow-y:auto"></div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button onclick="_avisoFlujosLoginIrA()" style="padding:4px 12px;background:rgba(251,191,36,.12);
+          border:1px solid #fbbf2466;color:#fbbf24;font-family:var(--mono);font-size:8.5px;border-radius:4px;cursor:pointer">
+          Ver en Flujos de Fondos
+        </button>
+        <button onclick="_cerrarAvisoFlujosLogin()" style="padding:4px 12px;background:none;
+          border:1px solid var(--bd2);color:var(--dim);font-family:var(--mono);font-size:8.5px;border-radius:4px;cursor:pointer">
+          Cerrar
+        </button>
+      </div>
+    </div>
+    <button onclick="_cerrarAvisoFlujosLogin()" title="Cerrar" style="background:none;border:none;color:#dca75e;
+      cursor:pointer;font-size:14px;padding:0;flex-shrink:0;line-height:1">×</button>
+  </div>
+</div>
+
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+// Alerta de flujos proyectados sin presentar, al loguearse o retomar sesión
+// en cualquier dispositivo — reutiliza _detectarFlujosProyectadosFaltantes()
+// (misma detección que el cartel del módulo Flujos de Fondos).
+function _cerrarAvisoFlujosLogin() {
+  const el = document.getElementById('aviso-flujos-login');
+  if (el) el.style.display = 'none';
+}
+function _avisoFlujosLoginIrA() {
+  _cerrarAvisoFlujosLogin();
+  showPanel('flujos', document.getElementById('nav-flujos'));
+  document.getElementById('nav-flujos')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function _avisoFlujosAlLoguear() {
+  const el = document.getElementById('aviso-flujos-login');
+  if (!el || typeof _detectarFlujosProyectadosFaltantes !== 'function') return;
+  const faltantes = _detectarFlujosProyectadosFaltantes();
+  if (!faltantes || !faltantes.length) { el.style.display = 'none'; return; }
+  const _fmtDia = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const titulo = document.getElementById('aviso-flujos-login-titulo');
+  const detalle = document.getElementById('aviso-flujos-login-detalle');
+  if (titulo) titulo.textContent =
+    `${faltantes.length} flujo${faltantes.length !== 1 ? 's' : ''} proyectado${faltantes.length !== 1 ? 's' : ''} sin presentar`;
+  if (detalle) detalle.innerHTML = faltantes.map(x =>
+    `${x.empresa} — ${FLUJO_CUAT_LBL[x.num]} ${x.anio} <span style="opacity:.7">(plazo venció el ${_fmtDia(x.deadline)})</span>`
+  ).join('<br>');
+  el.style.display = '';
 }
 </script>
 </body>
