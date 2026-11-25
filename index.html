@@ -16053,7 +16053,10 @@ function _fmSumarIngEgr(grid, mesesEdit, excluirRow) {
   return { sumIng, sumEgr, totIng, totEgr };
 }
 function _fmBuscarFilaImpCD(grid) {
-  return Array.from(grid.querySelectorAll('.fm-rubro-row'))
+  // Último match, no el primero: si por algún motivo hubiera más de una fila
+  // candidata, la que cierra la lista es la que efectivamente se usa en los
+  // cálculos del detalle (mismo criterio que _fmBuscarFilaResultado).
+  return [...grid.querySelectorAll('.fm-rubro-row')].reverse()
     .find(row => _esImpCredDeb(_fmFilaInfo(row).label));
 }
 function _fmActualizarImpEstimado() {
@@ -16134,7 +16137,15 @@ function _fmAplicarImpEstimado() {
 // mismo motivo que el Imp. Cred/Déb: si no hay un rubro de resultado
 // explícito, la vista de detalle ya calcula el resultado neto sola.
 function _fmBuscarFilaResultado(grid) {
-  return Array.from(grid.querySelectorAll('.fm-rubro-row'))
+  // Último match, no el primero: un flujo puede traer varias filas tipo
+  // "Resultado/Fondos" apiladas (ej. un SUBTOTAL intermedio además del
+  // resultado final "Fondos solicitados") — la que cierra la lista es
+  // siempre el resultado final (mismo criterio documentado en
+  // _flujoNecesidadSignada: "usar el ÚLTIMO rubro que matchee, no el
+  // primero"). Buscar la primera actualizaba una fila equivocada (ej. el
+  // subtotal, no "Fondos solicitados") sin que se note ningún cambio en
+  // la fila que el usuario realmente está mirando.
+  return [...grid.querySelectorAll('.fm-rubro-row')].reverse()
     .find(row => _fmFilaInfo(row).esResultado);
 }
 function _fmActualizarResultadoEstimado() {
