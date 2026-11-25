@@ -15776,13 +15776,20 @@ function buildVistaIndividualFlujo(claveOverride) {
   const _rubroImpCD = f.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
   const egrAajust   = _flujoEgrDetTotal(f) ?? egrA;
   const { impCredDeb: _impCDEstim, resultado: _resEstim } = _calcResultadoNeto(ingA, egrAajust);
-  // Preferir el resultado final explícito del archivo (necA / "Fondos solicitados"):
-  // ese valor puede ya incluir el imp. cred/déb aunque el archivo no traiga un
-  // rubro separado para él, así que estimar y restarle otro 1,2% duplicaría el
-  // impuesto (visible como RESULTADO NETO ≠ "Fondos solicitados"). El estimado
-  // solo se usa si el archivo no trae ningún resultado final explícito.
+  // "Fondos solicitados" (necA) sigue siendo el valor que muestra la tarjeta
+  // de arriba — puede ser un monto declarado/gestionado, distinto del cálculo
+  // puro de abajo hacia arriba (ver auditarFlujosInconsistentes, pensada
+  // justamente para detectar cuándo difieren mucho). Pero el Imp. Cred/Déb
+  // del CUADRO (pie SUBTOTAL/IMP/RESULTADO NETO) ya NO se fuerza a 0 solo
+  // porque exista necA: antes se asumía que necA ya lo tenía descontado, pero
+  // esa suposición deja de valer en cuanto se edita un ingreso/egreso a mano
+  // en el dashboard sin volver a tocar "Fondos solicitados" en la misma
+  // proporción (caso real: Bodega y Fincas de Aminga) — el cuadro quedaba
+  // mostrando $0 de impuesto y un RESULTADO NETO idéntico al SUBTOTAL, sin
+  // reflejar el 1,2%. Mismo criterio que ya usan _flujoResultadoBottomUp y
+  // buildComparacionFlujos: estimar siempre que no haya un rubro real.
   const resultado  = necA != null ? necA : _resEstim;
-  const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : (necA != null ? 0 : _impCDEstim);
+  const impCredDeb = _rubroImpCD ? Math.abs(_rubroImpCD.actual || 0) : _impCDEstim;
   const subtotal   = resultado + impCredDeb;
   // Aviso: el impuesto sobre créditos/débitos es ~1,2% — si el valor cargado es
   // una fracción grande de los egresos ajustados, lo más probable es que el
@@ -15822,13 +15829,12 @@ function buildVistaIndividualFlujo(claveOverride) {
   const _mesIng = m => f.rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesEgr = m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesSub = m => { const i=_mesIng(m),e=Math.abs(_mesEgr(m)); return i-e; };
-  // Si hay rubro explícito de imp. cred/déb, usar su valor por mes; si no hay rubro
-  // pero el archivo trae un resultado final explícito (necA), no estimar nada por
-  // mes (ya viene incluido en ese total); solo se estima 1,2% cuando no hay ni
-  // rubro ni resultado final de referencia.
+  // Si hay rubro explícito de imp. cred/déb, usar su valor por mes; si no,
+  // estimar 1,2% sobre el subtotal de ese mes — siempre, sin importar si
+  // existe o no un "Fondos solicitados" declarado (ver comentario arriba,
+  // junto al cálculo agregado de impCredDeb).
   const _mesImp = _rubroImpCD
     ? m => Math.abs(_rubroImpCD.porMes?.[m] ?? 0)
-    : necA != null ? () => 0
     : m => Math.abs(_mesSub(m)) * 0.012;
   const _mesRes = m => _mesSub(m) - _mesImp(m);
 
