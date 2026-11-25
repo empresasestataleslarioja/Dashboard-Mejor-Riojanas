@@ -15201,7 +15201,17 @@ function _flujoIngOperativo(f) {
   if (!f) return null;
   const rows = _flujoIngOperativoRows(f);
   if (rows.length) return rows.reduce((s, r2) => s + r2.actual, 0);
-  return _flujoIngTotal(f);
+  // Caer al total sin filtrar solo si el flujo directamente NO tiene
+  // rubros de ingreso cargados (dato faltante) — nunca cuando sí los
+  // tiene pero TODOS quedaron excluidos por no ser venta propia (ej. un
+  // período que solo recibió asistencia financiera del Estado): en ese
+  // caso el ingreso operativo real es $0, y caer al total reintroduciría
+  // justo lo que _esIngExcluido excluyó — caso real: Bodega y Fincas de
+  // Aminga, 3er cuatrimestre 2026, "Asistencia financiera recibida" volvía
+  // a contarse en Cobertura ing/egresos e ing/costo laboral.
+  const hayIngresos = (f.rubros||[]).some(r =>
+    r.tipo === 'ingreso' && !r.esTotal && r.actual != null && !/SUBTOTAL|TOTAL/i.test(r.label||''));
+  return hayIngresos ? 0 : _flujoIngTotal(f);
 }
 
 function _flujoLaboralRows(f) {
