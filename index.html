@@ -5464,6 +5464,8 @@ self.onmessage = async (e) => {
       </div>
       <div id="fm-rubros-grid" style="display:grid;grid-template-columns:repeat(3,1fr);
         gap:8px;margin-bottom:12px"></div>
+      <div id="fm-impcd-estimado" style="display:none;margin-bottom:12px;padding:8px 10px;
+        background:rgba(232,200,74,.06);border:1px solid rgba(232,200,74,.25);border-radius:5px"></div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="guardarFlujoManual()"
           style="padding:6px 18px;background:rgba(71,255,180,.15);border:1.5px solid #2ecc8a;
@@ -14008,6 +14010,8 @@ function toggleFlujoManual() {
   // Generar inputs de rubros
   const grid = document.getElementById('fm-rubros-grid');
   if (grid) {
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px';
+    delete grid.dataset.mesesEdit;
     grid.innerHTML = FLUJO_RUBROS_STD.map(r => `
       <div style="display:flex;flex-direction:column;gap:2px">
         <label style="font-size:8px;color:var(--dim);font-family:var(--mono)">${r.label}</label>
@@ -14019,6 +14023,8 @@ function toggleFlujoManual() {
           color:var(--dim);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">
       </div>`).join('');
   }
+  const impEst = document.getElementById('fm-impcd-estimado');
+  if (impEst) { impEst.style.display = 'none'; impEst.innerHTML = ''; }
 }
 
 function guardarFlujoManual() {
@@ -15932,22 +15938,24 @@ function _fmFilaRubroHtml(r, key, mesesEdit) {
   const montoInputs = mesesEdit.length
     ? mesesEdit.map(m => `<input data-key="${key}" data-mes="${m}" type="text" inputmode="decimal"
         value="${_fmtEd(r.porMes?.[m])}" placeholder="${m.slice(0,3)}"
-        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmRecalcFila('${rowId}')"
+        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmRecalcFila('${rowId}');_fmActualizarImpEstimado()"
         style="width:86px;padding:3px 5px;background:var(--s2);border:1px solid var(--bd2);
         color:var(--text);font-family:var(--mono);font-size:8.5px;border-radius:3px;outline:none">`).join('')
     : `<input data-key="${key}" type="text" inputmode="decimal"
         value="${_fmtEd(r.actual)}" placeholder="Importe"
-        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');"
+        oninput="this.value=this.value.replace(/[^\\d.,-]/g,'');_fmActualizarImpEstimado()"
         style="width:110px;padding:3px 6px;background:var(--s2);border:1px solid var(--bd2);
         color:var(--text);font-family:var(--mono);font-size:9px;border-radius:3px;outline:none">`;
   return `<div id="${rowId}" class="fm-rubro-row" style="display:flex;align-items:center;gap:5px;
     border-left:2px solid ${tipoColor};padding:3px 6px;background:var(--s3);border-radius:3px;flex-wrap:wrap">
-    <button type="button" title="Eliminar rubro" onclick="document.getElementById('${rowId}').remove()"
+    <button type="button" title="Eliminar rubro" onclick="document.getElementById('${rowId}').remove();_fmActualizarImpEstimado()"
       style="background:none;border:none;color:var(--neg);cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0">🗑</button>
     <input type="text" data-label-key="${key}" value="${r.label||''}" title="${r.label||''}" placeholder="Nombre del rubro"
+      onchange="_fmActualizarImpEstimado()"
       style="width:150px;flex-shrink:0;padding:2px 4px;background:var(--s2);border:1px solid var(--bd2);
       color:var(--dim);font-family:var(--mono);font-size:8px;border-radius:3px">
-    <select data-tipo-key="${key}" style="width:95px;flex-shrink:0;padding:3px 4px;background:var(--s2);
+    <select data-tipo-key="${key}" onchange="_fmActualizarImpEstimado()"
+      style="width:95px;flex-shrink:0;padding:3px 4px;background:var(--s2);
       border:1px solid var(--bd2);color:var(--text);font-family:var(--mono);font-size:8px;border-radius:3px">
       ${selOpts}
     </select>
@@ -15970,6 +15978,7 @@ function _fmAgregarRubro() {
   const row = wrap.firstElementChild;
   if (addBtn) grid.insertBefore(row, addBtn); else grid.appendChild(row);
   row.querySelector('input[data-label-key]')?.focus();
+  return row;
 }
 // Recalcula en vivo el total mostrado a la derecha de una fila mientras se
 // editan los importes por mes (el importe final que se guarda es la suma).
@@ -15980,6 +15989,99 @@ function _fmRecalcFila(rowId) {
     .reduce((s, i) => s + (_parseMontoAR(i.value) || 0), 0);
   const span = row.querySelector('.fm-rubro-total');
   if (span) span.textContent = total ? total.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—';
+}
+
+// ── Recálculo en vivo del Imp. sobre Créd/Déb mientras se editan ingresos
+// o egresos — mismo criterio que el 1,2% estimado en la vista de detalle
+// (_calcResultadoNeto): 1,2% sobre |ingresos − egresos|, excluyendo del
+// cálculo al propio rubro de Imp. Cred/Déb si ya está cargado.
+function _fmFilaInfo(row) {
+  const labelInp = row.querySelector('input[data-label-key]');
+  const label = labelInp ? labelInp.value : '';
+  const selTipo = row.querySelector('select[data-tipo-key]');
+  const tipoVal = selTipo ? selTipo.value : 'egreso';
+  return { label, esIngresoDet: tipoVal === 'ingreso', esEgresoDet: tipoVal === 'egreso' };
+}
+function _fmSumarIngEgr(grid, mesesEdit, excluirRow) {
+  const sumIng = {}, sumEgr = {};
+  mesesEdit.forEach(m => { sumIng[m] = 0; sumEgr[m] = 0; });
+  let totIng = 0, totEgr = 0;
+  Array.from(grid.querySelectorAll('.fm-rubro-row')).forEach(row => {
+    if (row === excluirRow) return;
+    const { label, esIngresoDet, esEgresoDet } = _fmFilaInfo(row);
+    if ((!esIngresoDet && !esEgresoDet) || _esImpCredDeb(label)) return;
+    const montoInputs = row.querySelectorAll('input[data-mes]');
+    if (montoInputs.length) {
+      montoInputs.forEach(i => {
+        const v = Math.abs(_parseMontoAR(i.value) || 0);
+        if (esIngresoDet) sumIng[i.dataset.mes] = (sumIng[i.dataset.mes] || 0) + v;
+        else sumEgr[i.dataset.mes] = (sumEgr[i.dataset.mes] || 0) + v;
+      });
+    } else {
+      const v = Math.abs(_parseMontoAR(row.querySelector('input[data-key]')?.value) || 0);
+      if (esIngresoDet) totIng += v; else totEgr += v;
+    }
+  });
+  return { sumIng, sumEgr, totIng, totEgr };
+}
+function _fmBuscarFilaImpCD(grid) {
+  return Array.from(grid.querySelectorAll('.fm-rubro-row'))
+    .find(row => _esImpCredDeb(_fmFilaInfo(row).label));
+}
+function _fmActualizarImpEstimado() {
+  const grid = document.getElementById('fm-rubros-grid');
+  const out = document.getElementById('fm-impcd-estimado');
+  if (!grid || !out) return;
+  const filas = grid.querySelectorAll('.fm-rubro-row');
+  if (!filas.length) { out.style.display = 'none'; out.innerHTML = ''; return; }
+  let mesesEdit = [];
+  try { mesesEdit = JSON.parse(grid.dataset.mesesEdit || '[]'); } catch(e) {}
+  const impRow = _fmBuscarFilaImpCD(grid);
+  const { sumIng, sumEgr, totIng, totEgr } = _fmSumarIngEgr(grid, mesesEdit, impRow);
+  const _fmt = v => v ? v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '0,00';
+  let detalle;
+  if (mesesEdit.length) {
+    const porMesEst = mesesEdit.map(m => Math.abs((sumIng[m]||0) - (sumEgr[m]||0)) * 0.012);
+    detalle = mesesEdit.map((m,i) => `${m.slice(0,3)}: $ ${_fmt(porMesEst[i])}`).join('  ·  ') +
+      `  ·  <strong>Total: $ ${_fmt(porMesEst.reduce((s,v)=>s+v,0))}</strong>`;
+  } else {
+    detalle = `<strong>$ ${_fmt(Math.abs(totIng - totEgr) * 0.012)}</strong>`;
+  }
+  out.style.display = '';
+  out.innerHTML = `<div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">
+      ↻ Imp. Cred/Déb recalculado (1,2% s/ |ingresos − egresos|)${impRow ? '' : ' — todavía no hay un rubro cargado para este concepto'}
+    </div>
+    <div style="font-size:9px;color:#e8c84a;font-family:var(--mono);line-height:1.6">${detalle}</div>
+    <button type="button" onclick="_fmAplicarImpEstimado()"
+      style="margin-top:5px;padding:3px 10px;background:none;border:1px solid #e8c84a66;
+      color:#e8c84a;font-family:var(--mono);font-size:8px;border-radius:4px;cursor:pointer">
+      ${impRow ? '↻ Aplicar al rubro cargado' : '+ Crear rubro con este valor'}
+    </button>`;
+}
+function _fmAplicarImpEstimado() {
+  const grid = document.getElementById('fm-rubros-grid');
+  if (!grid) return;
+  let mesesEdit = [];
+  try { mesesEdit = JSON.parse(grid.dataset.mesesEdit || '[]'); } catch(e) {}
+  let impRow = _fmBuscarFilaImpCD(grid);
+  if (!impRow) {
+    impRow = _fmAgregarRubro();
+    impRow.querySelector('input[data-label-key]').value = 'IMP. SOBRE CRÉDITO/DÉBITO (1,2%)';
+    impRow.querySelector('select[data-tipo-key]').value = 'egreso';
+  }
+  const { sumIng, sumEgr, totIng, totEgr } = _fmSumarIngEgr(grid, mesesEdit, impRow);
+  if (mesesEdit.length) {
+    impRow.querySelectorAll('input[data-mes]').forEach(i => {
+      const est = Math.abs((sumIng[i.dataset.mes]||0) - (sumEgr[i.dataset.mes]||0)) * 0.012;
+      i.value = est ? est.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+    });
+    _fmRecalcFila(impRow.id);
+  } else {
+    const inp = impRow.querySelector('input[data-key]');
+    const est = Math.abs(totIng - totEgr) * 0.012;
+    if (inp) inp.value = est ? est.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+  }
+  _fmActualizarImpEstimado();
 }
 
 function editarFlujo(clave) {
@@ -16034,6 +16136,7 @@ function editarFlujo(clave) {
         style="align-self:flex-start;margin-top:2px;padding:4px 10px;background:none;
         border:1px dashed var(--bd2);color:var(--acc);font-family:var(--mono);font-size:8.5px;
         border-radius:4px;cursor:pointer">+ Agregar rubro</button>`;
+    _fmActualizarImpEstimado();
   }
 
   pm.dataset.editandoClave = clave;
