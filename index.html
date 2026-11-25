@@ -15755,7 +15755,8 @@ function buildVistaIndividualFlujo(claveOverride) {
       if (r.tipo==='resultado' || _esImpCredDeb(r.label)) return 9; // al pie
       return 3;
     };
-    return [...f.rubros].sort((a,b) => rk(a) - rk(b));
+    const base = [...f.rubros].sort((a,b) => rk(a) - rk(b));
+    return _ordenarSueldoYCargasSAC(base, r => r.label || '', (a, b) => rk(a) === rk(b));
   })();
   // Filtrar: solo rubros detalle (sin ningún totalizador); los totales se inyectan como filas computadas
   const rubrosDetalle = rubrosOrdenados.filter(r => {
@@ -16270,7 +16271,9 @@ function editarFlujo(clave) {
   if (grid) {
     grid.dataset.mesesEdit = JSON.stringify(mesesEdit);
     grid.style.cssText = 'display:flex;flex-direction:column;gap:5px;margin-bottom:12px';
-    grid.innerHTML = f.rubros.map(r => _fmFilaRubroHtml(r, r.key, mesesEdit)).join('') +
+    const rubrosOrdenEdit = _ordenarSueldoYCargasSAC(f.rubros, r => r.label || '',
+      (a, b) => a.tipo === b.tipo && !!a.esTotal === !!b.esTotal);
+    grid.innerHTML = rubrosOrdenEdit.map(r => _fmFilaRubroHtml(r, r.key, mesesEdit)).join('') +
       `<button type="button" onclick="_fmAgregarRubro()"
         style="align-self:flex-start;margin-top:2px;padding:4px 10px;background:none;
         border:1px dashed var(--bd2);color:var(--acc);font-family:var(--mono);font-size:8.5px;
@@ -16528,6 +16531,37 @@ function _mapeoBorrarTodos() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Estructura estándar: INGRESOS detalle → EGRESOS detalle → TOTAL ING → TOTAL EGR → RESULTADO
 // Estable: preserva orden relativo dentro de cada grupo
+// Pedido explícito del usuario, válido SIEMPRE que se listan rubros de un
+// flujo (detalle en pantalla, editor, comparativo, informes imprimibles y
+// Excel): SAC debe quedar inmediatamente después de Sueldos, y Cargas
+// Sociales SAC inmediatamente después de Cargas Sociales — en el Excel de
+// origen suelen venir separados por otros conceptos intermedios.
+// `getLabel(item)` extrae el label de cada elemento (un rubro plano usa
+// r.label directamente; una fila "merged" de la comparación usa
+// (rA||rB).label). `mismoGrupo(a,b)` es opcional: si se pasa, nunca mueve
+// un rubro fuera de su propio grupo (ej. no mezclar detalle con totales).
+function _ordenarSueldoYCargasSAC(arr, getLabel, mismoGrupo) {
+  const ordenado = arr.slice();
+  const _normLbl = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _esSAC = x => { const u = _normLbl(getLabel(x)); return !u.includes('CARGA') && (u.includes('SAC') || u.includes('ANUAL COMPLEMENTARIO')); };
+  const _esSueldos = x => { const u = _normLbl(getLabel(x)); return u.includes('SUELDO') && !u.includes('CARGA') && !_esSAC(x); };
+  const _esCargasSocialesSAC = x => { const u = _normLbl(getLabel(x)); return u.includes('CARGA') && (u.includes('SAC') || u.includes('ANUAL COMPLEMENTARIO')); };
+  const _esCargasSociales = x => { const u = _normLbl(getLabel(x)); return u.includes('CARGA') && u.includes('SOCIAL') && !_esCargasSocialesSAC(x); };
+  const _moverDespuesDe = (esAncla, esMover) => {
+    const idxAncla = ordenado.findIndex(esAncla);
+    if (idxAncla < 0) return;
+    const idxMover = ordenado.findIndex((x, i) => i !== idxAncla && esMover(x));
+    if (idxMover < 0 || idxMover === idxAncla + 1) return;
+    if (mismoGrupo && !mismoGrupo(ordenado[idxMover], ordenado[idxAncla])) return;
+    const [item] = ordenado.splice(idxMover, 1);
+    const nuevoIdxAncla = ordenado.findIndex(esAncla);
+    ordenado.splice(nuevoIdxAncla + 1, 0, item);
+  };
+  _moverDespuesDe(_esSueldos, _esSAC);
+  _moverDespuesDe(_esCargasSociales, _esCargasSocialesSAC);
+  return ordenado;
+}
+
 function _ordenarMerged(merged) {
   const rank = ({rA, rB}) => {
     const r = rA || rB;
@@ -16545,33 +16579,7 @@ function _ordenarMerged(merged) {
   const ordenado = merged.map((r, i) => [r, i])
     .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
     .map(([r]) => r);
-
-  // Pedido explícito: SAC debe quedar inmediatamente después de Sueldos, y
-  // Cargas Sociales SAC inmediatamente después de Cargas Sociales — en el
-  // Excel de origen suelen venir separados por otros conceptos intermedios.
-  // Nunca mueve un rubro fuera de su propio grupo (rank): si por algún
-  // motivo quedaran en grupos distintos (ej. uno es total y el otro no),
-  // no se reordena nada.
-  const _normLbl = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const _lbl = r => (r.rA || r.rB)?.label || '';
-  const _esSAC = r => { const u = _normLbl(_lbl(r)); return !u.includes('CARGA') && (u.includes('SAC') || u.includes('ANUAL COMPLEMENTARIO')); };
-  const _esSueldos = r => { const u = _normLbl(_lbl(r)); return u.includes('SUELDO') && !u.includes('CARGA') && !_esSAC(r); };
-  const _esCargasSocialesSAC = r => { const u = _normLbl(_lbl(r)); return u.includes('CARGA') && (u.includes('SAC') || u.includes('ANUAL COMPLEMENTARIO')); };
-  const _esCargasSociales = r => { const u = _normLbl(_lbl(r)); return u.includes('CARGA') && u.includes('SOCIAL') && !_esCargasSocialesSAC(r); };
-  const _moverDespuesDe = (esAncla, esMover) => {
-    const idxAncla = ordenado.findIndex(esAncla);
-    if (idxAncla < 0) return;
-    const idxMover = ordenado.findIndex((r, i) => i !== idxAncla && esMover(r));
-    if (idxMover < 0 || idxMover === idxAncla + 1) return;
-    if (rank(ordenado[idxMover]) !== rank(ordenado[idxAncla])) return;
-    const [item] = ordenado.splice(idxMover, 1);
-    const nuevoIdxAncla = ordenado.findIndex(esAncla);
-    ordenado.splice(nuevoIdxAncla + 1, 0, item);
-  };
-  _moverDespuesDe(_esSueldos, _esSAC);
-  _moverDespuesDe(_esCargasSociales, _esCargasSocialesSAC);
-
-  return ordenado;
+  return _ordenarSueldoYCargasSAC(ordenado, r => (r.rA || r.rB)?.label || '', (a, b) => rank(a) === rank(b));
 }
 
 // Detecta rubros de Imp. Crédito/Débito bancario por label
@@ -18200,7 +18208,9 @@ function _rptFlujoIndividual() {
   };
 
   const mesHeaders = meses.map(m => `<th style="padding:5px 8px;text-align:right;font-size:8px;color:#555;background:#f0f4ff;border:1px solid #ddd">${m}</th>`).join('');
-  const filas = f.rubros.map(r => {
+  const rubrosOrdenRpt = _ordenarSueldoYCargasSAC(f.rubros, r => r.label || '',
+    (a, b) => a.tipo === b.tipo && !!a.esTotal === !!b.esTotal);
+  const filas = rubrosOrdenRpt.map(r => {
     const s = _rowStyle(r);
     const indent = (!r.esTotal && r.nivel === 1) ? 'padding-left:20px' : '';
     const mesCells = meses.map(m =>
