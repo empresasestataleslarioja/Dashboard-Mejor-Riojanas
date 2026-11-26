@@ -17817,6 +17817,15 @@ function exportarFlujoExcel() {
     return (v<0?'($ ':' $ ') + a.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v<0?')':'');
   };
   const P = (v, d=2) => v==null ? '—' : (v>0?'+':'')+v.toFixed(d)+'%';
+  // OJO con la polaridad: a diferencia de colVar (pantalla: positivo=verde
+  // por defecto), acá el default (isIng=false) ya es "positivo=rojo" —
+  // pensado para egresos/déficit/costos, donde crecer es malo. Para esos
+  // valores (ej. _varNomRes/_varRealRes/labVarNom, en convención
+  // |actual|−|anterior|/|anterior| = positivo cuando crece la magnitud)
+  // se le pasa el valor TAL CUAL, sin invertir signo — invertirlo (como
+  // si fuera para colVar) pinta el color al revés. isIng=true da vuelta
+  // la polaridad para métricas tipo ingreso/cobertura, donde crecer es
+  // bueno.
   const pColor = (v, isIng=false) => v==null ? T.dim : isIng ? (v>=0 ? T.pos : T.neg) : (v>=0 ? T.neg : T.pos);
   const pBg    = (v, isIng=false) => {
     if (v==null) return 'transparent';
@@ -18040,7 +18049,7 @@ function exportarFlujoExcel() {
                  <td style="padding:6px 14px;font-family:monospace;font-size:9px;font-style:italic;color:${T.dim}">Resultado — Var. real (Fisher, IPC ${ipc}%)</td>
                  <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">${C(_rNetASign)}</td>
                  <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;color:${T.dim}">≈${C(_rNetBSign!=null?_rNetBSign*(1+ipc/100):null)}</td>
-                 <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${pColor(-_varRealRes)}">${P(_varRealRes)}</td>
+                 <td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:9.5px;font-weight:700;color:${pColor(_varRealRes)}">${P(_varRealRes)}</td>
                </tr>` : '');
       })()}</tbody>
     </table>
@@ -18068,13 +18077,13 @@ function exportarFlujoExcel() {
       <div class="val" style="color:${T.dim};font-size:15px">${C(_rNetBSign)}</div>
       <div class="note">${fB.periodo}</div>
     </div>
-    <div class="kpi-card" style="border-top-color:${pColor(-_varNomRes)}">
+    <div class="kpi-card" style="border-top-color:${pColor(_varNomRes)}">
       <div class="lbl">VAR. NOMINAL RESULTADO</div>
-      <div class="val" style="color:${pColor(-_varNomRes)};font-size:15px">${P(_varNomRes)}</div>
+      <div class="val" style="color:${pColor(_varNomRes)};font-size:15px">${P(_varNomRes)}</div>
     </div>
-    ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(-_varRealRes)}">
+    ${ipc?`<div class="kpi-card" style="border-top-color:${pColor(_varRealRes)}">
       <div class="lbl">VAR. REAL (FISHER)</div>
-      <div class="val" style="color:${pColor(-_varRealRes)};font-size:15px">${P(_varRealRes)}</div>
+      <div class="val" style="color:${pColor(_varRealRes)};font-size:15px">${P(_varRealRes)}</div>
       <div class="note">descontando IPC ${ipc}%</div>
     </div>`:''}
     <div style="grid-column:span 2;display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -18129,11 +18138,11 @@ function exportarFlujoExcel() {
       </div>
       <div class="lab-cell">
         <div class="lbl">VAR. NOMINAL</div>
-        <div class="val" style="color:${pColor(-labVarNom)}">${P(labVarNom)}</div>
+        <div class="val" style="color:${pColor(labVarNom)}">${P(labVarNom)}</div>
       </div>
       ${ipc?`<div class="lab-cell">
         <div class="lbl">VAR. REAL (FISHER)</div>
-        <div class="val" style="color:${pColor(-labVarReal)}">${P(labVarReal)}</div>
+        <div class="val" style="color:${pColor(labVarReal)}">${P(labVarReal)}</div>
       </div>`:'<div class="lab-cell"></div>'}
     </div>
   </div>`:'';
