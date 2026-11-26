@@ -5576,7 +5576,7 @@ Se calcula automáticamente desde tabla INDEC+REM cuando el flujo tiene meses y 
             title="Reporte imprimible del flujo individual">
             🖨 Reporte individual
           </button>
-          <button id="btn-rpt-flujo-comp" onclick="exportarFlujoExcel()"
+          <button id="btn-rpt-flujo-comp" onclick="exportarComparativoExcelReal()"
             style="display:none;padding:4px 11px;background:rgba(21,101,192,.12);
             border:1px solid #185fa5;color:#47b4ff;font-family:var(--mono);
             font-size:8.5px;border-radius:3px;cursor:pointer"
@@ -18296,6 +18296,115 @@ function exportarFlujoExcel() {
   const _ifrDoc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!_ifrDoc) { alert('Tu navegador bloqueó el reporte. Intentá en Chrome o Edge.'); overlay.remove(); return; }
   _ifrDoc.open(); _ifrDoc.write(html); _ifrDoc.close();
+}
+
+// ── EXPORTAR COMPARATIVO A EXCEL REAL (.xlsx) ────────────────────
+// A diferencia de exportarFlujoExcel() (que arma el reporte imprimible
+// en HTML, pese al nombre), esta función genera un archivo .xlsx real
+// — pedido explícito del usuario: el botón "Exportar comparativo
+// (Excel)" terminaba abriendo el mismo reporte imprimible que "Exportar
+// / Reporte", en vez de descargar un Excel.
+function exportarComparativoExcelReal() {
+  const _c = window._compActiva;
+  if (!_c) { alert('Ejecutá la comparación primero (botón "Comparar").'); return; }
+  const doExport = () => {
+    const { fA, fB, ipc, _merged, ingA, ingB, egrADet, egrBDet,
+      labA, labB, covA, covB, labCovA, labCovB,
+      _resASigned, _resBSigned, _varNomRes, _varRealRes,
+      _tagMetricaCap, _sufMetrica } = _c;
+
+    const _vnAbs = (a, b) => (a != null && b != null && b !== 0) ? (Math.abs(a) - Math.abs(b)) / Math.abs(b) * 100 : null;
+    const _vrFisher = (vn) => (vn != null && ipc) ? ((1 + vn / 100) / (1 + ipc / 100) - 1) * 100 : null;
+    const _vBEq = (v) => (v != null && ipc) ? v * (1 + ipc / 100) : null;
+
+    // Mismo cálculo bottom-up que ya usan la pantalla y el reporte imprimible
+    const _rubroImpA = (fA.rubros || []).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+    const _rubroImpB = (fB.rubros || []).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
+    const { subtotal: subA } = _calcResultadoNeto(ingA, egrADet);
+    const { subtotal: subB } = _calcResultadoNeto(ingB, egrBDet);
+    const impA = _rubroImpA ? Math.abs(_rubroImpA.actual || 0) : _impCDEstimado(subA || 0);
+    const impB = _rubroImpB ? Math.abs(_rubroImpB.actual || 0) : _impCDEstimado(subB || 0);
+    const resA = subA - impA, resB = subB - impB;
+
+    const headerRow = ipc
+      ? ['Concepto', 'Tipo', fA.periodo, fB.periodo, `${fB.periodo} + IPC ${ipc}%`, 'Var. nominal %', 'Var. real (Fisher) %']
+      : ['Concepto', 'Tipo', fA.periodo, fB.periodo, 'Var. nominal %', 'Var. real (Fisher) %'];
+    const _fila = (lbl, tipo, vA, vB, vn, vr) => {
+      const row = [lbl, tipo, vA ?? null, vB ?? null];
+      if (ipc) row.push(_vBEq(vB));
+      row.push(vn != null ? parseFloat(vn.toFixed(2)) : null, vr != null ? parseFloat(vr.toFixed(2)) : null);
+      return row;
+    };
+
+    const aoa = [
+      ['Empresa', fA.empresa],
+      ['Período actual', fA.periodo],
+      ['Período anterior', fB.periodo],
+      ['IPC acumulado entre períodos (%)', ipc || ''],
+      [],
+      headerRow,
+    ];
+
+    // Rubros detalle (mismo filtro que ya usa el reporte imprimible: sin
+    // totalizadores/resultado/impCredDeb, ni filas en $0 en ambos períodos)
+    const _detalle = (_merged || []).filter(({ rA, rB }) => {
+      const r = rA || rB;
+      if (!r) return true;
+      if (r.tipo === 'resultado' || r.tipo === 'total') return false;
+      if (r.esTotal) return false;
+      if (_esImpCredDeb(r.label)) return false;
+      if (!rA?.actual && !rB?.actual) return false;
+      return true;
+    });
+    _detalle.filter(({ rA, rB }) => (rA?.tipo || rB?.tipo) === 'ingreso').forEach(({ rA, rB }) => {
+      const vA = rA?.actual ?? null, vB = rB?.actual ?? null;
+      aoa.push(_fila(rA?.label || rB?.label || '', 'Ingreso', vA, vB, _vnAbs(vA, vB), _vrFisher(_vnAbs(vA, vB))));
+    });
+    aoa.push(_fila(`${_tagMetricaCap} ingresos${_sufMetrica}`, '', ingA, ingB, _vnAbs(ingA, ingB), _vrFisher(_vnAbs(ingA, ingB))));
+    _detalle.filter(({ rA, rB }) => (rA?.tipo || rB?.tipo) !== 'ingreso').forEach(({ rA, rB }) => {
+      const vA = rA?.actual ?? null, vB = rB?.actual ?? null;
+      aoa.push(_fila(rA?.label || rB?.label || '', 'Egreso', vA, vB, _vnAbs(vA, vB), _vrFisher(_vnAbs(vA, vB))));
+    });
+    const egrADetNeg = egrADet != null ? -Math.abs(egrADet) : null;
+    const egrBDetNeg = egrBDet != null ? -Math.abs(egrBDet) : null;
+    aoa.push(_fila(`${_tagMetricaCap} egresos${_sufMetrica}`, '', egrADetNeg, egrBDetNeg, _vnAbs(egrADetNeg, egrBDetNeg), _vrFisher(_vnAbs(egrADetNeg, egrBDetNeg))));
+    aoa.push([]);
+    // SUBTOTAL/RESULTADO: _varNecesidad (más positivo=mejora), no abs-abs —
+    // mismo criterio ya corregido en pantalla y en el reporte imprimible.
+    const vnSub = _varNecesidad(subA, subB);
+    aoa.push(_fila(`SUBTOTAL INGRESOS − EGRESOS${_sufMetrica}`, '', subA, subB, vnSub, _varNecesidad(subA, _vBEq(subB))));
+    aoa.push(_fila('IMP. SOBRE CRÉDITO/DÉBITO (1,2%)', '', -impA, -impB, _vnAbs(impA, impB), _vrFisher(_vnAbs(impA, impB))));
+    aoa.push(_fila(`RESULTADO NETO${_sufMetrica}`, '', resA, resB, _varNecesidad(resA, resB), _varNecesidad(resA, _vBEq(resB))));
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 46 }, { wch: 10 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Comparativo');
+
+    // Hoja de indicadores clave
+    const aoaInd = [
+      ['Indicador', fA.periodo, fB.periodo, 'Var. nominal %', 'Var. real (Fisher) %'],
+      ['Resultado neto', _resASigned, _resBSigned, _varNomRes != null ? parseFloat(_varNomRes.toFixed(2)) : null, _varRealRes != null ? parseFloat(_varRealRes.toFixed(2)) : null],
+      ['Cobertura ing/egr (%)', covA, covB, parseFloat((_vnAbs(covA, covB) ?? 0).toFixed(2)), null],
+      ['Costo laboral', labA, labB, parseFloat((_vnAbs(labA, labB) ?? 0).toFixed(2)), parseFloat((_vrFisher(_vnAbs(labA, labB)) ?? 0).toFixed(2))],
+      ['Cobertura ing/costo laboral (%)', labCovA, labCovB, null, null],
+    ];
+    const wsInd = XLSX.utils.aoa_to_sheet(aoaInd);
+    wsInd['!cols'] = [{ wch: 28 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(wb, wsInd, 'Indicadores clave');
+
+    const _san = s => (s || '').replace(/[\\/:*?"<>|]/g, '').trim();
+    XLSX.writeFile(wb, `Comparativo_${_san(fA.empresa)}_${_san(fA.periodo)}_vs_${_san(fB.periodo)}.xlsx`);
+  };
+
+  if (window.XLSX) {
+    doExport();
+  } else {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = doExport;
+    document.head.appendChild(s);
+  }
 }
 
 // ── REPORTE IMPRIMIBLE FLUJO INDIVIDUAL ──────────────────────────
