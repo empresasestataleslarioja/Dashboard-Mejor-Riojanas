@@ -18601,9 +18601,19 @@ async function generarInformeFlujo() {
     const necA = _flujoNecesidadSignada(fA);
     const necB = _flujoNecesidadSignada(fB);
     const varNom  = _varNecesidad(necA, necB);
-    const varReal = (varNom!=null&&ipc) ? ((1+varNom/100)/(1+ipc/100)-1)*100 : null;
-    const ingA = _flujoIngTotal(fA);
-    const ingB = _flujoIngTotal(fB);
+    // Var. real: comparar necA directamente contra necB ya llevado a pesos
+    // de hoy (necB*(1+ipc/100)) con _varNecesidad — NUNCA Fisher-deflactar
+    // varNom con "(1+varNom/100)/(1+ipc/100)-1": esa fórmula asume una
+    // magnitud positiva y da un número sin sentido si necA/necB son un
+    // déficit (negativo) — mismo bug ya corregido en pantalla, el reporte
+    // imprimible y el Excel comparativo, pendiente acá.
+    const varReal = (necA!=null && necB!=null && ipc) ? _varNecesidad(necA, necB*(1+ipc/100)) : null;
+    // _flujoIngDetTotal (suma del detalle), no _flujoIngTotal (que prioriza
+    // la fila "TOTAL INGRESOS" declarada en el Excel, que puede no
+    // coincidir si se reclasificó algún rubro después) — mismo fix ya
+    // aplicado en la comparación en pantalla.
+    const ingA = _flujoIngDetTotal(fA) ?? _flujoIngTotal(fA);
+    const ingB = _flujoIngDetTotal(fB) ?? _flujoIngTotal(fB);
     const ingAOp = _flujoIngOperativo(fA);
     const ingBOp = _flujoIngOperativo(fB);
     const varIng = (ingA!=null&&ingB&&ingB!==0) ? (Math.abs(ingA)-Math.abs(ingB))/Math.abs(ingB)*100 : null;
@@ -18616,6 +18626,20 @@ async function generarInformeFlujo() {
     const labB = _flujoLaboral(fB);
     const labCovA = (ingAOp&&labA) ? ingAOp/Math.abs(labA)*100 : null;
     const labCovB = (ingBOp&&labB) ? ingBOp/Math.abs(labB)*100 : null;
+    // Costo laboral: magnitud siempre positiva (nunca un "déficit"), así que
+    // abs-abs + Fisher es seguro acá (a diferencia de necA/necB arriba).
+    const labVarNom  = (labA!=null && labB) ? (Math.abs(labA)-Math.abs(labB))/Math.abs(labB)*100 : null;
+    const labVarReal = (labVarNom!=null && ipc) ? ((1+labVarNom/100)/(1+ipc/100)-1)*100 : null;
+    // Resultado neto calculado "de abajo hacia arriba" (ingresos − egresos
+    // − imp. créd/déb) — mismo cálculo ya unificado entre pantalla, reporte
+    // imprimible y Excel comparativo (_flujoResultadoBottomUp), para que el
+    // Word no quede como la única vista que solo muestra el valor
+    // declarado ("Fondos solicitados", necA/necB) sin contrastarlo.
+    const resA = _flujoResultadoBottomUp(fA);
+    const resB = _flujoResultadoBottomUp(fB);
+    const _varNomRes  = (resA!=null && resB) ? (Math.abs(resA)-Math.abs(resB))/Math.abs(resB)*100 : null;
+    const _varRealRes = (_varNomRes!=null && ipc) ? ((1+_varNomRes/100)/(1+ipc/100)-1)*100 : null;
+    const _divergeA = _flujoDivergeDeBottomUp(fA, necA, resA);
 
     const hoy = new Date();
     const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
@@ -18631,7 +18655,15 @@ async function generarInformeFlujo() {
       ? (Math.abs(necA ?? 0) > Math.abs(necB ?? 0) ? 'aumento' : 'reducción') + ' del ' + fmtPa(varNom) +
         ' en términos nominales; pasando de ' + fmtM(necB) +
         ' (' + (fB?.periodo||'período anterior') + ') a ' + fmtM(necA) +
-        ' (' + fA.periodo + ')'
+        ' (' + fA.periodo + ')' +
+        // Resultado neto calculado de abajo hacia arriba — contraste con el
+        // valor declarado arriba (necA), y aviso si divergen demasiado
+        // (mismo umbral que "Auditar flujos").
+        (resA != null
+          ? '. El resultado neto calculado de abajo hacia arriba (ingresos operativos menos egresos e impuesto sobre créditos y débitos) para ' + fA.periodo + ' asciende a ' + fmtM(resA) +
+            (resB != null && _varRealRes != null ? ', con una variación real del ' + fmtPa(_varRealRes) + ' respecto de ' + fmtM(resB) + ' (' + (fB?.periodo||'período anterior') + ')' : '') +
+            (_divergeA ? '. Esta cifra difiere de manera significativa del monto declarado como "Fondos solicitados" (' + fmtM(necA) + '), por lo que se recomienda su revisión' : '')
+          : '')
       : 'variación respecto al período anterior';
 
     // Texto déficit inicial propuesto por la empresa vs. lo finalmente
@@ -18668,7 +18700,9 @@ async function generarInformeFlujo() {
       '{{IPC}}':             ipc ? ipc.toString() : '[IPC]',
       '{{VAR_REAL}}':        varReal!=null?fmtPa(varReal):'[COMPLETAR]',
       '{{COV_LAB_ANT}}':     labCovB!=null?labCovB.toFixed(2)+'%':'[COMPLETAR]',
-      '{{COV_LAB_ACT}}':     labCovA!=null?labCovA.toFixed(2)+'%':'[COMPLETAR]',
+      '{{COV_LAB_ACT}}':     labCovA!=null
+        ? labCovA.toFixed(2)+'%'+(labVarNom!=null?' (costo laboral: variación nominal '+fmtP(labVarNom)+(labVarReal!=null?', real '+fmtP(labVarReal):'')+' respecto del período anterior)':'')
+        : '[COMPLETAR]',
       '{{PERIODO_ANT}}':     fB?.periodo || '[PERÍODO ANTERIOR]',
       '{{PERIODO_ACT}}':     fA.periodo,
       '{{PERIODO_ANT_FULL}}':fB?.periodo || '[PERÍODO ANTERIOR]',
