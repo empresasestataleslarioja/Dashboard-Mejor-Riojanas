@@ -17505,12 +17505,21 @@ function buildComparacionFlujos() {
       // el período cambie de déficit a superávit o viceversa, a diferencia
       // de comparar solo magnitudes absolutas.
       const vn = _varNecesidad(vA, vB);
-      const vr = _vr(vn);
+      // Nunca Fisher-deflactar vn (_vr(vn) = (1+vn/100)/(1+ipc/100)-1): esa
+      // fórmula asume que vn salió de magnitudes positivas, y da un
+      // resultado sin sentido si vA/vB son un déficit (negativo) — mismo
+      // bug ya corregido en las tarjetas KPI de pantalla (_varRealRes) y en
+      // "RESUMEN COMPARATIVO". Acá, igual que ahí, se compara vA
+      // directamente contra vB ya llevado a pesos de hoy (vBEq, la misma
+      // columna "≈" de esta fila) con el mismo _varNecesidad — así preserva
+      // el signo correcto ante un cambio déficit↔superávit y da un número
+      // que SÍ corresponde a los montos realmente mostrados en la fila.
+      const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
+      const vr = _varNecesidad(vA, vBEq);
       // pos=true: _varNecesidad ya devuelve más positivo=mejora (a diferencia
       // de impRow más abajo, que usa un vn de magnitud simple donde más=peor).
       const cv = _cv(vn, true);
       const cr = _cv(vr, true);
-      const vBEq = (vB!=null&&ipc) ? vB*(1+ipc/100) : null;
       return `<tr style="background:rgba(232,255,71,.05);border-top:2px solid var(--y21)">
         <td style="padding:7px 12px;font-size:9.5px;font-weight:700;color:var(--y21);font-family:var(--mono);border-bottom:1px solid var(--bd)">${lbl}${extra}</td>
         <td style="padding:7px 10px;text-align:right;font-family:var(--mono);font-size:9.5px;font-weight:700;color:var(--y21);border-bottom:1px solid var(--bd)">${fmtM(vA)}</td>
@@ -18159,8 +18168,13 @@ function exportarFlujoExcel() {
         // da el signo correcto aunque el período cambie de déficit a
         // superávit o viceversa (ver misma nota en la vista interactiva).
         const tfR = (lbl, vA, vB) => {
-          const vn=_varNecesidad(vA,vB); const vr=_vr2(vn);
+          // vr: nunca Fisher-deflactar vn (_vr2) — da un número sin sentido
+          // si vA/vB son un déficit (negativo); se compara vA directamente
+          // contra vB ya llevado a pesos de hoy (vBEq), igual criterio que
+          // ya corrige tfRow/_varRealRes más arriba y en pantalla.
+          const vn=_varNecesidad(vA,vB);
           const vBEq=(vB!=null&&ipc)?vB*(1+ipc/100):null;
+          const vr=_varNecesidad(vA,vBEq);
           return `<tr style="background:${T.acc}18;border-top:2px solid ${T.acc}">
             <td style="padding:8px 14px;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${lbl}</td>
             <td style="padding:8px 10px;text-align:right;font-family:monospace;font-size:10px;font-weight:700;color:${T.acc}">${C(vA)}</td>
