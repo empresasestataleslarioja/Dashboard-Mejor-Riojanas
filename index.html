@@ -17183,6 +17183,15 @@ function buildComparacionFlujos() {
   // Aplicar signo: resultado hereda el signo de nec (negativo = déficit)
   const _resASigned = necA != null && _resA != null ? (necA < 0 ? -Math.abs(_resA) : Math.abs(_resA)) : null;
   const _resBSigned = necB != null && _resB != null ? (necB < 0 ? -Math.abs(_resB) : Math.abs(_resB)) : null;
+  // Var. nominal/real del Resultado Neto calculado de abajo hacia arriba
+  // (ingresos − egresos − imp. créd/déb) — mismo criterio que ya usa el
+  // reporte imprimible/Excel comparativo (exportarFlujoExcel), que antes
+  // no se mostraba acá en pantalla, así que esta vista y esa no exponían
+  // la misma variación (una solo mostraba la de "Necesidad actual",
+  // declarada a mano, que puede diferir del cálculo real — ver
+  // "Auditar flujos"). Ahora ambas quedan visibles en pantalla también.
+  const _varNomRes  = _varNecesidad(_resASigned, _resBSigned);
+  const _varRealRes = (_varNomRes != null && ipc) ? ((1 + _varNomRes / 100) / (1 + ipc / 100) - 1) * 100 : null;
   const _resRows = [
     { lbl:`${_tagMetricaCap} egresos`,  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
     ...(ingA||ingB ? [{ lbl:`${_tagMetricaCap} ingresos`, vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
@@ -17239,9 +17248,14 @@ function buildComparacionFlujos() {
   };
 
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:`Necesidad actual${_sufMetrica}`, v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true },
+    { l:`Necesidad actual${_sufMetrica}`, v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true,
+      title:'Monto declarado/editado a mano ("Fondos solicitados") — puede diferir del Resultado Neto calculado de abajo hacia arriba; ver "Auditar flujos".' },
     { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
     { l:'Var. real (Fisher)',   v:fmtP(varReal),                                                 c:colVar(varReal) },
+    { l:`Resultado neto (ingr.−egr.−imp.)${_sufMetrica}`, v:fmtM(_resASigned), c:_resASigned==null?'var(--dim)':_resASigned<0?'var(--neg)':'var(--pos)', big:true,
+      title:'Calculado de abajo hacia arriba (ingresos − egresos − 1,2% o rubro real de imp. créd/déb) — mismo criterio que usa el reporte imprimible/Excel comparativo.' },
+    { l:'Var. nominal resultado', v:fmtP(_varNomRes),                                            c:colVar(_varNomRes) },
+    { l:'Var. real resultado (Fisher)', v:fmtP(_varRealRes),                                     c:colVar(_varRealRes) },
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(2)+'%' : '—',                              c:'var(--text)', popKey:'cov_ing' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(2)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
     ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(2)+'%', c:'#e8c84a', title:'Ingresos operativos sobre costo laboral del período actual', popKey:'cov_lab' }] : []),
