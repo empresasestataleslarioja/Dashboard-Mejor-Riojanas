@@ -17202,12 +17202,22 @@ function buildComparacionFlujos() {
   // declarada a mano, que puede diferir del cálculo real — ver
   // "Auditar flujos"). Ahora ambas quedan visibles en pantalla también.
   const _varNomRes  = _varNecesidad(_resASigned, _resBSigned);
-  const _varRealRes = (_varNomRes != null && ipc) ? ((1 + _varNomRes / 100) / (1 + ipc / 100) - 1) * 100 : null;
+  // La fórmula de Fisher "(1+nominal)/(1+ipc)−1" asume que la variación nominal
+  // se calculó sobre magnitudes positivas (precios, ingresos) — aplicada a un
+  // déficit (negativo) da un resultado que no coincide con comparar
+  // directamente el resultado actual contra el anterior llevado a pesos de
+  // hoy (_resBSigned*(1+ipc/100), el mismo monto que ya se muestra en la
+  // tarjeta "Ant. + IPC"). Se usa esa comparación directa en su lugar, para
+  // que esta tarjeta y la fila del cuadro de abajo (que compara los mismos
+  // dos montos) siempre coincidan.
+  const _varRealRes = (_resASigned != null && _resBSigned != null && ipc)
+    ? _varNecesidad(_resASigned, _resBSigned * (1 + ipc / 100))
+    : null;
   const _resRows = [
     { lbl:`${_tagMetricaCap} egresos`,  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
     ...(ingA||ingB ? [{ lbl:`${_tagMetricaCap} ingresos`, vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
-    { lbl:`Resultado (néc. fondos)${_sufMetrica}`, vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true },
-    ...(ipc&&_resBSigned ? [{ lbl:`Resultado — Var. real (Fisher, IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true }] : []),
+    { lbl:`Resultado (néc. fondos)${_sufMetrica}`, vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true, vn: varNom },
+    ...(ipc&&_resBSigned ? [{ lbl:`Resultado — Var. real (Fisher, IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true, vn: _varRealRes }] : []),
   ];
   resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
     padding:10px 16px;font-family:var(--mono)">
@@ -17231,6 +17241,13 @@ function buildComparacionFlujos() {
           if (aEsDeficit !== bEsDeficit) {
             // Cambio de signo: mostrar etiqueta cualitativa
             varCell = `<span style="font-size:8px;font-weight:600;color:${aEsDeficit?'var(--neg)':'var(--pos)'}">${aEsDeficit?'→ DÉFICIT':'→ SUPERÁVIT'}</span>`;
+          } else if (row.vn !== undefined) {
+            // Usar el mismo valor ya calculado que muestra la tarjeta KPI
+            // correspondiente (varNom/_varRealRes) — nunca recalcularlo acá
+            // con otra fórmula, para que tarjeta y fila siempre coincidan.
+            const vp = row.vn == null ? null : -row.vn; // esta tabla usa signo "aumento = positivo", al revés que las tarjetas
+            const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
+            varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(2)}%</span>` : '—';
           } else {
             const vp = _varPct(row.vA, row.vB);
             const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
