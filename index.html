@@ -15433,7 +15433,7 @@ function _flujoResultadoBottomUp(f) {
   if (ingA == null || egrDet == null) return null;
   const subtotal = ingA - Math.abs(egrDet);
   const rubroImpCD = (f.rubros || []).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
-  const impCredDeb = rubroImpCD ? Math.abs(rubroImpCD.actual || 0) : Math.abs(subtotal) * 0.012;
+  const impCredDeb = rubroImpCD ? Math.abs(rubroImpCD.actual || 0) : _impCDEstimado(subtotal);
   return subtotal - impCredDeb;
 }
 
@@ -15841,12 +15841,12 @@ function buildVistaIndividualFlujo(claveOverride) {
   const _mesEgr = m => f.rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal&&!_esImpCredDeb(r.label)).reduce((s,r)=>s+(r.porMes?.[m]??0),0);
   const _mesSub = m => { const i=_mesIng(m),e=Math.abs(_mesEgr(m)); return i-e; };
   // Si hay rubro explícito de imp. cred/déb, usar su valor por mes; si no,
-  // estimar 1,2% sobre el subtotal de ese mes — siempre, sin importar si
-  // existe o no un "Fondos solicitados" declarado (ver comentario arriba,
-  // junto al cálculo agregado de impCredDeb).
+  // estimar 1,2% sobre el subtotal de ese mes — solo si ese mes es
+  // deficitario (ver _impCDEstimado): un mes con superávit no debe
+  // mostrar el impuesto estimado restándole al SUBTOTAL positivo.
   const _mesImp = _rubroImpCD
     ? m => Math.abs(_rubroImpCD.porMes?.[m] ?? 0)
-    : m => Math.abs(_mesSub(m)) * 0.012;
+    : m => _impCDEstimado(_mesSub(m));
   const _mesRes = m => _mesSub(m) - _mesImp(m);
 
   // La columna TOTAL de cada fila del pie debe ser la suma de sus propias
@@ -16031,8 +16031,9 @@ function _fmRecalcFila(rowId) {
 
 // ── Recálculo en vivo del Imp. sobre Créd/Déb mientras se editan ingresos
 // o egresos — mismo criterio que el 1,2% estimado en la vista de detalle
-// (_calcResultadoNeto): 1,2% sobre |ingresos − egresos|, excluyendo del
-// cálculo al propio rubro de Imp. Cred/Déb si ya está cargado.
+// (_impCDEstimado): 1,2% sobre |ingresos − egresos|, solo si ese resultado
+// es deficitario, excluyendo del cálculo al propio rubro de Imp. Cred/Déb
+// si ya está cargado.
 function _fmFilaInfo(row) {
   const labelInp = row.querySelector('input[data-label-key]');
   const label = labelInp ? labelInp.value : '';
@@ -16089,11 +16090,11 @@ function _fmActualizarImpEstimado() {
   const _fmt = v => v ? v.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '0,00';
   let detalle;
   if (mesesEdit.length) {
-    const porMesEst = mesesEdit.map(m => Math.abs((sumIng[m]||0) - (sumEgr[m]||0)) * 0.012);
+    const porMesEst = mesesEdit.map(m => _impCDEstimado((sumIng[m]||0) - (sumEgr[m]||0)));
     detalle = mesesEdit.map((m,i) => `${m.slice(0,3)}: $ ${_fmt(porMesEst[i])}`).join('  ·  ') +
       `  ·  <strong>Total: $ ${_fmt(porMesEst.reduce((s,v)=>s+v,0))}</strong>`;
   } else {
-    detalle = `<strong>$ ${_fmt(Math.abs(totIng - totEgr) * 0.012)}</strong>`;
+    detalle = `<strong>$ ${_fmt(_impCDEstimado(totIng - totEgr))}</strong>`;
   }
   // Si el flujo NO tiene un rubro propio de Imp. Cred/Déb, no se ofrece
   // crear uno: ese caso ya lo cubre la fórmula dinámica del 1,2% que la
@@ -16108,7 +16109,7 @@ function _fmActualizarImpEstimado() {
   out.style.display = '';
   out.innerHTML = impRow
     ? `<div style="font-size:8px;color:var(--dim);font-family:var(--mono);margin-bottom:4px">
-        ↻ Imp. Cred/Déb recalculado (1,2% s/ |ingresos − egresos|)
+        ↻ Imp. Cred/Déb recalculado (1,2% s/ |ingresos − egresos|, solo si hay déficit)
       </div>
       <div style="font-size:9px;color:#e8c84a;font-family:var(--mono);line-height:1.6">${detalle}</div>
       <button type="button" onclick="_fmAplicarImpEstimado()"
@@ -16118,7 +16119,7 @@ function _fmActualizarImpEstimado() {
       </button>`
     : `<div style="font-size:8px;color:var(--dim);font-family:var(--mono)">
         Este flujo no tiene un rubro propio de Imp. Cred/Déb — se calcula automáticamente
-        (1,2% s/ |ingresos − egresos|) al mostrar el detalle, sin necesidad de cargarlo.
+        (1,2% s/ |ingresos − egresos|, solo si hay déficit) al mostrar el detalle, sin necesidad de cargarlo.
       </div>`;
 }
 function _fmAplicarImpEstimado() {
@@ -16131,13 +16132,13 @@ function _fmAplicarImpEstimado() {
   const { sumIng, sumEgr, totIng, totEgr } = _fmSumarIngEgr(grid, mesesEdit, impRow);
   if (mesesEdit.length) {
     impRow.querySelectorAll('input[data-mes]').forEach(i => {
-      const est = Math.abs((sumIng[i.dataset.mes]||0) - (sumEgr[i.dataset.mes]||0)) * 0.012;
+      const est = _impCDEstimado((sumIng[i.dataset.mes]||0) - (sumEgr[i.dataset.mes]||0));
       i.value = est ? est.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
     });
     _fmRecalcFila(impRow.id);
   } else {
     const inp = impRow.querySelector('input[data-key]');
-    const est = Math.abs(totIng - totEgr) * 0.012;
+    const est = _impCDEstimado(totIng - totEgr);
     if (inp) inp.value = est ? est.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
   }
   _fmActualizarEstimados();
@@ -16183,14 +16184,14 @@ function _fmActualizarResultadoEstimado() {
   if (mesesEdit.length) {
     const impPorMes = impRow
       ? mesesEdit.map(m => { const i = Array.from(impRow.querySelectorAll('input[data-mes]')).find(x=>x.dataset.mes===m); return Math.abs(_parseMontoAR(i?.value) || 0); })
-      : mesesEdit.map(m => Math.abs((sumIng[m]||0) - (sumEgr[m]||0)) * 0.012);
+      : mesesEdit.map(m => _impCDEstimado((sumIng[m]||0) - (sumEgr[m]||0)));
     const resPorMes = mesesEdit.map((m,i) => (sumIng[m]||0) - (sumEgr[m]||0) - impPorMes[i]);
     detalle = mesesEdit.map((m,i) => `${m.slice(0,3)}: ${_signo(resPorMes[i])}`).join('  ·  ') +
       `  ·  <strong>Total: ${_signo(resPorMes.reduce((s,v)=>s+v,0))}</strong>`;
   } else {
     const impVal = impRow
       ? Math.abs(_parseMontoAR(impRow.querySelector('input[data-key]')?.value) || 0)
-      : Math.abs(totIng - totEgr) * 0.012;
+      : _impCDEstimado(totIng - totEgr);
     detalle = `<strong>${_signo(totIng - totEgr - impVal)}</strong>`;
   }
   out.style.display = '';
@@ -16218,7 +16219,7 @@ function _fmAplicarResultadoEstimado() {
       const m = i.dataset.mes;
       const impMes = impRow
         ? Math.abs(_parseMontoAR(Array.from(impRow.querySelectorAll('input[data-mes]')).find(x=>x.dataset.mes===m)?.value) || 0)
-        : Math.abs((sumIng[m]||0) - (sumEgr[m]||0)) * 0.012;
+        : _impCDEstimado((sumIng[m]||0) - (sumEgr[m]||0));
       const resVal = (sumIng[m]||0) - (sumEgr[m]||0) - impMes;
       i.value = resVal ? resVal.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
     });
@@ -16226,7 +16227,7 @@ function _fmAplicarResultadoEstimado() {
   } else {
     const impVal = impRow
       ? Math.abs(_parseMontoAR(impRow.querySelector('input[data-key]')?.value) || 0)
-      : Math.abs(totIng - totEgr) * 0.012;
+      : _impCDEstimado(totIng - totEgr);
     const resVal = totIng - totEgr - impVal;
     const inp = resRow.querySelector('input[data-key]');
     if (inp) inp.value = resVal ? resVal.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
@@ -16604,12 +16605,22 @@ function _esImpCredDeb(lbl) {
   return false;
 }
 
+// Estimación del Imp. Cred/Déb (1,2%) cuando el flujo no trae un rubro real
+// cargado para ese concepto: solo corresponde si el subtotal/resultado
+// sobre el que se calcula es negativo (déficit) — un mes o período con
+// superávit no tiene necesidad de fondos que justifique descontarle este
+// impuesto estimado (caso real: Bodega y Fincas de Aminga, meses con
+// SUBTOTAL positivo mostraban igual el 1,2% restado en el cuadro).
+function _impCDEstimado(subtotal) {
+  return subtotal < 0 ? Math.abs(subtotal) * 0.012 : 0;
+}
+
 // Calcula el bloque final: subtotal, imp cred/deb, resultado neto
 function _calcResultadoNeto(ingTotal, egrTotal) {
   const ing = ingTotal || 0;
   const egr = Math.abs(egrTotal || 0);
   const subtotal    = ing - egr;                   // negativo = déficit
-  const impCredDeb  = Math.abs(subtotal) * 0.012;  // 1,2% del subtotal, siempre costo
+  const impCredDeb  = _impCDEstimado(subtotal);  // 1,2% estimado, solo si hay déficit
   const resultado   = subtotal - impCredDeb;        // más negativo
   return { subtotal, impCredDeb, resultado };
 }
@@ -17176,8 +17187,8 @@ function buildComparacionFlujos() {
   const _rubroImpB_res = fB.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
   const { subtotal: _subA_res } = _calcResultadoNeto(ingA, egrADet);
   const { subtotal: _subB_res } = _calcResultadoNeto(ingB, egrBDet);
-  const _impA_res = _rubroImpA_res ? Math.abs(_rubroImpA_res.actual || 0) : Math.abs(_subA_res || 0) * 0.012;
-  const _impB_res = _rubroImpB_res ? Math.abs(_rubroImpB_res.actual || 0) : Math.abs(_subB_res || 0) * 0.012;
+  const _impA_res = _rubroImpA_res ? Math.abs(_rubroImpA_res.actual || 0) : _impCDEstimado(_subA_res || 0);
+  const _impB_res = _rubroImpB_res ? Math.abs(_rubroImpB_res.actual || 0) : _impCDEstimado(_subB_res || 0);
   const _resA = _subA_res - _impA_res;
   const _resB = _subB_res - _impB_res;
   // Aplicar signo: resultado hereda el signo de nec (negativo = déficit)
@@ -17436,8 +17447,8 @@ function buildComparacionFlujos() {
     const _rubroImpB = (fB.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
     const { subtotal: subA } = _calcResultadoNeto(ingA, egrADet);
     const { subtotal: subB } = _calcResultadoNeto(ingB, egrBDet);
-    const impA = _rubroImpA ? Math.abs(_rubroImpA.actual || 0) : Math.abs(subA || 0) * 0.012;
-    const impB = _rubroImpB ? Math.abs(_rubroImpB.actual || 0) : Math.abs(subB || 0) * 0.012;
+    const impA = _rubroImpA ? Math.abs(_rubroImpA.actual || 0) : _impCDEstimado(subA || 0);
+    const impB = _rubroImpB ? Math.abs(_rubroImpB.actual || 0) : _impCDEstimado(subB || 0);
     const resA = subA - impA;
     const resB = subB - impB;
     const _vn = (a, b) => (a!=null&&b!=null&&b!==0) ? (Math.abs(a)-Math.abs(b))/Math.abs(b)*100 : null;
@@ -17706,8 +17717,8 @@ function exportarFlujoExcel() {
   const _rubroImpB_rpt = (fB.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
   const { subtotal: _subA_rpt } = _calcResultadoNeto(ingA, egrADet);
   const { subtotal: _subB_rpt } = _calcResultadoNeto(ingB, egrBDet);
-  const _impA_rpt = _rubroImpA_rpt ? Math.abs(_rubroImpA_rpt.actual||0) : Math.abs(_subA_rpt||0)*0.012;
-  const _impB_rpt = _rubroImpB_rpt ? Math.abs(_rubroImpB_rpt.actual||0) : Math.abs(_subB_rpt||0)*0.012;
+  const _impA_rpt = _rubroImpA_rpt ? Math.abs(_rubroImpA_rpt.actual||0) : _impCDEstimado(_subA_rpt||0);
+  const _impB_rpt = _rubroImpB_rpt ? Math.abs(_rubroImpB_rpt.actual||0) : _impCDEstimado(_subB_rpt||0);
   const _rNetA = _subA_rpt - _impA_rpt;
   const _rNetB = _subB_rpt - _impB_rpt;
   const _rNetASign = (_necASignado != null && _rNetA != null) ? (_necASignado < 0 ? -Math.abs(_rNetA) : Math.abs(_rNetA)) : null;
@@ -18101,8 +18112,8 @@ function exportarFlujoExcel() {
         const _rubroImpB2 = (fB.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
         const { subtotal: subA } = _calcResultadoNeto(ingA, egrADet);
         const { subtotal: subB } = _calcResultadoNeto(ingB, egrBDet);
-        const impA = _rubroImpA2 ? Math.abs(_rubroImpA2.actual || 0) : Math.abs(subA || 0) * 0.012;
-        const impB = _rubroImpB2 ? Math.abs(_rubroImpB2.actual || 0) : Math.abs(subB || 0) * 0.012;
+        const impA = _rubroImpA2 ? Math.abs(_rubroImpA2.actual || 0) : _impCDEstimado(subA || 0);
+        const impB = _rubroImpB2 ? Math.abs(_rubroImpB2.actual || 0) : _impCDEstimado(subB || 0);
         const resA = subA - impA;
         const resB = subB - impB;
         const _vn2 = (a,b) => (a!=null&&b!=null&&b!==0)?(Math.abs(a)-Math.abs(b))/Math.abs(b)*100:null;
