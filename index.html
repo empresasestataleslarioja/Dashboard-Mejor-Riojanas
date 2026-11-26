@@ -17275,25 +17275,35 @@ function buildComparacionFlujos() {
     cov_lab: { f: fA, categoria: 'laboral', titulo: 'Costo laboral',       rows: _flujoLaboralRows(fA),      totalLabel: 'Total costo laboral' },
   };
 
+  // Un único indicador principal — antes se mostraban "Necesidad actual"
+  // (el valor declarado a mano, "Fondos solicitados") Y "Resultado neto"
+  // (calculado de abajo hacia arriba) como dos tarjetas completas: en la
+  // mayoría de los flujos ambos coinciden, duplicando el mismo número dos
+  // veces; cuando difieren (caso real: Bodega y Fincas de Aminga),
+  // mostraba dos "verdades" distintas sin indicar cuál es la vigente. El
+  // declarado sigue visible en la fila "Resultado (néc. fondos)" del
+  // cuadro de abajo; si difiere mucho del calculado, se marca con un
+  // aviso en vez de una tarjeta aparte (mismo umbral que "Auditar flujos").
+  const _divergeA = _flujoDivergeDeBottomUp(fA, necA, _flujoResultadoBottomUp(fA));
+  const _divergeB = _flujoDivergeDeBottomUp(fB, necB, _flujoResultadoBottomUp(fB));
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:`Necesidad actual${_sufMetrica}`, v:fmtM(necA),  c:necA==null?'var(--dim)':necA<0?'var(--neg)':'var(--pos)', big:true,
-      title:'Monto declarado/editado a mano ("Fondos solicitados") — puede diferir del Resultado Neto calculado de abajo hacia arriba; ver "Auditar flujos".' },
-    { l:'Var. nominal déficit', v:fmtP(varNom),                                                  c:colVar(varNom) },
-    { l:'Var. real (Fisher)',   v:fmtP(varReal),                                                 c:colVar(varReal) },
-    { l:`Resultado neto (ingr.−egr.−imp.)${_sufMetrica}`, v:fmtM(_resASigned), c:_resASigned==null?'var(--dim)':_resASigned<0?'var(--neg)':'var(--pos)', big:true,
+    { l:`Resultado neto${_sufMetrica}`, v:fmtM(_resASigned), c:_resASigned==null?'var(--dim)':_resASigned<0?'var(--neg)':'var(--pos)', big:true,
       title:'Calculado de abajo hacia arriba (ingresos − egresos − 1,2% o rubro real de imp. créd/déb) — mismo criterio que usa el reporte imprimible/Excel comparativo.' },
-    { l:'Var. nominal resultado', v:fmtP(_varNomRes),                                            c:colVar(_varNomRes) },
-    { l:'Var. real resultado (Fisher)', v:fmtP(_varRealRes),                                     c:colVar(_varRealRes) },
+    { l:'Var. nominal', v:fmtP(_varNomRes),                                                      c:colVar(_varNomRes) },
+    { l:'Var. real (Fisher)', v:fmtP(_varRealRes),                                                c:colVar(_varRealRes) },
+    ...((_divergeA||_divergeB) ? [{ l:'⚠ Difiere de "Fondos solicitados"', v:fmtM(necA), c:'#ff8c47',
+      title:'El monto declarado/editado a mano en "Fondos solicitados" difiere bastante del Resultado Neto calculado arriba — hacé clic para revisarlo en "Auditar flujos".',
+      onclickFn:'auditarFlujosInconsistentes()' }] : []),
     { l:'Cobertura ing/egr',   v:covA ? covA.toFixed(2)+'%' : '—',                              c:'var(--text)', popKey:'cov_ing' },
     { l:'Δ cobertura',         v:covA&&covB ? (covA-covB>0?'+':'')+(covA-covB).toFixed(2)+'pp' : '—', c:covA&&covB?(covA>covB?'var(--pos)':'var(--neg)'):'var(--dim)' },
     ...(labCovA ? [{ l:'Cob. ing / costo laboral', v:labCovA.toFixed(2)+'%', c:'#e8c84a', title:'Ingresos operativos sobre costo laboral del período actual', popKey:'cov_lab' }] : []),
     ...(ipc&&_resBSigned ? [{ l:`Ant. + IPC ${ipc}%`, v:fmtM(_resBSigned*(1+ipc/100)), c:'var(--dim)', title:'Equivalente real del resultado neto del período anterior en pesos actuales' }] : []),
-    ...(ipcProy&&necA ? [{ l:`Proyección siguiente período`, v:fmtM(necA*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el período actual` }] : []),
+    ...(ipcProy&&_resASigned ? [{ l:`Proyección siguiente período`, v:fmtM(_resASigned*(1+ipcProy/100)), c:'var(--y21)', big2:true, title:`Estimación con IPC proyectado ${ipcProy}% sobre el Resultado Neto del período actual` }] : []),
   ].map(k => `<div style="padding:${k.big||k.big2?'10px 18px':'8px 14px'};background:var(--s2);
     border:1px solid var(--bd);border-radius:4px;min-width:${k.big?'150px':k.big2?'200px':'110px'};
     ${k.big?'border-left:3px solid var(--neg)':k.big2?'border-left:3px solid var(--y21)':''}
-    ${k.popKey?'cursor:pointer;':''}"
-    ${k.title?`title="${k.title}"`:''}${k.popKey?`onclick="mostrarKpiDetalle(event,'${k.popKey}')"`:''}>
+    ${(k.popKey||k.onclickFn)?'cursor:pointer;':''}"
+    ${k.title?`title="${k.title}"`:''}${k.onclickFn?`onclick="${k.onclickFn}"`:k.popKey?`onclick="mostrarKpiDetalle(event,'${k.popKey}')"`:''}>
     <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
       <div style="font-size:8px;color:${k.big2?'var(--y21)':'var(--dim)'};font-family:var(--mono);flex:1">${k.l}</div>
       ${k.popKey ? '<div style="font-size:9px;color:var(--dim);opacity:.45" title="Ver rubros incluidos">ⓘ</div>' : ''}
