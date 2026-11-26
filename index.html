@@ -15428,7 +15428,7 @@ function _diagFlujo(empresaStr) {
 // individual de flujo (ver buildVistaIndividualFlujo) para separar el
 // resultado neto REAL del campo "Fondos solicitados" del archivo.
 function _flujoResultadoBottomUp(f) {
-  const ingA = _flujoIngTotal(f);
+  const ingA = _flujoIngDetTotal(f) ?? _flujoIngTotal(f);
   const egrDet = _flujoEgrDetTotal(f);
   if (ingA == null || egrDet == null) return null;
   const subtotal = ingA - Math.abs(egrDet);
@@ -15786,7 +15786,12 @@ function buildVistaIndividualFlujo(claveOverride) {
   // pie (SUBTOTAL/RESULTADO NETO) respecto de la suma de las columnas mensuales.
   const _rubroImpCD = f.rubros.find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
   const egrAajust   = _flujoEgrDetTotal(f) ?? egrA;
-  const { impCredDeb: _impCDEstim, resultado: _resEstim } = _calcResultadoNeto(ingA, egrAajust);
+  // ingADet (detalle), no ingA (declarado) — mismo motivo que ya evitó usar
+  // egrA (bruto) más arriba: si el Excel clasificó mal algún rubro, el
+  // "TOTAL INGRESOS" declarado puede no coincidir con la suma real de los
+  // rubros de ingreso detalle, y este estimado quedaría desalineado del
+  // resto del pie (que sí suma el detalle mes a mes).
+  const { impCredDeb: _impCDEstim, resultado: _resEstim } = _calcResultadoNeto(ingADet, egrAajust);
   // "Fondos solicitados" (necA) sigue siendo el valor que muestra la tarjeta
   // de arriba — puede ser un monto declarado/gestionado, distinto del cálculo
   // puro de abajo hacia arriba (ver auditarFlujosInconsistentes, pensada
@@ -16932,8 +16937,19 @@ function buildComparacionFlujos() {
   // Fisher: var real = (1+varNom/100)/(1+ipc/100) - 1
   const varReal = (varNom!=null && ipc) ? ((1 + varNom/100) / (1 + ipc/100) - 1) * 100 : null;
 
-  const ingA = _flujoIngTotal(fA);
-  const ingB = _flujoIngTotal(fB);
+  // _flujoIngDetTotal (suma de los rubros de ingreso detalle) en vez de
+  // _flujoIngTotal (que prioriza la fila "TOTAL INGRESOS" declarada en el
+  // Excel de origen): esa fila declarada puede no coincidir con el detalle
+  // si el archivo clasificó mal algún rubro (ej. una asistencia financiera
+  // estatal) y luego se corrigió el rubro sin volver a tocar el total —
+  // mismo motivo documentado en buildVistaIndividualFlujo (ingADet) y en
+  // _flujoIngDetTotal. Caso real: Bodega y Fincas de Aminga 3er
+  // cuatrimestre 2026, donde esto hacía que el Resultado Neto de abajo
+  // hacia arriba mostrado en esta pantalla ($463.278.852,99) no
+  // coincidiera con el de la vista individual del mismo flujo, que sí
+  // suma el detalle mes a mes ($436.639.846,75 — el correcto).
+  const ingA = _flujoIngDetTotal(fA) ?? _flujoIngTotal(fA);
+  const ingB = _flujoIngDetTotal(fB) ?? _flujoIngTotal(fB);
   const ingAOp = _flujoIngOperativo(fA);
   const ingBOp = _flujoIngOperativo(fB);
   const egrA = _flujoEgrTotal(fA);     // total bruto (para _calcResultadoNeto)
