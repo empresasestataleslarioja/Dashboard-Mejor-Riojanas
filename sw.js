@@ -14,7 +14,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Sin caché — siempre red para tener la versión más reciente
+// Sin caché — siempre red para tener la versión más reciente de index.html
 self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request, { cache: 'no-store' }).catch(() => fetch(event.request))
