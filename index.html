@@ -14188,8 +14188,16 @@ function _parsePeriodoFlujoStr(per) {
   const s = (per || '').toLowerCase();
   const anio = parseInt(s.match(/20\d\d/)?.[0]);
   if (!anio) return null;
-  const cuatMatch = s.match(/([1-4])[°ºo]?\s*(?:cuatrimestre|cuatrim|cuat)/);
-  const trimMatch = s.match(/([1-4])[°ºo]?\s*(?:trimestre|trim)/);
+  // (?:er|do|ro|to|°|º)? — el formato real usado en el dashboard es
+  // "1er/2do/3er/4to Cuatrimestre" (sufijo ordinal en texto, no solo
+  // °/º): sin este sufijo el match fallaba siempre para ese formato y
+  // la función caía al fallback tipo:'anio',num:1 — tratando CUALQUIER
+  // cuatrimestre/trimestre como si fuera "enero" de ese año, rompiendo
+  // en silencio el orden de la lista de flujos, "período anterior/
+  // siguiente", la alerta de períodos no consecutivos y el IPC acumulado
+  // sugerido para cualquier período que no mencionara meses por nombre.
+  const cuatMatch = s.match(/([1-4])\s*(?:er|do|ro|to|°|º)?\s*(?:cuatrimestre|cuatrim|cuat)/);
+  const trimMatch = s.match(/([1-4])\s*(?:er|do|ro|to|°|º)?\s*(?:trimestre|trim)/);
   if (cuatMatch) return { anio, tipo:'cuat', num: parseInt(cuatMatch[1]) };
   if (trimMatch) return { anio, tipo:'trim', num: parseInt(trimMatch[1]) };
   const MESES_MAP = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
@@ -17693,16 +17701,31 @@ function _ipcAcumEntrePeriodos(pA, pB) {
     septiembre:9, sep:9, sept:9, octubre:10, oct:10, noviembre:11, nov:11,
     diciembre:12, dic:12
   };
-  // Detecta el ÚLTIMO mes mencionado en el string (ej. "MAY-AGO 2026" → agosto=8)
+  // Detecta el ÚLTIMO mes mencionado en el string (ej. "MAY-AGO 2026" → agosto=8).
+  // Si el string no menciona ningún mes por nombre (ej. el formato estándar
+  // "1er/2do/3er Cuatrimestre 2026", sin nombres de mes) se infiere el mes de
+  // cierre a partir de _parsePeriodoFlujoStr (mismo parser que ya usa la
+  // alerta de períodos no consecutivos) — antes, en ese caso, se asumía
+  // diciembre por defecto, lo que hacía que "1er/2do/3er Cuatrimestre" de un
+  // mismo año resolvieran todos al mismo mes de cierre (12) y la función
+  // devolviera null siempre, sin sugerir nunca un IPC acumulado.
+  const DUR_TIPO = { cuat:4, trim:3, mes:1, anio:12 };
   const parsePer = p => {
     const s = (p||'').toLowerCase();
     const anio = parseInt(s.match(/20\d\d/)?.[0]);
-    // Buscar todos los meses mencionados y tomar el mayor (el cierre del período)
+    if (!anio) return null;
     const matches = Object.entries(MESES_NOM)
       .filter(([k]) => s.includes(k))
       .map(([,v]) => v);
-    const mes = matches.length ? Math.max(...matches) : 12;
-    return anio ? { anio, mes } : null;
+    if (matches.length) return { anio, mes: Math.max(...matches) };
+    const pp = _parsePeriodoFlujoStr(p);
+    if (pp) {
+      const inicioAbs = _absInicioPeriodo(pp);
+      const dur = DUR_TIPO[pp.tipo] || 4;
+      const cierreAbs = inicioAbs + dur - 1;
+      return { anio: Math.floor((cierreAbs - 1) / 12), mes: ((cierreAbs - 1) % 12) + 1 };
+    }
+    return { anio, mes: 12 };
   };
   const ppa = parsePer(pA), ppb = parsePer(pB);
   if (!ppa || !ppb) return null;
