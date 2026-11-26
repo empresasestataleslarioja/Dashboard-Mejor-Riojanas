@@ -17195,28 +17195,23 @@ function buildComparacionFlujos() {
   const _resASigned = necA != null && _resA != null ? (necA < 0 ? -Math.abs(_resA) : Math.abs(_resA)) : null;
   const _resBSigned = necB != null && _resB != null ? (necB < 0 ? -Math.abs(_resB) : Math.abs(_resB)) : null;
   // Var. nominal/real del Resultado Neto calculado de abajo hacia arriba
-  // (ingresos − egresos − imp. créd/déb) — mismo criterio que ya usa el
-  // reporte imprimible/Excel comparativo (exportarFlujoExcel), que antes
-  // no se mostraba acá en pantalla, así que esta vista y esa no exponían
-  // la misma variación (una solo mostraba la de "Necesidad actual",
-  // declarada a mano, que puede diferir del cálculo real — ver
-  // "Auditar flujos"). Ahora ambas quedan visibles en pantalla también.
-  const _varNomRes  = _varNecesidad(_resASigned, _resBSigned);
-  // La fórmula de Fisher "(1+nominal)/(1+ipc)−1" asume que la variación nominal
-  // se calculó sobre magnitudes positivas (precios, ingresos) — aplicada a un
-  // déficit (negativo) da un resultado que no coincide con comparar
-  // directamente el resultado actual contra el anterior llevado a pesos de
-  // hoy (_resBSigned*(1+ipc/100), el mismo monto que ya se muestra en la
-  // tarjeta "Ant. + IPC"). Se usa esa comparación directa en su lugar, para
-  // que esta tarjeta y la fila del cuadro de abajo (que compara los mismos
-  // dos montos) siempre coincidan.
-  const _varRealRes = (_resASigned != null && _resBSigned != null && ipc)
-    ? _varNecesidad(_resASigned, _resBSigned * (1 + ipc / 100))
-    : null;
+  // (ingresos − egresos − imp. créd/déb) — EXACTAMENTE la misma fórmula y
+  // convención de signo que ya usa el reporte imprimible/Excel comparativo
+  // (exportarFlujoExcel: |actual|−|anterior| sobre |anterior|, positivo =
+  // creció la magnitud del resultado/déficit). Antes esta pantalla no
+  // mostraba esta variación (solo la de "Necesidad actual", declarada a
+  // mano) y, al agregarla, cada vista la calculaba por su cuenta con una
+  // fórmula distinta y terminaban sin coincidir entre sí. Se guarda en
+  // window._compActiva para que exportarFlujoExcel reutilice este mismo
+  // valor en vez de recalcularlo — así pantalla y reporte impreso nunca
+  // pueden volver a desalinearse.
+  const _varNomRes  = (_resASigned != null && _resBSigned) ? (Math.abs(_resASigned) - Math.abs(_resBSigned)) / Math.abs(_resBSigned) * 100 : null;
+  const _varRealRes = (_varNomRes != null && ipc) ? ((1 + _varNomRes / 100) / (1 + ipc / 100) - 1) * 100 : null;
+  Object.assign(window._compActiva, { _resASigned, _resBSigned, _varNomRes, _varRealRes });
   const _resRows = [
     { lbl:`${_tagMetricaCap} egresos`,  vA: egrADet, vB: egrBDet, acento:'var(--neg)', posEsBueno: false },
     ...(ingA||ingB ? [{ lbl:`${_tagMetricaCap} ingresos`, vA: ingA, vB: ingB, acento:'var(--pos)', posEsBueno: true }] : []),
-    { lbl:`Resultado (néc. fondos)${_sufMetrica}`, vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true, vn: varNom },
+    { lbl:`Resultado (néc. fondos)${_sufMetrica}`, vA: necA, vB: necB, acento: necA!=null&&necA<0?'var(--neg)':'var(--pos)', posEsBueno: false, esResultado: true, vn: varNom==null?null:-varNom },
     ...(ipc&&_resBSigned ? [{ lbl:`Resultado — Var. real (Fisher, IPC ${ipc}%)`, vA: _resASigned, vB: _resBSigned*(1+ipc/100), acento:'var(--dim)', note:true, posEsBueno: false, esResultado: true, vn: _varRealRes }] : []),
   ];
   resumenEl.innerHTML = `<div style="background:var(--s2);border:1px solid var(--bd);border-radius:4px;
@@ -17242,10 +17237,11 @@ function buildComparacionFlujos() {
             // Cambio de signo: mostrar etiqueta cualitativa
             varCell = `<span style="font-size:8px;font-weight:600;color:${aEsDeficit?'var(--neg)':'var(--pos)'}">${aEsDeficit?'→ DÉFICIT':'→ SUPERÁVIT'}</span>`;
           } else if (row.vn !== undefined) {
-            // Usar el mismo valor ya calculado que muestra la tarjeta KPI
-            // correspondiente (varNom/_varRealRes) — nunca recalcularlo acá
-            // con otra fórmula, para que tarjeta y fila siempre coincidan.
-            const vp = row.vn == null ? null : -row.vn; // esta tabla usa signo "aumento = positivo", al revés que las tarjetas
+            // row.vn ya viene con el signo exacto a mostrar en esta columna
+            // (quien arma _resRows se encarga de la convención) — nunca
+            // recalcularlo acá con otra fórmula, para que esta fila y su
+            // tarjeta KPI correspondiente siempre coincidan.
+            const vp = row.vn;
             const c = vp==null?'var(--dim)': row.posEsBueno ? (vp>0?'var(--pos)':'var(--neg)') : (vp>0?'var(--neg)':'var(--pos)');
             varCell = vp!=null ? `<span style="color:${c};font-weight:600">${vp>0?'+':''}${vp.toFixed(2)}%</span>` : '—';
           } else {
@@ -17287,10 +17283,15 @@ function buildComparacionFlujos() {
   const _divergeA = _flujoDivergeDeBottomUp(fA, necA, _flujoResultadoBottomUp(fA));
   const _divergeB = _flujoDivergeDeBottomUp(fB, necB, _flujoResultadoBottomUp(fB));
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:`Resultado neto${_sufMetrica}`, v:fmtM(_resASigned), c:_resASigned==null?'var(--dim)':_resASigned<0?'var(--neg)':'var(--pos)', big:true,
-      title:'Calculado de abajo hacia arriba (ingresos − egresos − 1,2% o rubro real de imp. créd/déb) — mismo criterio que usa el reporte imprimible/Excel comparativo.' },
-    { l:'Var. nominal', v:fmtP(_varNomRes),                                                      c:colVar(_varNomRes) },
-    { l:'Var. real (Fisher)', v:fmtP(_varRealRes),                                                c:colVar(_varRealRes) },
+    { l:`Resultado neto (actual)${_sufMetrica}`, v:fmtM(_resASigned), c:_resASigned==null?'var(--dim)':_resASigned<0?'var(--neg)':'var(--pos)', big:true,
+      title:'Calculado de abajo hacia arriba (ingresos − egresos − 1,2% o rubro real de imp. créd/déb) — idéntico al que muestra el reporte imprimible/Excel comparativo.' },
+    { l:`Resultado neto (anterior)${_sufMetrica}`, v:fmtM(_resBSigned), c:'var(--dim)' },
+    // Convención igual a la del reporte (pColor(-_varNomRes)): el texto muestra
+    // +30,79% tal cual (positivo = creció la magnitud del resultado/déficit),
+    // pero el color es "malo" (rojo) cuando esa magnitud crece — por eso se le
+    // pasa el signo invertido solo al color, nunca al valor mostrado.
+    { l:'Var. nominal', v:fmtP(_varNomRes),                                                      c:colVar(_varNomRes==null?null:-_varNomRes) },
+    { l:'Var. real (Fisher)', v:fmtP(_varRealRes),                                                c:colVar(_varRealRes==null?null:-_varRealRes) },
     ...((_divergeA||_divergeB) ? [{ l:'⚠ Difiere de "Fondos solicitados"', v:fmtM(necA), c:'#ff8c47',
       title:'El monto declarado/editado a mano en "Fondos solicitados" difiere bastante del Resultado Neto calculado arriba — hacé clic para revisarlo en "Auditar flujos".',
       onclickFn:'auditarFlujosInconsistentes()' }] : []),
@@ -17732,6 +17733,11 @@ function exportarFlujoExcel() {
     egrADet: _egrADet, egrBDet: _egrBDet,
     labA, labB, covA, covB,
     varNom, varReal, labCovA, labCovB,
+    // Mismos valores que ya calculó y mostró el panel activo
+    // (buildComparacionFlujos) — nunca recalcularlos acá de nuevo con otra
+    // fórmula, para que el reporte imprimible/Excel y la pantalla jamás
+    // puedan volver a mostrar números distintos para lo mismo.
+    _resASigned: _rNetASign, _resBSigned: _rNetBSign, _varNomRes, _varRealRes,
     _tagMetrica, _tagMetricaCap, _sufMetrica } = _c;
   const egrADet = _egrADet ?? _flujoEgrDetTotal(fA);
   const egrBDet = _egrBDet ?? _flujoEgrDetTotal(fB);
@@ -17739,19 +17745,6 @@ function exportarFlujoExcel() {
   const necA = _necASignado != null ? Math.abs(_necASignado) : null;
   const necB = _necBSignado != null ? Math.abs(_necBSignado) : null;
 
-  // Variación sobre RESULTADO NETO (post imp. 1,2%) — igual al tfoot del panel activo
-  const _rubroImpA_rpt = (fA.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
-  const _rubroImpB_rpt = (fB.rubros||[]).find(r => !r.esTotal && _esImpCredDeb(r.label) && r.actual != null);
-  const { subtotal: _subA_rpt } = _calcResultadoNeto(ingA, egrADet);
-  const { subtotal: _subB_rpt } = _calcResultadoNeto(ingB, egrBDet);
-  const _impA_rpt = _rubroImpA_rpt ? Math.abs(_rubroImpA_rpt.actual||0) : _impCDEstimado(_subA_rpt||0);
-  const _impB_rpt = _rubroImpB_rpt ? Math.abs(_rubroImpB_rpt.actual||0) : _impCDEstimado(_subB_rpt||0);
-  const _rNetA = _subA_rpt - _impA_rpt;
-  const _rNetB = _subB_rpt - _impB_rpt;
-  const _rNetASign = (_necASignado != null && _rNetA != null) ? (_necASignado < 0 ? -Math.abs(_rNetA) : Math.abs(_rNetA)) : null;
-  const _rNetBSign = (_necBSignado != null && _rNetB != null) ? (_necBSignado < 0 ? -Math.abs(_rNetB) : Math.abs(_rNetB)) : null;
-  const _varNomRes = (_rNetASign != null && _rNetBSign) ? (Math.abs(_rNetASign) - Math.abs(_rNetBSign)) / Math.abs(_rNetBSign) * 100 : null;
-  const _varRealRes = (_varNomRes != null && ipc) ? ((1 + _varNomRes / 100) / (1 + ipc / 100) - 1) * 100 : null;
   const _varNomCov  = (covA != null && covB) ? (covA - covB) / covB * 100 : null;
   const _varRealCov = (_varNomCov != null && ipc) ? ((1 + _varNomCov / 100) / (1 + ipc / 100) - 1) * 100 : null;
 
