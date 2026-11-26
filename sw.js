@@ -1,5 +1,6 @@
 // Service Worker — Dashboard Mejor Riojanas
-// Actualizar CACHE_VER fuerza limpieza en todos los browsers al próximo deploy
+// Actualizar CACHE_VER (al short SHA del commit funcional previo) fuerza
+// limpieza de caché en todos los browsers al próximo deploy
 const CACHE_VER = 'f80bb05';
 
 self.addEventListener('install', () => self.skipWaiting());
