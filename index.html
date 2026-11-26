@@ -16647,21 +16647,28 @@ function buildComparacionFlujos() {
   const ipcProy  = parseFloat(document.getElementById('comp-flujo-ipc-proy')?.value || '0') || 0;
   const fA_prev  = DATA.flujos[claveA];
   const fB_prev  = DATA.flujos[claveB];
-  // Fuente 1: calcular desde tabla INDEC+REM usando meses y año explícitos del flujo A
+  // Fuente 1: calcular desde los dos períodos (A y B) — mide la inflación
+  // realmente transcurrida entre el cierre de B y el cierre de A. Tiene
+  // prioridad sobre "meses propios de A" (Fuente 2): esa última solo da el
+  // mismo resultado cuando A y B son consecutivos (ej. 2do vs 3er
+  // cuatrimestre); si no lo son (ej. 1er vs 3er, saltea el 2do), usar los
+  // meses propios de A ignora por completo ese intervalo salteado y da un
+  // acumulado menor al real.
   const _añoA   = fA_prev?.año || parseInt((fA_prev?.periodo||'').match(/20\d\d/)?.[0]);
-  const ipcDeMeses = (fA_prev?.meses?.length && _añoA) ? calcularIPCFlujo(fA_prev.meses, _añoA) : null;
-  // Fuente 2: calcular desde strings de período (fallback para flujos sin meses explícitos)
   const ipcDeStrings = (fA_prev && fB_prev) ? _ipcAcumEntrePeriodos(fA_prev.periodo, fB_prev.periodo) : null;
+  // Fuente 2: meses y año explícitos del flujo A — respaldo cuando no se
+  // puede resolver el período de alguno de los dos (string no parseable).
+  const ipcDeMeses = (fA_prev?.meses?.length && _añoA) ? calcularIPCFlujo(fA_prev.meses, _añoA) : null;
   // Fuente 3: IPC guardado en el flujo A cuando fue importado
-  const ipcAuto = ipcDeMeses ?? ipcDeStrings ?? null;
+  const ipcAuto = ipcDeStrings ?? ipcDeMeses ?? null;
   const ipc = ipcInput > 0 ? ipcInput : (ipcAuto ?? fA_prev?.ipc ?? 0);
   // Actualizar el input con el valor calculado y mostrar origen
   if (ipc > 0 && ipcInput === 0) {
     const ipcEl = document.getElementById('comp-flujo-ipc');
     if (ipcEl) {
       ipcEl.value = ipc;
-      const origen = ipcDeMeses != null ? 'INDEC+REM · meses ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' (período actual)'
-                   : ipcDeStrings != null ? 'INDEC+REM · calculado entre períodos'
+      const origen = ipcDeStrings != null ? 'INDEC+REM · calculado entre períodos'
+                   : ipcDeMeses != null ? 'INDEC+REM · meses ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' (período actual)'
                    : 'guardado en el flujo';
       ipcEl.title = 'IPC auto: ' + origen;
     }
@@ -16670,11 +16677,11 @@ function buildComparacionFlujos() {
   const ipcSrcEl = document.getElementById('comp-flujo-ipc-src');
   if (ipcSrcEl) {
     ipcSrcEl.textContent = ipc > 0
-      ? (ipcDeMeses != null ? '✓ ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' · período actual — INDEC+REM'
-       : ipcDeStrings != null ? '✓ Entre períodos — INDEC+REM'
+      ? (ipcDeStrings != null ? '✓ Entre períodos — INDEC+REM'
+       : ipcDeMeses != null ? '✓ ' + (fA_prev.meses||[]).join('/') + ' ' + _añoA + ' · período actual — INDEC+REM'
        : '— Guardado en flujo (sin meses/año)')
       : '';
-    ipcSrcEl.style.color = ipcDeMeses != null || ipcDeStrings != null ? 'var(--pos)' : 'var(--dim)';
+    ipcSrcEl.style.color = ipcDeStrings != null || ipcDeMeses != null ? 'var(--pos)' : 'var(--dim)';
   }
   const wrap   = document.getElementById('flujo-comp-wrap');
 
