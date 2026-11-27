@@ -2080,5 +2080,110 @@ group('Bridge Apps Script embebido en index.html — debe ser idéntico a apps-s
     'si tocaste uno de los dos, replicá el cambio en el otro antes de publicar');
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Funciones puras del informe Word de flujos comparados (selección de
+// rubros, abreviatura de período, variación real) — pensadas para
+// atrapar en el acto bugs como el de "Var. real de Fondos Solicitados"
+// (un campo calculado con la fórmula equivocada que no se detectó
+// durante meses porque no se mostraba en ninguna tarjeta de pantalla,
+// hasta que un cambio posterior lo conectó al Word) o el de
+// "_abreviarPeriodoFlujo colapsa un rango de meses a uno solo" — ambos
+// solo se notaron generando un .docx real y leyéndolo a mano.
+const _mesesConstsBlock = extractConstBlock(html,
+  "const _MESES_ABR3 = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];",
+  'septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};');
+const _umbralesInformeBlock = extractConstBlock(html,
+  'const UMBRAL_VAR_PCT_RUBRO_INFORME = 10;',
+  'const UMBRAL_MONTO_RUBRO_INFORME   = 1000000;');
+const {
+  _abreviarPeriodoFlujo,
+  _rubroEsRelevanteInforme,
+  _rubroVariacionNominal,
+  _rubroMontoVariacion,
+  _varNecesidad: _varNecesidadInforme,
+} = new Function(
+  extractFn(html, '_parsePeriodoFlujoStr') + '\n' +
+  _mesesConstsBlock + '\n' +
+  extractFn(html, '_abreviarPeriodoFlujo') + '\n' +
+  extractFn(html, '_rubroVariacionNominal') + '\n' +
+  extractFn(html, '_rubroMontoVariacion') + '\n' +
+  _umbralesInformeBlock + '\n' +
+  extractFn(html, '_esRubroLaboral') + '\n' +
+  extractFn(html, '_rubroEsRelevanteInforme') + '\n' +
+  extractFn(html, '_varNecesidad') + '\n' +
+  'return { _abreviarPeriodoFlujo, _rubroEsRelevanteInforme, _rubroVariacionNominal, _rubroMontoVariacion, _varNecesidad };'
+)();
+
+group('_abreviarPeriodoFlujo — abrevia período para citarlo en el informe Word', () => {
+  assert(_abreviarPeriodoFlujo('3er Cuatrimestre 2025') === '3°C/25', 'cuatrimestre con sufijo ordinal');
+  assert(_abreviarPeriodoFlujo('2do Trimestre 2026') === '2°T/26', 'trimestre con sufijo ordinal');
+  assert(_abreviarPeriodoFlujo('Marzo 2026') === 'Mar/26', 'un único mes');
+  assert(_abreviarPeriodoFlujo('Ejercicio 2024') === 'Ej/24', 'ejercicio anual');
+  // Bug real: un período citado como rango literal de meses ("SEPTIEMBRE-
+  // OCTUBRE-NOVIEMBRE-DICIEMBRE 2026") colapsaba al primer nombre de mes
+  // que encontraba ("Sep/26"), perdiendo que en realidad son 4 meses.
+  assert(_abreviarPeriodoFlujo('SEPTIEMBRE-OCTUBRE-NOVIEMBRE-DICIEMBRE 2026') === 'Sep-Dic/26',
+    'rango de varios meses cita el primero y el último, no solo el primero');
+  assert(_abreviarPeriodoFlujo('MAYO-JUNIO-JULIO-AGOSTO 2026') === 'May-Ago/26',
+    'rango de varios meses (otro ejemplo, orden de meses no consecutivo al alfabético)');
+});
+
+group('_rubroEsRelevanteInforme — criterio de preselección de rubros para el informe Word', () => {
+  const r = (label, tipo, actual) => ({ key: label, label, tipo, actual });
+  // Sueldos y cargas sociales: siempre relevante, aunque la variación sea chica.
+  assert(_rubroEsRelevanteInforme(r('Sueldos y cargas sociales', 'egreso', 100000100), r('Sueldos y cargas sociales', 'egreso', 100000000)) === true,
+    'sueldos y cargas sociales: siempre relevante aunque la variación sea ínfima');
+  assert(_rubroEsRelevanteInforme(r('Pago F.931', 'egreso', 5000100), r('Pago F.931', 'egreso', 5000000)) === true,
+    '"931" en el label también cuenta como costo laboral');
+  // Rubro nuevo (no existía en el período anterior): siempre relevante.
+  assert(_rubroEsRelevanteInforme(r('Intereses ganados', 'ingreso', 50000), null) === true,
+    'rubro nuevo: siempre relevante aunque el monto sea chico');
+  // Variación grande en % pero monto chico (< $1.000.000): NO relevante.
+  assert(_rubroEsRelevanteInforme(r('Gastos de librería', 'egreso', 40000), r('Gastos de librería', 'egreso', 10000)) === false,
+    '+300% de variación pero solo $30.000 de monto: no alcanza el umbral económico');
+  // Variación grande en % y monto grande: relevante.
+  assert(_rubroEsRelevanteInforme(r('Proveedores de insumos', 'egreso', 235045079.27), r('Proveedores de insumos', 'egreso', 163941660.70)) === true,
+    '+43% de variación y >$1.000.000 de monto: relevante');
+  // Variación chica en % (no llega al 10%), aunque el monto sea grande
+  // (>$1.000.000): el umbral porcentual por sí solo ya descarta el rubro.
+  assert(_rubroEsRelevanteInforme(r('Rubro estable', 'ingreso', 105000000), r('Rubro estable', 'ingreso', 100000000)) === false,
+    '5% de variación con $5.000.000 de monto: el monto alcanza pero el % (5%) no llega al 10%');
+});
+
+group('Var. real de "Fondos Solicitados" — equivalencia algebraica entre convenciones de signo', () => {
+  // Bug real: window._compActiva.varReal Fisher-deflactaba el nominal
+  // SIGNADO de _varNecesidad (negativo = empeora el déficit) en vez de
+  // comparar necA contra necB ya llevado a pesos de hoy — daba 168.83%
+  // en vez de 155.42% para este mismo caso real, y no se detectó porque
+  // ese campo no se muestra en ninguna tarjeta de pantalla. Este test
+  // fija la fórmula correcta (_varNecesidad(necA, necB*(1+ipc/100))) y
+  // prueba que es SIEMPRE equivalente, en magnitud, a Fisher-deflactar
+  // la variación nominal en convención abs-abs (positivo = creció) —
+  // que es lo que sí muestran las tarjetas de pantalla (Resultado Neto).
+  const fisherDeflateAbsAbs = (nomAbsAbs, ipc) => ((1 + nomAbsAbs/100) / (1 + ipc/100) - 1) * 100;
+  const varRealNecesidad = (necA, necB, ipc) => _varNecesidadInforme(necA, necB * (1 + ipc/100));
+
+  const casos = [
+    // [necB (anterior), necA (actual), ipc] — montos reales reportados por el usuario
+    [-297301867.61, -813958301.76, 7.19],
+    [-100, -110, 10],   // la necesidad crece exactamente lo mismo que la inflación -> real ~0
+    [-100, -120, 10],
+    [-1000000, -50000000, 5],
+  ];
+  casos.forEach(([necB, necA, ipc]) => {
+    const nomAbsAbs = (Math.abs(necA) - Math.abs(necB)) / Math.abs(necB) * 100;
+    const esperado = fisherDeflateAbsAbs(nomAbsAbs, ipc);
+    const obtenido = varRealNecesidad(necA, necB, ipc);
+    assert(Math.abs(Math.abs(obtenido) - Math.abs(esperado)) < 0.001,
+      `necA=${necA}, necB=${necB}, ipc=${ipc}%: var. real = ${Math.abs(obtenido).toFixed(2)}% ` +
+      `(coincide con Fisher-deflate del nominal abs-abs: ${Math.abs(esperado).toFixed(2)}%)`);
+  });
+  // Caso puntual del usuario: el valor debe ser 155.42%, no 168.83% (el
+  // resultado de la fórmula que tenía el bug).
+  const real = Math.abs(varRealNecesidad(-813958301.76, -297301867.61, 7.19));
+  assert(Math.abs(real - 155.42) < 0.01,
+    'caso real reportado por el usuario: 155.42% (no 168.83%, que daba la fórmula con el bug)');
+});
+
 console.log(`\n${pass} OK, ${fail} FALLÓ${fail ? ' — revisar antes de publicar' : ''}`);
 process.exit(fail ? 1 : 0);
