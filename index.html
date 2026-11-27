@@ -5604,6 +5604,11 @@ Se calcula automáticamente desde tabla INDEC+REM cuando el flujo tiene meses y 
         </div>
       </div>
 
+      <!-- Selección manual de rubros a incluir en el detalle del informe
+           Word (ANÁLISIS DE INGRESOS/EGRESOS) — ver buildComparacionFlujos
+           y generarInformeFlujo -->
+      <div id="flujo-informe-seleccion" style="margin-bottom:14px"></div>
+
       <!-- Ranking de egresos por peso relativo -->
       <div id="flujo-ranking" style="margin-bottom:14px"></div>
 
@@ -14228,6 +14233,33 @@ function _abreviarPeriodoFlujo(periodoStr) {
   return 'Ej/' + yy;
 }
 
+// Variación nominal (abs-abs) entre un par de rubros emparejados de un
+// comparativo de flujos — null si falta alguno de los dos valores o si B
+// es 0 (no se puede calcular %). Compartida entre buildComparacionFlujos
+// (checkboxes de selección para el informe) y generarInformeFlujo (texto
+// de cada ítem y filtro automático de relevancia).
+function _rubroVariacionNominal(rA, rB) {
+  const a = rA?.actual ?? null, b = rB?.actual ?? null;
+  if (a == null || b == null || b === 0) return null;
+  return (Math.abs(a) - Math.abs(b)) / Math.abs(b) * 100;
+}
+// Umbral de relevancia por defecto para el detalle de rubros del informe
+// Word: variación nominal ≥10% Y peso ≥3% sobre el total de su tipo
+// (ingreso/egreso) — exige las dos condiciones para que un rubro chico con
+// un % enorme no ensucie la lista, y uno grande con variación chica no
+// quede afuera sin que se vea. Se usa como preselección de los checkboxes
+// en pantalla y como filtro automático en generarInformeFlujo cuando no
+// hay selección manual.
+const UMBRAL_VAR_PCT_RUBRO_INFORME  = 10;
+const UMBRAL_PESO_PCT_RUBRO_INFORME = 3;
+function _rubroEsRelevanteInforme(rA, rB, totalTipo) {
+  const peso = totalTipo ? Math.abs(rA?.actual ?? rB?.actual ?? 0) / totalTipo * 100 : 0;
+  if (!rA || !rB) return peso >= UMBRAL_PESO_PCT_RUBRO_INFORME;
+  const vn = _rubroVariacionNominal(rA, rB);
+  if (vn == null) return false;
+  return Math.abs(vn) >= UMBRAL_VAR_PCT_RUBRO_INFORME && peso >= UMBRAL_PESO_PCT_RUBRO_INFORME;
+}
+
 // ── Alerta: flujos PROYECTADOS no presentados en plazo ──────────────
 // Pedido explícito: los flujos son cuatrimestrales (Ene–Abr, May–Ago,
 // Sep–Dic) y el proyectado de cada uno debería cargarse hasta 30 días
@@ -16961,6 +16993,66 @@ function buildComparacionFlujos() {
 
   const allKeys = _merged.map(({rA,rB}) => rA?.key ?? rB?.key);
 
+  // ── Selección manual de rubros a incluir en el informe Word ────────
+  // Pedido explícito: permitir elegir de antemano qué conceptos de
+  // ingresos/egresos se quieren analizar en el Word, en vez de depender
+  // solo del filtro automático por relevancia. generarInformeFlujo() lee
+  // estos checkboxes (si existen y siguen vigentes para este mismo par
+  // de flujos) y los usa tal cual; si no hay selección, sigue filtrando
+  // automáticamente por relevancia como antes.
+  (() => {
+    const panel = document.getElementById('flujo-informe-seleccion');
+    if (!panel) return;
+    const _detalleSel = _merged.filter(({ rA, rB }) => {
+      const r = rA || rB;
+      if (!r || (r.tipo !== 'ingreso' && r.tipo !== 'egreso')) return false;
+      if (r.esTotal) return false;
+      if (_esImpCredDeb(r.label)) return false;
+      if (!rA?.actual && !rB?.actual) return false;
+      return true;
+    });
+    const _totalTipo = (tipo) => _detalleSel.filter(({ rA, rB }) => (rA?.tipo || rB?.tipo) === tipo)
+      .reduce((s, { rA, rB }) => s + Math.abs(rA?.actual ?? rB?.actual ?? 0), 0);
+    const totalIng = _totalTipo('ingreso'), totalEgr = _totalTipo('egreso');
+    const _fila = (rA, rB, totalTipo) => {
+      const key = String(rA?.key ?? rB?.key ?? '');
+      const label = rA?.label || rB?.label || '[sin nombre]';
+      const vn = _rubroVariacionNominal(rA, rB);
+      const checked = _rubroEsRelevanteInforme(rA, rB, totalTipo);
+      const vnTxt = !rA ? 'discontinuado' : !rB ? 'nuevo' : vn == null ? 'sin variación' : (vn >= 0 ? '+' : '') + vn.toFixed(2) + '%';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:9px"
+        onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'">
+        <input type="checkbox" data-rubro-key="${key.replace(/"/g,'&quot;')}" ${checked?'checked':''} style="cursor:pointer;flex-shrink:0">
+        <span style="flex:1;color:var(--text);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span>
+        <span style="color:var(--dim);font-family:var(--mono);font-size:8.5px;flex-shrink:0">${vnTxt}</span>
+      </label>`;
+    };
+    const ingHtml = _detalleSel.filter(({rA,rB}) => (rA?.tipo||rB?.tipo)==='ingreso').map(({rA,rB}) => _fila(rA,rB,totalIng)).join('')
+      || '<div style="font-size:9px;color:var(--dim);padding:4px 6px">— sin rubros de ingreso —</div>';
+    const egrHtml = _detalleSel.filter(({rA,rB}) => (rA?.tipo||rB?.tipo)==='egreso').map(({rA,rB}) => _fila(rA,rB,totalEgr)).join('')
+      || '<div style="font-size:9px;color:var(--dim);padding:4px 6px">— sin rubros de egreso —</div>';
+    panel.innerHTML = `<div class="card" style="padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);
+          font-family:var(--mono);font-weight:600">Conceptos a incluir en el informe Word</span>
+        <span style="font-size:8px;color:var(--dim);font-family:var(--mono)"
+          title="Preseleccionados por relevancia (≥${UMBRAL_VAR_PCT_RUBRO_INFORME}% de variación y ≥${UMBRAL_PESO_PCT_RUBRO_INFORME}% de peso sobre el total). Tildá o destildá para elegir exactamente qué conceptos analizar en el Word.">
+          ℹ preseleccionados por relevancia — editable
+        </span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:8px;color:#2ecc8a;font-family:var(--mono);font-weight:600;margin-bottom:4px">INGRESOS</div>
+          ${ingHtml}
+        </div>
+        <div>
+          <div style="font-size:8px;color:var(--neg);font-family:var(--mono);font-weight:600;margin-bottom:4px">EGRESOS</div>
+          ${egrHtml}
+        </div>
+      </div>
+    </div>`;
+  })();
+
   // KPIs — helpers robustos para cualquier estructura de flujo
   const necA = _flujoNecesidadSignada(fA); // signed: negativo = déficit
   const necB = _flujoNecesidadSignada(fB);
@@ -18689,56 +18781,54 @@ async function generarInformeFlujo() {
     // Mismo filtro que usa el reporte imprimible (_detalle): solo rubros de
     // detalle (sin totalizadores ni imp. créd/déb), y con importe en al
     // menos uno de los dos períodos.
-    const _rubroVariacion = (rA, rB) => {
-      const a = rA?.actual ?? null, b = rB?.actual ?? null;
-      if (a == null || b == null || b === 0) return null;
-      return (Math.abs(a) - Math.abs(b)) / Math.abs(b) * 100;
-    };
-    // Selección de rubros "relevantes" — pedido explícito: el primer
-    // párrafo de cada apartado (fijo) ya expone la variación agregada; el
-    // detalle que sigue debe surgir de ELEGIR ítems con variación
-    // relevante (no listar todos los rubros sin criterio) y dejar lugar a
-    // su justificativo. El "por qué" de cada variación es información
-    // caso-específica que solo conoce quien prepara el informe — se deja
-    // como [COMPLETAR], igual que el resto de los datos de esta plantilla
-    // que el sistema no puede conocer (destinatario, fecha de nota, etc.).
-    const UMBRAL_VAR_PCT_RUBRO  = 10; // % mínimo de variación nominal para considerarla relevante
-    const UMBRAL_PESO_PCT_RUBRO = 3;  // % mínimo de peso sobre el total del mismo tipo (ingreso/egreso)
+    //
+    // Selección de rubros a listar — pedido explícito: el primer párrafo
+    // de cada apartado (fijo) ya expone la variación agregada; el detalle
+    // que sigue debe surgir de ELEGIR ítems, no de listar todos sin
+    // criterio. Dos modos:
+    //  1) Selección MANUAL: si el usuario tildó/destildó checkboxes en el
+    //     panel "Conceptos a incluir en el informe Word" (pantalla de
+    //     comparación) para este mismo par de flujos, se respeta EXACTO
+    //     lo que marcó — incluso si eso es cero ítems de un tipo.
+    //  2) Filtro AUTOMÁTICO (sin selección manual, o comparación corrida
+    //     para otro par de flujos): variación nominal ≥10% y peso ≥3%
+    //     sobre el total del mismo tipo, con respaldo a los 2 de mayor
+    //     peso si ninguno cruza el umbral.
+    // En ambos casos, cada ítem queda con un "[COMPLETAR JUSTIFICATIVO]"
+    // para que quien prepare el informe explique el motivo real de la
+    // variación — dato que el sistema no puede conocer.
+    const _panelSeleccion = _compFresco ? document.getElementById('flujo-informe-seleccion') : null;
+    const _checksSeleccion = _panelSeleccion ? [..._panelSeleccion.querySelectorAll('input[type=checkbox]')] : [];
+    const _marcados = _checksSeleccion.length
+      ? new Set(_checksSeleccion.filter(cb => cb.checked).map(cb => cb.dataset.rubroKey))
+      : null;
     const _listaRubros = (tipo) => {
       const candidatos = _mergedRubros.filter(({ rA, rB }) => {
         const r = rA || rB;
         if (!r || r.tipo !== tipo) return false;
         if (r.esTotal) return false;
-        if (typeof _esImpCredDeb === 'function' && _esImpCredDeb(r.label)) return false;
+        if (_esImpCredDeb(r.label)) return false;
         if (!rA?.actual && !rB?.actual) return false;
         return true;
       });
       const totalTipo = candidatos.reduce((s, { rA, rB }) => s + Math.abs(rA?.actual ?? rB?.actual ?? 0), 0);
       const items = candidatos.map(({ rA, rB }) => {
         const label = rA?.label || rB?.label || '[sin nombre]';
-        const vn = _rubroVariacion(rA, rB);
+        const vn = _rubroVariacionNominal(rA, rB);
         const peso = totalTipo ? Math.abs(rA?.actual ?? rB?.actual ?? 0) / totalTipo * 100 : 0;
-        let texto, relevante;
-        if (!rA) {
-          texto = label + ': rubro discontinuado (sin dato en ' + (fA.periodo || 'el período actual') + ')';
-          relevante = peso >= UMBRAL_PESO_PCT_RUBRO;
-        } else if (!rB) {
-          texto = label + ': rubro nuevo (sin dato en ' + (fB?.periodo || 'el período anterior') + ')';
-          relevante = peso >= UMBRAL_PESO_PCT_RUBRO;
-        } else if (vn == null) {
-          texto = label + ': sin variación calculable';
-          relevante = false;
-        } else {
-          texto = label + ': ' + (vn >= 0 ? 'aumento' : 'reducción') + ' del ' + Math.abs(vn).toFixed(2) + '%';
-          relevante = Math.abs(vn) >= UMBRAL_VAR_PCT_RUBRO && peso >= UMBRAL_PESO_PCT_RUBRO;
-        }
+        let texto;
+        if (!rA) texto = label + ': rubro discontinuado (sin dato en ' + (fA.periodo || 'el período actual') + ')';
+        else if (!rB) texto = label + ': rubro nuevo (sin dato en ' + (fB?.periodo || 'el período anterior') + ')';
+        else if (vn == null) texto = label + ': sin variación calculable';
+        else texto = label + ': ' + (vn >= 0 ? 'aumento' : 'reducción') + ' del ' + Math.abs(vn).toFixed(2) + '%';
+        const relevante = _marcados ? _marcados.has(String(rA?.key ?? rB?.key ?? '')) : _rubroEsRelevanteInforme(rA, rB, totalTipo);
         return { texto: texto + ' [COMPLETAR JUSTIFICATIVO]', abs: vn == null ? -1 : Math.abs(vn), peso, relevante };
       });
       let relevantes = items.filter(i => i.relevante);
-      // Si ningún rubro cruza el umbral (flujo con variaciones chicas y
-      // parejas en todo el detalle), no dejar la sección vacía — mostrar
-      // los 2 de mayor peso igual, para que siempre haya algo a justificar.
-      if (!relevantes.length && items.length) {
+      // El respaldo "no dejar vacío" aplica SOLO en modo automático — si el
+      // usuario marcó la selección a mano, cero ítems tildados significa
+      // "no incluir ninguno" en ese apartado, no un olvido a corregir.
+      if (!_marcados && !relevantes.length && items.length) {
         relevantes = [...items].sort((x, y) => y.peso - x.peso).slice(0, 2);
       }
       relevantes.sort((x, y) => y.abs - x.abs);
