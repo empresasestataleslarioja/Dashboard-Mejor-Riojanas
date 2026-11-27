@@ -18663,6 +18663,13 @@ async function generarInformeFlujo() {
           ? '. El resultado neto calculado de abajo hacia arriba (ingresos operativos menos egresos e impuesto sobre créditos y débitos) para ' + fA.periodo + ' asciende a ' + fmtM(resA) +
             (resB != null && _varRealRes != null ? ', con una variación real del ' + fmtPa(_varRealRes) + ' respecto de ' + fmtM(resB) + ' (' + (fB?.periodo||'período anterior') + ')' : '') +
             (_divergeA ? '. Esta cifra difiere de manera significativa del monto declarado como "Fondos solicitados" (' + fmtM(necA) + '), por lo que se recomienda su revisión' : '')
+          : '') +
+        // Variación del costo laboral — como oración aparte acá (no dentro
+        // de {{COV_LAB_ACT}}: la plantilla ya envuelve ese valor con el
+        // período entre paréntesis justo después, y agregarle texto ahí
+        // deja un paréntesis sin cerrar/de más en esa misma oración).
+        (labVarNom != null
+          ? '. El costo laboral registra una variación nominal del ' + fmtPa(labVarNom) + (labVarReal!=null?' (real del '+fmtPa(labVarReal)+')':'') + ' respecto del período anterior'
           : '')
       : 'variación respecto al período anterior';
 
@@ -18700,9 +18707,7 @@ async function generarInformeFlujo() {
       '{{IPC}}':             ipc ? ipc.toString() : '[IPC]',
       '{{VAR_REAL}}':        varReal!=null?fmtPa(varReal):'[COMPLETAR]',
       '{{COV_LAB_ANT}}':     labCovB!=null?labCovB.toFixed(2)+'%':'[COMPLETAR]',
-      '{{COV_LAB_ACT}}':     labCovA!=null
-        ? labCovA.toFixed(2)+'%'+(labVarNom!=null?' (costo laboral: variación nominal '+fmtP(labVarNom)+(labVarReal!=null?', real '+fmtP(labVarReal):'')+' respecto del período anterior)':'')
-        : '[COMPLETAR]',
+      '{{COV_LAB_ACT}}':     labCovA!=null?labCovA.toFixed(2)+'%':'[COMPLETAR]',
       '{{PERIODO_ANT}}':     fB?.periodo || '[PERÍODO ANTERIOR]',
       '{{PERIODO_ACT}}':     fA.periodo,
       '{{PERIODO_ANT_FULL}}':fB?.periodo || '[PERÍODO ANTERIOR]',
