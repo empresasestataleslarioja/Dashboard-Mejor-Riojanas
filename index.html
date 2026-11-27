@@ -14243,21 +14243,38 @@ function _rubroVariacionNominal(rA, rB) {
   if (a == null || b == null || b === 0) return null;
   return (Math.abs(a) - Math.abs(b)) / Math.abs(b) * 100;
 }
-// Umbral de relevancia por defecto para el detalle de rubros del informe
-// Word: variación nominal ≥10% Y peso ≥3% sobre el total de su tipo
-// (ingreso/egreso) — exige las dos condiciones para que un rubro chico con
-// un % enorme no ensucie la lista, y uno grande con variación chica no
-// quede afuera sin que se vea. Se usa como preselección de los checkboxes
-// en pantalla y como filtro automático en generarInformeFlujo cuando no
-// hay selección manual.
-const UMBRAL_VAR_PCT_RUBRO_INFORME  = 10;
-const UMBRAL_PESO_PCT_RUBRO_INFORME = 3;
-function _rubroEsRelevanteInforme(rA, rB, totalTipo) {
-  const peso = totalTipo ? Math.abs(rA?.actual ?? rB?.actual ?? 0) / totalTipo * 100 : 0;
-  if (!rA || !rB) return peso >= UMBRAL_PESO_PCT_RUBRO_INFORME;
+// Monto de variación (siempre positivo, en $) entre un par de rubros
+// emparejados — para un rubro nuevo/discontinuado, el monto propio del
+// único período en que existe.
+function _rubroMontoVariacion(rA, rB) {
+  if (!rA) return Math.abs(rB?.actual ?? 0);
+  if (!rB) return Math.abs(rA?.actual ?? 0);
+  return Math.abs((rA.actual ?? 0) - (rB.actual ?? 0));
+}
+// Criterio de relevancia por defecto para el detalle de rubros del informe
+// Word — pedido explícito, en este orden:
+//  1) Sueldos y cargas sociales (remuneraciones, 931, SUSS y similares):
+//     siempre relevante, sin importar cuánto varíe.
+//  2) Rubro nuevo del período actual (no existía en el anterior): siempre
+//     relevante.
+//  3) Para el resto: la variación % por sí sola no alcanza — tiene que
+//     estar respaldada por una variación económica importante. Umbral
+//     base: variación nominal ≥10% Y monto de variación ≥$1.000.000.
+// Se usa como preselección de los checkboxes en pantalla y como filtro
+// automático en generarInformeFlujo cuando no hay selección manual — en
+// ambos casos el resto de los conceptos queda igual disponible para que
+// el usuario los elija a mano si quiere analizarlos.
+const UMBRAL_VAR_PCT_RUBRO_INFORME = 10;
+const UMBRAL_MONTO_RUBRO_INFORME   = 1000000;
+function _rubroEsRelevanteInforme(rA, rB) {
+  const label = rA?.label || rB?.label || '';
+  if (_esRubroLaboral(label)) return true;
+  if (rA && !rB) return true; // rubro nuevo
+  const montoVar = _rubroMontoVariacion(rA, rB);
+  if (!rA || !rB) return montoVar >= UMBRAL_MONTO_RUBRO_INFORME; // discontinuado
   const vn = _rubroVariacionNominal(rA, rB);
-  if (vn == null) return false;
-  return Math.abs(vn) >= UMBRAL_VAR_PCT_RUBRO_INFORME && peso >= UMBRAL_PESO_PCT_RUBRO_INFORME;
+  if (vn == null) return montoVar >= UMBRAL_MONTO_RUBRO_INFORME; // sin % calculable (B=0) pero el monto importa igual
+  return Math.abs(vn) >= UMBRAL_VAR_PCT_RUBRO_INFORME && montoVar >= UMBRAL_MONTO_RUBRO_INFORME;
 }
 
 // ── Alerta: flujos PROYECTADOS no presentados en plazo ──────────────
@@ -15270,21 +15287,26 @@ function _flujoIngOperativo(f) {
   return hayIngresos ? 0 : _flujoIngTotal(f);
 }
 
+// Sueldos, cargas sociales y conceptos laborales similares (remuneraciones,
+// honorarios de directores/profesionales, 931/SUSS, SAC, etc.) — detección
+// por patrón de label, reutilizada por _flujoLaboralRows (indicador de
+// cobertura de costo laboral) y por _rubroEsRelevanteInforme (estos rubros
+// siempre se preseleccionan en el informe Word, sin importar su variación).
+function _esRubroLaboral(lbl) {
+  const u = (lbl||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  return u.includes('REMUNER') || (u.includes('CARGA') && u.includes('SOCIAL')) ||
+         (u.includes('HONORAR') && (u.includes('DIRECT') || u.includes('SINDIC') || u.includes('PROFES'))) ||
+         (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') ||
+         u.includes('HABERES') || u.includes('JORNAL') || u.includes('SAC') || u.includes('AGUINALDO') ||
+         u.includes('931') || u.includes('SUSS');
+}
 function _flujoLaboralRows(f) {
   if (!f) return [];
   const cfg = _getRubrosCfg(f)[_flujoKey(f)]?.laboral || {};
-  const _n = s => (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  const _esLabAuto = lbl => {
-    const u = _n(lbl);
-    return u.includes('REMUNER') || (u.includes('CARGA') && u.includes('SOCIAL')) ||
-           (u.includes('HONORAR') && (u.includes('DIRECT') || u.includes('SINDIC') || u.includes('PROFES'))) ||
-           (u.includes('SUELDO') && !u.includes('LIQUIDAC')) || u.includes('SALARIO') ||
-           u.includes('HABERES') || u.includes('JORNAL') || u.includes('SAC') || u.includes('AGUINALDO');
-  };
   return (f.rubros||[]).filter(r => {
     if (r.esTotal || r.actual == null) return false;
     const ov = r.label in cfg ? cfg[r.label] : null;
-    return ov !== null ? ov : _esLabAuto(r.label);
+    return ov !== null ? ov : _esRubroLaboral(r.label);
   });
 }
 
@@ -17011,32 +17033,31 @@ function buildComparacionFlujos() {
       if (!rA?.actual && !rB?.actual) return false;
       return true;
     });
-    const _totalTipo = (tipo) => _detalleSel.filter(({ rA, rB }) => (rA?.tipo || rB?.tipo) === tipo)
-      .reduce((s, { rA, rB }) => s + Math.abs(rA?.actual ?? rB?.actual ?? 0), 0);
-    const totalIng = _totalTipo('ingreso'), totalEgr = _totalTipo('egreso');
-    const _fila = (rA, rB, totalTipo) => {
+    const _fmtMonto = v => '$' + Math.abs(v).toLocaleString('es-AR', {maximumFractionDigits:0});
+    const _fila = (rA, rB) => {
       const key = String(rA?.key ?? rB?.key ?? '');
       const label = rA?.label || rB?.label || '[sin nombre]';
       const vn = _rubroVariacionNominal(rA, rB);
-      const checked = _rubroEsRelevanteInforme(rA, rB, totalTipo);
+      const checked = _rubroEsRelevanteInforme(rA, rB);
       const vnTxt = !rA ? 'discontinuado' : !rB ? 'nuevo' : vn == null ? 'sin variación' : (vn >= 0 ? '+' : '') + vn.toFixed(2) + '%';
       return `<label style="display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:3px;cursor:pointer;font-size:9px"
-        onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'">
+        onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'"
+        title="Variación: ${_fmtMonto(_rubroMontoVariacion(rA, rB))}">
         <input type="checkbox" data-rubro-key="${key.replace(/"/g,'&quot;')}" ${checked?'checked':''} style="cursor:pointer;flex-shrink:0">
         <span style="flex:1;color:var(--text);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span>
         <span style="color:var(--dim);font-family:var(--mono);font-size:8.5px;flex-shrink:0">${vnTxt}</span>
       </label>`;
     };
-    const ingHtml = _detalleSel.filter(({rA,rB}) => (rA?.tipo||rB?.tipo)==='ingreso').map(({rA,rB}) => _fila(rA,rB,totalIng)).join('')
+    const ingHtml = _detalleSel.filter(({rA,rB}) => (rA?.tipo||rB?.tipo)==='ingreso').map(({rA,rB}) => _fila(rA,rB)).join('')
       || '<div style="font-size:9px;color:var(--dim);padding:4px 6px">— sin rubros de ingreso —</div>';
-    const egrHtml = _detalleSel.filter(({rA,rB}) => (rA?.tipo||rB?.tipo)==='egreso').map(({rA,rB}) => _fila(rA,rB,totalEgr)).join('')
+    const egrHtml = _detalleSel.filter(({rA,rB}) => (rA?.tipo||rB?.tipo)==='egreso').map(({rA,rB}) => _fila(rA,rB)).join('')
       || '<div style="font-size:9px;color:var(--dim);padding:4px 6px">— sin rubros de egreso —</div>';
     panel.innerHTML = `<div class="card" style="padding:12px 14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <span style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);
           font-family:var(--mono);font-weight:600">Conceptos a incluir en el informe Word</span>
         <span style="font-size:8px;color:var(--dim);font-family:var(--mono)"
-          title="Preseleccionados por relevancia (≥${UMBRAL_VAR_PCT_RUBRO_INFORME}% de variación y ≥${UMBRAL_PESO_PCT_RUBRO_INFORME}% de peso sobre el total). Tildá o destildá para elegir exactamente qué conceptos analizar en el Word.">
+          title="Preseleccionados: sueldos y cargas sociales (siempre), rubros nuevos (siempre), y el resto solo si la variación nominal es ≥${UMBRAL_VAR_PCT_RUBRO_INFORME}% Y el monto de la variación supera ${_fmtMonto(UMBRAL_MONTO_RUBRO_INFORME)}. Tildá o destildá para elegir exactamente qué conceptos analizar en el Word.">
           ℹ preseleccionados por relevancia — editable
         </span>
       </div>
@@ -18811,25 +18832,24 @@ async function generarInformeFlujo() {
         if (!rA?.actual && !rB?.actual) return false;
         return true;
       });
-      const totalTipo = candidatos.reduce((s, { rA, rB }) => s + Math.abs(rA?.actual ?? rB?.actual ?? 0), 0);
       const items = candidatos.map(({ rA, rB }) => {
         const label = rA?.label || rB?.label || '[sin nombre]';
         const vn = _rubroVariacionNominal(rA, rB);
-        const peso = totalTipo ? Math.abs(rA?.actual ?? rB?.actual ?? 0) / totalTipo * 100 : 0;
+        const montoVar = _rubroMontoVariacion(rA, rB);
         let texto;
         if (!rA) texto = label + ': rubro discontinuado (sin dato en ' + (fA.periodo || 'el período actual') + ')';
         else if (!rB) texto = label + ': rubro nuevo (sin dato en ' + (fB?.periodo || 'el período anterior') + ')';
         else if (vn == null) texto = label + ': sin variación calculable';
         else texto = label + ': ' + (vn >= 0 ? 'aumento' : 'reducción') + ' del ' + Math.abs(vn).toFixed(2) + '%';
-        const relevante = _marcados ? _marcados.has(String(rA?.key ?? rB?.key ?? '')) : _rubroEsRelevanteInforme(rA, rB, totalTipo);
-        return { texto: texto + ' [COMPLETAR JUSTIFICATIVO]', abs: vn == null ? -1 : Math.abs(vn), peso, relevante };
+        const relevante = _marcados ? _marcados.has(String(rA?.key ?? rB?.key ?? '')) : _rubroEsRelevanteInforme(rA, rB);
+        return { texto: texto + ' [COMPLETAR JUSTIFICATIVO]', abs: vn == null ? -1 : Math.abs(vn), montoVar, relevante };
       });
       let relevantes = items.filter(i => i.relevante);
       // El respaldo "no dejar vacío" aplica SOLO en modo automático — si el
       // usuario marcó la selección a mano, cero ítems tildados significa
       // "no incluir ninguno" en ese apartado, no un olvido a corregir.
       if (!_marcados && !relevantes.length && items.length) {
-        relevantes = [...items].sort((x, y) => y.peso - x.peso).slice(0, 2);
+        relevantes = [...items].sort((x, y) => y.montoVar - x.montoVar).slice(0, 2);
       }
       relevantes.sort((x, y) => y.abs - x.abs);
       return relevantes.map(i => i.texto);
