@@ -5326,7 +5326,7 @@ self.onmessage = async (e) => {
             color:var(--dim);line-height:1.4;max-width:200px"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)" title="Monto que la empresa propuso originalmente como déficit — se usa para medir la variación contra lo finalmente gestionado">Déficit inicial propuesto</label>
+          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)" title="Monto que la empresa presentó originalmente en formato digital, antes de cualquier ajuste — se usa para medir la variación contra el monto finalmente autorizado para gestionar">Monto inicial presentado digitalmente</label>
           <input id="fc-deficit-inicial" type="text" inputmode="decimal" placeholder="$ opcional"
             style="width:140px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
@@ -5435,7 +5435,7 @@ self.onmessage = async (e) => {
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none">
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)" title="Monto que la empresa propuso originalmente como déficit — se usa para medir la variación contra lo finalmente gestionado">Déficit inicial propuesto</label>
+          <label style="font-size:8.5px;color:var(--dim);font-family:var(--mono)" title="Monto que la empresa presentó originalmente en formato digital, antes de cualquier ajuste — se usa para medir la variación contra el monto finalmente autorizado para gestionar">Monto inicial presentado digitalmente</label>
           <input id="fm-deficit-inicial" type="text" inputmode="decimal" placeholder="$ opcional"
             style="width:140px;padding:5px 9px;background:var(--s2);border:1px solid var(--bd2);
             color:var(--text);font-family:var(--mono);font-size:10px;border-radius:4px;outline:none"
@@ -13962,7 +13962,20 @@ function confirmarGuardarFlujo() {
 }
 
 function _leerDeficitInicialConfirm() {
-  const v = _parseMontoAR(document.getElementById('fc-deficit-inicial')?.value);
+  const el = document.getElementById('fc-deficit-inicial');
+  let v = _parseMontoAR(el?.value);
+  // Pedido explícito: al cargar un flujo, si este campo quedó vacío, dar
+  // una oportunidad más — con una ventana explícita, no un campo chico
+  // fácil de pasar por alto — antes de guardarlo sin este dato (el
+  // tercer párrafo del informe Word queda sin esa comparación si no se
+  // carga acá o más tarde desde "Editar flujo").
+  if (v == null) {
+    const resp = prompt('Monto inicial presentado digitalmente por la empresa (antes de cualquier ajuste) — dejar vacío para omitir:');
+    if (resp != null && resp.trim() !== '') {
+      v = _parseMontoAR(resp);
+      if (el && v != null) el.value = Math.abs(v).toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2});
+    }
+  }
   return v != null ? Math.abs(v) : null;
 }
 
@@ -18960,25 +18973,27 @@ async function generarInformeFlujo() {
     // empeora/aumento, misma convención que _varNecesidad en todo el DBG).
     const dirVarReal = varReal == null ? '[COMPLETAR]' : (varReal >= 0 ? 'una reducción del' : 'un aumento del');
 
-    // Texto déficit inicial propuesto por la empresa vs. lo finalmente
-    // gestionado en este flujo (Fondos solicitados REAL, necARaw — nunca
-    // el necA normalizado a promedio mensual: deficit_inicial_propuesto es
-    // el monto real del flujo, comparar contra el promediado daría una
-    // diferencia falsa) — sin tolerancia, cualquier diferencia cuenta.
-    // Vacío si el flujo no tiene este dato cargado.
+    // Texto monto inicial presentado digitalmente por la empresa vs. el
+    // monto finalmente autorizado para gestionar en este flujo (Fondos
+    // solicitados REAL, necARaw — nunca el necA normalizado a promedio
+    // mensual: deficit_inicial_propuesto es el monto real del flujo,
+    // comparar contra el promediado daría una diferencia falsa) — sin
+    // tolerancia, cualquier diferencia cuenta. Vacío si el flujo no
+    // tiene este dato cargado (se pide al confirmar la carga del flujo,
+    // o se puede completar después desde "✏ Editar flujo").
     const fmt0 = v => '$' + Math.round(Math.abs(v)).toLocaleString('es-AR');
     const textoDeficitInicial = (() => {
       const defInicial = fA.deficit_inicial_propuesto;
       if (defInicial == null || necARaw == null) return '';
-      const gestionado = Math.abs(necARaw);
-      const diff = gestionado - defInicial;
+      const autorizado = Math.abs(necARaw);
+      const diff = autorizado - defInicial;
       if (diff === 0) {
-        return ' Cabe destacar que el déficit finalmente gestionado no presenta modificaciones respecto del déficit inicial propuesto por la empresa (' + fmt0(defInicial) + ').';
+        return ' Cabe destacar que el monto autorizado para gestionar se mantuvo sin modificaciones respecto del monto inicial presentado digitalmente por la empresa (' + fmt0(defInicial) + ').';
       }
       const pct = defInicial !== 0 ? (Math.abs(diff) / defInicial * 100).toFixed(2) + '%' : '—';
-      const verbo = diff > 0 ? 'un incremento' : 'una reducción';
-      return ' Cabe destacar que el déficit finalmente gestionado (' + fmt0(gestionado) + ') registra ' + verbo + ' de ' + fmt0(diff) +
-        ' (' + pct + ') respecto del déficit inicial propuesto por la empresa (' + fmt0(defInicial) + ').';
+      const verbo = diff > 0 ? 'aumentó' : 'disminuyó';
+      return ' Cabe destacar que el monto autorizado para gestionar (' + fmt0(autorizado) + ') ' + verbo + ' ' + fmt0(diff) +
+        ' (' + pct + ') respecto del monto inicial presentado digitalmente por la empresa (' + fmt0(defInicial) + ').';
     })();
 
     // Mapa de reemplazos
