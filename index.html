@@ -14515,6 +14515,19 @@ function buildFlujos() {
   _renderListaFlujos();
 }
 
+// Limpia las 3 secciones que SOLO escribe buildComparacionFlujos() —
+// "RESUMEN COMPARATIVO" (#flujo-semaforo), ranking de egresos
+// (#flujo-ranking) y "Conceptos a incluir en el informe Word"
+// (#flujo-informe-seleccion) — para que no quede contenido de un
+// comparativo anterior (de otra empresa/período) visible después de
+// cambiar la selección sin volver a apretar "Comparar períodos".
+function _limpiarPanelesComparacion() {
+  ['flujo-semaforo', 'flujo-ranking', 'flujo-informe-seleccion'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+}
+
 function _poblarSelectoresFlujos() {
   const flujos = Object.values(DATA.flujos || {});
   const empresa = document.getElementById('sel-flujo-empresa')?.value || '';
@@ -14578,8 +14591,23 @@ function _poblarSelectoresFlujos() {
         ipcEl.value = f.ipc;
       }
       _poblarSelectoresFlujos();
+      _limpiarPanelesComparacion();
     };
     selA.addEventListener('change', selA._ipcListenerFn);
+  }
+  // Bug real: al cambiar de empresa/período sin volver a apretar "Comparar
+  // períodos", el "RESUMEN COMPARATIVO", el ranking de egresos y "Conceptos
+  // a incluir en el informe Word" quedaban con el contenido del ÚLTIMO
+  // comparativo corrido — ninguno de los dos lo limpia, solo buildComparacionFlujos()
+  // los escribe. Si después se entraba a "Ver flujo individual" (que sí
+  // refresca #flujo-kpis/#tbl-flujos, pero no toca esas 3 secciones), el
+  // usuario veía una mezcla: título/KPIs de la empresa nueva pero esas 3
+  // secciones con montos de la comparación anterior, de otra empresa.
+  const selB = document.getElementById('sel-flujo-b');
+  if (selB) {
+    if (selB._limpiezaListenerFn) selB.removeEventListener('change', selB._limpiezaListenerFn);
+    selB._limpiezaListenerFn = _limpiarPanelesComparacion;
+    selB.addEventListener('change', selB._limpiezaListenerFn);
   }
 
   // Lbl de cantidad
@@ -15736,6 +15764,12 @@ function buildVistaIndividualFlujo(claveOverride) {
   if (selA && claveOverride && selA.value !== claveOverride) selA.value = claveOverride;
   const f = DATA.flujos[claveA];
   if (!f) return;
+  // Bug real: sin esto, el "RESUMEN COMPARATIVO", el ranking de egresos y
+  // "Conceptos a incluir en el informe Word" del ÚLTIMO comparativo corrido
+  // (de otra empresa/período) quedaban visibles acá, mezclados con el
+  // título/KPIs de ESTE flujo — esta función solo refresca #flujo-kpis y
+  // #tbl-flujos, nunca esas otras 3 secciones.
+  _limpiarPanelesComparacion();
 
   const wrap = document.getElementById('flujo-comp-wrap');
   if (wrap) { wrap.style.display = ''; wrap.dataset.clave = claveA; }
@@ -16784,6 +16818,7 @@ function buildComparacionFlujos() {
   const wrap   = document.getElementById('flujo-comp-wrap');
 
   if (!claveA || !claveB) {
+    _limpiarPanelesComparacion();
     alert('Seleccioná ambos períodos para comparar.'); return;
   }
   const fA_raw = DATA.flujos[claveA]; // actual
