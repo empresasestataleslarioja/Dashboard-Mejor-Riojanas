@@ -18835,6 +18835,73 @@ function _rptFlujoIndividual() {
 }
 
 // ── GENERAR INFORME WORD ──────────────────────────────────────────
+function _descargarBlobComoArchivo(blob, nombreArchivo) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href    = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Previsualización del informe Word antes de elegir descargar o imprimir.
+// El .docx generado arriba es el archivo real (con el formato/plantilla
+// original) — para mostrarlo en pantalla sin un visor de Word se convierte
+// a HTML aproximado con mammoth.js (igual convención del resto de la app:
+// librería cargada por CDN on-demand, ver XLSX/Chart.js/jsPDF más arriba).
+// Si no hay conexión para traer mammoth.js, se cae al comportamiento
+// anterior (descarga directa del .docx) — igual criterio que el fallback
+// de JSZip más abajo en el catch de generarInformeFlujo.
+async function _mostrarPreviaInformeWord(blob, nombreArchivo) {
+  let htmlAprox;
+  try {
+    if (!window.mammoth) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.6.0/mammoth.browser.min.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('sin conexión para previsualizar'));
+        document.head.appendChild(s);
+      });
+    }
+    const buf = await blob.arrayBuffer();
+    const res = await window.mammoth.convertToHtml({ arrayBuffer: buf });
+    htmlAprox = res.value;
+  } catch (e) {
+    // Sin previsualización disponible — se descarga directo, como antes.
+    _descargarBlobComoArchivo(blob, nombreArchivo);
+    return;
+  }
+
+  const docxUrl = URL.createObjectURL(blob);
+  const previewHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+    + 'body{font-family:"Times New Roman",serif;font-size:12pt;margin:2.5cm;color:#111}'
+    + 'p{text-align:justify;margin:8pt 0;line-height:1.5}'
+    + 'table{border-collapse:collapse;margin:10pt 0}td,th{border:1px solid #999;padding:4pt 8pt}'
+    + 'img{max-width:100%}'
+    + '</style></head><body>' + htmlAprox
+    + '<p style="margin-top:24pt;font-size:9pt;color:#888">— Vista previa aproximada del contenido. El archivo .docx descargado conserva el formato/plantilla original (logos, encabezados, numeración) tal como se ve al abrirlo en Word. —</p>'
+    + '</body></html>';
+  const previewBlobUrl = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
+
+  let overlay = document.getElementById('_rpt_overlay_word');
+  if (!overlay) { overlay = document.createElement('div'); overlay.id = '_rpt_overlay_word'; document.body.appendChild(overlay); }
+  if (overlay.dataset.docxUrl) URL.revokeObjectURL(overlay.dataset.docxUrl);
+  overlay.dataset.docxUrl = docxUrl;
+  overlay.dataset.docxNombre = nombreArchivo;
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column';
+  overlay.innerHTML = '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:#111;border-bottom:1px solid #333;flex-shrink:0">'
+    + '<span style="font-size:9px;color:#888;font-family:monospace;letter-spacing:.1em">PREVISUALIZACIÓN — INFORME WORD</span>'
+    + '<div style="display:flex;gap:8px;margin-left:auto">'
+    + '<button onclick="var o=document.getElementById(\'_rpt_overlay_word\');var a=document.createElement(\'a\');a.href=o.dataset.docxUrl;a.download=o.dataset.docxNombre;a.click()" style="padding:4px 12px;background:#1a3a8f;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">⬇ Descargar .docx</button>'
+    + '<button onclick="var fr=document.getElementById(\'_rpt_iframe_word\');if(fr){fr.contentWindow.focus();fr.contentWindow.print();}" style="padding:4px 12px;background:#1565c0;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">🖨 Imprimir</button>'
+    + '<button onclick="document.getElementById(\'_rpt_overlay_word\').style.display=\'none\'" style="padding:4px 12px;background:#333;color:#aaa;border:none;border-radius:3px;cursor:pointer;font-size:9px;font-family:monospace">✕ Cerrar</button>'
+    + '</div></div>'
+    + '<iframe id="_rpt_iframe_word" src="'+previewBlobUrl+'" style="flex:1;border:none;background:#fff"></iframe>';
+}
+
 async function generarInformeFlujo() {
   const claveA = document.getElementById('sel-flujo-a')?.value;
   const claveB = document.getElementById('sel-flujo-b')?.value;
@@ -19194,16 +19261,10 @@ async function generarInformeFlujo() {
 
     zip.file('word/document.xml', nuevoXml);
     const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const nombreArchivo = 'Informe_' + fA.empresa.replace(/\s+/g,'_') + '_' + fA.periodo.replace(/\s+/g,'_') + '.docx';
 
-    const url = URL.createObjectURL(blob);
-    const a   = document.createElement('a');
-    a.href    = url;
-    a.download = 'Informe_' + fA.empresa.replace(/\s+/g,'_') + '_' + fA.periodo.replace(/\s+/g,'_') + '.docx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
+    setMsg('⏳ Generando previsualización…', 'var(--dim)');
+    await _mostrarPreviaInformeWord(blob, nombreArchivo);
     setMsg('✓ Informe Word generado con formato original', 'var(--pos)');
     setTimeout(() => { if (msg) msg.textContent = ''; }, 5000);
 
