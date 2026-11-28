@@ -14515,14 +14515,19 @@ function buildFlujos() {
   _renderListaFlujos();
 }
 
-// Limpia las 3 secciones que SOLO escribe buildComparacionFlujos() —
-// "RESUMEN COMPARATIVO" (#flujo-semaforo), ranking de egresos
+// Limpia las secciones que SOLO escribe buildComparacionFlujos() —
+// "RESUMEN COMPARATIVO" (#flujo-semaforo), el resumen agregado con las
+// filas Total ingresos/egresos/Resultado (néc. fondos)/Var. real
+// (#flujo-resumen-agregado — un <div> que esa función crea e inserta
+// dinámicamente como hermano de #flujo-kpis la primera vez que corre,
+// no existe en el HTML estático; se nos había pasado por alto la
+// primera vez que se escribió este fix), ranking de egresos
 // (#flujo-ranking) y "Conceptos a incluir en el informe Word"
 // (#flujo-informe-seleccion) — para que no quede contenido de un
 // comparativo anterior (de otra empresa/período) visible después de
 // cambiar la selección sin volver a apretar "Comparar períodos".
 function _limpiarPanelesComparacion() {
-  ['flujo-semaforo', 'flujo-ranking', 'flujo-informe-seleccion'].forEach(id => {
+  ['flujo-semaforo', 'flujo-resumen-agregado', 'flujo-ranking', 'flujo-informe-seleccion'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '';
   });
@@ -15141,12 +15146,18 @@ function _flujoNecesidadSignada(f) {
   // Fallback: _flujoNecesidad con sus propios pasos (busca esTotal, etc.)
   const abs = _flujoNecesidad(f);
   if (abs != null && abs !== 0) return -abs;
-  // Último recurso: sumar egresos - ingresos directamente (funciona con datos viejos sin esTotal)
-  const rubros = f.rubros || [];
-  const sumEgr = rubros.filter(r=>r.tipo==='egreso'&&!r.esTotal).reduce((s,r)=>s+Math.abs(r.actual||0),0);
-  const sumIng = rubros.filter(r=>r.tipo==='ingreso'&&!r.esTotal).reduce((s,r)=>s+(r.actual||0),0);
-  if (sumEgr > 0) return sumIng - sumEgr; // negativo si déficit
+  // Último recurso: resultado calculado de abajo hacia arriba (ingresos −
+  // egresos − imp. créd/déb), no solo ingresos − egresos a secas — esto
+  // último se queda corto por el imp. créd/déb (≈1,2% del subtotal) y
+  // puede colar un "Fondos solicitados" que no cierra EXACTO con lo que
+  // muestra la propia tabla del flujo (fila "RESULTADO NETO") ni con
+  // _flujoResultadoBottomUp, usado en el comparativo/auditoría/Word —
+  // caso real: ACCION VERDE sept-dic 2026, sin ninguna fila de resultado
+  // en su Excel.
+  const bottomUp = _flujoResultadoBottomUp(f);
+  if (bottomUp != null) return bottomUp;
   // Fallback adicional: usar totalizadores esTotal si no hay rubros detalle tipados
+  const rubros = f.rubros || [];
   const totalEgr = rubros.find(r=>r.tipo==='total'&&r.esTotal&&r.actual!=null&&r.actual!==0);
   const totalIng = rubros.find(r=>r.tipo==='ingreso'&&r.esTotal&&r.actual!=null&&r.actual!==0);
   if (totalEgr) return (totalIng ? totalIng.actual : 0) - Math.abs(totalEgr.actual);
@@ -15200,15 +15211,34 @@ function _flujoNecesidad(f) {
       u.includes('SUPERÁVIT') || u.includes('SUPERAVIT') ||
       u.includes('RESULTADO') ||
       (u.includes('NECESIDAD') && !u.includes('SEMANAL') && !u.includes('MENSUAL') && !u.includes('DIARIA')) ||
-      u.includes('REQUERIMIENTO') ||
+      // Anclado al inicio ("REQUERIMIENTO MENSUAL"/"REQUERIMIENTO DE
+      // FONDOS") — un includes() suelto también matcheaba "Honorarios
+      // Arca, requerimiento aprox" (un gasto cualquiera que solo
+      // menciona la palabra, tipo='egreso') — caso real: ACCION VERDE
+      // sept-dic 2026, mostraba $700.000 (ese gasto puntual) como
+      // "Fondos solicitados" en vez de null, cuando el resultado real de
+      // abajo hacia arriba era -$94.197.640,30. Mismo bug ya corregido
+      // en la clasificación al importar (ver esResultadoLbl más arriba
+      // en el archivo) pero nunca replicado acá, un fallback aparte que
+      // corre en cada cálculo sobre rubros ya importados.
+      /^REQUERI/.test(u) ||
       u.includes('FONDOS')
     );
   });
   if (rLbl) return Math.abs(rLbl.actual);
-  // 5. Último rubro esTotal del flujo como último recurso
+  // 5. Último rubro esTotal del flujo como último recurso — pero solo si
+  // es un total GENERAL (tipo 'resultado'/'total'), nunca un subtotal de
+  // categoría ("TOTAL INGRESOS"/"TOTAL EGRESOS", esTotal=true pero
+  // tipo='ingreso'/'egreso'): devolver el total de egresos solo como si
+  // fuera la "necesidad de fondos" es tan equivocado como el bug de
+  // REQUERIMIENTO de más arriba — mismo caso real (ACCION VERDE
+  // sept-dic 2026, sin ninguna fila de resultado en su Excel): sin este
+  // filtro, este paso agarraba "TOTAL EGRESOS" ($127.304.400,53) en vez
+  // de devolver null.
   const rubros = f.rubros || [];
   for (let i = rubros.length - 1; i >= 0; i--) {
-    if (rubros[i].esTotal && rubros[i].actual != null) return Math.abs(rubros[i].actual);
+    if (rubros[i].esTotal && rubros[i].actual != null &&
+        (rubros[i].tipo === 'resultado' || rubros[i].tipo === 'total')) return Math.abs(rubros[i].actual);
   }
   return null;
 }
@@ -15577,7 +15607,15 @@ function _flujoResultadoBottomUp(f) {
 const _FLUJO_UMBRAL_DIVERGENCIA_ABS = 500000;  // $500.000
 const _FLUJO_UMBRAL_DIVERGENCIA_PCT = 0.15;    // 15% de los egresos detalle
 function _flujoDivergeDeBottomUp(f, necA, bottomUp) {
-  if (necA == null || bottomUp == null) return false;
+  if (bottomUp == null) return false;
+  // Sin "Fondos solicitados" declarado (ninguna fila de resultado en el
+  // Excel, ni campo necesidad_fondos cargado): no hay nada contra qué
+  // divergir, pero sí hay un resultado calculado — tratarlo como
+  // "diverge al máximo" para que _flujoNecesidadParaLista (y la
+  // auditoría) usen el calculado en vez de dejar el campo vacío. Caso
+  // real: ACCION VERDE sept-dic 2026, sin ninguna fila de resultado en
+  // su Excel.
+  if (necA == null) return true;
   const diff = Math.abs(necA - bottomUp);
   const egrBase = Math.abs(_flujoEgrDetTotal(f) || 0);
   const pctBase = egrBase > 0 ? diff / egrBase : (diff > 0 ? 1 : 0);
@@ -15788,7 +15826,15 @@ function buildVistaIndividualFlujo(claveOverride) {
     (v < 0 ? '(' : '') + '$ ' + Math.abs(v).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}) + (v < 0 ? ')' : '');
 
   // KPIs
-  const necA = _flujoNecesidadSignada(f);
+  // Preferir "Fondos solicitados" declarado en el Excel, pero si no hay
+  // ninguno (o diverge demasiado del resultado neto real) mostrar el
+  // calculado de abajo hacia arriba — mismo criterio ya usado en la
+  // lista de flujos (_flujoNecesidadParaLista) — para no dejar esta
+  // tarjeta vacía ni con un valor sin sentido cuando el Excel no trae
+  // una fila de resultado propia (caso real: ACCION VERDE sept-dic
+  // 2026).
+  const _necInfo = _flujoNecesidadParaLista(f);
+  const necA = _necInfo.valor;
   const ingA = _flujoIngTotal(f);
   // Ingresos detalle, igual que "TOTAL INGRESOS" de la tabla — mostrar acá el
   // total declarado por el Excel (ingA) hacía que esta tarjeta no coincidiera
@@ -15814,9 +15860,12 @@ function buildVistaIndividualFlujo(claveOverride) {
     cov_lab: { f, categoria: 'laboral', titulo: 'Costo laboral',       rows: _labRows_ind,   totalLabel: 'Total costo laboral' },
   };
   const necCol   = necA == null ? 'var(--dim)' : necA < 0 ? 'var(--neg)' : 'var(--pos)';
+  const _necLbl  = _necInfo.estimado
+    ? '<span style="color:#ff8c47" title="No hay un monto de &quot;Fondos solicitados&quot; declarado (o difiere demasiado del resultado neto real) — se muestra el resultado neto calculado de abajo hacia arriba">≈ Fondos solicitados (estimado)</span>'
+    : 'Fondos solicitados';
 
   document.getElementById('flujo-kpis').innerHTML = [
-    { l:'Fondos solicitados',       v:fmt(necA),   c:necCol, big:true },
+    { l:_necLbl,       v:fmt(necA),   c:necCol, big:true },
     { l:'Total ingresos',           v:fmt(ingADet),   c:'#1a9e68' },
     // Egresos detalle (sin imp. créd/déb), igual que cobertura/subtotal más abajo —
     // mostrar acá el total bruto importado del Excel (egrA) hacía que esta tarjeta
@@ -17138,8 +17187,16 @@ function buildComparacionFlujos() {
   })();
 
   // KPIs — helpers robustos para cualquier estructura de flujo
-  const necA = _flujoNecesidadSignada(fA); // signed: negativo = déficit
-  const necB = _flujoNecesidadSignada(fB);
+  // Preferir "Fondos solicitados" declarado, pero si no hay ninguno (o
+  // diverge demasiado del resultado neto real) usar el calculado de
+  // abajo hacia arriba — mismo criterio que la lista de flujos y la
+  // vista individual (_flujoNecesidadParaLista) — para que el
+  // comparativo y el informe Word no queden con un valor vacío o sin
+  // sentido cuando el Excel no trae una fila de resultado propia.
+  const _necInfoA = _flujoNecesidadParaLista(fA);
+  const _necInfoB = _flujoNecesidadParaLista(fB);
+  const necA = _necInfoA.valor; // signed: negativo = déficit
+  const necB = _necInfoB.valor;
   const varNom  = _varNecesidad(necA, necB);
   // NUNCA Fisher-deflactar varNom directamente ("(1+varNom/100)/(1+ipc/100)-1"):
   // esa fórmula asume una magnitud positiva y da un número sin sentido si
@@ -18818,8 +18875,14 @@ async function generarInformeFlujo() {
     // _flujoNecesidadSignada (no _flujoNecesidad, que siempre devuelve un
     // valor absoluto) — fmtM más abajo distingue déficit por el signo, y
     // con el valor sin signo esa etiqueta nunca aparecía en el Word.
-    const necA = _c ? _c.necA : _flujoNecesidadSignada(fA);
-    const necB = _c ? _c.necB : _flujoNecesidadSignada(fB);
+    // Preferir "Fondos solicitados" declarado, pero si no hay ninguno (o
+    // diverge demasiado del resultado neto real) usar el calculado de
+    // abajo hacia arriba — mismo criterio que la vista individual y el
+    // comparativo (_flujoNecesidadParaLista) — para que el Word no quede
+    // con "[COMPLETAR]" cuando el Excel no trae una fila de resultado
+    // propia (caso real: ACCION VERDE sept-dic 2026).
+    const necA = _c ? _c.necA : _flujoNecesidadParaLista(fA).valor;
+    const necB = _c ? _c.necB : _flujoNecesidadParaLista(fB).valor;
     // Fondos Solicitados REAL del flujo actual, nunca el valor de necA de
     // arriba — ese puede venir normalizado a "promedio mensual" (vía _c)
     // cuando el período actual y el anterior tienen distinta cantidad de
@@ -18827,7 +18890,7 @@ async function generarInformeFlujo() {
     // "cuánto se está pidiendo" ni para contrastar contra el déficit
     // inicial propuesto (deficit_inicial_propuesto, que es el monto real
     // del flujo, no un promedio mensual).
-    const necARaw = _flujoNecesidadSignada(fA);
+    const necARaw = _flujoNecesidadParaLista(fA).valor;
     const varNom  = _c ? _c.varNom : _varNecesidad(necA, necB);
     // Var. real: comparar necA directamente contra necB ya llevado a pesos
     // de hoy (necB*(1+ipc/100)) con _varNecesidad — NUNCA Fisher-deflactar
