@@ -18851,21 +18851,41 @@ function _descargarBlobComoArchivo(blob, nombreArchivo) {
 // original) — para mostrarlo en pantalla sin un visor de Word se convierte
 // a HTML aproximado con mammoth.js (igual convención del resto de la app:
 // librería cargada por CDN on-demand, ver XLSX/Chart.js/jsPDF más arriba).
-// Si no hay conexión para traer mammoth.js, se cae al comportamiento
-// anterior (descarga directa del .docx) — igual criterio que el fallback
-// de JSZip más abajo en el catch de generarInformeFlujo.
+// Si no hay conexión para traer mammoth.js (ninguna de las fuentes
+// alternativas abajo responde), se cae al comportamiento anterior
+// (descarga directa del .docx) — igual criterio que el fallback de JSZip
+// más abajo en el catch de generarInformeFlujo.
+//
+// Varias URLs candidatas, no una sola: si la ruta exacta de una versión
+// puntual en cdnjs cambia o no existe, probar la siguiente en vez de
+// caer directo a "sin previsualización" — la última es jsdelivr sirviendo
+// la versión más reciente del paquete de npm, sin depender de un número
+// de versión fijo.
+async function _cargarMammoth() {
+  if (window.mammoth) return true;
+  const candidatos = [
+    'https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.6.0/mammoth.browser.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.4.21/mammoth.browser.min.js',
+    'https://cdn.jsdelivr.net/npm/mammoth/mammoth.browser.min.js',
+  ];
+  for (const url of candidatos) {
+    const ok = await new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.onload = () => resolve(!!window.mammoth);
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+    if (ok) return true;
+  }
+  return false;
+}
+
 async function _mostrarPreviaInformeWord(blob, nombreArchivo) {
   let htmlAprox;
   try {
-    if (!window.mammoth) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth.js/1.6.0/mammoth.browser.min.js';
-        s.onload = resolve;
-        s.onerror = () => reject(new Error('sin conexión para previsualizar'));
-        document.head.appendChild(s);
-      });
-    }
+    const disponible = await _cargarMammoth();
+    if (!disponible) throw new Error('sin conexión para previsualizar');
     const buf = await blob.arrayBuffer();
     const res = await window.mammoth.convertToHtml({ arrayBuffer: buf });
     htmlAprox = res.value;
